@@ -6,34 +6,33 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-05-29
-- 运行时间：2026-05-29 21:07:09 UTC
+- 最新运行日期：2026-05-30
+- 运行时间：2026-05-30 20:42:37 UTC
 - 运行状态：成功
-- 本次总论文数：4
-- 精读区：2
+- 本次总论文数：3
+- 精读区：1
 - 速读区：2
 
 ### 今日简报（AI）
-今日聚焦4篇论文，精读最高分《FRAPPE》9.0分与《HEVC加速》8.0分，速读涵盖视觉程序与屏幕视频表示。  
-最值得关注：FRAPPE提出全输入残差输出自编码与投影追踪编码器，在特征学习上表现突出；HEVC加速结合CNN与层次注意力Transformer，显著提升视频编码效率。  
-建议优先精读FRAPPE理解编码新范式，再速读HEVC论文跟进视频压缩前沿。
-- 详情：[/202605/29/README](/202605/29/README)
+今日推荐3篇论文，精读1篇《Scale When Needed: Adaptive Neuron-level Mixed Precision Quantization Aware Training》（8.0分），速读2篇涉及运动补偿权压缩与视觉程序学习。
+
+最值得关注的是混合精度量化训练策略，它通过自适应神经元级精度分配提升模型效率；同时运动补偿权压缩也为部署优化提供了新思路。
+
+建议对轻量化模型感兴趣的读者优先精读《Scale When Needed》，并速读其余两篇以拓宽对压缩与结构化表达的理解。
+- 详情：[/202605/30/README](/202605/30/README)
 
 ### 精读区论文标签
-1. [FRAPPE: Full Input, Residual Output Autoencoding with Projection Pursuit Encoder](/202605/29/2605.28992v1-frappe-full-input-residual-output-autoencoding-with-projection-pursuit-encoder)  
-   标签：评分：9.0/10、query:compress
-   evidence：用于图像压缩的自编码框架，含率失真优化
-2. [Accelerating HEVC Intra Partitioning via a CNN-Hierarchical Attention Transformer Hybrid](/202605/29/2605.29063v1-accelerating-hevc-intra-partitioning-via-a-cnn-hierarchical-attention-transformer-hybrid)  
+1. [Scale When Needed: Adaptive Neuron-level Mixed Precision Quantization Aware Training](/202605/30/2605.25054v1-scale-when-needed-adaptive-neuron-level-mixed-precision-quantization-aware-training)  
    标签：评分：8.0/10、query:compress
-   evidence：使用CNN-Transformer混合加速HEVC帧内分区，涉及率失真优化
+   evidence：神经元级别混合精度量化方法可应用于图像压缩的量化策略
 
 ### 速读区论文标签
-1. [Structure over Pixels: Learning Variable-Length Visual Programs](/202605/29/2605.27696v2-structure-over-pixels-learning-variable-length-visual-programs)  
+1. [Motion-Compensated Weight Compression](/202605/30/2605.24754v1-motion-compensated-weight-compression)  
    标签：评分：7.0/10、query:compress
-   evidence：使用率失真探针学习可变长度离散视觉编码，与图像压缩核心概念高度相关
-2. [NeR-SC: Adapting Neural Video Representation to Screen Content](/202605/29/2605.27024v1-ner-sc-adapting-neural-video-representation-to-screen-content)  
+   evidence：使用率失真目标进行量化残差编码
+2. [Structure over Pixels: Learning Variable-Length Visual Programs](/202605/30/2605.27696v2-structure-over-pixels-learning-variable-length-visual-programs)  
    标签：评分：6.0/10、query:compress
-   evidence：屏幕内容视频的神经表示压缩
+   evidence：利用率失真探针学习可变长度视觉程序，与端到端学习的图像压缩中的率失真优化相关
 
 
 <div class="dpr-home-promo-card">
