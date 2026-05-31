@@ -6,77 +6,77 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-05-22 ~ 2026-05-31
-- 运行时间：2026-05-31 03:03:48 UTC
+- 最新运行日期：2026-05-31
+- 运行时间：2026-05-31 21:00:50 UTC
 - 运行状态：成功
 - 本次总论文数：19
-- 精读区：8
-- 速读区：11
+- 精读区：7
+- 速读区：12
 
 ### 今日简报（AI）
-本期共推荐19篇论文，其中精读8篇、速读11篇，高分精读聚焦输入凸神经网络训练与自适应训练优化两大方向。最值得关注的是《A lift for input-convex neural network training》和《PILOT》提出的新型训练框架，分别解决了凸性约束与动态调参难题。建议普通读者优先精读这两篇，并速读《Recursive Block-Diagonal Coupling》与《Vision Transformers Need Better Token Interaction》以获取视觉模型资源节约和token交互改进的实用技巧。
-- 详情：[/20260522-20260531/README](/20260522-20260531/README)
+今日完成19篇论文筛选，精读7篇（含1篇满分10分）。最值得关注的是相位感知小波编码-解码器用于密集预测（10分）以及格理论代数模型与数学形态学深度学习（9分）。建议优先阅读精读高分论文，思考其在小样本或结构预测任务中的扩展。
+- 详情：[/202605/31/README](/202605/31/README)
 
 ### 精读区论文标签
-1. [A lift for input-convex neural network training](/20260522-20260531/2605.24274v1-a-lift-for-input-convex-neural-network-training)  
+1. [Phase-Aware Wavelet-Based-Scattering Encoder-Decoder for Dense Predictions](/202605/31/2605.24621v1-phase-aware-wavelet-based-scattering-encoder-decoder-for-dense-predictions)  
+   标签：评分：10.0/10、query:compress
+   evidence：使用相位感知的小波散射变换进行密集预测，与小波图像压缩直接相关
+2. [Lattice theory and algebraic models for deep convolutional learning based on mathematical morphology](/202605/31/2605.24608v1-lattice-theory-and-algebraic-models-for-deep-convolutional-learning-based-on-mathematical-morphology)  
    标签：评分：9.0/10、query:neural-arch
-   evidence：针对输入凸神经网络提出提升训练方法，解决优化困难
-2. [PILOT: Policy-Informed Learned Optimization for Adaptive Deep Network Training](/20260522-20260531/2605.24570v1-pilot-policy-informed-learned-optimization-for-adaptive-deep-network-training)  
+   evidence：利用格理论和数学形态学为深度卷积架构建立了严格的代数框架
+3. [CodecSplat: Ultra-Compact Latent Coding for Feed-Forward 3D Gaussian Splatting](/202605/31/2605.25563v1-codecsplat-ultra-compact-latent-coding-for-feed-forward-3d-gaussian-splatting)  
+   标签：评分：9.0/10、query:compress
+   evidence：用于前馈3D高斯泼溅的超紧凑潜在编码，含熵编码
+4. [Deep Psychovisual Image Representations](/202605/31/2605.29260v1-deep-psychovisual-image-representations)  
+   标签：评分：9.0/10、query:compress
+   evidence：受图像编码启发，学习频域表示并对感知重要频率进行量化
+5. [elasticAI.explorer: Towards a Unified End-to-End Framework for Hardware-Aware Neural Architecture Search](/202605/31/2605.30019v1-elasticaiexplorer-towards-a-unified-end-to-end-framework-for-hardware-aware-neural-architecture-search)  
    标签：评分：9.0/10、query:neural-arch
-   evidence：提出在线优化器，根据梯度一致性调整更新行为，直接针对深度学习模型优化策略
-3. [Growing a Neural Network in Breadth, Depth, and Time](/20260522-20260531/2605.25174v1-growing-a-neural-network-in-breadth-depth-and-time)  
-   标签：评分：9.0/10、query:neural-arch
-   evidence：通过可微分成本在宽度、深度和时间维度上生长网络
-4. [EMA-Nesterov: Stabilizing Nesterov's Lookahead for Accelerated Deep Learning Optimization](/20260522-20260531/2605.25395v1-ema-nesterov-stabilizing-nesterovs-lookahead-for-accelerated-deep-learning-optimization)  
-   标签：评分：9.0/10、query:neural-arch
-   evidence：提出EMA-Nesterov，利用指数移动平均稳定Nesterov动量，改进深度学习优化
-5. [ATV-Net: Adaptive Triple-View Network with Dynamic Feature Fusion](/20260522-20260531/2605.25803v1-atv-net-adaptive-triple-view-network-with-dynamic-feature-fusion)  
-   标签：评分：9.0/10、query:neural-arch
-   evidence：通过多视图特征融合改进计算机视觉分割架构
-6. [JetViT: Efficient High-Resolution Vision Transformer with Post-Training Attention Search](/20260522-20260531/2605.26636v1-jetvit-efficient-high-resolution-vision-transformer-with-post-training-attention-search)  
-   标签：评分：9.0/10、query:neural-arch
-   evidence：提出混合视觉Transformer架构和后训练注意力搜索，提升高分辨率图像推理效率
-7. [SIGMA: Bridging Structural and Distributional Gaps for Vision Foundation Model Adaptation](/20260522-20260531/2605.27893v1-sigma-bridging-structural-and-distributional-gaps-for-vision-foundation-model-adaptation)  
-   标签：评分：9.0/10、query:neural-arch
-   evidence：SIGMA适配器解决视觉基础模型适应中的结构分布差异，属于架构改进
-8. [Singularity-aware Optimization via Randomized Geometric Probing: Towards Stable Non-smooth Optimization](/20260522-20260531/2605.29547v1-singularity-aware-optimization-via-randomized-geometric-probing-towards-stable-non-smooth-optimization)  
-   标签：评分：9.0/10、query:neural-arch
-   evidence：奇异性感知优化器用于稳定非平滑深度学习优化
+   evidence：面向硬件感知的神经架构搜索框架
+6. [CFMDCTCodec: A Low-Bitrate Neural Speech Codec with Noise-Prior-aware Conditional Flow Matching for MDCT-Spectral Enhancement](/202605/31/2605.26812v1-cfmdctcodec-a-low-bitrate-neural-speech-codec-with-noise-prior-aware-conditional-flow-matching-for-mdct-spectral-enhancement)  
+   标签：评分：8.0/10、query:compress
+   evidence：在神经语音编解码器中使用MDCT变换和量化
+7. [LV-OSD: Language-Vision-Complementary Open-Set Object Detection](/202605/31/2605.28271v1-lv-osd-language-vision-complementary-open-set-object-detection)  
+   标签：评分：8.0/10、query:neural-arch
+   evidence：双分支检测框架用于开放集检测
 
 ### 速读区论文标签
-1. [Recursive Block-Diagonal Coupling for Resource-Efficient Training of Vision Models](/20260522-20260531/2605.23656v1-recursive-block-diagonal-coupling-for-resource-efficient-training-of-vision-models)  
+1. [Interdomain Attention: Beyond Token-Level Key-Value Memory](/202605/31/2605.24330v1-interdomain-attention-beyond-token-level-key-value-memory)  
    标签：评分：8.0/10、query:neural-arch
-   evidence：提出递归块对角耦合方法，实现视觉模型的资源高效训练
-2. [Vision Transformers Need Better Token Interaction](/20260522-20260531/2605.23868v1-vision-transformers-need-better-token-interaction)  
+   evidence：通过核方法将状态空间模型集成到注意力中
+2. [CLIP-Guided SAM: Parameter-Efficient Semantic Conditioning for Promptable Segmentation](/202605/31/2605.24807v1-clip-guided-sam-parameter-efficient-semantic-conditioning-for-promptable-segmentation)  
    标签：评分：8.0/10、query:neural-arch
-   evidence：分析视觉Transformer中的语义扩散现象，并提出改进的标记交互机制，直接针对计算机视觉架构改进
-3. [CAffNet: Hard Constraint-Affine Neural Networks](/20260522-20260531/2605.24437v1-caffnet-hard-constraint-affine-neural-networks)  
+   evidence：参数高效的语义条件分割，一种神经网络架构设计的最佳实践
+3. [Latent Recurrent Transformer: Architecture Exploration, Training Strategies, and Scaling Behavior](/202605/31/2605.26797v1-latent-recurrent-transformer-architecture-exploration-training-strategies-and-scaling-behavior)  
    标签：评分：8.0/10、query:neural-arch
-   evidence：CAffNet将硬约束仿射层嵌入神经网络架构
-4. [Neuromorphic LiDAR-based Bird's Eye View Object Detection using Energy-efficient Spiking Neural Networks](/20260522-20260531/2605.25293v1-neuromorphic-lidar-based-birds-eye-view-object-detection-using-energy-efficient-spiking-neural-networks)  
+   evidence：研究新型Transformer架构和训练策略以支持扩展
+4. [Learning Compositional Latent Structure with Vector Networks](/202605/31/2605.28007v1-learning-compositional-latent-structure-with-vector-networks)  
    标签：评分：8.0/10、query:neural-arch
-   evidence：提出脉冲神经网络编码器-解码器用于激光雷达鸟瞰视角目标检测，属于计算机视觉架构改进
-5. [DepthAgent: Towards Better Universal Depth Estimation via Sample-wise Expert Selection](/20260522-20260531/2605.23281v1-depthagent-towards-better-universal-depth-estimation-via-sample-wise-expert-selection)  
+   evidence：具有可复用秩1权重原子的层次循环架构用于组合潜在结构
+5. [Towards the Connection between Activation Sparsity and Flat Minima](/202605/31/2605.25612v1-towards-the-connection-between-activation-sparsity-and-flat-minima)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：样本级专家选择用于通用深度估计
-6. [Rethinking Transfer Learning for Industrial Inspection: DINOv3 vs. ImageNet Pretraining Across RGB and X-ray Tasks](/20260522-20260531/2605.23472v1-rethinking-transfer-learning-for-industrial-inspection-dinov3-vs-imagenet-pretraining-across-rgb-and-x-ray-tasks)  
+   evidence：建立了激活稀疏性与损失景观平坦最小值之间的理论联系，为优化提供指导
+6. [Towards Controllable Image Generation through Representation-Conditioned Diffusion Models](/202605/31/2605.27343v1-towards-controllable-image-generation-through-representation-conditioned-diffusion-models)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：比较工业检测视觉任务的预训练策略
-7. [PixIE: Prompted Pixel-Space Low-Light Image Enhancement](/20260522-20260531/2605.23531v1-pixie-prompted-pixel-space-low-light-image-enhancement)  
+   evidence：探索基于自监督表示条件的扩散模型用于可控图像生成
+7. [AdaMerge: Salience-Aware Adaptive Token Merging for Training-Free Acceleration of Vision Transformers](/202605/31/2605.27465v1-adamerge-salience-aware-adaptive-token-merging-for-training-free-acceleration-of-vision-transformers)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：提出基于DINO提示像素块和空间通道压缩的新型像素级低光照图像增强架构
-8. [DualMem: Bypassing the Objectness Bottleneck for Calibrated Unknown-Stream Filtering in Open-World Object Detection](/20260522-20260531/2605.23634v1-dualmem-bypassing-the-objectness-bottleneck-for-calibrated-unknown-stream-filtering-in-open-world-object-detection)  
+   evidence：基于显著感知的token合并加速ViT
+8. [SparseOpt: Addressing Normalization-induced Gradient Skew in Sparse Training](/202605/31/2605.27541v1-sparseopt-addressing-normalization-induced-gradient-skew-in-sparse-training)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：解决开放世界目标检测中的对象性瓶颈，改进计算机视觉架构
-9. [B-GRTO: Bootstrapped Group Relative Tool Optimization for Referring Segmentation](/20260522-20260531/2605.23500v1-b-grto-bootstrapped-group-relative-tool-optimization-for-referring-segmentation)  
+   evidence：解决归一化导致梯度偏差的稀疏感知优化器
+9. [Learning from Semantic Dictionaries: Discriminative Codebook Contrastive Learning for Unified Visual Representation and Generation](/202605/31/2605.25012v1-learning-from-semantic-dictionaries-discriminative-codebook-contrastive-learning-for-unified-visual-representation-and-generation)  
+   标签：评分：6.0/10、query:compress
+   evidence：离散码本表示学习，可应用于图像压缩量化
+10. [The Rescue Effect: Spatio-Semantic Early Exit Bypasses Quantization Collapse in CLIP](/202605/31/2605.26415v1-the-rescue-effect-spatio-semantic-early-exit-bypasses-quantization-collapse-in-clip)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：提出群组相对工具优化方法，将强化学习与可微目标结合用于引用分割，属于模型优化策略
-10. [CoDA: Color Distribution Probing for Efficient and Generalizable AI-Generated Image Detection](/20260522-20260531/2605.24306v1-coda-color-distribution-probing-for-efficient-and-generalizable-ai-generated-image-detection)  
+   evidence：通过早期退出绕过CLIP中的量化坍塌
+11. [Tail-Aware HiFloat4: W4A4 Post-Training Quantization for Wan2.2](/202605/31/2605.26628v1-tail-aware-hifloat4-w4a4-post-training-quantization-for-wan22)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：利用颜色分布探测检测AI生成图像，属于计算机视觉方法
-11. [AdaFuse-Det: Adaptive Cross-Modal Fusion of Event Cameras for Robust Object Detection in Low-Light RGB Imagery](/20260522-20260531/2605.24691v1-adafuse-det-adaptive-cross-modal-fusion-of-event-cameras-for-robust-object-detection-in-low-light-rgb-imagery)  
+   evidence：视频生成transformer的后训练量化
+12. [Probabilistic Smoothing with Ratio-Monotone Transforms for Global Optimization](/202605/31/2605.27316v1-probabilistic-smoothing-with-ratio-monotone-transforms-for-global-optimization)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：用于低光照目标检测的自适应跨模态融合，属于计算机视觉架构改进技术
+   evidence：提出了一个基于比率单调变换的通用概率平滑全局优化框架
 
 
 <div class="dpr-home-promo-card">
