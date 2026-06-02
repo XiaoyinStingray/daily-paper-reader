@@ -1,0 +1,1530 @@
+Title: Inconsistency-Aware Minimization: Improving Generalization with Unlabeled Data
+
+URL Source: https://arxiv.org/pdf/2605.31324v1
+
+Published Time: Mon, 01 Jun 2026 01:17:59 GMT
+
+Number of Pages: 27
+
+Markdown Content:
+# Inconsistency-Aware Minimization: Improving Generalization with Unlabeled Data 
+
+Hee-Sung Kim 1 Hyeonseong Kim 1 2 Sungyoon Lee 1
+
+## Abstract 
+
+Estimating the generalization gap and developing optimization methods that improve generalization are crucial for deep learning models, for both theoretical understanding and practical applica-tions. Leveraging unlabeled data for these pur-poses offers significant advantages in real-world scenarios. This paper introduces a novel gener-alization measure, local inconsistency , derived from an information-geometric perspective on the parameter space of neural networks. A key fea-ture of local inconsistency is that it can be com-puted without explicit labels. We establish theo-retical underpinnings by connecting local incon-sistency to the Fisher information matrix and the loss Hessian. Empirically, we demonstrate that local inconsistency correlates with the generaliza-tion gap. Based on these findings, we propose Inconsistency-Aware Minimization (IAM), which incorporates local inconsistency into the training objective. We demonstrate that in standard super-vised learning settings, IAM enhances generaliza-tion, achieving performance comparable to that of existing methods such as Sharpness-Aware Min-imization. Furthermore, IAM exhibits efficacy in semi- and self-supervised learning scenarios, where the local inconsistency is computed from unlabeled data. 
+
+## 1. Introduction 
+
+Estimating the generalization gap and optimizing models to perform well on unseen data are central challenges in deep learning. Prior work has linked the flatness of the loss landscape to generalization and proposed sharpness-driven optimizers; however, sharpness—often instantiated as the 
+
+> 1
+
+Department of Computer Science, Hanyang University, Seoul, Korea 2Agency for Defense Development, Daejeon, Korea. Corre-spondence to: Sungyoon Lee <sungyoonlee@hanyang.ac.kr>. 
+
+Proceedings of the 43 rd International Conference on Machine Learning , Seoul, South Korea. PMLR 306, 2026. Copyright 2026 by the author(s). 
+
+largest eigenvalue of the loss Hessian—does not by itself re-liably predict the generalization gap across settings (Keskar et al., 2017; Dinh et al., 2017; Li et al., 2018; Garipov et al., 2018; Foret et al., 2021; Kwon et al., 2021; Kim et al., 2022; Zhuang et al., 2022; Andriushchenko et al., 2023). Alternatively, some studies examine output-based measures such as disagreement (Jiang et al., 2022) and inconsistency 
+
+(Johnson & Zhang, 2023), which can correlate with the generalization gap under certain conditions. However, dis-agreement is non-differentiable and resists direct integration into training. Inconsistency is also impractical for a single model, since it requires aggregating outputs across multiple models and data splits at high computational cost. In this work, we introduce local inconsistency , an information-geometric measure of output sensitivity in pa-rameter space. Concretely, local inconsistency is defined as the worst-case (within an ℓ2 ball) KL divergence be-tween the output distributions of a model and its perturbed counterpart. Crucially, it is (i) computable from a single trained model and (ii) differentiable , enabling both esti-mation and direct regularization within standard training pipelines. Furthermore, its computation (iii) relies only on unlabeled data , a key property that unlocks applications in label-constrained settings, including semi-/self-supervised learning. We theoretically ground local inconsistency by connecting it to the Fisher information matrix (FIM) and the loss Hes-sian, showing that, under a local quadratic approximation, it is governed by the FIM’s largest eigenvalue. This pro-vides a complementary signal to traditional sharpness (e.g., 
+
+λmax (H)), as we find that local inconsistency maintains a meaningful correlation with the generalization gap even in settings where sharpness measures falter. Building on this, we propose Inconsistency-Aware Minimiza-tion (IAM) 1, which incorporates local inconsistency into the training objective. IAM inherits the practical advantages of single-model training while uniquely enabling regular-ization from unlabeled data . On CIFAR-10/100 supervised benchmarks, IAM matches or surpasses sharpness-aware 
+
+> 1
+
+Code is available at https://github.com/ heesung-k/IAM .
+
+1
+
+> arXiv:2605.31324v1 [cs.LG] 29 May 2026 Inconsistency-Aware Minimization: Improving Generalization with Unlabeled Data
+
+baselines. Crucially, its label-agnostic nature makes it a versatile regularizer for other learning paradigms; we show it boosts the performance of both the semi-supervised frame-work FixMatch and the self-supervised method SimCLR, demonstrating its broad applicability. • A computable and differentiable measure from un-labeled data. We introduce local inconsistency , an information-geometric generalization measure that is 
+
+model-intrinsic and label-free , making it practical both to estimate and to regularize during training. • Theory: links to FIM/Hessian and to prior incon-sistency. We formalize connections from local in-consistency to the FIM (and via Gauss–Newton to the Hessian) and discuss a relationship to Johnson & Zhang (2023), clarifying how local inconsistency com-plements inconsistency while avoiding the multi-model costs of prior inconsistency measures. • Method: IAM for labeled, semi-/self-supervised learning. We develop IAM, which incorporates local inconsistency into the training objective. IAM achieves competitive or superior generalization to SAM in su-pervised tasks and, uniquely, leverages unlabeled data 
+
+to improve semi- and self-supervised training. 
+
+## 2. Related Work 
+
+Understanding and improving generalization in deep neural networks, especially given their large capacity and tendency to overfit (Zhang et al., 2017), remains a central challenge. While networks can memorize random labels (Zhang et al., 2017) and learn simple patterns before noise (Arpit et al., 2017), phenomena like double descent (Nakkiran et al., 2021) and the inadequacy of uniform convergence theory (Nagarajan & Kolter, 2019) highlight the need for novel generalization measures beyond loss-based metrics. Traditional measures like VC-dimension often fall short. While spectrally-normalized margin bounds (Bartlett et al., 2017) and PAC-Bayes approaches offer insights, no single measure consistently predicts generalization (Jiang* et al., 2020). Recently, disagreement (Jiang et al., 2022) and in-consistency (Johnson & Zhang, 2023) have shown promise, correlating well with the generalization gap, even when computed on unlabeled data. However, their reliance on training multiple models poses practical limitations for di-rect optimization in a single-model setup, underscoring the need for efficient, label-free, single-model generalization measures. The geometry of the loss landscape, particularly the flatness of minima, has been extensively linked to generalization (Keskar et al., 2017; Li et al., 2018). However, the utility of sharpness as a sole predictor is debated due to issues like scale invariance (Dinh et al., 2017) and its correlation with training hyperparameters rather than true generalization (An-driushchenko et al., 2023). Indeed, some studies suggest that output inconsistency and instability can be more reliable predictors than sharpness (Johnson & Zhang, 2023). Infor-mation geometry has inspired a reparametrization-invariant sharpness measure (Jang et al., 2022), but these can be computationally expensive. This context motivates our ex-ploration of “local inconsistency”, an alternative geometric measure focusing on output sensitivity within a parame-ter neighborhood, computable from unlabeled data using a single model. Various regularization techniques, both explicit (e.g., dropout (Srivastava et al., 2014), batch normalization (San-turkar et al., 2018), Mixup (Zhang et al., 2018)) and implicit (e.g., SGD’s bias (Hardt et al., 2016; Soudry et al., 2018)), aim to improve generalization. Methods like Sharpness-Aware Minimization (SAM, (Foret et al., 2021)) and ASAM (Kwon et al., 2021) directly optimize for flat minima and have shown significant improvements. Despite their success, the precise role of sharpness in generalization remains an active area of research (Jiang* et al., 2020; Andriushchenko et al., 2023), further motivating the development of comple-mentary approaches like our proposed IAM. 
+
+## 3. Background and Preliminaries 
+
+In this section, we briefly review fundamental concepts and notations essential for understanding our proposed metric and its theoretical connections. We focus on probabilistic classification models, information geometry, and aspects of the loss landscape. 
+
+3.1. Notation and Problem Setup 
+
+We consider probabilistic classification models. Let x ∈ X 
+
+be a data point from the input space X , and y ∈ [C] = 
+
+{0, 1, . . . , C − 1} be the corresponding class label, where 
+
+C is the total number of classes. The data pair (x, y ) is as-sumed to be drawn from an underlying distribution D over 
+
+X × [C]. A model, parameterized by θ ∈ Rm, outputs a probability distribution over classes for a given input x. This is typically achieved by transforming a logit vector z(x; θ)
+
+through a softmax function: f (x; θ) = softmax (z(x, θ )) .Thus, f (x; θ) = [ p(0 |x; θ), p (1 |x; θ), . . . , p (C − 1|x; θ)] ⊤.Given a training dataset Zn = {(xi, y i) : i = 1 , . . . , n }
+
+drawn i.i.d. from D, the model is typically trained by min-imizing a loss function. For classification, the empirical Cross-Entropy (CE) loss will be written as follows: 
+
+L(θ) = 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+li(θ),
+
+where li(θ) = l(xi, y i; θ) = − log p(yi|xi; θ).2Inconsistency-Aware Minimization: Improving Generalization with Unlabeled Data 
+
+3.2. Fisher Information Matrix and KL Divergence 
+
+The Fisher information matrix (FIM), F (θ), for the family of probability density p(x, y ; θ) = p(x)p(y|x; θ) parameter-ized by parameters θ is defined as 
+
+F (θ) = Ex
+
+Ey∼p(y|x;θ)
+
+∇θ l(x, y ; θ)∇θ l(x, y ; θ)⊤ 
+
+= Ex
+
+∇θ z⊤  diag( f (x; θ)) − f (x; θ)f (x; θ)⊤ ∇θ z .
+
+(1) In practice, the expectation Ep(x) is often approximated by an empirical average over the available data (e.g., training data {xi}ni=1 or unlabeled data). The Kullback-Leibler (KL) divergence between the output distributions of a model with parameters θ and a slightly perturbed model θ + δ, f (x; θ) and f (x; θ + δ), respectively, can be locally approximated using a second-order Taylor expansion with respect to δ as: 
+
+Ex [KL ( f (x; θ)∥f (x; θ + δ))] = 12 δ⊤F (θ)δ + O(∥δ∥3). (2) 
+
+3.3. Loss Hessian and Gauss-Newton Approximation 
+
+The geometry of the empirical loss surface L(θ) is de-scribed by its Hessian matrix H(θ) = ∇2 
+
+> θ
+
+L(θ). For the CE loss, the Hessian can be approximated by the Gauss-Newton (GN) matrix, G(θ). The second deriva-tive of the per-sample CE loss ℓi(θ) with respect to the logits zi = z(xi; θ), ∇2 
+
+> z
+
+ℓi(θ) = diag( f (xi; θ)) −
+
+f (xi; θ)f (xi; θ)⊤, depends only on the model’s output probabilities f (xi; θ). Consequently, the per-sample GN term, Gi(θ) = ∇θ z⊤ 
+
+> i
+
+(∇2 
+
+> z
+
+ℓi)∇θ zi, is equivalent to the FIM contribution in Eq. (1) . The empirical GN matrix, 
+
+G(θ) = 1
+
+> n
+
+Pni=1 Gi(θ), thus often termed the empirical FIM, provides a positive semi-definite approximation to 
+
+H(θ):
+
+H(θ) ≈ G(θ) = F (θ)
+
+and is frequently used in optimization (Martens, 2020; Pas-canu & Bengio, 2013). 
+
+## 4. Assessing Generalization Gap via Local Inconsistency 
+
+This section introduces our proposed measure, local incon-sistency, designed to capture the generalization gap. We first define local inconsistency and elucidate its theoretical underpinnings by connecting it to the FIM and the loss Hes-sian. We then discuss its relationship with inconsistency (Johnson & Zhang, 2023). Finally, we present empirical results demonstrating the correlation between local incon-sistency and the generalization gap, comparing it with other common measures. 
+
+4.1. Local Inconsistency, Sρ(θ)
+
+We introduce local inconsistency, Sρ(θ), defined as: 
+
+Sρ(θ) = max ∥δ∥≤ ρ Ex∼p(x)[KL( f (x; θ)∥f (x; θ + δ))] ,
+
+(3) which represents the sensitivity of the model’s output dis-tribution f (x; θ) with respect to the worst perturbations δ,within a Euclidean ball of radius ρ around the parameter θ.Intuitively, a high value of Sρ(θ) indicates that the model’s output distribution is highly sensitive to small perturbations in parameter space. This sensitivity suggests potential insta-bility or uncertainty in the model’s predictions associated with the vicinity of θ.
+
+Practical Advantages of Sρ Local inconsistency shares a practical advantage with sharpness-based measures (Keskar et al., 2017; Foret et al., 2021) in that it can be calculated using a single trained model. Furthermore, like disagree-ment (Jiang et al., 2022) and inconsistency (Johnson & Zhang, 2023), our metric can be estimated using only un-labeled data. A notable advantage over inconsistency and disagreement estimation is that evaluating Sρ does not re-quire training multiple model instances derived from the same training procedure and is directly regularizable . This potentially makes Sρ more computationally efficient and practical to compute, especially when model training is resource-intensive. 
+
+4.2. Connection to FIM and Hessian 
+
+The relationship between our metric Sρ and the Fisher In-formation Matrix (FIM) can be established by leveraging the local quadratic approximation of the KL divergence, as outlined in Section 3. With this quadratic approximation, we can approximate Sρ(θ) with the maximum eigenvalue of FIM, scaled by ρ2/2:
+
+Sρ(θ) ≈ max ∥δ∥≤ ρ
+
+12 δ⊤F (θ)δ
+
+= 12 (ρv max )⊤F (θ)( ρv max )= 12 ρ2λmax (F (θ)) , (4) where vmax is the eigenvector corresponding to the largest eigenvalue λmax of F (θ). Remarkably, this approximation requires only the model θ and unlabeled data (used to com-pute the expectation). The Fisher Information Matrix F (θ), to which Sρ(θ) is related via its maximum eigenvalue, also connects to the Hessian of the loss function H(θ). As detailed in Section 3, for Negative Log Likelihood losses such as CE, the Hessian can be approximated by the Gauss-Newton matrix G(θ),equivalent to empirical FIM computed using training data. 3Inconsistency-Aware Minimization: Improving Generalization with Unlabeled Data 
+
+Consequently, when calculating Sρ(θ) using the training data, it approximates 12 ρ2λmax (G(θ)) . Given that G(θ)
+
+often provides a good approximation to the true loss Hessian near a local minimum, Sρ(θ) therefore offers insights into the maximum curvature of the loss landscape in that vicinity. 
+
+4.3. Local Inconsistency and Generalization Bounds 
+
+Under near interpolation, which is a standard regime in mod-ern deep learning (Zhang et al., 2017), the empirical Hessian splits into a Fisher/Gauss–Newton term plus a small resid-ual, which lets us replace λmax (HS (θ)) with λmax (FS (θ)) 
+
+up to a spectral slack. 
+
+Theorem 4.1 (FIM-based generalization bound) . Under the same assumptions of Theorem 3.1 of Luo et al. (2024), for any ξ ∈ (0 , 1) and ρ > 0, with probability at least 1 − ξ
+
+over the choice of S ∼ D, we have 
+
+LD (θ) ≤ LS (θ) + ρ2
+
+2
+
+
+
+λmax 
+
+ FS (θ) + εR
+
+
+
++ Cm 3/2ρ3
+
+> 6
+
++ O
+
+ 1
+
+√n
+
+
+
+,
+
+where n is the number of samples. 
+
+In particular, at (near) interpolation ( εR ≈ 0), the residual vanishes and the curvature term reduces to λmax (FS (θ)) 
+
+with no degradation. We defer the exact complexity term and proof to Appendix A. This bound suggests that minimizing a combination of 
+
+LS (θ) and the local inconsistency Sρ(θ) lowers the upper bound on the true risk LD (θ). This provides a theoreti-cal motivation for our Inconsistency-Aware Minimization (IAM) framework, which aims to find solutions that are ac-curate on the training data while keeping output sensitivity low in parameter space, as measured by Sρ(θ).
+
+4.4. Relation with Inconsistency in Johnson & Zhang (2023) 
+
+Local inconsistency exhibits an interesting relationship to the inconsistency in Johnson & Zhang (2023) defined as: 
+
+CP = EZn Eθ,θ ′∼ΘP |Zn Ex∼p(x)[KL( f (x; θ)∥f (x; θ′))] .
+
+We consider the conditional inconsistency for a fixed Zn,denoted CP |Zn , without outer expectation. Then our pro-posed metric, Sρ(θZn ), is approximately proportional to the conditional inconsistency CP |Zn :
+
+m
+
+2C CP |Zn ≲ Sρ(θZn ) ≲ m
+
+2 CP |Zn , (5) under certain assumptions, such as assuming the parameter posterior ΘP |Zn as a distribution with isotropic covariance and θZn as mean. This connection arises because both met-rics are related to the local geometry captured by the FIM at θZn , with Sρ being linked to its maximum eigenvalue and CP |Zn to its trace. Practically, the eigenspectra of the FIM of a neural network are observed to be dominated by a few large eigenvalues (specifically related to the number of classes, C in classification task) while remaining eigenval-ues are near zero (Sagun et al., 2017; Papyan, 2018; 2019; 2020; Karakida et al., 2019; 2021). This observation indi-cates that the ratio λmax (F (θ)) /Tr( F (θ)) is larger than 1
+
+> C
+
+(C ≪ m). For detailed derivation, please see Appendix B. 
+
+4.5. Estimating Local Inconsistency Sρ(θ)
+
+Directly computing Sρ(θ) requires solving the maximiza-tion problem over the high-dimensional parameter pertur-bation δ. For deep neural networks, finding the exact maxi-mum within the L2-ball of radius ρ is generally intractable. Therefore, we employ numerical approximation methods. For small perturbations δ, the expected KL divergence can be accurately approximated by a second-order Taylor ex-pansion involving the Fisher Information Matrix (FIM), 
+
+F (θ), as Eq. (2) of Section 3 . Under quadratic approxima-tion, as discussed in Section 4.2, the optimal perturbation 
+
+δ∗ = ρv max , the maximum value is then Sρ(θ) = 12 ρ2λmax ,and the gradient of the approximated KL divergence with respect to δ is F (θ)δ.This connection motivates, instead of the usual Projected Gradient Ascent update δ ← Π{δ:∥δ∥≤ ρ}(δ + ηF (θ)δ), an iterative gradient ascent approach that updates: 
+
+δk+1 = ρ
+
+∥F (θ)δk∥ F (θ)δk, δ0 = ε ∼ N 
+
+
+
+0, σ2
+
+m Im
+
+
+
+,
+
+where σ2 is initial noise scale. Iterative gradient ascent is precisely one iteration of the Power Iteration method used to find the dominant eigenvector of F (θ).
+
+Algorithm for estimating Sρ(θ) Based on the above, we propose Algorithm 1 to estimate Sρ(θ). This algorithm performs K steps of normalized gradient ascent (effectively, Power Iteration under the quadratic approximation) to find an approximate maximizing perturbation δ∗. Algorithm 1 requires K gradient computations. 
+
+Algorithm 1 Estimation of Sρ(θ)
+
+Input: model parameter θ ∈ Rm, noise scale σ2, radius 
+
+ρ > 0, number of steps K ≥ 1
+
+Initialize δ0 randomly with N (0 , σ2 
+
+> m
+
+Im)
+
+for k = 0 to K − 1 do 
+
+Compute gk = ∇δ ExKL( f (x; θ)∥f (x; θ + δ)) |δ=δk
+
+Update perturbation: δk+1 = ρ gk 
+
+> ∥gk∥
+
+end for return Ex∼p(x)KL( f (x; θ)∥f (x; θ + δK )) 
+
+4Inconsistency-Aware Minimization: Improving Generalization with Unlabeled Data 10 1 10 0 10 1  
+
+> S()
+> 0.25
+> 0.30
+> 0.35
+> 0.40
+> 0.45
+> generalization gap
+
+(a) Sρ. τ = 0 .5141 10 0 10 1 10 2 10 3 10 4 
+
+> Tr( H)
+> 0.25
+> 0.30
+> 0.35
+> 0.40
+> 0.45
+> generalization gap
+
+(b) Tr( H). τ = 0 .5444 10 1 10 0 10 1 10 2 10 3 
+
+> max (H)
+> 0.25
+> 0.30
+> 0.35
+> 0.40
+> 0.45
+> generalization gap
+
+(c) λmax (H). τ = 0 .5175 10 6 10 5 10 4  
+
+> S()
+> 0.05
+> 0.10
+> 0.15
+> 0.20
+> 0.25
+> 0.30
+> generalization gap
+> WD
+> 0.0
+> 0.0001
+> 0.0005
+> DA
+> False
+> True
+
+(d) Sρ. τ = 0 .3658 10 2 10 1 10 0 10 1 10 2 10 3 10 4 
+
+> Tr( H)
+> 0.05
+> 0.10
+> 0.15
+> 0.20
+> 0.25
+> 0.30
+> generalization gap
+
+(e) Tr( H). τ = −0.0439 10 3 10 2 10 1 10 0 10 1 10 2 10 3 
+
+> max (H)
+> 0.05
+> 0.10
+> 0.15
+> 0.20
+> 0.25
+> 0.30
+> generalization gap
+
+(f) λmax (H). τ = −0.1200 
+
+Figure 1. Local inconsistency and sharpness measures vs the generalization gap. 
+
+4.6. Empirical Results 
+
+To compare the predictive capability of Sρ for the general-ization gap with traditional loss-based sharpness measures, we conducted experiments on CIFAR-10. We trained two distinct architectures, a 6-layer CNN (6CNN) and a Wide Residual Network (WRN28-2) (Zagoruyko & Komodakis, 2016), under various hyperparameter settings (details in Appendix F). Sρ was estimated using a disjoint, unlabeled dataset. For comparison, we also computed two common sharpness measures: the trace, Tr( H), and the maximum eigenvalue, λmax (H).Figure 1 presents scatter plots of these metrics against the generalization gap (test error - train error), with Kendall’s Tau ( τ ) reported for each. For the simpler 6CNN model (top row), Sρ (τ = 0 .5141 ) exhibited a positive correlation with the generalization gap, comparable to Tr( H) (τ = 0 .5444 )and λmax (H) (τ = 0 .5175 ). This suggests that for smaller models, various geometric measures may similarly capture aspects of generalization. However, for the larger WRN28-2 model under vary-ing data augmentation and weight decay settings (bottom row), a more nuanced behavior emerged. As noted by Andriushchenko et al. (2023), different training configu-rations—specifically combinations of weight decay and data augmentation—can form distinct solution subgroups. 
+
+Tr( H) and λmax (H) show positive correlations only within such subgroups but exhibit negative overall correlations globally ( τ = −0.0439 and τ = −0.1200 , respectively). In stark contrast, our Sρ maintained a positive, albeit reduced, global correlation ( τ = 0 .3658 ). This divergence, particularly with larger models and data augmentation, suggests that the output-based formulation of local inconsistency is more robust to the absolute scale effects that vary across models and data-augmentation set-tings than traditional Hessian-based sharpness. While the predictive utility of sharpness metrics can be confounded by these subgroup effects, Sρ demonstrates more consistent global predictiveness, hinting at its potential as a more ro-bust generalization indicator in complex training scenarios. 
+
+## 5. Inconsistency-Aware Minimization (IAM): Incorporating Local Inconsistency into the Objective 
+
+Our empirical findings suggest that local inconsistency, 
+
+Sρ(θ) defined in Eq. (3) , correlates with the generalization gap. This motivates its use as a regularizer to guide the opti-mization towards solutions that not only fit the training data, but also exhibit low sensitivity in their output distributions with respect to parameter perturbations. We propose two strategies to incorporate local inconsistency into the training objective. 1. Direct Regularization (IAM-D) : This approach directly penalizes local inconsistency by adding it to the standard training loss L(θ):
+
+LIAM-D (θ) = L(θ) + βS ρ(θ) (6) where β > 0 is a hyperparameter balancing the trade-off. This objective seeks parameter values θ for which the model outputs are consistent across the neighborhood. 5Inconsistency-Aware Minimization: Improving Generalization with Unlabeled Data 
+
+Algorithm 2 Inconsistency-Aware Minimization 
+
+Input: Initial model parameters θ0; Learning rate η; Base optimizer O; Neighborhood size ρ; training set Zn; Batch size b; Number of steps K for Algorithm 1. 
+
+while not converged do 
+
+Sample batch {(xi, y i)}bi=1 .Compute δK from Algorithm 1 using current θ, ρ, and data {xi}bi=1 .
+
+if IAM-S then 
+
+Compute gradient g = ∇θ L(θ)|θ+δK
+
+else if IAM-D then 
+
+Compute gradient g = ∇θ (L(θ) + βS ρ(θ)) 
+
+end if 
+
+θ ← O (θ, g, η )
+
+end while Return optimized parameters θ.2. SAM-like Approach (IAM-S) : Inspired by SAM (Foret et al., 2021), this method aims to find parameters θ that re-side in a neighborhood of uniformly low loss by minimizing the loss at an adversarially perturbed point θ + δ∗:
+
+LIAM-S (θ) = L(θ + δ∗), (7) 
+
+δ∗ = arg max ∥δ∥≤ ρ 1
+
+> n
+
+Pni=1 KL( f (xi, θ )∥f (xi, θ + δ)) is the perturbation that maximizes the local inconsistency term with current mini-batch. Note that the objective minimizes the original loss L at the perturbed point θ + δ:
+
+L(θ + δ) ≈ L(θ) + δ⊤∇θ L(θ) + 12 δ⊤G(θ)δ. 
+
+Note that our perturbation δ and −δ have equal probability of being sampled. Consequently, the symmetry mitigates the influence of the first-order term δ⊤∇θ L(θ) in expecta-tion, suggesting IAM-S implicitly minimizes the principal eigenvalues of G(θ) (equivalent to empirical FIM). 
+
+5.1. Algorithm for Inconsistency-Aware Minimization 
+
+Optimizing LIAM-D (θ) and LIAM-S (θ) involves a min-max procedure. The inner maximization to find δ∗ (i.e., comput-ing Sρ(θ) and the corresponding δ∗) is performed using an Algorithm 1 with current mini-batch, typically for K = 1 
+
+to match the number of additional gradient computations to that of SAM. For IAM-D , we simply add the regularization term βS ρ(θ) to the original loss L(θ) and compute the gra-dient g = ∇θ (L(θ) + βS ρ(θ)) . In the case of IAM-S , the outer minimization step calculates the gradient of the loss at the perturbed point θ + δK . Following the approxima-tion used in SAM, we drop the second-order terms arising from the derivative ∇θ δ (see Appendix D for theoretical justification for IAM-D). Finally, a base optimizer O (e.g., SGD or Adam) updates θ using the computed gradient g, as summarized in Algorithm 2. 1 0 1                  
+
+> 1
+> 0
+> 1
+> (a) f(x;θ±δ1)101
+> 1
+> 0
+> 1(b) f(x;θ±ε)
+> Figure 2. A synthetic classification example. The black, blue, orange lines correspond to decision boundaries of the NN with trained parameter, and parameter perturbed by ±δ1(a) or ±ε(b).
+
+Figure 2 intuitively shows the role of perturbation δ1 with decision boundaries of a Neural Network (NN) for two-dimensional synthetic data generated from mixtures of three Gaussians. As Jang et al. (2022) show, the density change occurs mainly along the principal eigenvectors of FIM; thus, 
+
+δ1 is aligned with principal eigenvectors of FIM and causes a meaningful output distribution shift while the noise pertur-bation ε with the same norm does not. See Appendix C for a detailed analysis of the effectiveness of δ1 in this setting. Moreover, as K increases, IAM benefits from a more accu-rate estimation of local inconsistency, offering a trade-off between performance and cost (see Appendix E.1). 
+
+5.2. Empirical Evaluation in Supervised Learning 
+
+We evaluate the performance of IAM against SGD, SAM, and ASAM (Kwon et al., 2021) on standard image clas-sification tasks. Wide ResNet (WRN) (Zagoruyko & Ko-modakis, 2016) serves as the baseline model, trained on CIFAR-{10, 100}, F-MNIST, and SVHN with standard data augmentations. Specifically, we employ WRN-16-8 for CIFAR-{10, 100} and WRN-28-10 for F-MNIST and SVHN. Optimal hyperparameters were determined via a grid search: for IAM-D, we set β = 1 .0, ρ = 0 .1 on CIFAR-10 and β = 10 .0, ρ = 0 .1 on CIFAR-100; for IAM-S, we used ρ = 0 .1 and ρ = 0 .5 for CIFAR-10 and CIFAR-100, respectively. To ensure a fair comparison under a fixed com-putational budget, we report the best test error for SGD from either 200 or 400 epochs. Detailed experimental settings are listed in Appendix F. For additional results of ViT (Dosovit-skiy et al., 2021) on CIFAR-10 and ImageNet, please refer to Table 8 and Table 6 in Appendix E.3. Table 1 summarizes the test error rates. Both IAM-D and IAM-S not only reduce test error compared to SGD but also achieve performance comparable to SAM and ASAM on overall datasets. Notably, on the complex CIFAR-100 dataset, IAM-S outperforms SAM by a margin of 0.81%, demonstrating its effectiveness in challenging scenarios. 6Inconsistency-Aware Minimization: Improving Generalization with Unlabeled Data 
+
+Table 1. Test Error (mean ± stderr) of SGD, SAM, ASAM, and IAM across datasets. 
+
+Dataset SGD SAM ASAM IAM-D IAM-S CIFAR-10 3.68 ±0.04 3.31 ±0.01 3.15 ±0.02 3.28 ±0.06 3.28 ±0.03 
+
+CIFAR-100 19.17 ±0.19 17.63 ±0.12 17.15 ±0.11 17.16 ±0.03 16.82 ±0.01 
+
+F-MNIST 4.45 ±0.05 4.13 ±0.02 4.11 ±<0.01 4.13 ±0.04 4.10 ±0.05 
+
+SVHN 3.82 ±0.06 3.47 ±0.09 3.24 ±0.04 3.13 ±0.06 3.13 ±0.01 0 50 100 150 200 
+
+Train Step 
+
+> 0.02 0.04 0.06 0.08 0.10 0.12
+> Inconsistency
+> 70 75 80 85 90 95 100
+> Test Accuracy
+
+(a) CIFAR-10 0 50 100 150 200 
+
+Train Step 
+
+> 0.51.01.52.0
+> Inconsistency
+> SGD Inconsistency IAM Inconsistency SGD Accuracy IAM Accuracy
+> 30 40 50 60 70 80 90 100
+> Test Accuracy
+
+(b) CIFAR-100 
+
+Figure 3. The evolution of the local inconsistency Sρ(θ) and test accuracy with SGD and IAM-D. 
+
+We further analyze the training dynamics in Figure 3, which illustrates the evolution of local inconsistency Sρ(θ) and test accuracy for SGD and IAM-D. IAM-D effectively sup-presses the increase in Sρ(θ) and mitigates overfitting. This effect is particularly evident after the learning rate decay points, where the test accuracy of SGD tends to degrade while its inconsistency rebounds. In contrast, IAM-D main-tains a stable Sρ(θ) below that of SGD throughout the train-ing. These observations suggest that minimizing local in-consistency helps confine the model to parameter regions with smoother output distributions, which correlates with the generalization improvements observed in Table 1. To verify the scalability of our approach, we extend our eval-uation to the large-scale ImageNet dataset using a ResNet-50 architecture. Following the experimental setting of Foret et al. (2021), we train the model with a batch size of 1024, 
+
+Table 2. Top-1 and Top-5 error (mean ± stderr) of ResNet-50 trained 200 epochs on ImageNet. 
+
+Top-1 Top-5 SGD 22.66 ± 0.12 6.51 ± 0.06 
+
+SAM 21.80 ± 0.12 5.99 ± 0.04 
+
+IAM-D 21.36 ± 0.06 5.70 ± 0.02 
+
+IAM-S 21.72 ± 0.07 5.90 ± 0.02 
+
+initial learning rate of 0.2, and basic augmentations. We set 
+
+ρ = 0 .2 for IAM-S, ρ = 0 .1 for IAM-D, and ρ = 0 .05 for SAM. We report the best score achieved by SGD at either 200 epochs or 400 epochs. As shown in Table 2, IAM-D and IAM-S outperform the standard SGD baseline in both Top-1 and Top-5 error. In particular, IAM-D outperforms the stronger SAM baseline. See Table 5 in Appendix E.2 for the results of each epochs. While SAM relies on the gradient of the training loss, IAM derives perturbations via the KL divergence. The generaliza-tion performance of IAM-S empirically demonstrates that a single-step perturbation δ1 ≈ F (θ)ε is not merely stochas-tic; rather, it effectively captures the principal eigenspace of the FIM with minimal computational effort ( K = 1 ). This observation aligns with Explicit Jacobian Regulariza-tion (Lee et al., 2023), which showed that random noise becomes a meaningful perturbation when projected onto the Jacobian’s column space. The same mechanism applies here: multiplying ε by F (θ) weights each eigendirection by its eigenvalue, so a single step amplifies the dominant curvature directions while suppressing the rest. 
+
+5.3. IAM for Learning with Limited or No Explicit Labels 
+
+A key advantage of local inconsistency is its computability from unlabeled data, making IAM well-suited for scenarios with limited or no explicit supervision. We demonstrate this in semi-supervised and self-supervised learning set-tings. IAM-D can be seamlessly “plugged in” to complex pipelines like FixMatch (Sohn et al., 2020) or SimCLR (Chen et al., 2020) by adding penalty term βS ρ(θ) to the original objective. Detailed experimental settings are listed in Appendix F. 7Inconsistency-Aware Minimization: Improving Generalization with Unlabeled Data 
+
+Table 3. Test error (mean ± stderr) with semi-supervised setting on CIFAR-10 and CIFAR-100 CIFAR-10 CIFAR-100 250 labels 4000 labels 2500 labels 10000 labels SGD 63.82 ± 0.18 22.45 ± 0.40 68.91 ± 0.43 45.94 ± 0.35 
+
+SAM 63.91 ± 0.18 19.95 ± 0.22 69.53 ± 0.79 43.30 ± 0.11 
+
+IAM-D 61.77 ± 0.09 15.07 ± 0.14 66.98 ± 0.01 40.02 ± 0.13 
+
+FixMatch 6.26 ± 0.39 4.10 ± 0.17 32.84 ± 0.40 22.93 ± 0.05 
+
+FixMatch + IAM-D 5.30 ± 0.08 3.88 ± 0.02 28.95 ± 0.59 21.99 ± 0.04 
+
+Semi-Supervised Learning. We demonstrate the advan-tage of IAM in a label-scarce setting on CIFAR-{10, 100}. Our method, IAM-D, optimizes a joint objective: the stan-dard cross-entropy loss on the labeled subset, plus the local inconsistency penalty computed over the entire mini-batch (both labeled and unlabeled samples). The results in Ta-ble 3 show that IAM-D consistently outperforms both SGD and SAM. Furthermore, to highlight its versatility, we inte-grated IAM-D into the strong FixMatch framework (Sohn et al., 2020). This combination significantly lowers the test error both on CIFAR-10 and CIFAR-100, demonstrating that IAM-D can serve as an effective plug-and-play regu-larizer to enhance state-of-the-art semi-supervised learning methods. This approach contrasts with methods like SAM, which can only promote flatness over the small, labeled subset. Simply applying SAM to labeled loss of FixMatch fails to improve generalization (see Appendix E.4). A critical insight is that flatness measured on a sparse set of labeled points may not reflect true flatness across the entire data distribution. By leveraging second-order information from abundant unlabeled data, IAM-D seeks a more generalizable minimum. 0 50 100 150 200 
+
+> Epoch
+> 40
+> 50
+> 60
+> 70
+> 80
+> Test Accuracy (%)
+> IAM (accuracy) SGD (accuracy) IAM (loss) SGD (loss)
+> 6.06.57.0
+> Loss
+
+Figure 4. Test accuracy on linear probe and SimCLR training loss for ResNet-18 on CIFAR-10, comparing SimCLR trained with SGD (SimCLR-SGD) versus SimCLR with IAM-D (SimCLR-IAM). 
+
+Self-Supervised Learning (SSL). The label-agnostic na-ture of IAM makes it directly applicable to SSL objectives. We integrated IAM-D into the SimCLR framework (Chen et al., 2020), training a ResNet-18 (He et al., 2016) encoder on CIFAR-10. Performance was evaluated using linear prob-ing. The local inconsistency term for IAM-D was computed using the model’s projection-head outputs. Figure 4 shows that SimCLR trained with IAM-D (SimCLR-IAM) achieves higher test accuracy on the downstream linear classification task compared to vanilla SimCLR (SimCLR-SGD). Further-more, SimCLR-IAM tends to converge faster in terms of test error and also minimizes the SimCLR training loss more rapidly, despite the additional local inconsistency regular-ization. This suggests that controlling local inconsistency is beneficial even when no explicit labels are available during representation learning. 
+
+## 6. Conclusion 
+
+In this work, we introduced “local inconsistency,” a novel information-geometric generalization measure computable from a single model using only unlabeled data. We theoreti-cally linked it to the Fisher Information Matrix (FIM) and the loss Hessian. Empirically, local inconsistency correlates with the generalization gap and exhibits distinct characteris-tics from traditional sharpness-based metrics. Based on this, we proposed Inconsistency-Aware Minimiza-tion (IAM), an optimization framework that directly incor-porates local inconsistency into the training objective. IAM enhances generalization in supervised learning, matching or exceeding that of Sharpness-Aware Minimization (SAM). Crucially, IAM proves effective in semi- and self-supervised learning by leveraging unlabeled data for local inconsis-tency computation, improving performance in label-scarce settings. These findings offer a practical and theoretically-grounded approach to improving model generalization, particularly valuable in real-world applications where labeled data is limited. Future research could focus on exploring the scala-bility and applicability of IAM to a wider array of modern model architectures and other tasks or on developing a com-putationally efficient version of IAM. 8Inconsistency-Aware Minimization: Improving Generalization with Unlabeled Data 
+
+## Impact Statement 
+
+This paper presents work whose goal is to advance the field of Machine Learning. There are many potential societal consequences of our work, none which we feel must be specifically highlighted here. 
+
+## Acknowledgments 
+
+We thank the anonymous reviewers for insightful reviews. This work was partially supported by Institute of Informa-tion & communications Technology Planning & Evalua-tion (IITP) grants (RS-2020-II201373, Artificial Intelligence Graduate School Program (Hanyang University); RS-2023-002206284, Artificial intelligence for prediction of structure-based protein interaction reflecting physicochemical prin-ciples); the BK21 FOUR (Fostering Outstanding Universi-ties for Research) project; NRF2024S1A5C3A02043653, Socio-Technological Solutions for Bridging the AI Divide: A Blockchain and Federated Learning-Based AI Training Data Platform) and Korea Institute for Advanced Study (KIAS) grant funded by the Korean government (MSIT). 
+
+## References 
+
+Andriushchenko, M., Croce, F., Müller, M., Hein, M., and Flammarion, N. A modern look at the relationship be-tween sharpness and generalization. In Krause, A., Brun-skill, E., Cho, K., Engelhardt, B., Sabato, S., and Scarlett, J. (eds.), Proceedings of the 40th International Confer-ence on Machine Learning , volume 202 of Proceedings of Machine Learning Research , pp. 840–902. PMLR, 23–29 Jul 2023. Arpit, D., Jastrz˛ ebski, S., Ballas, N., Krueger, D., Bengio, E., Kanwal, M. S., Maharaj, T., Fischer, A., Courville, A., Bengio, Y., and Lacoste-Julien, S. A closer look at mem-orization in deep networks. In Precup, D. and Teh, Y. W. (eds.), Proceedings of the 34th International Conference on Machine Learning , volume 70 of Proceedings of Ma-chine Learning Research , pp. 233–242. PMLR, 06–11 Aug 2017. Bartlett, P. L., Foster, D. J., and Telgarsky, M. J. Spectrally-normalized margin bounds for neural networks. In Guyon, I., Luxburg, U. V., Bengio, S., Wallach, H., Fergus, R., Vishwanathan, S., and Garnett, R. (eds.), Advances in Neural Information Processing Systems , volume 30. Cur-ran Associates, Inc., 2017. Chen, T., Kornblith, S., Norouzi, M., and Hinton, G. Asimple framework for contrastive learning of visual repre-sentations. In III, H. D. and Singh, A. (eds.), Proceedings of the 37th International Conference on Machine Learn-ing , volume 119 of Proceedings of Machine Learning Research , pp. 1597–1607. PMLR, 13–18 Jul 2020. Dinh, L., Pascanu, R., Bengio, S., and Bengio, Y. Sharp min-ima can generalize for deep nets. In Precup, D. and Teh, Y. W. (eds.), Proceedings of the 34th International Con-ference on Machine Learning , volume 70 of Proceedings of Machine Learning Research , pp. 1019–1028. PMLR, 06–11 Aug 2017. Dosovitskiy, A., Beyer, L., Kolesnikov, A., Weissenborn, D., Zhai, X., Unterthiner, T., Dehghani, M., Minderer, M., Heigold, G., Gelly, S., Uszkoreit, J., and Houlsby, N. An image is worth 16x16 words: Transformers for image recognition at scale. In International Conference on Learning Representations , 2021. Foret, P., Kleiner, A., Mobahi, H., and Neyshabur, B. Sharpness-aware minimization for efficiently improving generalization. In International Conference on Learning Representations , 2021. Garipov, T., Izmailov, P., Podoprikhin, D., Vetrov, D. P., and Wilson, A. G. Loss surfaces, mode connectivity, and fast ensembling of dnns. In Bengio, S., Wallach, H., Larochelle, H., Grauman, K., Cesa-Bianchi, N., and Gar-nett, R. (eds.), Advances in Neural Information Process-ing Systems , volume 31. Curran Associates, Inc., 2018. Hardt, M., Recht, B., and Singer, Y. Train faster, generalize better: Stability of stochastic gradient descent. In Balcan, M. F. and Weinberger, K. Q. (eds.), Proceedings of The 33rd International Conference on Machine Learning , vol-ume 48 of Proceedings of Machine Learning Research ,pp. 1225–1234, New York, New York, USA, 20–22 Jun 2016. PMLR. He, K., Zhang, X., Ren, S., and Sun, J. Deep residual learn-ing for image recognition. In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR) , June 2016. Jang, C., Lee, S., Park, F., and Noh, Y.-K. Areparametrization-invariant sharpness measure based on information geometry. Advances in neural information processing systems , 35:27893–27905, 2022. Jiang*, Y., Neyshabur*, B., Mobahi, H., Krishnan, D., and Bengio, S. Fantastic generalization measures and where to find them. In International Conference on Learning Representations , 2020. Jiang, Y., Nagarajan, V., Baek, C., and Kolter, J. Z. Assess-ing generalization of SGD via disagreement. In Interna-tional Conference on Learning Representations , 2022. Johnson, R. and Zhang, T. Inconsistency, instability, and generalization gap of deep neural network training. In Oh, A., Naumann, T., Globerson, A., Saenko, K., Hardt, M., and Levine, S. (eds.), Advances in Neural Information 
+
+9Inconsistency-Aware Minimization: Improving Generalization with Unlabeled Data 
+
+Processing Systems , volume 36, pp. 9479–9505. Curran Associates, Inc., 2023. Karakida, R., Akaho, S., and Amari, S.-i. Universal statistics of fisher information in deep neural networks: Mean field approach. In The 22nd International Conference on Artificial Intelligence and Statistics , pp. 1032–1041. PMLR, 2019. Karakida, R., Akaho, S., and Amari, S.-i. Pathological spectra of the fisher information metric and its variants in deep neural networks. Neural Computation , 33(8): 2274–2307, 07 2021. ISSN 0899-7667. doi: 10.1162/ neco_a_01411. Keskar, N. S., Mudigere, D., Nocedal, J., Smelyanskiy, M., and Tang, P. T. P. On large-batch training for deep learning: Generalization gap and sharp minima. In Inter-national Conference on Learning Representations , 2017. Kim, M., Li, D., Hu, S. X., and Hospedales, T. Fisher SAM: Information geometry and sharpness aware minimisation. In Chaudhuri, K., Jegelka, S., Song, L., Szepesvari, C., Niu, G., and Sabato, S. (eds.), Proceedings of the 39th International Conference on Machine Learning , volume 162 of Proceedings of Machine Learning Research , pp. 11148–11161. PMLR, 17–23 Jul 2022. Kwon, J., Kim, J., Park, H., and Choi, I. K. Asam: Adaptive sharpness-aware minimization for scale-invariant learn-ing of deep neural networks. In Meila, M. and Zhang, T. (eds.), Proceedings of the 38th International Conference on Machine Learning , volume 139 of Proceedings of Ma-chine Learning Research , pp. 5905–5914. PMLR, 18–24 Jul 2021. Lee, S., Park, J., and Lee, J. Implicit Jacobian regularization weighted with impurity of probability output. In Krause, A., Brunskill, E., Cho, K., Engelhardt, B., Sabato, S., and Scarlett, J. (eds.), Proceedings of the 40th Interna-tional Conference on Machine Learning , volume 202 of 
+
+Proceedings of Machine Learning Research , pp. 19141– 19184. PMLR, 23–29 Jul 2023. Li, H., Xu, Z., Taylor, G., Studer, C., and Goldstein, T. Vi-sualizing the loss landscape of neural nets. In Bengio, S., Wallach, H., Larochelle, H., Grauman, K., Cesa-Bianchi, N., and Garnett, R. (eds.), Advances in Neural Informa-tion Processing Systems , volume 31. Curran Associates, Inc., 2018. Luo, H., Truong, T., Pham, T., Harandi, M., Phung, D., and Le, T. Explicit eigenvalue regularization improves sharpness-aware minimization. In Globerson, A., Mackey, L., Belgrave, D., Fan, A., Paquet, U., Tomczak, J., and Zhang, C. (eds.), Advances in Neural Information Pro-cessing Systems , volume 37, pp. 4424–4453. Curran As-sociates, Inc., 2024. Mandt, S., Hoffman, M. D., and Blei, D. M. Stochastic gra-dient descent as approximate bayesian inference. J. Mach. Learn. Res. , 18(1):4873–4907, January 2017. ISSN 1532-4435. Martens, J. New insights and perspectives on the natural gradient method. Journal of Machine Learning Research ,21(146):1–76, 2020. Nagarajan, V. and Kolter, J. Z. Uniform convergence may be unable to explain generalization in deep learning. In Wal-lach, H., Larochelle, H., Beygelzimer, A., d'Alché-Buc, F., Fox, E., and Garnett, R. (eds.), Advances in Neural Information Processing Systems , volume 32. Curran As-sociates, Inc., 2019. Nakkiran, P., Kaplun, G., Bansal, Y., Yang, T., Barak, B., and Sutskever, I. Deep double descent: where bigger models and more data hurt*. Journal of Statistical Me-chanics: Theory and Experiment , 2021(12):124003, dec 2021. doi: 10.1088/1742-5468/ac3a74. Papyan, V. The full spectrum of deepnet Hessians at scale: Dynamics with SGD training and sample size. arXiv preprint arXiv:1811.07062 , 2018. Papyan, V. Measurements of three-level hierarchical struc-ture in the outliers in the spectrum of deepnet hessians. In Chaudhuri, K. and Salakhutdinov, R. (eds.), Proceed-ings of the 36th International Conference on Machine Learning , volume 97 of Proceedings of Machine Learn-ing Research , pp. 5012–5021. PMLR, 09–15 Jun 2019. Papyan, V. Traces of class/cross-class structure pervade deep learning spectra. Journal of Machine Learning Research ,21(252):1–64, 2020. Pascanu, R. and Bengio, Y. Revisiting Natural Gradient for Deep Networks. arXiv preprint arXiv:1301.3584 , 2013. Sagun, L., Evci, U., Guney, V. U., Dauphin, Y., and Bottou, L. Empirical analysis of the hessian of over-parametrized neural networks. arXiv preprint arXiv:1706.04454 , 2017. Santurkar, S., Tsipras, D., Ilyas, A., and Madry, A. How does batch normalization help optimization? In Ben-gio, S., Wallach, H., Larochelle, H., Grauman, K., Cesa-Bianchi, N., and Garnett, R. (eds.), Advances in Neural Information Processing Systems , volume 31. Curran As-sociates, Inc., 2018. Sohn, K., Berthelot, D., Carlini, N., Zhang, Z., Zhang, H., Raffel, C. A., Cubuk, E. D., Kurakin, A., and Li, C.-L. Fixmatch: Simplifying semi-supervised learning with consistency and confidence. In Larochelle, H., Ranzato, M., Hadsell, R., Balcan, M., and Lin, H. (eds.), Advances in Neural Information Processing Systems , volume 33, pp. 596–608. Curran Associates, Inc., 2020. 10 Inconsistency-Aware Minimization: Improving Generalization with Unlabeled Data 
+
+Soudry, D., Hoffer, E., Nacson, M. S., Gunasekar, S., and Srebro, N. The implicit bias of gradient descent on sep-arable data. Journal of Machine Learning Research , 19 (70):1–57, 2018. Srivastava, N., Hinton, G., Krizhevsky, A., Sutskever, I., and Salakhutdinov, R. Dropout: a simple way to prevent neural networks from overfitting. J. Mach. Learn. Res. ,15(1):1929–1958, January 2014. ISSN 1532-4435. Zagoruyko, S. and Komodakis, N. Wide residual networks. In Richard C. Wilson, E. R. H. and Smith, W. A. P. (eds.), 
+
+Proceedings of the British Machine Vision Conference (BMVC) , pp. 87.1–87.12. BMVA Press, September 2016. ISBN 1-901725-59-6. doi: 10.5244/C.30.87. Zhang, C., Bengio, S., Hardt, M., Recht, B., and Vinyals, O. Understanding deep learning requires rethinking gen-eralization. In International Conference on Learning Representations , 2017. Zhang, H., Cisse, M., Dauphin, Y. N., and Lopez-Paz, D. mixup: Beyond empirical risk minimization. In Interna-tional Conference on Learning Representations , 2018. Zhuang, J., Gong, B., Yuan, L., Cui, Y., Adam, H., Dvornek, N. C., sekhar tatikonda, s Duncan, J., and Liu, T. Surro-gate gap minimization improves sharpness-aware training. In International Conference on Learning Representations ,2022. 11 Inconsistency-Aware Minimization: Improving Generalization with Unlabeled Data 
+
+## A. Proof of the FIM-based generalization bound 
+
+We provide a self-contained derivation of the FIM-form bound stated in Theorem 4.1. Throughout, let LS (θ) =
+
+> 1
+> n
+
+Pni=1 ℓ(f (xi; θ), y i) be the empirical cross-entropy with logits z(x; θ) ∈ RC , probabilities f (x; θ) = softmax( z),and J(x; θ) := ∇θ z(x; θ) ∈ RC×m. ∥ · ∥ denotes the Euclidean norm for vectors and the spectral norm for matrices. We write HS (θ) := ∇2LS (θ) and define the empirical Fisher 
+
+FS (θ) := 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+J⊤
+
+> i
+
+ diag( f (xi; θ)) − f (xi; θ)f (xi; θ)⊤Ji,
+
+where Ji := J(xi; θ).
+
+Assumption (near interpolation). There exists εR ≥ 0 such that the residual 
+
+RS (θ) := 1
+
+n
+
+> n
+
+X
+
+> i=1
+> C
+
+X
+
+> k=1
+
+(f (xi; θ) − yi)k ∇2 
+
+> θ
+
+zk(xi; θ) satisfies ∥RS (θ)∥ ≤ εR. (A1) 
+
+Step 1: Hessian–FIM decomposition for softmax–CE Lemma A.1 (Gauss–Newton (=FIM) + residual) . For each sample i, with loss ℓi := ℓ(f (xi; θ), y i),
+
+∇θ ℓi = J⊤ 
+
+> i
+
+(f (xi; θ) − yi)
+
+∇2 
+
+> θ
+
+ℓi = J⊤
+
+> i
+
+ diag( f (xi; θ)) − f (xi; θ)f (xi; θ)⊤Ji +
+
+> C
+
+X
+
+> k=1
+
+(f (xi; θ) − yi)k ∇2 
+
+> θ
+
+zk(xi; θ).
+
+Averaging over i yields HS (θ) = FS (θ) + RS (θ).Proof. Since ℓ(p, y ) = − P 
+
+> k
+
+yk log pk and p = softmax( z), ∂ℓ ∂z = p − y. By the chain rule, ∇θ ℓi = J⊤ 
+
+> i
+
+(f (xi; θ) − yi).Differentiating once more, 
+
+∇2 
+
+> θ
+
+ℓi = J⊤
+
+> i
+
+ ∂f (xi; θ)
+
+∂z i
+
+
+
+Ji +
+
+> C
+
+X
+
+> k=1
+
+ ∂ℓ i
+
+∂z ik 
+
+
+
+∇2 
+
+> θ
+
+zk(xi, θ ),
+
+and ∂f (xi;θ) 
+
+> ∂z i
+
+= diag( f (xi; θ)) − f (xi; θ)f (xi; θ)⊤ for softmax. Using ∂ℓ i 
+
+> ∂z ik
+
+= ( f (xi; θ) − yi)k gives the stated identity. Averaging over i completes the proof. 
+
+Step 2: Spectral control via Weyl’s inequality Lemma A.2 (Hessian vs. FIM eigenvalues) . If HS = FS + RS with FS , R S symmetric, then 
+
+λmax (HS ) ≤ λmax (FS ) + ∥RS ∥.
+
+Combining Lemma A.1 with Assumption (A1) and Lemma A.2 gives 
+
+λmax 
+
+ HS (θ) ≤ λmax 
+
+ FS (θ) + εR. (8) 
+
+Step 3: From the Hessian-based bound to the FIM form 
+
+We recall the Hessian-based bound of Luo et al. (2024) (Theorem 3.1) under the assumption that the loss function is bounded by L, the third-order partial derivative of the loss function is bounded by C, and LD (θ) ≤ Eε∼N (0 ,σ 2Im)LD (θ + ε).
+
+LD (θ) ≤ LS (θ) + m σ 2
+
+2 λmax 
+
+ HS (θ) + Cm 3σ3
+
+6 (9) 
+
++ L
+
+2√n
+
+s
+
+m log  1 + ∥θ∥2
+
+ρ2
+
+ + 2 log 1
+
+ξ + 4 log( n + m) + O(1) . (10) 12 Inconsistency-Aware Minimization: Improving Generalization with Unlabeled Data 
+
+Theorem A.3 (FIM-based generalization bound; Theorem 4.1) . Assume that the loss function is bounded by L, the third-order partial derivative of the loss function is bounded by C, and LD (θ) ≤ Eε∼N (0 ,σ 2Im)LD (θ + ε). For any ξ ∈ (0 , 1) 
+
+and ρ > 0, with probability at least 1 − ξ over the choice of S ∼ D, we have 
+
+LD (θ) ≤ LS (θ) + ρ2
+
+2
+
+
+
+λmax 
+
+ FS (θ) + εR
+
+
+
++ Cm 3/2ρ3
+
+> 6
+
++ L
+
+2√n
+
+s
+
+m log  1 + ∥θ∥2
+
+ρ2
+
+ + 2 log 1
+
+ξ + 4 log( n + m) + O(1) , (11) 
+
+where n is the number of samples and ρ = √mσ .
+
+In particular, at (near) interpolation where εR ≈ 0 (LS (θ) ≈ 0), the residual vanishes and the curvature term reduces to 
+
+λmax (FS (θ)) without degradation. 
+
+Proof. Substitute (8) into (9). 
+
+## B. Relation between Local Inconsistency and Inconsistency 
+
+This section outlines an approximate derivation relating the model output inconsistency CP , as defined by Johnson & Zhang (2023), to the local sensitivity metric Sρ(θ) defined previously. we first show simple demonstrations that these two metrics are related primarily through the Fisher Information Matrix (FIM), under specific assumptions like isotropic covariance. We then show results with anisotropic covariance. 
+
+Definitions 
+
+• Inconsistency ( CP ): Measures the average difference (in terms of KL divergence) between the outputs of models generated by a stochastic training procedure P applied to the same training data Zn. The average is taken over draws of the training data Zn and pairs of models (Θ , Θ′) drawn from the conditional distribution ΘP |Zn .
+
+CP = EZn Eθ,θ ′∼ΘP |Zn Ex[KL( f (x; θ)∥f (x; θ′))] .
+
+Here, ΘP |Zn denotes the distribution over parameters resulting from applying procedure P to dataset Zn.• Local Inconsistency ( Sρ(θ)): Measures the expected maximum change in the model’s output distribution within a 
+
+ρ-radius ball around a specific parameter vector w. For consistency with the derivation below, we use the form where the expectation is inside the maximization. 
+
+Sρ(θ) = max  
+
+> ∥δ∥≤ ρ
+
+Ex[KL( f (x; θ)∥f (x; θ + δ))] .
+
+Here, δ ∈ Rm is a perturbation to the parameters w.
+
+Assumptions The following derivation relies on several key assumptions: 1. Isotropic Covariance Posterior Assumption : For a given training set Zn, the conditional parameter distribution 
+
+ΘP |Zn can be approximated by an isotropic distribution centered at a specific parameter vector θZn derived from Zn:
+
+E[Θ P |Zn ] = θZn , Cov[Θ P |Zn ] = s2Im, where s2 is a small variance. This approximation is motivated by studies interpreting Stochastic Gradient Descent (SGD) as a form of approximate Bayesian inference, where the distribution of parameters after training can resemble a Gaussian centered near a mode of a posterior distribution related to the loss function (Mandt et al., 2017). 2. Validity of Second-Order KL Approximation : The KL divergence between outputs of models with slightly different parameters can be accurately approximated by a quadratic form involving the Fisher Information Matrix (FIM). This relies on the parameter difference being small, implying s2 must be small. 3. Effective FIM Constancy in Expectation : The variations of the FIM F (θ′) for θ′ ∼ N (θZn , s 2Im) around F (θZn ) are assumed to average out sufficiently within the expectation required to calculate CP |Zn . This allows the approximation 
+
+CP |Zn ≈ s2Tr( F (θZn )) .13 Inconsistency-Aware Minimization: Improving Generalization with Unlabeled Data 
+
+Approximation of CP We first consider the conditional inconsistency for a fixed Zn, denoted CP |Zn , by removing the outer expectation EZn :
+
+CP |Zn = Eθ,θ ′∼ΘP |Zn Ex[KL( f (θ, x )∥f (θ′, x ))] 
+
+Applying the isotropic covariance posterior assumption, θ = θZn + δ and θ′ = θZn + δ′, where δ, δ ′ are independent perturbations ( E[δ] = E[δ′] = 0 , Cov[ δ] = Cov[ δ′] = s2Im). 
+
+CP |Zn ≈ Eδ,δ ′ Ex[KL( f (θZn + δ, x )∥f (θZn + δ′, x ))] 
+
+Using the second-order Taylor expansion for KL divergence taking the expectation over x, valid for small ∥δ − δ′∥ (i.e., small s2): 
+
+Ex[KL( f (θZn + δ, x )∥f (θZn + δ′, x ))] = 12 (δ − δ′)T F (θZn + δ′)( δ − δ′) + O(∥δ∥3)
+
+Let u = θ − θ′ = δ − δ′. Since δ, δ ′ are independent, u ∼ N (0 , 2s2Im). Substituting this into the expression for CP |Zn :
+
+CP |Zn = Eu
+
+ 12 uT F (θ′)u
+
+
+
++ O(∥δ∥3)= Eu
+
+ 12 uT F (θZn )u
+
+
+
++ O(∥δ∥3) (FIM Constancy in Expectation Assumption )= 12 Tr(Cov( u)F (θZn )) + 12 E[u]T F (θZn )E[u] + O(∥δ∥3)= 12 Tr(2 s2ImF (θZn )) + 0 + O(∥δ∥3) (E[u] = 0) 
+
+≈ s2Tr( F (θZn )) 
+
+Thus, the conditional inconsistency for a fixed Zn is approximately proportional to the trace of the FIM evaluated at θZn :
+
+CP |Zn ≈ s2Tr( F (θZn )) (12) The overall inconsistency CP is the expectation of this quantity over Zn: CP ≈ EZn [s2Tr( F (θZn ))] .
+
+Approximation of Sρ(θZn ) Applying the same second-order KL approximation to the definition of Sρ(θZn ):
+
+Sρ(θZn ) = max 
+
+> ∥δ∥≤ ρ
+
+12 δ⊤F (θZn )δ + O(∥δ∥3)
+
+The maximum value of the quadratic form δT Aδ for a positive semi-definite matrix A subject to ∥δ∥ ≤ ρ is achieved when 
+
+δ is aligned with the eigenvector corresponding to the largest eigenvalue ( λmax (A)) and has norm ρ. Thus: 
+
+Sρ(θZn ) = 12 ρ2λmax (F (θZn )) (13) This shows that the local sensitivity Sρ is approximately proportional to the largest eigenvalue of the FIM. 
+
+Connecting CP |Zn and Sρ(θZn ) For a m × m positive semi-definite matrix A, the relationship between its trace and largest eigenvalue is given by 1 
+
+> m
+
+Tr( A) ≤ λmax (A) ≤ Tr( A). Applying this to the FIM F (θZn ):
+
+1
+
+m Tr( F (θZn )) ≤ λmax (F (θZn )) ≤ Tr( F (θZn )) 
+
+Substituting this into the approximation for Sρ(θZn ) from Eq. (13): 
+
+ρ2
+
+2m Tr( F (θZn )) ≤ Sρ(θZn ) ≤ ρ2
+
+2 Tr( F (θZn )) 
+
+14 Inconsistency-Aware Minimization: Improving Generalization with Unlabeled Data 
+
+Let’s assume a plausible connection, for instance, s2 = ρ2/m . Substituting this into the approximation for CP |Zn from Eq. (12), we get CP |Zn ≈ ρ2 
+
+> m
+
+Tr( F (θZn )) . Combining this with the bounds for Sρ(θZn ):
+
+12
+
+ ρ2
+
+m Tr( F (θZn )) 
+
+
+
+≤ Sρ(θZn ) ≤ m
+
+2
+
+ ρ2
+
+m Tr( F (θZn )) 
+
+
+
+.
+
+This leads to the final approximate relationship between the conditional inconsistency (for a fixed Zn) and the local sensitivity (at the corresponding θZn ): 12 CP |Zn ≤ Sρ(θZn ) ≤ m
+
+2 CP |Zn (14) This result suggests that, under the stated assumptions, the conditional inconsistency CP |Zn and the local sensitivity Sρ(θZn )
+
+are approximately proportional, with the proportionality factor potentially depending on the parameter dimension m.
+
+Anisotropic covariance Let Cov[ θP |Zn ] = s2Σ, where s2 = ρ2 
+
+> m
+
+. Starting from CP |Zn = 12 Tr( ΣF (θZn )) ,
+
+λmin (Σ)Tr( F ) ≤ Tr(Σ F ) ≤ λmax (Σ)Tr( F )
+
+λmin (Σ) λmax (F ) ≤ Tr(Σ F ) ≤ λmax (Σ) mλ max (F )
+
+ρ2
+
+2mλ max (Σ) Tr(Σ F ) ≤ ρ2
+
+2 λmax (F ) ≤ ρ2
+
+2λmin (Σ) Tr(Σ F )1
+
+λmax (Σ) CP |Zn ≤ Sρ(θZn ) ≤ mλmin (Σ) CP |Zn
+
+Practical Considerations: Eigenvalue Spectrum of Neural Networks In practice, for deep learning models, the FIM often exhibits a sparse eigenvalue spectrum: many eigenvalues are close to zero, and only a few are significantly large. In such cases: • The trace Tr( F ) = P λi is dominated by the sum of the few large eigenvalues. • The ratio λmax (F )/Tr( F ) might be closer to 1/m ′ than 1/d , where m′ ≪ m is the “effective rank” or number of dominant eigenvalues. This implies that the bounds relating λmax (F ) and Tr( F ) might be tighter than the general 1/m and 1 factors suggest. Consequently, the relationship between CP |Zn (related to trace) and Sρ (related to max eigenvalue) could be closer to direct proportionality than Eq. (5) indicates, especially if s2 is appropriately related to ρ2.
+
+Summary and Limitations This analysis provides a heuristic argument suggesting a connection between conditional inconsistency CP |Zn and local sensitivity Sρ(θZn ). Under assumptions of a Gaussian posterior, small variance s2, validity of second-order KL approximations, local FIM constancy, and a specific link between s2 and ρ2 (e.g., s2 = ρ2/m ), we find that Sρ(θZn ) is approximately proportional to CP |Zn , potentially up to a factor related to dimension m. This connection is mediated by the trace and the maximum eigenvalue of the Fisher Information Matrix. The practical observation of sparse FIM eigenvalues might strengthen this relationship. 15 Inconsistency-Aware Minimization: Improving Generalization with Unlabeled Data 
+
+## C. Decision boundary of neural networks and principal eigenspace of FIM 
+
+To intuitively analyze the role of δ1 in the training of a neural network, we conducted experiments using a 3-layer fully-connected neural network on two-dimensional synthetic data. The data is generated from a mixture of three Gaussian distributions, a setup analogous to that employed by (Jang et al., 2022) in their investigation of the characteristics of the FIM eigensubspace. Their work demonstrated that perturbing parameters along the principal eigenvectors of the FIM can lead to significant modifications in the decision boundary, such as increasing or decreasing the margins of specific classes. 1 0 1                      
+
+> 1
+> 0
+> 1
+> (a) Decision boundary perturbed by δ1from ε1101
+> 1
+> 0
+> 1
+> (b) Decision boundary perturbed by δ1from ε2101
+> 1
+> 0
+> 1
+> (c) Decision boundary perturbed by δ1from ε3101
+> 1
+> 0
+> 1
+> (d) Decision boundary perturbed by ε
+> Figure 5. A synthetic classification example. The black, blue, orange lines correspond to decision boundaries of the NN with trained parameter values, and parameter values perturbed by δ1. Each plot use different noise.
+
+Our investigation focuses on whether δ1, despite being derived from only a single gradient step (as described in Algorithm 1) and thus influenced by an initial random noise vector ε, still induces substantial changes in the neural network’s decision boundary. Figure 5 visualizes these effects. The black lines in each subfigure depict the original decision boundary obtained with the trained parameters w. Figure 5 (a-c) show the perturbed decision boundaries (blue and orange lines) when distinct 
+
+±δ1 with ρ = 0 .5 is added to w. Each of these δ1 vectors was computed using a different random initialization noise vector, denoted as ε1, ε2, and ε3, respectively. For a direct comparison of the perturbation’s nature, Figure 5(d) illustrates the decision boundary perturbed by directly adding the random noise vector ε to w. This vector ε is sampled from the same distribution as initial vectors (e.g. ε1) and is scaled to ∥ε∥ = ρ the same as δ1. As observed in Figure 5 (d), direct perturbation with such an arbitrary random noise vector does not meaningfully alter the decision boundary, even when its norm is equivalent to that of the δ1. This is sharply opposed to the significant changes induced by δ1 perturbations shown in Figures 5 (a-c), underscoring that the direction derived by Algorithm 1, even in a single step, is substantially more influential than arbitrary noise of the same magnitude. This result intuitively suggests that the perturbation δ1 with single gradient step is still meaningful and aligned with principal eigenvectors of FIM. To investigate the alignment between the single-step perturbation vector δ1 and the principal eigenspace of the FIM, we explicitly compute the FIM and its top three eigenvectors v1, v2, v3, corresponding to the largest eigenvalues λ1 > λ 2 > λ 3.The perturbation δ1 results from one normalized gradient ascent step on the KL divergence objective, starting from an initial random noise ε. In the language of power iteration, δ1 before normalization sums the FIM eigenvectors weighted by λiαi.Formally, write ε in the eigenbasis of F (w) as ε = Pmi αivi with ε ∼ N (0 , σ 2Im); the coefficients αi are i.i.d. N (0 , σ 2)
+
+because {vi} form an orthonormal basis. 
+
+F (θ)ε =
+
+> m
+
+X
+
+> i
+
+λiviv⊤
+
+> im
+
+X
+
+> i
+
+αivi
+
+=
+
+> m
+
+X
+
+> i
+
+λiαivi
+
+The cosine similarity between δ1 and vi is therefore λiαi, and the projection onto the principal subspace, ∥ P3   
+
+> iδ⊤
+> 1vi∥∥δ1∥
+
+, equals    
+
+> ∥P3
+> iαiλivi∥∥δ∥
+
+.Figure 6 presents empirical results from this analysis. Panel (a) shows histograms of the absolute cosine similarities between 
+
+δ1 (generated from 10,000 different ε samples) and each of the top three eigenvectors. δ1 aligns more strongly with v1, the 16 Inconsistency-Aware Minimization: Improving Generalization with Unlabeled Data 0.0 0.2 0.4 0.6 0.8 1.0 
+
+> 0
+> 1
+> 2
+> 3
+> 4
+> 5
+> 6
+> Density
+> absolute Cosine similarity with eigenvectors
+> v_max
+> v_2
+> v_3
+
+(a) cosine similarity between δ1 and vi, i ∈ { 1, 2, 3}0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0  
+
+> 0
+> 5
+> 10
+> 15
+> 20
+> 25
+> 30
+> Density
+
+(b) alignment of δ1, ∥ P3 
+
+> i
+
+δ⊤ 
+
+> 1
+
+vi∥/∥δ1∥
+
+Figure 6. A synthetic classification example. δ1 aligns with the top three eigenvectors of the FIM, sampled from 10,000 Gaussian noises ε.
+
+eigenvector of the largest eigenvalue λ1, than with v2 or v3. Panel (b) shows the squared norm of the projection of δ1 onto the top-3 eigenspace; the values concentrate near 1, so δ1 vectors from different initializations remain largely within this principal subspace. These results support the theoretical expectation that the single-step perturbation δ1 aligns predominantly with the principal eigenspace of the FIM. 
+
+Accuracy of Algorithm 1 against the exact maximizer. The analysis above concerns a single step ( K = 1 ). We now verify that Algorithm 1 recovers the exact local inconsistency as K grows. On the same 3-layer MLP and 2D Gaussian-mixture setup, we explicitly form F ∈ R5393 ×5393 and compare three quantities: the theoretical value ρ2 
+
+> 2
+
+λmax (F ) from a full eigendecomposition; the numerical maximum S∗ 
+
+> ρ
+
+from an extensive Projected Gradient Ascent (20 multi-starts, 200 steps, initial step size ρ/ 8 with scheduled decay); and our estimate ˆSρ from Algorithm 1. Algorithm 1 recovers 99 .77% 
+
+of the exact maximum value (mean relative error 0.23% ), and its perturbation direction δalg1 aligns with the theoretical principal eigenvector v1 at cosine similarity 0.9960 ± 0.0004 .To confirm this holds throughout training rather than only at convergence, we track all three quantities over the full optimization, recomputing the exact eigendecomposition every 10 steps. To check that Algorithm 1 behaves correctly as K
+
+increases, we run this comparison with K = 10 . Figure 7 shows that ˆSρ tracks the theoretical maximum with negligible gap across training, indicating that the low approximation error is stable rather than incidental to a particular checkpoint. 0 200 400 600 800 1000       
+
+> Training Epochs
+> 0.00002
+> 0.00004
+> 0.00006
+> 0.00008
+> 0.00010
+> 0.00012
+> 0.00014
+> value  Theoretical S(122max )
+> Mutistart PGD-200 ( S*)
+> Algorithm 1 ( S)
+
+Figure 7. Optimization dynamics of the theoretical value ρ2 
+
+> 2
+
+λmax (F ), the numerical exact maximum S∗ 
+
+> ρ
+
+, and the Algorithm 1 estimate 
+
+ˆSρ (K = 10 ) over training. The three curves remain tightly overlapped throughout. 
+
+17 Inconsistency-Aware Minimization: Improving Generalization with Unlabeled Data 
+
+## D. Theoretical Justification for Detaching the Perturbation in IAM-D 
+
+Takeaway. In IAM-D we optimize LIAM-D (θ) = L(θ) + βS ρ(θ). Under the second-order (quadratic) approximation of the KL divergence, the local inconsistency is well-approximated by the FIM spectral norm: 
+
+˜Sρ(θ) := max 
+
+> ∥δ∥≤ ρ
+
+12 δ⊤F (θ)δ = 12 ρ2 λmax (F (θ)) . (15) Crucially, the exact gradient of ˜Sρ(θ) can be computed without differentiating through the maximizer δ∗(θ). Equivalently, applying a stop-gradient (detach) to δ∗ yields the correct outer gradient (envelope theorem / Hellmann–Feynman viewpoint). 
+
+D.1. Quadratic surrogate and its maximizer 
+
+Since F (θ) ⪰ 0, the maximizer of the Rayleigh quotient is attained at the top eigenvector. Let vmax (θ) be a unit-norm eigenvector associated with λmax (F (θ)) and define 
+
+δ∗(θ) := ρ v max (θ). (16) Then ˜Sρ(θ) = 12 (δ∗)⊤F (θ)δ∗ = 12 ρ2λmax (F (θ)) .
+
+D.2. Stop-gradient computes the exact gradient of ˜Sρ
+
+We differentiate the quadratic form 12 (δ∗)⊤F (θ)δ∗ w.r.t. θ. For each coordinate θj , the chain rule gives 
+
+∂∂θ j
+
+˜Sρ(θ) = 12 (δ∗)⊤ ∂F (θ)
+
+∂θ j
+
+δ∗
+
+| {z }
+
+> (A) curvature term
+
++ ( δ∗)⊤F (θ) ∂δ ∗
+
+∂θ j
+
+| {z }
+
+> (B) perturbation term
+
+. (17) Term (A) is exactly what is computed when we stop gradients through δ∗.To show that term (B) vanishes for the exact maximizer, note that F (θ)δ∗ = λmax (F (θ)) δ∗, hence 
+
+(δ∗)⊤F (θ) ∂δ ∗
+
+∂θ j
+
+= λmax (F (θ)) ( δ∗)⊤ ∂δ ∗
+
+∂θ j
+
+. (18) Moreover, ∥δ∗(θ)∥ = ρ is constant by construction, so 
+
+∂∂θ j
+
+∥δ∗(θ)∥2 = ∂∂θ j
+
+ (δ∗)⊤δ∗ = 2( δ∗)⊤ ∂δ ∗
+
+∂θ j
+
+= 0 , (19) which implies (δ∗)⊤ ∂δ ∗ 
+
+> ∂θ j
+
+= 0 and therefore term (B) is zero. Plugging back into (17), 
+
+∇θ ˜Sρ(θ) = ∇θ
+
+ 12 δ⊤F (θ)δ
+
+
+
+> δ=δ∗(θ)
+
+= 12 (δ∗)⊤(∇θ F (θ)) δ∗. (20) Finally, when λmax (F (θ)) is simple, the Hellmann–Feynman theorem gives 
+
+∇θ λmax (F (θ)) = vmax (θ)⊤(∇θ F (θ)) vmax (θ), (21) and thus (20) can be equivalently written as 
+
+∇θ ˜Sρ(θ) = 12 ρ2 ∇θ λmax (F (θ)) . (22) (If λmax has multiplicity > 1, the same expression yields a valid subgradient for any unit vector in the top eigenspace.) 
+
+D.3. Implication for IAM-D implementation 
+
+In practice, δ∗ is approximated by K steps of power iteration (Algorithm 1), producing δK . We implement IAM-D by 
+
+stopping gradients through δK when computing the outer gradient: 
+
+greg := ∇θ
+
+
+
+β bSρ(θ; sg( δK )) 
+
+
+
+, (23) where sg( ·) denotes the stop-gradient operator. When δK ≈ δ∗, this matches the exact gradient of the quadratic surrogate 
+
+˜Sρ(θ), while avoiding costly higher-order terms arising from differentiating through the inner maximization. 18 Inconsistency-Aware Minimization: Improving Generalization with Unlabeled Data 
+
+## E. Extra experiments 
+
+E.1. Analysis of Local Inconsistency Estimation 
+
+In this section, we analyze how the estimation of local inconsistency Sρ(θ) is affected by approximation choices: the mini-batch size used for perturbation ( m-sharpness) and the number of gradient ascent steps ( K). Regarding m-sharpness, we follow the protocol introduced for SAM—computing independent perturbations on disjoint sub-batches in parallel and 
+
+averaging the perturbed gradients for the update—and replicate this scheme for IAM-S. m indicates the size of disjoint sub-batch. 
+
+Figure 8. Estimated Sρ(θ) with respect to K on WRN28-2 (CIFAR-10) using Algorithm 1 vs. Projected Gradient Ascent. Algorithm 1 with K = 3 offers a sufficient approximation of the true maximizer. 
+
+We investigate the impact of the number of steps K used in Algorithm 1 on model performance. From the perspective of estimating Sρ(θ), increasing K naturally yields a more accurate approximation of the worst-case perturbation δ∗ and, consequently, a tighter lower bound on the local inconsistency, as illustrated in Figure 8. This suggests that a more precise estimation of Sρ(θ) (i.e., using K > 1) during training may lead to better regularization and improved generalization. To verify this, we conducted an ablation study on K using IAM-D trained on CIFAR-10/100, following the standard hyperparameters described in Appendix F. The results are summarized in Table 4. As shown in Table 4, we observe a consistent improvement in generalization performance as K increases. Specifically, increasing K from 1 to 3 reduces the test error from 3.28% to 2.99%, although this comes at the cost of increased computational overhead. Notably, this finding stands in contrast to SAM, where increasing the number of inner maximization steps was reported to have no strong effect on test accuracy for CIFAR-10. While SAM found that a single step was sufficient to obtain a good approximation of the maximizer, our results indicate that for IAM, a more accurate estimation of the local inconsistency via multiple steps ( K > 1) provides tangible benefits to the final model performance. 
+
+Table 4. Test error and training cost of IAM with respect to K and m (WRN28-10). 
+
+## K CIFAR-10 CIFAR-100 Running time (s/epoch) Standard m = 32 m = 16 Standard m = 32 m = 16 
+
+## 1 3.28 ± 0.06 3.05 ± 0.02 3.03 ± 0.02 17.16 ± 0.03 16.92 ± 0.04 16.58 ± 0.05 239 (1.0 ×)2 3.03 ± 0.02 2.85 ± 0.04 2.80 ± 0.02 16.92 ± 0.04 16.08 ± 0.08 15.45 ± 0.09 311 (1.3 ×)3 2.99 ± 0.04 2.86 ± 0.01 2.91 ± 0.02 16.90 ± 0.03 15.89 ± 0.01 15.34 ± 0.05 378 (1.6 ×)5 2.98 ± 0.03 2.80 ± 0.08 2.87 ± 0.01 16.62 ± 0.02 15.78 ± 0.18 15.26 ± 0.01 525 (2.2 ×)
+
+19 Inconsistency-Aware Minimization: Improving Generalization with Unlabeled Data 0 25 50 75 100 125 150 175 200 
+
+Epoch 
+
+3% 
+
+4% 
+
+5% 
+
+10% 
+
+> Test Error (%)
+
+SGD (baseline) 
+
+IAM-D K=1 
+
+IAM-D K=2 
+
+IAM-D K=3 
+
+IAM-D K=5 
+
+(a) CIFAR-10, m = 128 .0 25 50 75 100 125 150 175 200 
+
+Epoch 
+
+3% 
+
+4% 
+
+5% 
+
+10% 
+
+> Test Error (%)
+
+SGD (baseline) 
+
+IAM-D K=1 
+
+IAM-D K=2 
+
+IAM-D K=3 
+
+IAM-D K=5 (b) CIFAR-10, m = 32 0 25 50 75 100 125 150 175 200 
+
+Epoch 
+
+17% 
+
+18% 
+
+20% 
+
+30% 
+
+40% 
+
+> Test Error (%)
+
+SGD (baseline) 
+
+IAM-D K=1 
+
+IAM-D K=2 
+
+IAM-D K=3 
+
+IAM-D K=5 
+
+(c) CIFAR-100, m = 128 0 25 50 75 100 125 150 175 200 
+
+Epoch 
+
+17% 
+
+18% 
+
+20% 
+
+30% 
+
+40% 
+
+> Test Error (%)
+
+SGD (baseline) 
+
+IAM-D K=1 
+
+IAM-D K=2 
+
+IAM-D K=3 
+
+IAM-D K=5 (d) CIFAR-100, m = 32 
+
+Figure 9. The evolution of test error (log-scale) with SGD and IAM-D according to different sub-batch size and K 
+
+20 Inconsistency-Aware Minimization: Improving Generalization with Unlabeled Data 
+
+m-sharpness in IAM: parallel per-sub-batch perturbations On CIFAR-10 with a fixed total batch size 256 , we split each batch into sub-batch size m ∈ { 4, 16 , 64 , 256 }, compute perturbation δ and gradient ∇θ L(θ + δ) on each mini-batch and update with the mean of gradients. We sweep ρ ∈ { 0.005 , 0.01 , 0.02 , 0.05 , 0.1, 0.2, 0.5} and repeat each (m, ρ )
+
+condition three times with independent seeds. All other training details (backbone, schedule, preprocessing) are identical to the main IAM-S experiments in the paper. 0.005 0.01 0.02 0.05 0.1 0.2 0.5     
+
+> 3.0
+> 3.5
+> 4.0
+> 4.5
+> 5.0
+> 5.5
+> 6.0
+> Best Error (%) with 95% CI
+> Mini-Batch Size (m)
+> 4
+> 16
+> 64
+> 256
+> Figure 10. Test error as a function of ρfor different values of m.
+
+Figure 10 shows that smaller values of m tend to yield models having better generalization ability as observed in (Foret et al., 2021). 21 Inconsistency-Aware Minimization: Improving Generalization with Unlabeled Data 
+
+E.2. Supervised learning 
+
+Table 5. Top-1 and Top-5 error (mean ± stderr) of ResNet-50 trained on ImageNet with different epoch settings. 
+
+Epoch Metric SGD SAM IAM-D IAM-S 100 Top-1 23.27 ± 0.08 22.69 ± 0.13 22.39 ± 0.12 22.84 ± 0.04 
+
+Top-5 6.72 ± 0.03 6.41 ± 0.03 6.24 ± 0.03 6.46 ± 0.06 
+
+200 Top-1 22.66 ± 0.12 21.80 ± 0.12 21.36 ± 0.06 21.72 ± 0.07 
+
+Top-5 6.51 ± 0.07 5.99 ± 0.04 5.70 ± 0.02 5.90 ± 0.02 
+
+400 Top-1 22.80 ± 0.23 21.45 ∗ 20.73 ∗ 20.95 ∗
+
+Top-5 6.66 ± 0.06 5.95 5.53 5.61 
+
+> ∗
+
+Results except for SGD at 400 epochs are from a single run. 
+
+100 200 400 800 
+
+77 
+
+78 
+
+79 
+
+Effective Training Epochs 
+
+> Top-1 Accuracy (%)
+> SGD
+> SAM
+> IAM-D
+> IAM-S
+
+Figure 11. Top-1 Accuracy vs. Effective Training Cost on ImageNet. Since SAM and IAM variants require two backward passes per step, their effective epochs are doubled compared to SGD. Results of SGD at 800 epochs are from a single run. IAM-D consistently achieves the best accuracy-efficiency trade-off across all training budgets. 
+
+Table 5 reports Top-1/Top-5 error of ResNet-50 on ImageNet across 100, 200, and 400 training epochs. Consistent with the observation of Foret et al. (2021) that SGD tends to overfit as training is extended from 200 to 400 epochs while SAM continues to improve, we find that SGD’s Top-1 error stagnates (and even slightly degrades) from 22.66% at 200 epochs to 22.80% at 400 epochs, whereas SAM further reduces error to 21.45%. Both IAM variants exhibit the same favorable scaling behavior as SAM: IAM-D improves from 21.36% to 20.73% and IAM-S from 21.72% to 20.95% as the training budget doubles. Notably, IAM-D consistently achieves the lowest error across all epoch settings, outperforming SAM by 0.30%, 0.44%, and 0.72% at 100, 200, and 400 epochs, respectively. This widening gap suggests that the regularization induced by local inconsistency becomes increasingly beneficial under longer training, where overfitting pressure is stronger. A natural concern with IAM and SAM-style methods is the additional computational cost introduced by the inner perturbation step, which requires an extra forward-backward pass per update. To assess whether the observed gains justify this overhead, we compare optimizers on equal footing in terms of effective training epochs , defined as the number of gradient evaluations normalized by that of one SGD epoch. Under this metric, one epoch of SAM, IAM-D, or IAM-S costs twice as much as one epoch of SGD. Figure 11 plots Top-1 accuracy against effective training epochs for all methods. Even at matched compute, IAM-D dominates the best accuracy at every compute budget: at 400 effective epochs, IAM-D attains 78.64% accuracy, surpassing SGD trained for 800 effective epochs (76.88%) by 1.76% and SAM at the same budget (78.20%) by 0.44%. The gap persists at 800 effective epochs, where IAM-D reaches 79.27% versus 78.55% for SAM. IAM-S exhibits a similar advantage over SAM, while SGD’s accuracy plateaus and eventually deteriorates due to overfitting. These results indicate that the extra gradient computation incurred by IAM is not merely a fixed-cost tax but yields a strictly better accuracy-compute trade-off than both vanilla SGD and SAM across the entire range of training budgets we examined. 22 Inconsistency-Aware Minimization: Improving Generalization with Unlabeled Data 
+
+E.3. ViT 
+
+Table 6. Test error ± stderr of SGD, SAM, and IAM-D when fine-tuning ViT-S/16 on CIFAR-10. 
+
+Method Test error SGD 1.86 ± 0.01 
+
+SAM 1.56 ± 0.01 
+
+IAM-D 1.52 ± 0.02 
+
+To demonstrate the versatility of IAM beyond CNN architectures, we conducted additional fine-tuning experiments on ViT-S/16 pre-trained on ImageNet-1K using the CIFAR-10 dataset. We compared IAM-D against SGD and SAM. We fine-tuned the models for 10,000 steps with a batch size of 128, with base optimizer SGD. Gradient clipping with max norm = 1 .0 is applied. The initial learning rate was set to 0.01 with a linear decay schedule after 500 warmup steps. For perturbation magnitude ρ, we used ρ = 0 .05 for SAM and ρ = 0 .1 for IAM-D. 
+
+Table 7. Test error (mean ± stderr) of ViT-T/4 trained 200 epochs on CIFAR-10 and CIFAR-100. 
+
+Optimizer CIFAR-10 CIFAR-100 Adam-W 15.29 ± 0.50 43.73 ± 0.19 
+
+SAM 14.39 ± 0.31 42.45 ± 0.35 
+
+ASAM 14.60 ± 0.25 41.78 ± 0.33 
+
+IAM-D 13.93 ± 0.17 40.83 ± 0.42 
+
+IAM-S 14.37 ± 0.19 42.25 ± 0.42 
+
+We also train ViT-Tiny/4 on CIFAR-{10,100}, with Adam-W as default optimizer. The initial learning rate was set to 0.003 
+
+with a linear decay schedule after 3000 warm-up steps. Other settings are the same as main experiments. 
+
+Table 8. Top-1 and Top-5 error (mean ± stderr) of ViT-S/32 trained 300 epochs on ImageNet. 
+
+Top-1 Top-5 Adam-W 33.81 ± 0.07 13.96 ± 0.07 
+
+SAM 32.24 ± 0.17 12.84 ± 0.07 
+
+IAM-D 31.03 ± 0.10 11.95 ± 0.08 
+
+IAM-S 30.09 ± 0.30 11.38 ± 0.19 
+
+In addition, we train ViT-S/32 on ImageNet, with Adam-W as default optimizer. The initial learning rate was set to 0.0075 
+
+with a linear decay schedule after 40000 warm-up steps. We use the same ρ values for SAM, IAM-D and IAM-S as in ResNet-50 experiments. IAM-D is consistently competitive with SAM on the transformer-based architecture, confirming that our proposed local inconsistency measure is effective across different model inductive biases. 
+
+Table 9. Test error (mean ± stderr) of MLP-Mixer-T/4 trained 200 epochs on CIFAR-10 and CIFAR-100. 
+
+Optimizer CIFAR-10 CIFAR-100 Adam-W 15.81 ± 0.45 43.11 ± 0.26 
+
+SAM 15.35 ± 0.25 41.26 ± 0.60 
+
+ASAM 16.01 ± 0.31 43.52 ± 0.25 
+
+IAM-D 14.63 ± 0.40 41.51 ± 0.32 
+
+IAM-S 15.03 ± 0.26 38.39 ± 0.31 
+
+23 Inconsistency-Aware Minimization: Improving Generalization with Unlabeled Data 
+
+E.4. Semi-supervised learning 
+
+If we restrict SAM only to the labeled loss to avoid instability, we only minimize sharpness for the very small subset of labeled data (e.g., 250 samples). This fails to regularize the global landscape. To confirm this, we ran “FixMatch + SAM” on CIFAR-10 (250 labels). 
+
+Table 10. Test Error (mean ± stderr) on CIFAR-10 with 250 labels using a WRN-28-2 model. 
+
+Method Test error FixMatch 6.26 ± 0.39 
+
+FixMatch + SAM 9.90 ± 0.74 
+
+FixMatch + IAM-D 5.30 ± 0.08 
+
+This is significantly worse than FixMatch + SGD (6.26 %) and FixMatch + IAM-D (5.30 %). This failure case underscores the strength of IAM-D: it calculates inconsistency on unlabeled data without relying on potentially incorrect pseudo-labels, making it naturally superior for SSL. 
+
+E.5. Self-supervised learning 
+
+We extend the SSL experiment in Section 5.3 to CIFAR-100 using the same SimCLR + IAM-D setup described in Appendix, with the encoder evaluated via linear probing. We use β = 1 .0, ρ = 0 .1, identical to the CIFAR-10 SSL setting. As shown in 0 50 100 150 200 
+
+> Epoch
+
+40 
+
+50 
+
+60 
+
+70 
+
+80 
+
+> Test Accuracy (%)
+> IAM (accuracy) SGD (accuracy) IAM (loss) SGD (loss)
+
+6.06.57.0
+
+> Loss
+
+0 50 100 150 200 
+
+> Epoch
+
+10 
+
+20 
+
+30 
+
+40 
+
+50 
+
+> Test Accuracy (\%)
+> IAM (accuracy)
+> SGD (accuracy)
+> IAM (loss)
+> SGD (loss)
+
+2
+
+3
+
+4
+
+5
+
+6
+
+7
+
+> Loss
+
+Figure 12. Test accuracy on linear probe and SimCLR training loss for ResNet-18 on CIFAR-{10, 100}, comparing SimCLR trained with SGD (SimCLR-SGD) versus SimCLR with IAM-D (SimCLR-IAM). 
+
+Figure 12, SimCLR-IAM consistently achieves higher linear probe accuracy than SimCLR-SGD on CIFAR-100, mirroring the trend observed on CIFAR-10. This confirms that controlling local inconsistency benefits self-supervised representation learning regardless of the number of classes. 24 Inconsistency-Aware Minimization: Improving Generalization with Unlabeled Data 
+
+## F. Experimental Details 
+
+Practical Considerations in estimating Sρ(θ)
+
+• Computational Efficiency: Calculating the FIM explicitly and performing eigenvalue decomposition is computation-ally expensive ( O(m2) or worse, where m is the number of parameters). Algorithm 1 avoids this by requiring only K
+
+gradient computations (forward and backward passes) per estimation, making its computational cost approximately 
+
+O(mK ), which is significantly more feasible for large networks. • Number of Steps (K): Empirical studies on neural network Hessians and FIMs suggest that the eigenspectrum is often dominated by a large dominant eigenvalue. Thus, the Power Iteration method can converge quickly to the dominant eigenvector. In practice, using a small number of steps, often just K = 3 , is found to be sufficient to get a reasonable estimate of the maximizing direction. This makes the computation highly efficient. • Averaging to reduce variance from initialization: The estimate of Sρ(θ) obtained from Algorithm 1 depends on the random initialization δ0 when K = 1 . To obtain a more stable estimate, we compute the metric multiple times (e.g., 10 times) with different random initializations for δ0 and report the average value: Eδ0 [Estimate from Alg 1 ].
+
+Infrastructure Experiments are implemented in PyTorch 2.5.1 and executed on NVIDIA A40, A100 and L4 GPUs. 
+
+F.1. Experimental details for Figure 1 (Section 4.6) 
+
+We trained 6CNN and WRN28-2 using SGD to investigate the relationship between generalization gap and local inconsis-tency. For 6CNN, each hyperparameter combination was run with 5 independent random seeds to assess variability. Tr( H),
+
+λmax (H) and Sρ were computed on a 5,000-sample unlabeled held-out set.  
+
+> Table 11. Hyperparameters used for 6CNN and WRN28-2 on CIFAR-10.
+
+Hyperparameter 6CNN WRN28-2 
+
+Dataset CIFAR-10 CIFAR-10 Training data size 45K 45K Initial learning rate {0.001, 0.002, 0.005, 0.01, 0.02, 0.05} {0.1, 0.03, 0.01} Batch size {32, 64, 128, 256, 512} {32, 64, 128, 256, 512} Weight decay {0.0, 10 −4, 5 × 10 −4, 10 −3} {0.0, 10 −4, 5 × 10 −4}Learning rate scheduling constant {cosine annealing, multi-step} Data augmentation False {True, False} Label smoothing – –Epochs until convergence ( < 400 ) {150, 200, 300} 
+
+K 3 1
+
+F.2. Image classification 
+
+Each reported metric is the mean ± standard error computed over minimum test error from three independent runs. 
+
+Dataset. We evaluate on CIFAR-10 (50,000 training, 10,000 test images), CIFAR-100 (50,000 training, 10,000 test images), Fashion-MNIST, and SVHN (no additional datasets). CIFAR-10, CIFAR-100, and SVHN are resized to 32 × 32 
+
+and preprocessed with RandomCrop( 32 , padding = 4 ). Fashion-MNIST is preprocessed with RandomCrop( 28 , padding = 4 ). Below are applied augmentations in common: • RandomHorizontalFlip (p = 0 .5), and • Normalization using the official mean and standard deviation. No additional augmentation such as Cutout or Mixup is applied. 25 Inconsistency-Aware Minimization: Improving Generalization with Unlabeled Data 
+
+Optimization. The models are trained for 200 epochs with mini-batch size 128 . We use SGD with momentum 0.9, weight decay 5 × 10 −4 as an optimizer, and a multistep learning rate schedule that decays the initial rate 0.1 (0.01 for SVHN) by 0.2 at epochs 60, 120, and 160. We report the best score achieved by each SGD training run across either the standard epochs or the doubled epochs. 
+
+Hyperparameters. For image classification tasks, β, ρ are tuned via grid search over β ∈ { 0.1, 1.0, 5.0, 10 .0, 20 .0}, ρ ∈{0.01 , 0.05 , 0.1, 0.5, 1.0} with validation split using 10% of the training dataset. As seen in Figure 13, the best pairs are 
+
+(1 .0, 0.1) for CIFAR-10 and (10 .0, 0.1) for CIFAR-100. For both datasets, β and ρ had a trade-off relation.     
+
+> (a) CIFAR-10 Heatmap (b) CIFAR-100 Heatmap
+> Figure 13. Test error heatmap of IAM-D.
+
+Loss function. Cross-entropy with label smoothing (α = 0 .1) is used for all methods. 
+
+F.3. Semi-supervised learning 
+
+In semi-supervised learning experiment, we shared most of the settings with image classification. Each reported metric is computed over minimum test error from three independent runs. Experiments with FixMatch are stated in a separate section. 
+
+Optimization. Models are trained for 200 epochs without learning rate scheduling. 
+
+Hyperparameters. We used β = 1 .0 and ρ = 0 .1 for CIFAR-10 and β = 10 .0 and ρ = 0 .1 for CIFAR-100. SAM is also trained with ρ = 0 .1. The batch size 128 is used for labeled data and 384 for unlabeled data. 
+
+FixMatch. We followed the reported FixMatch settings. WRN-28-2 for CIFAR-10, WRN-28-8 for CIFAR-100 are trained for 220 iterations with SGD as the base optimizer using the learning rate 0.03 , momentum 0.9, weight decay 5e − 4, with cosine learning rate scheduling. For IAM-D, ρ = 0 .01 , β = 1 .0 is applied for CIFAR-10 and ρ = 0 .05 , β = 1 .0 is applied for CIFAR-100. The batch size for the labeled data was 64 , and for unlabeled data was 448 . We applied EMA with decay 
+
+0.99 .
+
+F.4. Self-supervised learning 
+
+Each reported metric is the mean test accuracy obtained from three independent runs. 
+
+Dataset. We use the CIFAR - 10, CIFAR-100 benchmark. All images are resized to 32 ×32 and augmented with the SimCLR(Chen et al., 2020) pipeline: • RandomResizedCrop (32 , scale=(0 .4, 1.0)) ,• RandomHorizontalFlip (p = 0 .5), 26 Inconsistency-Aware Minimization: Improving Generalization with Unlabeled Data 
+
+• ColorJitter (0 .4, 0.4, 0.2, 0.1) with probability 0.8,• RandomGrayscale (p=0 .2) , and • Normalization using the official mean and standard deviation. 
+
+Encoder & Projection Head. We adopt a ResNet -18 backbone with the first convolution modified to 3×3 layer with stride = 1 and the max -pool removed. The projector is a two -layer MLP (hidden size 512 , output size 128 ) with ReLU activation. 
+
+Optimization. Models are trained for 200 epochs with mini -batch size 1024 . We use SGD (momentum 0.9, weight decay 
+
+1×10 −4) and a cosine-annealing learning-rate schedule starting at 1.0 after a 10-epoch warm-up. 
+
+Contrastive Loss. The NT-Xent loss is computed with temperature τ = 0 .5.
+
+IAM Hyperparameters. We set the inconsistency weight β=1 .0, neighborhood radius ρ=0 .1, and noise -scale 3.0
+
+(Gaussian initialization). The local inconsistency is computed between projection head outputs with temperature τ =0 .5.
+
+Stability Heuristics. The stability heuristics are identical to those used in the image classification setting. 
+
+Linear Evaluation. After every 5 epochs (and at the final epoch), a frozen encoder is evaluated via a linear probe trained for 20 epochs with AdamW optimizer on the full training set (batch size 1024). The reported metric is the probe’s test accuracy. 27
