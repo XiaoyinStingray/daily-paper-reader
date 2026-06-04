@@ -6,63 +6,78 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-06-03
-- 运行时间：2026-06-03 22:40:37 UTC
+- 最新运行日期：2026-06-04
+- 运行时间：2026-06-04 22:09:17 UTC
 - 运行状态：成功
-- 本次总论文数：13
-- 精读区：1
+- 本次总论文数：18
+- 精读区：6
 - 速读区：12
 
 ### 今日简报（AI）
-今日聚焦资源高效的图像语义通信与视觉语言模型推理优化。
+今日编译18篇论文，精读聚焦超快神经视频压缩与信号参数化压缩误差边界。
 
-最值得看的方向：递归视觉Transformer的动态深度宽度调整实现高效语义通信；VLM中的训练无关token剪枝与量化压缩方法。
+最值得关注的是《Ultra-Fast Neural Video Compression》（9.0分）提出的超高速压缩方法，以及《Bounding Global and Local Compression Error》（8.0分）对误差上界的理论分析。
 
-建议后续重点关注如何将token剪枝技术与语义通信结合，在保证性能前提下进一步降低计算资源消耗。
-- 详情：[/202606/03/README](/202606/03/README)
+建议普通读者优先阅读这两篇精读论文，掌握视频压缩前沿与压缩误差的量化方法。
+- 详情：[/202606/04/README](/202606/04/README)
 
 ### 精读区论文标签
-1. [Recursive Vision Transformer with Dynamic Depth and Width Adjustment for Resource-Efficient Image Semantic Communication](/202606/03/2606.00114v1-recursive-vision-transformer-with-dynamic-depth-and-width-adjustment-for-resource-efficient-image-semantic-communication)  
+1. [Ultra-Fast Neural Video Compression](/202606/04/2606.04410v1-ultra-fast-neural-video-compression)  
+   标签：评分：9.0/10、query:compress
+   evidence：基于块的神经视频编码器，优化率失真复杂度权衡
+2. [Bounding Global and Local Compression Error of Signal Parameterizations](/202606/04/2606.00126v1-bounding-global-and-local-compression-error-of-signal-parameterizations)  
+   标签：评分：8.0/10、query:compress
+   evidence：信号参数化压缩误差的界限框架，适用于隐式神经表示
+3. [SWARD: Stochastic Window-Attention-Based Relational Distillation for Cross-Architectural Semantic Segmentation](/202606/04/2606.00999v1-sward-stochastic-window-attention-based-relational-distillation-for-cross-architectural-semantic-segmentation)  
    标签：评分：8.0/10、query:neural-arch
-   evidence：具有动态深度和宽度调整的递归视觉Transformer实现资源高效图像通信
+   evidence：跨架构语义分割的知识蒸馏方法，改进轻量学生网络
+4. [Rank-Aware Quantile Activation for Motion-Robust Crop Segmentation in UAV Imagery](/202606/04/2606.01118v1-rank-aware-quantile-activation-for-motion-robust-crop-segmentation-in-uav-imagery)  
+   标签：评分：8.0/10、query:neural-arch
+   evidence：提出新型双分位数激活函数，提升分割性能
+5. [Neural Network Compression by Approximate Differential Equivalence](/202606/04/2606.01402v1-neural-network-compression-by-approximate-differential-equivalence)  
+   标签：评分：8.0/10、query:neural-arch
+   evidence：通过聚合动力学相似神经元压缩模型，属于模型优化
+6. [KD-NVC: A Search-and-Distill Framework to Accelerate Neural Video Coding](/202606/04/2606.04595v1-kd-nvc-a-search-and-distill-framework-to-accelerate-neural-video-coding)  
+   标签：评分：8.0/10、query:compress
+   evidence：率失真权衡，知识蒸馏，神经架构搜索加速视频编码
 
 ### 速读区论文标签
-1. [OccamToken: Efficient VLM Inference with Training-Free and Budget-Adaptive Token Pruning](/202606/03/2605.29657v1-occamtoken-efficient-vlm-inference-with-training-free-and-budget-adaptive-token-pruning)  
+1. [SOCO: Benchmarking Semantic Object Correspondence in Vision Foundation Models](/202606/04/2605.31597v1-soco-benchmarking-semantic-object-correspondence-in-vision-foundation-models)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：无需训练的令牌剪枝实现高效视觉语言模型推理
-2. [Where to Refine, When to Stop: Rethinking Redundancy via Latent Discrepancy for Efficient Visual Autoregressive Generation](/202606/03/2606.00310v1-where-to-refine-when-to-stop-rethinking-redundancy-via-latent-discrepancy-for-efficient-visual-autoregressive-generation)  
+   evidence：视觉基础模型评估基准
+2. [SOCO: Benchmarking Semantic Object Correspondence in Vision Foundation Models](/202606/04/2605.31597v2-soco-benchmarking-semantic-object-correspondence-in-vision-foundation-models)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：通过潜在差异度量进行标记剪枝实现高效视觉自回归生成
-3. [ETC: Extreme Token Compression via Task-aware Visual Information Distillation in VLMs](/202606/03/2606.00543v1-etc-extreme-token-compression-via-task-aware-visual-information-distillation-in-vlms)  
-   标签：评分：7.0/10、query:compress
-   evidence：采用变分信息蒸馏的视觉语言模型极端令牌压缩，属于神经压缩方法
-4. [FocusDiT: Masking Queries in Diffusion Transformers for Fine-grained Image Generation](/202606/03/2606.02090v1-focusdit-masking-queries-in-diffusion-transformers-for-fine-grained-image-generation)  
+   evidence：视觉基础模型评估基准
+3. [Automatically Differentiable Nonlinear Tensor Networks (ADNTNs) for Exponential Compression of Deep Neural Networks](/202606/04/2606.00130v1-automatically-differentiable-nonlinear-tensor-networks-adntns-for-exponential-compression-of-deep-neural-networks)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：在扩散变换器中对查询进行掩码以改进细粒度图像生成
-5. [Beyond Single Solution: Multi-Hypothesis Collaborative Deep Unfolding Network for Image Compressive Sensing](/202606/03/2606.03666v1-beyond-single-solution-multi-hypothesis-collaborative-deep-unfolding-network-for-image-compressive-sensing)  
-   标签：评分：7.0/10、query:compress
-   evidence：深度展开网络用于图像压缩感知，图像压缩方向
-6. [Exploring Easy Boosts for Lidar Semantic Scene Completion](/202606/03/2606.03992v1-exploring-easy-boosts-for-lidar-semantic-scene-completion)  
+   evidence：使用非线性张量网络生成权重，实现深度神经网络指数级压缩，属于模型优化策略
+4. [Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks](/202606/04/2606.00340v1-balancing-learning-rates-across-layers-exact-two-step-dynamics-and-optimal-scaling-in-linear-neural-networks)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：使用语义伪标签和可见性信息提升激光雷达语义场景完成性能
-7. [Transfer learning RGB models to hyperspectral images with trainable tensor decompositions](/202606/03/2605.28331v1-transfer-learning-rgb-models-to-hyperspectral-images-with-trainable-tensor-decompositions)  
+   evidence：最优学习率选择，分层学习率，模型优化策略
+5. [FocusDiT: Masking Queries in Diffusion Transformers for Fine-grained Image Generation](/202606/04/2606.02090v2-focusdit-masking-queries-in-diffusion-transformers-for-fine-grained-image-generation)  
+   标签：评分：7.0/10、query:neural-arch
+   evidence：通过查询掩码改进扩散Transformer中的注意力与前馈网络，属于架构改进技术
+6. [A combination of noise and bilateral filters achieve supralinear and scalable adversarial robustness in CNNs](/202606/04/2606.02267v1-a-combination-of-noise-and-bilateral-filters-achieve-supralinear-and-scalable-adversarial-robustness-in-cnns)  
+   标签：评分：7.0/10、query:neural-arch
+   evidence：组合噪声与双边滤波提升CNN鲁棒性，属于性能改进技术
+7. [MIC: Maximizing Informational Capacity in Adaptive Representations via Isotropic Subspace Alignment](/202606/04/2605.29987v1-mic-maximizing-informational-capacity-in-adaptive-representations-via-isotropic-subspace-alignment)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：可训练张量分解将RGB模型适配到高光谱图像任务
-8. [MIC: Maximizing Informational Capacity in Adaptive Representations via Isotropic Subspace Alignment](/202606/03/2605.29987v2-mic-maximizing-informational-capacity-in-adaptive-representations-via-isotropic-subspace-alignment)  
+   evidence：表示学习正则化以提升性能
+8. [MIC: Maximizing Informational Capacity in Adaptive Representations via Isotropic Subspace Alignment](/202606/04/2605.29987v2-mic-maximizing-informational-capacity-in-adaptive-representations-via-isotropic-subspace-alignment)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：多尺度表示优化方法
-9. [MergeTok: Unified Continuous and Discrete Visual Tokenization via Token Merging](/202606/03/2605.30904v1-mergetok-unified-continuous-and-discrete-visual-tokenization-via-token-merging)  
-   标签：评分：6.0/10、query:compress
-   evidence：通过令牌合并统一连续和离散视觉分词
-10. [QVGGT: Post-Training Quantized Visual Geometry Grounded Transformer](/202606/03/2605.31124v1-qvggt-post-training-quantized-visual-geometry-grounded-transformer)  
-   标签：评分：6.0/10、query:compress
-   evidence：后训练量化与混合精度模型压缩
-11. [Saliency-Aware Model Merging](/202606/03/2606.00511v1-saliency-aware-model-merging)  
+   evidence：表示学习正则化以提升性能
+9. [Positional Encodings Anchor Spatial Structure in Vision Transformers: A Geometric Perspective on Robustness](/202606/04/2606.00124v1-positional-encodings-anchor-spatial-structure-in-vision-transformers-a-geometric-perspective-on-robustness)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：模型合并作为优化策略
-12. [Collaborative Few-Step Distillation and Low-Bit Quantization for Wan2.2 Dual-Expert Video Diffusion Models](/202606/03/2606.00658v1-collaborative-few-step-distillation-and-low-bit-quantization-for-wan22-dual-expert-video-diffusion-models)  
+   evidence：研究位置编码对ViT表示几何和鲁棒性的影响
+10. [FiSeR: Fine-Grained Source Representations for Cross-Domain AI Image Detection](/202606/04/2606.00606v1-fiser-fine-grained-source-representations-for-cross-domain-ai-image-detection)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：使用量化和蒸馏进行模型优化
+   evidence：层次对比学习提升表示迁移性，属于性能改进技术
+11. [Memory-Efficient LLM Training with Dynamic Sparsity: From Stability to Practical Scaling](/202606/04/2606.00888v1-memory-efficient-llm-training-with-dynamic-sparsity-from-stability-to-practical-scaling)  
+   标签：评分：6.0/10、query:neural-arch
+   evidence：提出SMET方法稳定动态稀疏训练，属于深度学习模型优化策略
+12. [HASTE: Hardware-Aware Dynamic Sparse Training for Large Output Spaces](/202606/04/2606.01117v1-haste-hardware-aware-dynamic-sparse-training-for-large-output-spaces)  
+   标签：评分：6.0/10、query:neural-arch
+   evidence：提出分组共享固定扇入稀疏输出层设计，减少内存和计算，属于模型优化策略
 
 
 <div class="dpr-home-promo-card">

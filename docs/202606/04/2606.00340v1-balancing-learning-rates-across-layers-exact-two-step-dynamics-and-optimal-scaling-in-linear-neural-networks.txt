@@ -1,0 +1,15485 @@
+Title: Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks
+
+URL Source: https://arxiv.org/pdf/2606.00340v1
+
+Published Time: Tue, 02 Jun 2026 00:32:03 GMT
+
+Number of Pages: 77
+
+Markdown Content:
+# Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+Tianyu Pang 1 Vignesh Kothapalli 2 Shenyang Deng 1 Haohui Wang 3 Dawei Zhou 3 Yaoqing Yang 1
+
+Abstract 
+
+We study optimal learning-rate selection in two-layer and three-layer linear neural networks trained to learn linear target functions. In par-ticular, we derive the exact closed-form expres-sions for the gradients and test loss after one and two steps of gradient descent, enabling a precise characterization of early training dynam-ics. We characterize how learning rates should scale under the gradient approximation in the first two steps, and prove that performing up-dates with this approximation yields a tractable surrogate loss with a tight, small approximation error. This formulation enables the theoretical analysis of layer-wise learning rates and reveals a distinct early-training regime: test loss can be minimized by unequal learning rates at the ini-tial step, while equal learning rates become op-timal in subsequent steps. Our numerical exper-iments validate the theory and demonstrate the importance of balancing layer-wise learning rates early during training. The code is available at: 
+
+TDCSZ327/Layer-Balancing .
+
+1. Introduction 
+
+The dynamics of gradient descent in deep neural networks are shaped not only by the architecture and initialization (Saxe et al., 2019; Goldt et al., 2020; Kunin et al., 2024) but also by the choice of learning rates for individual layers. In practice, networks often use separate learning rates across layers, or adopt layer-wise adaptive schedules (You et al., 2017; Zhou et al., 2023; Wang et al., 2025; He et al., 2026) to accelerate convergence and improve generalization. Even in simpler linear overparameterized models, however, it is unclear how the relative scale of layer-wise learning rates affects training trajectories and resulting test performance. Small deviations in early gradient updates can propagate 
+
+> 1
+
+Dartmouth College 2Stanford University 3Virginia Tech. Cor-respondence to: Yaoqing Yang <Yaoqing.Yang@dartmouth.edu >.
+
+Proceedings of the 43 rd International Conference on Machine Learning , Seoul, South Korea. PMLR 306, 2026. Copyright 2026 by the author(s). 
+
+through layers and affect learned representations in ways that are difficult to quantify. In neural networks, the gradient updates tend to couple dominant, signal-aligned components with smaller residual terms (Ba et al., 2022; Wang et al., 2023; Kothapalli et al., 2025). Since the norms of these components vary across layers, the learning rates play a crucial role in determining the training dynamics. A theoretical analysis of these com-ponents requires a layer-by-layer training assumption that is atypical of practical settings. On the other hand, linear networks offer a rich alternative where the linear interaction between layers naturally determines the structure of the gra-dient (Saxe et al., 2014). In particular, each layer’s update depends on the product of the weights in the other layers and the data matrix. However, the effects of layer-wise learning rates on the learning dynamics are still not well understood. Previous works on continuous-time gradient flow analyses in linear networks suggest that the weight norms across layers may balance over time (Du et al., 2018; Ye & Du, 2021; Wang et al., 2021). Whereas kernel-based approx-imations predict nearly linear evolution of outputs (Jacot et al., 2018; Hu & Lu, 2022). However, these approaches do not study the effects of learning rate selection in discrete, finite-step settings on the signal-residual coupling in gradi-ent updates. This coupling effect is further complicated by network depth. Even for three-layer linear networks, the gradient of the output with respect to an intermediate layer contains products of multiple weight matrices and the data matrix, leading to higher-order interactions that influence both the magnitude and direction of updates. Approaches that consider layers independently fail to capture these ef-fects (Arora et al., 2018), and conventional mean-field (Mei et al., 2018) or maximal-update (Yang & Hu, 2021; Yang et al., 2022) analyses tend to rely on infinitesimal step sizes. Consequently, predicting how the choice of layer-wise learn-ing rates affects early generalization requires a framework that can both isolate the leading components of the gradient and quantify their contribution to test performance. Previous work on layer-wise adaptation has focused pri-marily on heuristic or asymptotic regimes. Methods such as per-layer decay, adaptive optimizers (Zhou et al., 2023; Liu et al., 2024), or normalization-based rescaling (You et al., 2018; Yang et al., 2022) are motivated by empirical 1
+
+> arXiv:2606.00340v1 [cs.LG] 29 May 2026 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks
+
+improvements but do not offer explicit formulas linking learning rates to test loss. Analyses of implicit bias (Arora et al., 2019; Gidel et al., 2019) or norm balancing describe certain asymptotic trajectories, yet they do not address the finite-step dynamics where early layer-wise interactions are critical. In multi-layer settings, these interactions determine whether early updates align with the signal or are dominated by cross-layer interference, and small differences in learning rates can have a disproportionate effect on generalization. In this paper, we develop a framework for analyzing layer-wise learning rates in two-layer and three-layer linear net-works under random orthogonal initialization. Central to our approach is a gradient decomposition that separates the dominant, label-aligned component of each layer’s update from smaller residual terms, allowing closed-form expres-sions for the test loss after one and two gradient steps. Our contributions include: • Characterizing the dominant components of gradients and rigorously bounding residual terms in operator norm, establishing conditions under which approxi-mate gradients accurately capture test loss dynamics. • Showing that in two-layer networks, symmetric learn-ing rates across layers are suboptimal after a single update due to the distinct roles of representation and readout, but become locally optimal after two updates in sufficiently wide networks, revealing a transition from asymmetric to balanced learning rates. • Extending the analysis to three-layer networks with a scalar output, capturing richer cross-layer interac-tions, identifying distinct scaling regimes for admis-sible learning rates, and providing explicit test loss expressions that include higher-order interactions be-tween layer updates. • Identifying critical thresholds for learning rates ( η =
+
+O(h√h) for two layers, η = O(h) for three layers) beyond which gradient dynamics and test loss behavior qualitatively change, connecting with maximal-update and mean-field scaling regimes. While our analysis is restricted to linear networks with or-thogonal initialization, it provides a principled foundation for understanding how layer-wise learning rates shape early generalization, and offers insights that can guide the design of learning rate schedules in more complex architectures. 
+
+2. Related Work 
+
+2.1. Layer-wise Hyperparameter Tuning 
+
+When training and fine-tuning deep learning models, layer-wise hyperparameter tuning serves as a lightweight and memory-efficient tuning paradigm (Yao et al., 2024). It has shown great potential to reconcile the coarse granular-ity of global tuning (Loshchilov & Hutter, 2016; Hu et al., 2024) and the high memory demands of parameter-wise tun-ing (Kingma, 2014; Liu et al., 2019; Yao et al., 2021). For example, Howard & Ruder (2018); Long et al. (2015) have shown layer-wise learning rate strategies can enhance test accuracy in both transfer learning and domain adaptation tasks. LARS and LAMB (You et al., 2017; 2018) propose “trust ratio” to assign layer-wise learning rates and mitigate gradient divergence in large-batch training. accelerating the training of large models on computer vision (CV) and natural language processing (NLP) tasks. AutoLR (Ro & Choi, 2021) automatically tunes its layer-wise learning rates according to the “role” of each layer to balance layer-wise weight variations. Adam-mini (Zhang et al., 2024) and 
+
+Blockwise-LR (Wang et al., 2025) assign layer-wise learning rate based on the different Hessian block structures in Transformers (Vaswani et al., 2017). Complementing these algorithmic heuristics, in this work we provide an exact two-step characterization in two- and three-layer lin-ear networks that links layer-wise learning-rate allocation directly to test loss, yielding a principled prescription for when asymmetric versus balanced learning rates are optimal. We include more discussion of other layer-wise parameters, such as the pruning ratio and weight decay, in Appendix B. 
+
+2.2. Layer-balancing Phenomenon 
+
+Prior work like Du et al. (2018); Wang et al. (2021); Ye & Du (2021) shows that the norm difference between adja-cent layers of deep homogeneous models stays constant or vanishes during training, they term this as one kind of auto-matic layer balancing. More recently, Zhou et al. (2023); Liu et al. (2024) find that balancing weight spectra across layers helps model training, and they propose a layer-wise learning rate scheduler, called TempBalance , that allo-cates learning rates by assessing the heavy-tailness of each layer (a property that correlates with layer quality). In addition, Kunin et al. (2024) study the training dynamics of linear neural networks and find that when all layers learn at similar rates, linear neural networks exhibit rapid feature learning. Likewise, Yang et al. (2022) and Yang et al. (2024) show that for square matrices, balanced learning-rates can be optimal under the maximal-update parameterization. Both results are consistent with our findings. 
+
+3. Preliminaries and Setup 
+
+Notation. For n ∈ N, we denote [n] = {1, · · · , n }. We use O(·) to denote the standard big-O notation and the sub-script Od(·) to denote the asymptotic limit of d → ∞ .Formally, for two sequences of real numbers xd and yd,
+
+xd = Od(yd) represents lim d→∞ |xd| ≤ C1|yd| for some constant C1. Similarly, xd = Od, P(yd) denotes that the asymptotic inequality almost surely holds under a prob-2Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+ability measure P. The definitions can be extended to the standard Ω( ·), Θ( ·) notations analogously. For two sequences of real numbers xd and yd, xd ≍ yd repre-sents C2|yd| ≤ | xd| ≤ C1|yd|, for constants C1, C 2 > 0
+
+For a real matrix B = ( Bij )n×m ∈ Rn×m, B◦p repre-sents an element-wise p-power transformation such that 
+
+B◦p = ( Bpij )n×m. ⊙ is the matrix Hadamard product, 
+
+sign( .) denotes the element-wise sign function. ∥·∥ denotes the ℓ2 norm for vectors and the operator norm for matrices. 
+
+∥·∥ F denotes the Frobenius norm. 0h×d, 1h×d ∈ Rh×d
+
+represent the all-zero and all-ones matrices, respectively. 
+
+Definition 3.1 (Orthogonal initialization) . We say a random matrix O1 ∈ Rh×h is random orthogonal if it is uniformly distributed on the orthogonal group with respect to the Haar measure, i.e. O1O⊤ 
+
+> 1
+
+= O⊤ 
+
+> 1
+
+O1 = Ih. We say a random vector a1 ∈ Rh is random orthogonal if it is uniformly distributed on the orthogonal group with respect to the Haar measure, i.e. a⊤ 
+
+> 1
+
+a1 = 1 , and E[a1a⊤ 
+
+> 1
+
+] = 1 
+
+> h
+
+Ih.
+
+Assumption 3.2. For random orthogonal initialization of the NN weights, we assume data number n = model width 
+
+h = data dimension d.
+
+Two-layer and three-layer NNs. For the two-layer case, we consider a linear NN as our student model f (·) : Rh →
+
+Rh. For an input xi ∈ Rh, its prediction is formulated as: 
+
+f (xi) = 1
+
+h x⊤ 
+
+> i
+
+W1W2. (1) For the three-layer case, we consider a linear NN as our 
+
+student model f ∗(·) : Rh → R. For an input xi ∈ Rh, its prediction is formulated as: 
+
+f ∗(xi) = 1
+
+√h x⊤ 
+
+> i
+
+W1W2a. (2) Here W1 ∈ Rh×h, W2 ∈ Rh×h, a ∈ Rh are the first two hidden layers and last layer weights, respectively, with random orthogonal initialization. To keep the loss well-scaled, we use a scaling coefficient of 1 
+
+> h
+
+for the two-layer network and 1√h for the three-layer network. 
+
+Dataset. We use linear teacher models to generate the training data of both two-layer and three-layer student net-works under random orthogonal initialization. We sam-ple input data X ∈ Rh×h as h data points {x1, · · · , xh},where 1√h X is a random orthogonal matrix. To simplify the analysis, we do not consider label noise. • Two-layer NN Case. For a given xi ∈ Rh, we use a linear teacher model F : Rh → Rh to generate the corresponding label yi ∈ Rh (Du et al., 2018) as: 
+
+yi = F (xi) = M ⊤xi. (3) Here, M ∈ Rh×h is the target matrix , where √hM
+
+is a random orthogonal matrix. We represent X ∈
+
+Rh×h, Y ∈ Rh×h as the input matrix and the label matrix, respectively. • Three-layer NN Case. For a given xi ∈ Rh, we use a linear teacher model F ∗ : Rh → R to generate the corresponding scalar label yi ∈ R as: 
+
+yi = F ∗(xi) = β∗⊤ xi. (4) Here random orthogonal vector β∗ ∈ Rh is the target direction . We represent X ∈ Rh×h, y ∈ Rh as the input matrix and the label vector, respectively. 
+
+Training procedure. We adopt GD as the optimizer for training. Here we consider a simple training procedure: For the two-layer NN, we apply GD updates on both the layers simultaneously. For the three-layer NN, each GD update only simultaneously trains the first two hidden layers and we fix the last layer weights a ∈ Rh. In both settings, we employ the mean-squared error as our training loss function: 
+
+ˆLtwo-layer (f, X, Y ) = 12h ∥Y − f (X)∥2 
+
+> F
+
+(5) 
+
+ˆLthree-layer (f ∗, X, y) = 12h ∥y − f ∗(X)∥2 . (6) Where X ∈ Rh×h, Y ∈ Rh×h, y ∈ Rh are training data, and labels for two-layer and three-layer NN, respectively. 
+
+Assumption 3.3. We consider a non-asymptotic setting, where h, n ≤ C and C is a large constant. 
+
+Assumption 3.4. We aim to determine whether using the same learning rates across layers leads to minimal test loss for networks trained with a one-step or two-step GD update when η1 + η2 = 2 hα, where hα ≤ critical threshold (O(h√h) for two-layer NN, O(h) for three-layer NN). 
+
+4. Overview of Main Results: Balancing Layer-wise Learning Rates 
+
+In this work, we study how layer-wise learning rates influ-ence early training dynamics and generalization in linear neural networks. Our analysis reveals how the interplay between network width, training depth, and learning-rate scale drives the emergence of asymmetric versus balanced updates across layers. 
+
+Gradient decomposition and leading-order approxima-tion. For both two-layer and three-layer networks, we decompose the exact gradients into leading-order, signal-aligned terms and smaller residual terms: 
+
+Gti = Bti − Ati, i = 1 , 2,
+
+where Ati captures the primary contribution from the labels, and Bti is higher-order in 1√h . For learning rates below the critical thresholds ( η1, η 2 ≤ O(h√h) for two-layer, 3Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 0 25000 50000   
+
+> η1
+> 0.88
+> 0.90
+> 0.92
+> 0.94
+> Test Loss
+> η1=η2
+> 30000
+> 35000
+> 40000
+> 45000
+> 50000
+> 55000
+> 60000
+> η1 + η2
+
+(a) 1-step (theory) 0 25000 50000    
+
+> η1
+> 0.88
+> 0.90
+> 0.92
+> 0.94
+> Test Loss
+> η1=η2
+> 30000
+> 35000
+> 40000
+> 45000
+> 50000
+> 55000
+> 60000
+> η1 + η2
+
+(b) 1-step (experiment) 0 25000 50000   
+
+> η1
+> 0.6
+> 0.7
+> 0.8
+> 0.9
+> Test Loss
+> η1=η2
+> 30000
+> 35000
+> 40000
+> 45000
+> 50000
+> 55000
+> 60000
+> η1 + η2
+
+(c) 2-step (theory) 0 25000 50000    
+
+> η1
+> 0.7
+> 0.8
+> 0.9
+> Test Loss
+> η1=η2
+> 30000
+> 35000
+> 40000
+> 45000
+> 50000
+> 55000
+> 60000
+> η1 + η2
+
+(d) 2-step (experiment) 
+
+Figure 1. 2-layer NN under orthogonal initialization. Here we set η1 + η2 ≤ O(h 32 ) and h = 1000 . We observe that the theoretical losses closely track the empirical test losses measured after either one or two updates. Moreover, a clear qualitative shift emerges: after a single update, symmetric learning rates across layers are suboptimal, whereas after two updates they become locally optimal. We discuss this in Section 6. 
+
+η1, η 2 ≤ O(h) for three-layer), Bti is negligible in norm. This decomposition justifies replacing exact gradients with their leading-order components when computing the test loss, simplifying analysis and revealing the dominant factors that govern learning-rate balance. 
+
+Two-layer networks: asymmetry vs. balance. For the student network f (x) = 1 
+
+> h
+
+x⊤W1W2 trained on labels 
+
+y = M ⊤x, we find: • Early asymmetry: After a single gradient step, symmet-ric learning rates η1 = η2 do not minimize the test loss. Early training favors asymmetric updates, as the first layer primarily absorbs the label signal while the sec-ond layer transmits it. Enforcing symmetry too early limits the network’s ability to exploit this distinction. • Emergent balance: After two steps, for sufficiently large width and an appropriate range of total learning-rate scale, symmetric layer-wise learning rates become locally optimal. At this stage, layers have coordinated sufficiently, making balanced updates advantageous for minimizing test loss. 
+
+Three-layer networks: extension and scaling. For the student network f ∗(x) = 1√h x⊤W1W2a with output vec-tor a, the qualitative phenomena is similar to the two-layer NNs. Early training favors asymmetric learning rates, re-flecting distinct roles of hidden layers. After multiple steps, balanced learning rates emerge as optimal, but the admis-sible learning-rate regime is reduced to O(h) due to differ-ences in the initialization schemes of the two- and three-layer NNs, as well as the additional output layer. Two-step test loss also depends more strongly on higher-order prod-ucts of η1η2, highlighting deeper cross-layer interactions. 
+
+Key takeaway: balancing learning rates across layers. 
+
+Our results show that optimal layer-wise learning rates are dynamic. Early-stage training benefits from asymmetry to leverage layer-specific signal propagation, while deeper or later-stage updates promote balance, enabling coordinated alignment across layers. This perspective connects explicit gradient norms, test loss formulas, and width scaling to a principled understanding of when and why learning-rate bal-ancing is beneficial in linear NNs. In Appendix E and F, we extend the main results under orthogonal initialization to the gaussian initialization setting, obtaining a theoretical loss expression for the one-step GD update and complementing it with simulation experiments for the multi-step case, we find that similar conclusions hold. 
+
+5. Main Results 
+
+5.1. Norm Analysis of Gradient Matrices 
+
+Here we give the norm analysis of update gradient matrices under random orthogonal initialization. This analysis is an important step in simplifying the derivation of the theoretical test loss in the next Section (Section 5.3). It also provides intuition about the range of learning rates that are beneficial for model training and offers a deeper understanding of the gradient matrices. Here, we examine the norm properties of the gradient matrices during one-step and two-step updates under both the two-layer and three-layer NN settings. We take two-layer NN case as a main example. The t-step update equations for the two-layer NN are as follows: 
+
+W t 
+
+> 1
+
+= W t−11 − η1Gt−11 ; W t 
+
+> 2
+
+= W t−12 − η2Gt−12 , (7) where W t 
+
+> 1
+
+, W t 
+
+> 2
+
+are two hidden layer weights after t-step update, η1 and η2 are the learning rate for the first layer and second layer, respectively. W t 
+
+> 1
+
+and W t 
+
+> 2
+
+are the up-dated layer weights. Gt−11 and Gt−12 are the corresponding 
+
+t−step exact gradient matrices, where: 
+
+Gt−11 = 1
+
+h2 W t−11 W t−12 W t−12 
+
+> ⊤
+
+− 1
+
+h2 X⊤Y W t−1⊤ 
+
+> 2
+
+,
+
+Gt−12 = 1
+
+h2 W t−11
+
+> ⊤
+
+W t−11 W t−12 − 1
+
+h2 W t−11
+
+> ⊤
+
+X⊤Y .
+
+Since the gradients incorporate label information, we decom-pose each gradient matrix into two constituent components: 
+
+Gtℓ = Btℓ − Atℓ, ℓ ∈ { 1, 2}, (8) where the matrices Atℓ correspond to data-aligned gradi-ent components, while Btℓ capture self-interaction effects 4Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+arising from weight Gram matrices. Specifically for ℓ = 1 :
+
+At 
+
+> 1
+
+= 1
+
+h M W t⊤ 
+
+> 2
+
+, Bt 
+
+> 1
+
+= 1
+
+h2 W t 
+
+> 1
+
+W t 
+
+> 2
+
+W t⊤ 
+
+> 2
+
+, (9) and for the second layer ℓ = 2 ,
+
+At 
+
+> 2
+
+= 1
+
+h W t⊤ 
+
+> 1
+
+M , Bt 
+
+> 2
+
+= 1
+
+h2 W t⊤ 
+
+> 1
+
+W t 
+
+> 1
+
+W t 
+
+> 2
+
+. (10) The Atℓ terms describe how the network weights align with the target matrix M ( equation 3), and thus represent the primary learning signal. The Btℓ terms arise from weight-weight interactions and act as an implicit regularization term whose magnitude grows with the norm of the weights. 
+
+One-Step Updates and Gradient Structure. Using this decomposition, the one-step gradient descent updates can be written as: 
+
+W 1 
+
+> ℓ
+
+= W 0 
+
+> ℓ
+
++ ηℓA0 
+
+> ℓ
+
+− ηℓB0 
+
+> ℓ
+
+. (11) Under orthogonal initialization, the norms of A0 
+
+> ℓ
+
+concen-trate around deterministic quantities, while B0 
+
+> ℓ
+
+is initially small due to the orthogonality of W 01 and W 02 . Thus, early-stage learning is dominated by the signal-aligned term A0 
+
+> ℓ
+
+.
+
+Signal-Only Reference Dynamics. To isolate the contri-bution of the data-aligned terms, we consider a signal-only trajectory by removing the self-interaction components: 
+
+gW 1 
+
+> ℓ
+
+= W 0 
+
+> ℓ
+
++ ηℓA0 
+
+> ℓ
+
+. (12) The corresponding signal-only gradient components at the next step are: 
+
+fA11 = 1
+
+h M gW 12
+
+> ⊤
+
+, fA12 = 1
+
+h
+
+gW 11
+
+> ⊤
+
+M . (13) This fictitious trajectory captures pure signal propagation through the network and admits clean norm bounds that are independent of higher-order weight interactions. It serves as a reference point for comparing the true GD dynamics. 
+
+Two-Step Updates and Higher-Order Corrections. The true two-step updates take the form: 
+
+W 2 
+
+> ℓ
+
+= W 1 
+
+> ℓ
+
++ ηℓA1 
+
+> ℓ
+
+− ηℓB1 
+
+> ℓ
+
+. (14) To facilitate comparison with the signal-only trajectory, we define the corrected approximation 
+
+W 2 
+
+> ℓ
+
+= gW 1 
+
+> ℓ
+
++ ηℓ fA1 
+
+> ℓ
+
+− ηℓ fB1 
+
+> ℓ
+
+, (15) 
+
+G1 
+
+> ℓ
+
+= fB1 
+
+> ℓ
+
+− fA1 
+
+> ℓ
+
+, (16) where fB1 
+
+> ℓ
+
+denotes the self-interaction term evaluated along the signal-only path. This construction allows us to quantify the deviation between W 2 
+
+> ℓ
+
+and gW 2 
+
+> ℓ
+
+and to show that the difference is controlled by higher-order terms in ηℓ.
+
+5.2. Learning Rate Regimes and Gradient Dominance 
+
+We now formalize the effect of learning rate scaling on the relative magnitude of the signal and self-interaction components of the gradients. By analyzing the norms of the matrices A01, A02, B01 , B02 , fA11, fA12, fB11 , fB12 , we obtain the following characterization of the gradient structure under random orthogonal initialization. 
+
+Proposition 5.1. (Two-layer NN under random orthogo-nal initialization.) Under Assumption 3.2, if the learning rates satisfy η1, η 2 ≤ O(h√h), then the gradients are well-approximated by their signal-aligned components: 
+
+G01 − A01 ≤ G01
+
+√h − 1 , G02 − A02 ≤ G02
+
+√h − 1 ,
+
+G11 − fA11 ≤
+
+G11
+
+√h − 1 , G12 − fA12 ≤
+
+G12
+
+√h − 1 .
+
+Proposition 5.1 shows that, for sufficiently wide networks, the contribution of the self-interaction terms Btℓ to the gra-dient norm is suppressed by a factor of 1/(√h − 1) . Conse-quently, both the one-step gradients G0 
+
+> ℓ
+
+and the corrected two-step gradients G1 
+
+> ℓ
+
+are dominated by their signal-aligned components A0 
+
+> ℓ
+
+and fA1 
+
+> ℓ
+
+, respectively. This justifies approx-imating the early-stage training dynamics using the signal-only trajectory introduced previously (see complete proof in Appendix C.1.2 and C.2.1). In Figure 3 in Appendix F , we perform spectral analysis of the A0 
+
+> ℓ
+
+, fA1 
+
+> ℓ
+
+, B0 
+
+> ℓ
+
+, fB1 
+
+> ℓ
+
+,
+
+G0 
+
+> ℓ
+
+, G1 
+
+> ℓ
+
+matrices and visualize the norm gap highlighted in Proposition 5.1, we further verify that B0 
+
+> ℓ
+
+and fB1 
+
+> ℓ
+
+are negligible, as they are dominated by A0 
+
+> ℓ
+
+and fA1 
+
+> ℓ
+
+.
+
+Large Learning Rate Regime. The proposition also iden-tifies a critical scaling of the learning rate at which self-interaction effects become non-negligible for two-layer neu-ral networks. In particular, when η1 = Θ( h√h), we have: 
+
+W 11 − W 01 F ≍ W 01 F , (17) 
+
+W 21 − gW 11 F
+
+≍ gW 11 F
+
+, (18) and analogously for the second layer when η2 = Θ( h√h).This scaling marks a transition point where a single gradient step produces a weight update comparable in magnitude to the existing weights. Proposition 5.1 shows that when the learning rates satisfy η1, η 2 ≤ O(h√h), the signal-aligned components dominate the gradients from a norm perspective. Specifically, the sets {A0 
+
+> i
+
+}2 
+
+> i=1
+
+and { fA1 
+
+> i
+
+}2 
+
+> i=1
+
+are very close to {G0 
+
+> i
+
+}2 
+
+> i=1
+
+and {G1 
+
+> i
+
+}2
+
+> i=1
+
+, respectively. This implies that 
+
+{A0 
+
+> i
+
+}2 
+
+> i=1
+
+and { fA1 
+
+> i
+
+}2 
+
+> i=1
+
+serve as the leading terms in the one-step gradients {G0 
+
+> i
+
+}2 
+
+> i=1
+
+and the corrected two-step gradients 
+
+{G1 
+
+> i
+
+}2
+
+> i=1
+
+. This approximation substantially simplifies the 5Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+subsequent analysis of the theoretical test loss for the two-layer neural network. In particular, it allows us to replace the exact gradients {G0 
+
+> i
+
+}2 
+
+> i=1
+
+and {G1 
+
+> i
+
+}2 
+
+> i=1
+
+with their leading-order counterparts {A0 
+
+> i
+
+}2 
+
+> i=1
+
+and { fA1 
+
+> i
+
+}2
+
+> i=1
+
+, respectively, as formally justified by Lemma 5.2. For the three-layer setting, we similarly replace the original gradients by their leading terms, as justified by Proposition C.4 and C.11, in order to streamline the test loss analysis. Finally, Proposition 5.1 also identifies a critical learning-rate scaling. When the learning rates for the first and second layers are set to be on the order of Θ( h√h), the gradient updates become comparable in magnitude to the initialized weight matrices, effectively overwhelming the initialization. This behavior mirrors the learning-rate scaling associated with the maximal update parameterization studied in Yang & Hu (2021); Yang et al. (2022). Prior work (Ba et al., 2022; Yang & Hu, 2021; Yang et al., 2022; 2023) suggests that choosing learning rates within (or below) this large-learning-rate regime can be beneficial for training. While these studies primarily focus on two-layer networks with a fixed output layer, our analysis reaches a compatible con-clusion without relying on this assumption. A similar result can be obtained for the three-layer NN setting under ran-dom orthogonal initialization with η1, η 2 no more than O(h)
+
+(See Proposition C.4 and C.11). We provide the proof in Appendix C.1.1 and C.2.2. 
+
+5.3. Relationship between Test Loss and Layer-wise Learning Rates 
+
+This section characterizes how the test loss depends on the learning rates of individual layers in the linear NNs trained under random orthogonal initialization. 5.3.1. T WO -LAYER NEURAL NETWORKS 
+
+Given test data ˜x0 ∼ N (0, Ih), we consider the test loss 
+
+Ltwo-layer = EW1,W2,M , ˜x0,X
+
+1
+
+h ˜x0W1W2 − ˜x0M
+
+> 2
+
+.
+
+As the exact closed-form characterization of the test loss is nontrivial, our analysis proceeds by first simplifying the training dynamics using leading-order gradient approxima-tions, and then translating these simplified dynamics into explicit expressions for the test loss. 
+
+Lemma 5.2. Under Assumption 3.2 and 3.3, for η1, η2 ≤
+
+O(h√h), we have 
+
+Ltwo-layer (W 11 , W 12 ) − Ltwo-layer ( gW 11 , gW 12 ) ≤ O(h−1).
+
+Ltwo-layer (W 21 , W 22 ) − Ltwo-layer ( gW 21 , gW 22 ) ≤ O(h− 12 ).
+
+Lemma 5.2 formalizes the idea that, for sufficiently large width and moderate learning rates, the test loss is insensitive to higher-order gradient corrections. Specifically, when 
+
+η1, η 2 ≤ O(h√h), replacing the true gradient with the signal-aligned approximations changes the test loss by at most O(h−1) after one step and O(h−1/2) after two steps. Intuitively, this result builds on Proposition 5.1: since the signal components dominate the gradient norms, the parts of the update omitted in the approximation contribute only lower-order perturbations to the weights. As a consequence, the network’s input–output map after one or two steps is well-approximated by the signal-only dynamics, and the resulting test loss remains essentially unchanged at leading order. This lemma is crucial because it allows us to analyze the test loss using simplified weight trajectories that admit closed-form expressions, without sacrificing asymptotic ac-curacy. The simplified analysis leads to the following result for two-layer networks. 
+
+Theorem 5.3. Given Assumption 3.2, 3.3 and in addition assume η1 and η2 are no more than O(h√h), based on Proposition 5.1 and Lemma 5.2, consider the training pro-cedure discussed in Section 3, we obtain the following test loss after one-step and two-step GD update in a two-layer neural network under random orthogonal initialization: 
+
+Ltwo-layer (W 11 , W 12 ) = η21
+
+h4 + η22
+
+h4 + 2η1η2
+
+h4 + η21 η22
+
+h7
+
+− 2η1
+
+h2 − 2η2
+
+h2 + 1
+
+h + 2η1η2
+
+h5 + 1 
+
+Ltwo-layer (W 21 , W 22 ) = 1
+
+h (1 + η1η2
+
+h3 )4 + 16 η21 η22
+
+h7
+
++
+
+ 2( η1 + η2)( η1η2 + h3)
+
+h5 − 1
+
+2
+
++ (1 + η1η2
+
+h3 )2 8η1η2
+
+h5
+
+We provide the proof in Appendix D.1 and D.2. Theorem 5.3 provides explicit formulas for the test loss after one-step and two-step gradient descent updates in a two-layer network. While the expressions themselves are algebraically involved, their structure reveals several key phenomena. 
+
+One-step test loss. The one-step test loss decomposes into three types of terms: (i) Linear improvement terms (e.g., 
+
+−2η1/h 2, −2η2/h 2), which reflect the reduction in error due to alignment with the target signal. (ii) Quadratic and interaction terms (e.g., η21 /h 4, η22 /h 4, η1η2/h 4), which cap-ture over-updating and cross-layer coupling. (iii) Residual variance terms (e.g., 1/h + 1 ), arising from the randomness of initialization and test inputs. These components make explicit how learning rates at different layers contribute asymmetrically and interactively to NN generalization. 
+
+Two-step test loss. For the two-step update, the test loss exhibits higher-order dependence on the product η1η2. This reflects the fact that meaningful improvement in a two-layer 6Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+linear network requires coordination between layers; up-dating only one layer is insufficient to substantially reduce the prediction error. The appearance of repeated factors of 
+
+(1 + η1η2/h 3) highlights the multiplicative nature of repre-sentation learning across layers. Building on this insight, we obtain the following corollary: 
+
+Corollary 5.4. Suppose η1+η2 = 2 hα and we consider 0 <α ≤ 32 . Then, for any α in this range, the point η1 = η2 =
+
+hα is not a local minimum of the loss Ltwo-layer (W 11 , W 12 ).However, for 1 < α ≤ 32 , if h > max {h∗, 256 }, then η1 =
+
+η2 = hα is a local minimum of the loss Ltwo-layer (W 21 , W 22 ),where h∗ is the root of the following equation: 
+
+(1+ o(1)) h1−α+16 hα−2+2 h−α+8 hα−3+6 h3α−6−2 = 0 
+
+Corollary 5.4 studies the test loss landscape under a con-strained learning-rate budget η1 + η2 = 2 hα (Assump-tion 3.4), which isolates the effect of how learning rates are allocated across layers, rather than their total magnitude. 
+
+Asymmetric learning rates after one-step update. The first conclusion is that the symmetric choice η1 = η2 is not a local minimum of the test loss after a single gradient descent step for any 0 < α ≤ 32 . This result indicates that, in the initial stage of training, the test loss is optimized by an asym-metric allocation of learning rates across layers. After one update, the two layers contribute differently to the predictor: updates to the first layer primarily control the formation of internal representations, whereas updates to the second layer mainly affect the linear readout of these representa-tions. Imposing equal learning rates at this stage restricts the network from exploiting this structural asymmetry, resulting in suboptimal test performance. 
+
+Symmetric learning rates after two-step update. In con-trast, the second conclusion shows that for 1 < α ≤ 32
+
+and sufficiently large network width, the symmetric choice 
+
+η1 = η2 becomes a local minimum of the test loss after two gradient descent steps. This behavior reflects a transition in the training dynamics: after multiple updates, the learning process becomes increasingly coupled across layers, and coordinated updates yield improved generalization. In this regime, balanced learning rates facilitate effective interac-tion between layers, leading to optimal performance. The lower bound on α ensures that the learning rates are suf-ficiently large to induce non-negligible cross-layer effects, while remaining within a stable training regime. Overall, this corollary identifies a phase transition in the optimal allocation of layer-wise learning rates, governed by the interaction between network width, training depth, and the overall scale of the learning rates. 5.3.2. T HREE -LAYER NEURAL NETWORKS 
+
+We now characterize the test loss of a three-layer neural net-work after one-step and two-step gradient descent updates under random orthogonal initialization. Compared to the two-layer setting, the presence of a vector-valued output layer a fundamentally alters both the learning-rate scaling and the structure of the resulting test loss. Given test data 
+
+˜x0 ∼ N (0, Ih), we consider the test loss: 
+
+Lthree-layer = EW 01 ,W 02 ,a,  
+
+> β∗,˜x0,X
+
+ 1
+
+√h ˜x0W1W2a − ˜x0β∗
+
+2
+
+Structural distinction from the two-layer network. In the three-layer network, the predictor takes the form 
+
+˜x0W1W2a, where the output weights a ∈ Rh are fixed throughout training. Consequently, learning in the hidden layers affects the test loss only through their joint alignment with the target vector β∗. This additional linear mapping at the output introduces a bottleneck that attenuates the prop-agation of gradient updates, thereby reducing the scale at which layer-wise interactions become significant. As a re-sult, the admissible learning-rate regime in the three-layer setting is η1, η 2 ≤ O(h), which is strictly smaller than the 
+
+O(h√h) regime identified for the two-layer network. 
+
+Theorem 5.5. Given Assumption 3.2, 3.3 and in addition assume η1 and η2 are no more than O(h) based on Propo-sition C.4 and C.11, consider the training procedure dis-cussed in Section 3, we derive the test loss after one-step and two-step GD update in a three-layer neural network: 
+
+Lthree-layer (W 11 , W 12 ) = η21
+
+h2 + η22
+
+h2 + 2η1η2
+
+h2 + η21 η22
+
+h4
+
+− 2η1
+
+h − 2η2
+
+h + 1
+
+h + 2η1η2
+
+h3 + 1 
+
+Lthree-layer (W 21 , W 22 ) = 
+
+ 2( η1 + η2)( h + η1η2)
+
+h2 − 1
+
+2
+
++ 1
+
+h + 2η1η2
+
+h2 + 10 η1η2
+
+h3 + η21 η22
+
+h3
+
++ 37 η21 η22
+
+h4 + 12 η31 η32
+
+h5 + η41 η42
+
+h6
+
+The first expression in Theorem 5.5 gives the test loss af-ter a single gradient descent step. We provide the proof in Appendix D.4. Its structure mirrors that of the two-layer case, with appropriately rescaled terms. The two-step test loss exhibits a substantially richer dependence on the learn-ing rates, involving higher-order polynomial terms in the product η1η2. We provide the proof in Appendix D.5. This behavior reflects the fact that, in a three-layer network, a meaningful reduction in test loss requires coordinated up-dates across both hidden layers over multiple steps. Similar to Corollary 5.4, we have the following corollary for a three-layer neural network. 7Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 0 50   
+
+> η1
+> 0.85
+> 0.90
+> Test Loss
+> η1=η2
+> 30
+> 40
+> 50
+> 60
+> 70
+> 80
+> 90
+> 100
+> η1 + η2
+
+(a) 1-step (theory) 0 50    
+
+> η1
+> 0.85
+> 0.90
+> 0.95
+> Test Loss
+> η1=η2
+> 30
+> 40
+> 50
+> 60
+> 70
+> 80
+> 90
+> 100
+> η1 + η2
+
+(b) 1-step (experiment) 0 50   
+
+> η1
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> Test Loss
+> η1=η2
+> 30
+> 40
+> 50
+> 60
+> 70
+> 80
+> 90
+> 100
+> η1 + η2
+
+(c) 2-step (theory) 0 50    
+
+> η1
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> Test Loss
+> η1=η2
+> 30
+> 40
+> 50
+> 60
+> 70
+> 80
+> 90
+> 100
+> η1 + η2
+
+(d) 2-step (experiment) 
+
+Figure 2. 3-layer NN under orthogonal initialization. Here we set η1 + η2 ≤ O(h 23 ) and h = 1000 . We observe conclusions and results similar to those in Figure 1. We discuss more in Section 6. 
+
+Corollary 5.6. Suppose η1+η2 = 2 hα and we consider 0 <α < 1. Then, for any α in this range, the point η1 = η2 =
+
+hα is not a local minimum of the loss Lthree-layer (W 11 , W 12 ).However, for 0 < α ≤ 23 , if h > h ∗, then η1 = η2 = hα
+
+is a local minimum of the loss Lthree-layer (W 21 , W 22 ), where 
+
+h∗ is the root of the following equation: 
+
+32 h3α−2 + 33 hα−1 + 74 hα−2 + 2 h−α
+
++10 h−α−1 + 36 h3α−3 + 4 h5α−4 − 8 = 0 
+
+Comparison with the two-layer case. While both two-layer and three-layer networks exhibit nontrivial dependence on layer-wise learning rates, the three-layer setting differs in two key aspects. First, the critical learning-rate scale is reduced from O(h√h) to O(h) due to differences in the initialization schemes as well as the presence of the fixed output vector a. Second, the two-step test loss has a stronger dependence on higher-order products of η1 and η2, reflect-ing enhanced cross-layer coupling. Overall, Theorem 5.5 demonstrates that, in three-layer networks with a vector-valued output layer, the test loss is governed by a delicate interaction between layer-wise learning rates, training depth, and network width. Although early-stage updates admit a decomposition similar to that of the two-layer case, deeper architectures amplify cross-layer interactions over succes-sive steps, leading to a distinct learning-rate scaling regime and a richer dependence of test loss on the learning rates. 
+
+6. Experiments 
+
+Orthogonal initialization. Here we numerically validate our theoretical results under orthogonal initialization. We set h = n = d = 1000 and keep the model and data ini-tialization the same as in Section 3. In Figure 1, 2 and 4, we present both theoretical simulations and empirical ex-periments for two- and three-layer networks, comparing the one-step and two-step test loss as a function of the learning rates across a range of η1 + η2 values below the critical threshold. Across all settings, the theoretical losses we de-rive closely match the observed test losses after either one or two updates. Moreover, when η1 + η2 = 2 hα lies below the critical threshold, we can see a clear qualitative shift: after a single update, symmetric learning rates across layers are suboptimal, whereas after two updates they become lo-cally optimal in sufficiently wide networks. This reveals a transition from asymmetric to balanced layer-wise learning-rate allocation. For different h, see Figure 11 and 12 in Appendix F). We also find that balanced layer-wise learning-rate allocation can be locally optimal during early training over multiple steps (up to 512 update steps) under orthogo-nal initialization (see Figure 5, 7 and 9 in Appendix F). 
+
+Gaussian initialization. To demonstrate the generality of our results, we repeat the same set of experiments under gaussian initialization. We observe the same behavior as in the orthogonal case: after the first update, symmetric layer-wise learning rates are suboptimal, whereas after two updates they become locally optimal in sufficiently wide net-works. This phenomenon can also further extend to multiple training steps, please see Figure 6 and 8 in Appendix F. 
+
+Linear NN under noisy condition. In Figure 10 in Ap-pendix F, we consider adding label noise ξ ∼ N (0 , ρ ) to the teacher model in both two layer and three layer linear neural networks under orthogonal initialization. We still observe that after the first update, symmetric layer-wise learning rates are suboptimal, whereas after two updates they become locally optimal. 
+
+Deep Linear NNs. In Figure 14, we consider 4-layer and 8-layer linear neural networks, which generalize the two layer and three layer settings. We observe that, for one and two update steps, the same transition from asymmetry to balance still appears. 
+
+Nonlinear NNs. Here we consider a three layer nonlin-ear neural network, where the student model is f (xi) =  
+
+> 1√h
+
+σ(σ(x⊤ 
+
+> i
+
+W1)W2)a, and the teacher model is yi =
+
+σ(β∗⊤ xi), with σ being the ReLU activation. We use the same orthogonal initialization and training pipeline as in the two layer and three layer settings. In Figure 15, we visualize the test loss as a function of η1 after 1 and 8-step updates η1 + η2 < O (√h). Although the curves are rela-tively less symmetric than in linear case, we still observe a similar asymmetry-to-balance transition, which generalizes the cases and results covered by our theoretical setup. 8Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+7. Discussion 
+
+Learning rate scheduler Design. In previous sections, we revealed the asymmetry to balance transition in layer-wise learning rate allocation and offered theoretical support for layer-wise learning rate schedulers that aim to promote layer balance at later stages of training. Here, we provide a simple example to guide their practical design. Consider a teacher model yi = M ⊤xi and a student model f (xi) = 
+
+xiW1W2, where xi is the input and W1, W2 are the two trainable matrices. Since the Frobenius norm is a classic generalization metric, we can leverage it for W1 and W2 to design a learning rate scheduler. First, we expect the layer with the larger Frobenius norm to be assigned a smaller learning rate, due to the property of the metric. More importantly, based on the theoretical insights in our paper, we expect the learning rates of the two layers to become balanced in the later stages of training, which motivates us to promote balance between the layer norms. As a result, at each step t, we set the learning rates for 
+
+W1t and W2t as η(t) 
+
+> W1
+
+= 2∥W2t∥F 
+
+> ∥W1t∥F+∥W2t∥F
+
+lr , η(t) 
+
+> W2
+
+=
+
+> 2
+
+∥W1t∥F 
+
+> ∥W1t∥F+∥W2t∥F
+
+lr , where lr is a uniform base learning rate. As training enters the later stage, this balance-driven learn-ing rate scheduler promotes ∥W1∥F − ∥ W2∥F → 0, and the learning rates also become balanced. It is worth noting that for this matrix-factorization type linear network, the curvature at convergence, measured by the largest Hessian eigenvalue, is related to ∥W1∥F − ∥ W2∥F ; in particular, smaller norm gap corresponds to a flatter solution (Wang et al., 2021). Therefore, the transition of the learning rates from asymmetry to balance also corresponds to the process by which the model gradually converges to a flatter minima. In Figure 17, we consider a setup where ∥W2∥F = 6 and 
+
+∥W1∥F = 1 at initialization, and compare this design with a uniform learning rate used throughout training. We find that this layer-wise schedule captures the asymmetry-to-balance transition observed in our paper, and achieves lower training loss and test loss than the fully uniform baseline. More specifically, we observe that ∥W1∥F − ∥ W2∥F
+
+approaches zero in the middle and late stages of training, which corresponds to increasingly balanced learning rates. 
+
+Step-dependent optimality of learning-rate symmetry. 
+
+Our results indicate that symmetric learning rates are sub-optimal for the first step but optimal for two steps. This may not be the same as using asymmetric learning rates early and balancing them later during training. This sug-gests that asymmetric learning rates may be preferable at the very beginning of training, and symmetric learning rates become optimal as cross-layer interactions develop over subsequent steps, even if the initial learning-rate allocation is not optimal. We believe this also points to a practical strat-egy that use asymmetric learning rates early in training and more symmetric ones later. we further clarify this question through examples involving a three-layer linear network and a CNN; please see Appendix F. 
+
+8. Conclusion 
+
+In this work, we provide a finite-step characterization of how layer-wise learning rates should be balanced during training in linear neural networks. By analyzing gradient descent dynamics after one and two updates, we show that symmet-ric learning rates across layers are generally suboptimal at initialization, with early optimization favoring asymmetric allocations that reflect the distinct roles of different layers. As training progresses, a transition occurs where sufficiently large width and appropriate scaling of the total learning rate cause balanced learning rates to be locally optimal. Thus, signaling the emergence of coordinated layer-wise updates. This transition is architecture-dependent, with deeper net-works exhibiting stricter conditions under which symmetry is optimal. Our results formalize balancing learning rates across layers as a dynamical phenomenon driven by opti-mization and scaling, rather than a static design choice, and elucidate how depth, width, and learning-rate magnitude jointly shape this behavior. 
+
+Acknowledgments 
+
+This work is supported by the DARPA AIQ program, the U.S. Department of Energy under Award Number DE-SC0025584, the Allocation Year 2026 DOE Mission Sci-ence Award, Dartmouth College, and Lambda AI. 
+
+Impact Statement 
+
+This paper presents research aimed at advancing machine learning theory, particularly by providing an exact, finite-step characterization of how layer-wise learning-rate choices shape early training dynamics and generalization in multi-layer linear neural networks. Our analysis reveals a tran-sition from initially asymmetric optimal learning rates to later balanced rates. While this work may have various po-tential societal implications, we do not find it necessary to highlight any specific ones here. 
+
+References 
+
+Arora, S., Cohen, N., Golowich, N., and Hu, W. A conver-gence analysis of gradient descent for deep linear neural networks. arXiv preprint arXiv:1810.02281 , 2018. Arora, S., Cohen, N., Hu, W., and Luo, Y. Implicit regular-ization in deep matrix factorization. Advances in neural information processing systems , 32, 2019. Ba, J., Erdogdu, M. A., Suzuki, T., Wang, Z., Wu, D., and Yang, G. High-dimensional asymptotics of feature learn-9Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+ing: How one gradient step improves the representation. 
+
+Advances in Neural Information Processing Systems , 35: 37932–37946, 2022. Dong, Z., Yao, Z., Gholami, A., Mahoney, M. W., and Keutzer, K. Hawq: Hessian aware quantization of neural networks with mixed-precision. In Proceedings of the IEEE/CVF international conference on computer vision ,pp. 293–302, 2019. Du, S. S., Hu, W., and Lee, J. D. Algorithmic regulariza-tion in learning deep homogeneous models: Layers are automatically balanced. Advances in neural information processing systems , 31, 2018. Gao, C., Chen, K., Rao, J., Liu, R., Sun, B., Zhang, Y., Peng, D., Guo, X., and Subrahmanian, V. Mola: Moe lora with layer-wise expert allocation. In Findings of the Association for Computational Linguistics: NAACL 2025 ,pp. 5097–5112, 2025. Gidel, G., Bach, F., and Lacoste-Julien, S. Implicit regu-larization of discrete gradient dynamics in linear neural networks, 2019. URL https://arxiv.org/abs/ 1904.13262 .Goldt, S., Advani, M. S., Saxe, A. M., Krzakala, F., and Zdeborov ´a, L. Dynamics of stochastic gradient descent for two-layer neural networks in the teacher–student setup*. Journal of Statistical Mechanics: Theory and Experiment , 2020(12), 2020. ISSN 1742-5468. doi: 10.1088/1742-5468/abc61e. URL http://dx.doi. org/10.1088/1742-5468/abc61e .He, D., Tu, S., Jaiswal, A., Shen, L., Yuan, G., Liu, S., and Yin, L. Alphadecay: Module-wise weight de-cay for heavy-tailed balancing in llms. arXiv preprint arXiv:2506.14562 , 2025. He, D., Tu, S., Wang, K., Yin, L., and Liu, S. One LR doesn’t fit all: Heavy-tail guided layerwise learning rates for LLMs. In ICLR 2026 2nd Workshop on Deep Genera-tive Model in Machine Learning: Theory, Principle and Efficacy , 2026. URL https://openreview.net/ forum?id=Aj3ZWgxYwt .Howard, J. and Ruder, S. Universal language model fine-tuning for text classification. arXiv preprint arXiv:1801.06146 , 2018. Hu, H. and Lu, Y. M. Universality laws for high-dimensional learning with random features. IEEE Transactions on Information Theory , 69(3):1932–1964, 2022. Hu, S., Tu, Y., Han, X., He, C., Cui, G., Long, X., Zheng, Z., Fang, Y., Huang, Y., Zhao, W., et al. Minicpm: Unveiling the potential of small language models with scalable train-ing strategies. arXiv preprint arXiv:2404.06395 , 2024. Ishii, M. and Sato, A. Layer-wise weight decay for deep neural networks. In Pacific-Rim Symposium on Image and Video Technology , pp. 276–289. Springer, 2017. Jacot, A., Gabriel, F., and Hongler, C. Neural tangent ker-nel: Convergence and generalization in neural networks. 
+
+Advances in neural information processing systems , 31, 2018. Kingma, D. P. Adam: A method for stochastic optimization. 
+
+arXiv preprint arXiv:1412.6980 , 2014. Kothapalli, V., Pang, T., Deng, S., Liu, Z., and Yang, Y. From spikes to heavy tails: Unveiling the spectral evolu-tion of neural networks. Transactions on Machine Learn-ing Research , 2025. Kunin, D., Ravent ´os, A., Domin ´e, C., Chen, F., Klindt, D., Saxe, A., and Ganguli, S. Get rich quick: exact solutions reveal how unbalanced initializations promote rapid feature learning. Advances in Neural Information Processing Systems , 37:81157–81203, 2024. Lee, J., Park, S., Mo, S., Ahn, S., and Shin, J. Layer-adaptive sparsity for the magnitude-based pruning. arXiv preprint arXiv:2010.07611 , 2020. Lin, M., Ji, R., Zhang, Y., Zhang, B., Wu, Y., and Tian, Y. Channel pruning via automatic structure search. arXiv preprint arXiv:2001.08565 , 2020. Liu, L., Jiang, H., He, P., Chen, W., Liu, X., Gao, J., and Han, J. On the variance of the adaptive learning rate and beyond. arXiv preprint arXiv:1908.03265 , 2019. Liu, Z., Hu, Y., Pang, T., Zhou, Y., and Yang, Y. Model bal-ancing helps low-data training and fine-tuning. Empirical Methods in Natural Language Processing , 2024. Long, M., Cao, Y., Wang, J., and Jordan, M. Learning transferable features with deep adaptation networks. In 
+
+International conference on machine learning , pp. 97– 105. PMLR, 2015. Loshchilov, I. and Hutter, F. Sgdr: Stochastic gra-dient descent with warm restarts. arXiv preprint arXiv:1608.03983 , 2016. Lu, H., Zhou, Y., Liu, S., Wang, Z., Mahoney, M. W., and Yang, Y. Alphapruning: Using heavy-tailed self regular-ization theory for improved layer-wise pruning of large language models. Advances in Neural Information Pro-cessing Systems , 2024. Mei, S., Montanari, A., and Nguyen, P.-M. A mean field view of the landscape of two-layer neural net-works. Proceedings of the National Academy of Sci-ences , 115(33), July 2018. ISSN 1091-6490. doi: 10.1073/pnas.1806579115. URL http://dx.doi. org/10.1073/pnas.1806579115 .10 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+Nakamura, K. and Hong, B.-W. Adaptive weight decay for deep neural networks. IEEE Access , 7:118857–118865, 2019. Qing, P., Gao, C., Zhou, Y., Diao, X., Yang, Y., and Vosoughi, S. Alphalora: Assigning lora experts based on layer training quality. arXiv preprint arXiv:2410.10054 ,2024. Ro, Y. and Choi, J. Y. Autolr: Layer-wise pruning and auto-tuning of learning rates in fine-tuning of deep networks. In Proceedings of the AAAI Conference on Artificial In-telligence , volume 35, pp. 2486–2494, 2021. Saxe, A. M., McClelland, J. L., and Ganguli, S. Exact solutions to the nonlinear dynamics of learning in deep linear neural networks, 2014. URL https://arxiv. org/abs/1312.6120 .Saxe, A. M., McClelland, J. L., and Ganguli, S. A mathe-matical theory of semantic development in deep neural networks. Proceedings of the National Academy of Sci-ences , 116(23):11537–11546, 2019. Shen, S., Dong, Z., Ye, J., Ma, L., Yao, Z., Gholami, A., Mahoney, M. W., and Keutzer, K. Q-bert: Hessian based ultra low precision quantization of bert. In Proceedings of the AAAI Conference on Artificial Intelligence , vol-ume 34, pp. 8815–8821, 2020. Vaswani, A., Shazeer, N., Parmar, N., Uszkoreit, J., Jones, L., Gomez, A. N., Kaiser, Ł., and Polosukhin, I. At-tention is all you need. Advances in neural information processing systems , 30, 2017. Vershynin, R. High-dimensional probability: An introduc-tion with applications in data science , volume 47. Cam-bridge university press, 2018. Wang, J., Wang, M., Zhou, Z., Yan, J., Wu, L., et al. The sharpness disparity principle in transformers for ac-celerating language model pre-training. arXiv preprint arXiv:2502.19002 , 2025. Wang, Y., Chen, M., Zhao, T., and Tao, M. Large learn-ing rate tames homogeneity: Convergence and balancing effect. arXiv preprint arXiv:2110.03677 , 2021. Wang, Z., Engel, A., Sarwate, A. D., Dumitriu, I., and Chiang, T. Spectral evolution and invariance in linear-width neural networks. Advances in neural information processing systems , 36:20695–20728, 2023. Yang, G. and Hu, E. J. Tensor programs iv: Feature learning in infinite-width neural networks. In International Con-ference on Machine Learning , pp. 11727–11737. PMLR, 2021. Yang, G., Hu, E. J., Babuschkin, I., Sidor, S., Liu, X., Farhi, D., Ryder, N., Pachocki, J., Chen, W., and Gao, J. Tensor programs v: Tuning large neural networks via zero-shot hyperparameter transfer. arXiv preprint arXiv:2203.03466 , 2022. Yang, G., Yu, D., Zhu, C., and Hayou, S. Tensor programs vi: Feature learning in infinite-depth neural networks. 
+
+arXiv preprint arXiv:2310.02244 , 2023. Yang, G., Yu, D., Zhu, C., and Hayou, S. Tensor programs vi: Feature learning in infinite depth neural networks. In 
+
+International Conference on Learning Representations ,volume 2024, pp. 55099–55150, 2024. Yao, K., Gao, P., Li, L., Zhao, Y., Wang, X., Wang, W., and Zhu, J. Layer-wise importance matters: Less memory for better performance in parameter-efficient fine-tuning of large language models. arXiv preprint arXiv:2410.11772 ,2024. Yao, Z., Gholami, A., Shen, S., Mustafa, M., Keutzer, K., and Mahoney, M. Adahessian: An adaptive second order optimizer for machine learning. In proceedings of the AAAI conference on artificial intelligence , volume 35, pp. 10665–10673, 2021. Ye, T. and Du, S. S. Global convergence of gradient de-scent for asymmetric low-rank matrix factorization. Ad-vances in Neural Information Processing Systems , 34: 1429–1439, 2021. Yin, L., Wu, Y., Zhang, Z., Hsieh, C.-Y., Wang, Y., Jia, Y., Li, G., Jaiswal, A., Pechenizkiy, M., Liang, Y., et al. Out-lier weighed layerwise sparsity (owl): A missing secret sauce for pruning llms to high sparsity. arXiv preprint arXiv:2310.05175 , 2023. You, Y., Gitman, I., and Ginsburg, B. Large batch training of convolutional networks. arXiv preprint arXiv:1708.03888 , 2017. You, Y., Zhang, Z., Hsieh, C.-J., Demmel, J., and Keutzer, K. Imagenet training in minutes. In Proceedings of the 47th international conference on parallel processing , pp. 1–10, 2018. Zhang, Y., Chen, C., Li, Z., Ding, T., Wu, C., Kingma, D. P., Ye, Y., Luo, Z.-Q., and Sun, R. Adam-mini: Use fewer learning rates to gain more. arXiv preprint arXiv:2406.16793 , 2024. Zhou, Y., Pang, T., Liu, K., Mahoney, M. W., Yang, Y., et al. Temperature balancing, layer-wise weight analysis, and neural network training. Advances in Neural Information Processing Systems , 36, 2023. 11 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+Appendix A. Limitations 
+
+Our analysis is restricted to linear networks and focuses on the first few steps of gradient descent. However, unlike prior work that mainly focuses on asymptotic convergence, gradient flow, or kernel-based analyses, our work derives exact closed-form expressions for the gradients and test loss after one and two GD steps, enabling a precise characterization of early training dynamics. In particular, we directly link finite-step layer-wise learning-rate allocation to test loss. This is already nontrivial even for two-layer and three-layer linear networks: at each step, we decompose the gradient into dominant signal-aligned components and smaller residual terms, and rigorously bound the residual terms in operator norm, establishing conditions under which the approximate gradients accurately characterize the test loss dynamics. Extending these theoretical results to nonlinear activations, stochastic optimization, and adaptive learning-rate methods presents a natural and challenging direction. More broadly, understanding how and when balancing learning rates across layers emerges in realistic deep networks may provide new theoretical guidance for optimization strategies beyond the linearized or asymptotic regimes. 
+
+B. More Related Work on Layer-wise Hyperparameter Tuning 
+
+Besides layer-wise learning rate tuning, strategies for assigning different layer-wise pruning ratios, for both unstructured and structured pruning, have been studied actively. ABCPruner (Lin et al., 2020) first proposes layer-wise pruning strategies from a heuristic way and try to reduce the search space of possible layer sparsity combinations. Lee et al. (2020) modify magnitude-based pruning by rescaling the importance scores in a layer by a factor dependent on the magnitude of surviving connections in that layer. Yin et al. (2023) allocate layer-wise pruning ratio proportional to the outlier ratio observed within each layer, thereby facilitating a more effective alignment between layer-wise weight sparsity and outlier ratios. 
+
+Alphapruning (Lu et al., 2024) assigns layer-wise pruning ratios based on the heavy-tailness across layers in large language models (LLMs), undertrained layers will be pruned more to ensure the post-pruning performance does not degrade aggressively across all layers, thereby achieving layer balancing. Furthermore, Ishii & Sato (2017); Nakamura & Hong (2019); He et al. (2025) introduce layer-wise weight decay schedulers and works such as HAWQ (Dong et al., 2019) and Q-BERT (Shen et al., 2020) propose hessian-aware layer-wise quantization approaches. Qing et al. (2024); Gao et al. (2025) allocate layer-wise experts for MoE layers in transformers based on certain representation metrics. 
+
+C. Norm Analysis of Update Gradient Matrices 
+
+Lemma C.1. (Hanson-Wright Inequality (Vershynin, 2018)). Let x = ( x1, · · · , x n) ∈ Rn be a random vector with independent, mean zero, sub-gaussian coordinates. Let A be an n × n matrix. Then for every t ≥ 0, we have 
+
+P  x⊤Ax − Ex⊤Ax ≥ t ≤ 2 exp 
+
+"
+
+−c min( t2
+
+K4 ∥A∥2
+
+> F
+
+, tK2 ∥A∥ )
+
+#
+
+,
+
+where K = max i ∥xi∥ψ2 .
+
+Lemma C.2. (Concentration of Lipschitz function on the sphere (Vershynin, 2018)). Consider a random vector x ∈ √nSn−1.Given a Lipschitz function f : √nSn−1 → R. Then 
+
+P {| f (x) − Ef (x)| ≥ t} ≤ 2 exp( − ct 2
+
+∥f ∥2
+
+> Lip
+
+).
+
+Lemma C.3. (Bernstein Inequality (Vershynin, 2018)). Let x1, · · · , x n be independent, mean zero, sub-exponential random variables. Then, for every t ≥ 0, we have 
+
+P
+
+( nX
+
+> i=1
+
+xi ≥ t
+
+)
+
+≤ 2 exp 
+
+"
+
+−c min( t2
+
+Pni=1 ∥xi∥2
+
+> ψ1
+
+, t
+
+max i ∥xi∥ψ1
+
+)
+
+#
+
+where c > 0 is an absolute constant. 
+
+12 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+C.1. Norm Analysis of One-step Update Gradient Matrices 
+
+C.1.1. T HREE -LAYER NEURAL NETWORK UNDER ORTHOGONAL INITIALIZATION 
+
+Proposition C.4. (Three-layer NN setting under Orthogonal initialization.) Under Assumption 3.2, we have gradient approximation, 
+
+G01 − A01 ≤ 1
+
+√h − 1 G01 ,
+
+G02 − A02 ≤ 1
+
+√h − 1 G02 .
+
+(19) 
+
+And we have 
+
+Small lr : η1 = Θ( √h) ⇒ W 11 − W 01 ≍ W 01 (20) 
+
+η2 = Θ( √h) ⇒ W 12 − W 02 ≍ W 02 (21) 
+
+Large lr : η1 = Θ( h) ⇒ W 11 − W 01 F ≍ W 01 F (22) 
+
+η2 = Θ( h) ⇒ W 12 − W 02 F ≍ W 02 F (23) 
+
+Proof of Proposition C.4. Note that A01 = 1√h β∗a⊤W 0⊤ 
+
+> 2
+
+, A02 = 1√h W 0⊤ 
+
+> 1
+
+β∗a⊤ are both rank-1 matrices. Here we consider the orthogonal initialization where we have X⊤X = XX ⊤ = hI, W 0⊤ 
+
+> 1
+
+W 01 = W 01 W 0⊤ 
+
+> 1
+
+= I, W 0⊤ 
+
+> 2
+
+W 02 =
+
+W 02 W 0⊤ 
+
+> 2
+
+= I, a⊤a = 1 , E[aa ⊤] = 1 
+
+> h
+
+I, β∗⊤ β∗ = 1 , E[β∗β∗⊤ ] = 1 
+
+> h
+
+I. Based on this, 
+
+A01 = A01 F =
+
+q
+
+tr (A01
+
+> ⊤
+
+A01) = 1
+
+√h (24) 
+
+A02 = A02 F =
+
+q
+
+tr (A02
+
+> ⊤
+
+A02) = 1
+
+√h . (25) We also have B01 = 1 
+
+> h
+
+W 01 W 02 aa ⊤W 0⊤ 
+
+> 2
+
+, B02 = 1 
+
+> h
+
+W 0⊤ 
+
+> 1
+
+W 01 W 02 aa ⊤ are both rank-1 matrices. We have 
+
+B01 = B01 F =
+
+q
+
+tr (B01
+
+> ⊤
+
+B01 ) = 1
+
+h (26) 
+
+B02 = B02 F =
+
+q
+
+tr (B02
+
+> ⊤
+
+B02 ) = 1
+
+h . (27) Since G01 = B01 − A01, G02 = B02 − A02, we obtain that 
+
+G01 − A01 ≤ 1
+
+√h A01 ≤ 1
+
+√h ( G01 + G01 − A01 )
+
+G02 − A02 ≤ 1
+
+√h A02 ≤ 1
+
+√h ( G01 + G02 − A02 ).
+
+Thus, we get that 
+
+G01 − A01 ≤ 1
+
+√h − 1 G01 ,
+
+G02 − A02 ≤ 1
+
+√h − 1 G02 .
+
+(28) Based on this, we can get √h G01 = Θ h, P(1) , √h G01 F = Θ h, P(1) , √h G02 = Θ h, P(1) , √h G02 F = Θ h, P(1) .Since we have W 01 = 1 , W 01 F = √h, W 02 = 1 , W 02 F = √h, based on Assumption E.1, we have 
+
+Small lr : η1 = Θ( √h) ⇒ W 11 − W 01 ≍ W 01
+
+η2 = Θ( √h) ⇒ W 12 − W 02 ≍ W 02
+
+Large lr : η1 = Θ( h) ⇒ W 11 − W 01 F ≍ W 01 F
+
+η2 = Θ( h) ⇒ W 12 − W 02 F ≍ W 02 F
+
+13 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+□
+
+C.1.2. T WO -LAYER NEURAL NETWORK UNDER ORTHOGONAL INITIALIZATION 
+
+Proposition C.5. (Two-layer NN setting under Orthogonal initialization.) Under Assumption 3.2, we have gradient approximation, 
+
+G01 − A01 ≤ 1
+
+√h − 1 G01 ,
+
+G02 − A02 ≤ 1
+
+√h − 1 G02 .
+
+(29) 
+
+And we have 
+
+Large lr : η1 = Θ( h√h) ⇒ W 11 − W 01 F ≍ W 01 F (30) 
+
+η2 = Θ( h√h) ⇒ W 12 − W 02 F ≍ W 02 F (31) 
+
+Proof of Proposition C.5. Note that A01 = 1 
+
+> h
+
+M W 0⊤ 
+
+> 2
+
+, A02 = 1 
+
+> h
+
+W 0⊤ 
+
+> 1
+
+M . Here we consider the orthogonal initialization where we have X⊤X = XX ⊤ = hI, W 0⊤ 
+
+> 1
+
+W 01 = W 01 W 0⊤ 
+
+> 1
+
+= I, W 0⊤ 
+
+> 2
+
+W 02 = W 02 W 0⊤ 
+
+> 2
+
+= I, M ⊤M = M M ⊤ = 
+
+> 1
+> h
+
+I. Based on this, 
+
+A01 = 1
+
+h√h , A01 F =
+
+q
+
+tr (A01
+
+> ⊤
+
+A01) = 1
+
+h (32) 
+
+A02 = 1
+
+h√h , A02 F =
+
+q
+
+tr (A02
+
+> ⊤
+
+A02) = 1
+
+h . (33) We also have B01 = 1 
+
+> h2
+
+W 01 W 02 W 0⊤ 
+
+> 2
+
+, B02 = 1 
+
+> h
+
+W 0⊤ 
+
+> 1
+
+W 01 W 02 , so we can get that 
+
+B01 = 1
+
+h2 , B01 F =
+
+q
+
+tr (B01
+
+> ⊤
+
+B01 ) = 1
+
+h√h (34) 
+
+B02 = 1
+
+h2 , B02 F =
+
+q
+
+tr (B02
+
+> ⊤
+
+B02 ) = 1
+
+h√h . (35) Since G01 = B01 − A01, G02 = B02 − A02, we obtain that 
+
+G01 − A01 ≤ 1
+
+√h A01 ≤ 1
+
+√h ( G01 + G01 − A01 )
+
+G02 − A02 ≤ 1
+
+√h A02 ≤ 1
+
+√h ( G01 + G02 − A02 ).
+
+Thus, we get that 
+
+G01 − A01 ≤ 1
+
+√h − 1 G01 ,
+
+G02 − A02 ≤ 1
+
+√h − 1 G02 .
+
+(36) Based on this, we can get h√h G01 = Θ h, P(1) , h G01 F = Θ h, P(1) , h √h G02 = Θ h, P(1) , h G02 F = Θ h, P(1) .Since we have W 01 = 1 , W 01 F = √h, W 02 = 1 , W 02 F = √h, based on Assumption E.1, we have 
+
+Large lr : η1 = Θ( h√h) ⇒ W 11 − W 01 F ≍ W 01 F
+
+η2 = Θ( h√h) ⇒ W 12 − W 02 F ≍ W 02 F
+
+□
+
+14 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+C.1.3. T HREE -LAYER NEURAL NETWORK UNDER GAUSSIAN INITIALIZATION 
+
+Here, we present a one-step update gradient-norm analysis for three-layer neural networks under Gaussian initialization. To ensure generality, here we incorporate noise with different d, h, n .
+
+Lemma C.6. Consider that W1 ∈ Rd×h, W2 ∈ Rh×h, a ∈ Rh are the first two hidden layers and last layer weights, respectively, with entries sampled i.i.d as follows √d [W1]i,j ∼ N (0 , 1) , √h [W2]i,j ∼ N (0 , 1) , √h [a]i ∼ N (0 , 1) , ∀i ∈
+
+[h], j ∈ [d]. We define 
+
+A01 = 1
+
+n√h X⊤ya ⊤W 0⊤
+
+> 2
+
+B01 = 1
+
+nh X⊤XW 01 W 02 aa ⊤W 0⊤
+
+> 2
+
+A02 = 1
+
+n√h W 0⊤ 
+
+> 1
+
+X⊤ya ⊤
+
+B02 = 1
+
+nh W 0⊤ 
+
+> 1
+
+X⊤XW 01 W 02 aa ⊤,
+
+we have (i) E A01 ≤ E A01 F ≤ C
+
+ 
+
+> 1√h
+
++ dn√h +
+
+q 1 
+
+> h
+
++ dnh 
+
+
+
+(ii) E B01 ≤ E B01 F ≤ C
+
+q
+
+1 + hd
+
+  1 
+
+> d
+
++ 1
+
+> n
+
+
+
+(iii) P
+
+
+
+A01 F ≥ C
+
+ 6√h + dn√h + 5√d√nh 
+
+ 
+
+≤ 4e−ch + 6 e−cn 
+
+(iv) P
+
+
+
+A01 ≤ ρe
+
+> √2d
+> 8√nh
+
+
+
+≤ 6
+
+
+
+e−c min    
+
+> nnd 2(n2+d2),nd n+d
+> o
+
++ e−cn + e−ch 
+
+
+
+(v) P
+
+
+
+B01 F ≥ C
+
+ 8 
+
+> h
+
++ 2dnh + 9√d√nh + 4√nh + 4√hd 
+
+ 
+
+≤ 4e−cn + 8 e−ch + 2 e−cd 
+
+(vi) E A02 ≤ E A02 F ≤ C
+
+ √(h+d)( n+d)( √n+d+√n)
+
+> n√hd
+
+
+
+(vii) E B02 ≤ E B02 F ≤ C   1 
+
+> d
+
++ 1 
+
+> h
+
++ 1 
+
+> n
+
++ dnh 
+
+
+
+(viii) P
+
+
+
+A02 F ≥ C
+
+ 12 √h + 2dn√h + 10 √d√nh + 6√dd + 5√nn + √dn
+
+ 
+
+≤ 2e−cd + 2 e−ch + 6 e−cn 
+
+(ix) P
+
+
+
+A02 ≤ ρe
+
+> √2d
+> 8√nh
+
+
+
+≤
+
+6
+
+
+
+e−c min      
+
+> nnd 2(n2+d2),nd n+d,nd 4(n2+d2)( h2+d2)
+> o
+
++ e−cn + e−ch + e−cd + nhd 2e−c√d
+
+
+
+(x) P
+
+
+
+B02 F ≥ C
+
+ 4 
+
+> h
+
++ 32 dnh + 16 √dh√n + 4√hd + 16 √nh + 4√nd + 4 
+
+> n
+
++ 16 √dn√h
+
+ 
+
+≤ 8e−cd + 6 e−ch 
+
+Remark C.7. Note that A01 is a rank-1 matrix, so the upper bound and lower bound of A01 F and A01 is similar. The same is to A02.
+
+Proof of Lemma C.6. We analyze these matrices of interest separately. 15 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+Part of (i). Notice that 
+
+A01 F ≤ 1
+
+n√h X⊤Xβ ∗a⊤W 0⊤ 
+
+> 2F
+
++ 1
+
+n√h X⊤ξa ⊤W 0⊤ 
+
+> 2F
+
+≤ 1
+
+n√h X⊤Xβ ∗ a⊤W 0⊤ 
+
+> 2
+
++ 1
+
+n√h X⊤ξ a⊤W 0⊤
+
+> 2
+
+≤ 1
+
+n√h ∥X∥ (∥X∥ + ∥ξ∥) ∥a∥ W 02 . (37) Based on basic probability theory, we know that Gaussian random matrices and vectors satisfy 
+
+E(∥a∥) = 1 , E(∥ξ∥) = ρe
+
+√n
+
+E( W 02
+
+> 2
+
+) ≤ C0, E(∥X∥2) ≤ C1(n + d), (38) where C0 and C1 are consts. Based on ( 38), we obtain 
+
+E( A01 ) ≤ E( A01 )F ≤ C 1
+
+√h + dn√h +
+
+r 1
+
+h + dnh 
+
+!
+
+.
+
+Part of (ii). Notice that 
+
+B01 F ≤ 1
+
+nh X⊤XW 01 W 02 a a⊤W 0⊤
+
+> 2
+
+≤ 1
+
+nh ∥X∥2 W 01 ∥a∥2 W 0⊤
+
+> 2
+> 2
+
+(39) Besides ( C.3), based on basic probability theory, we know that Gaussian random matrices and vectors satisfy 
+
+E( W 01
+
+> 2
+
+) ≤ C0(1 + hd ). (40) Based on ( 38) and ( 40), we obtain 
+
+E( B01 ) ≤ E( B01 )F ≤ C
+
+r
+
+1 + hd
+
+ 1
+
+d + 1
+
+n
+
+
+
+.
+
+Part of (iii). Based on random vector and matrix concentration property of ∥X∥ , ∥ξ∥ , ∥a∥ and W 02 (e.g. derived by Lemma C.3: for any t ≥ 0,
+
+P( ∥ξ∥ − ρe
+
+√n ≥ 12 ρe
+
+√n) ≤ 2e−cn , P(|∥ a∥ − 1| ≥ 12 ) ≤ 2e−ch ,
+
+P(∥X∥ ≥ √n + √d + t) ≤ 2e−ct 2
+
+, P( W 02 ≥ 3) ≤ 2e−ch 
+
+(41) Hence, from ( 37) and ( 41), we arrive at 
+
+P A01 F ≥ C 2
+
+√h + dn√h + 3√d
+
+√nh + t2
+
+n√h + 3t
+
+√nh + 2t√dn√h
+
+!! 
+
+≤ 2( e−cn + 2 e−ch + 2 e−ct 2
+
+)
+
+Thus we can take t = √n to obtain the result that: 
+
+P A01 F ≥ C 6
+
+√h + dn√h + 5√d
+
+√nh 
+
+!! 
+
+≤ 4e−ch + 6 e−cn .
+
+16 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+Part of (iv). Here we try to give the lower bound of ∥A1∥, since A1 is rank-1 matrix, we have 
+
+A01 
+
+> 2
+
+= 1
+
+n2h X⊤ya ⊤W 0⊤
+
+> 2
+> 2
+
+= 1
+
+n2h X⊤ya ⊤W 0⊤
+
+> 2
+> 2
+> F
+
+= 1
+
+n2h tr (W 02 ay ⊤XX ⊤ya ⊤W 0⊤ 
+
+> 2
+
+)= 1
+
+n2h tr (y⊤XX ⊤ya ⊤W 0⊤ 
+
+> 2
+
+W 02 a)= 1
+
+n2h W 02 a 2 X⊤y 2
+
+≥ 1
+
+n2h W 02 a 2 
+
+ξ⊤XX ⊤ξ + 2 β∗⊤
+
+X⊤XX ⊤ξ
+
+
+
+.
+
+Following (Ba et al., 2022), we define events E1, E2 and E3 by 
+
+E1 := 
+
+
+
+tr (XX ⊤) − nd ≤ nd 
+
+2
+
+
+
+, E2 := 
+
+n
+
+∥X∥ ≤ √d + 2 √n
+
+o
+
+, E3 :=  W 02 ≤ 3 .
+
+Based on ( 41) and Lemma C.3, we know that 
+
+P(E1) ≥ 1 − 2e−cn , P(E2) ≥ 1 − 2e−cn , P(E3) ≥ 1 − 2e−ch .
+
+Thus condition on E1 ∩ E2, it is easy to find that E XX ⊤ 2 
+
+> F
+
+≤ C2n(n2 + d2), also based on ( 38), by Lemma C.1, we have 
+
+P
+
+
+
+ξ⊤XX ⊤ξ ≤ ρ2
+
+> e
+
+2 nd − t|E1 ∩ E2
+
+
+
+≤ 2e−c min    
+
+> nt2
+> n(n2+d2),tn+d
+> o
+
+.
+
+Choosing t = ρ2 
+
+> e
+> 4
+
+nd , we have 
+
+P
+
+
+
+ξ⊤XX ⊤ξ ≤ ρ2
+
+> e
+
+8 nd 
+
+
+
+≤ 2e−c min    
+
+> nnd 2(n2+d2),nd n+d
+> o
+
++ 4 e−cn . (42) In addition, by Lemma C.2, condition on E2, we know that 
+
+β∗⊤
+
+X⊤XX ⊤ξ ψ2
+
+≤ C3
+
+pn(n2 + d2),
+
+one can easily see that 
+
+P
+
+
+
+β∗⊤
+
+X⊤XX ⊤ξ ≥ t|E2
+
+
+
+≤ 2e− ct 2 
+
+> n(n2+d2)
+
+.
+
+Thus, let t = ρ2 
+
+> e
+> 32
+
+nd , we obtain 
+
+P
+
+
+
+β∗⊤
+
+X⊤XX ⊤ξ ≥ ρ2
+
+> e
+
+32 nd 
+
+
+
+≤ 2e− cnd 2(n2+d2) + 2 e−cn . (43) Similarly, by Lemma C.2, condition on E3, we know that W 02 a − 1 ψ2
+
+≤ 3C3√h , we obtain that 
+
+P   W 02 a ≥ t|E3
+
+ ≤ 2e−cht 2
+
+.
+
+Thus, let t = 12 , we obtain 
+
+P
+
+
+
+W 02 a ≤ 12
+
+
+
+≤ 4e−ch . (44) 17 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+Based on ( 42), ( 43) and ( 44), we arrive at 
+
+P A01 ≤ ρe
+
+√2d
+
+8√nh 
+
+!
+
+≤ 6
+
+
+
+e−c min    
+
+> nnd 2(n2+d2),nd n+d
+> o
+
++ e−cn + e−ch 
+
+
+
+Part of (v). Based on random matrix concentration property of W 01 , we have for any t ≥ 0
+
+P( W 01 ≥ 2 + 
+
+r hd ) ≤ 2e−cd (45) Based on ( 39), ( 41) and ( 45), similar to proof of (ii), by choosing t = √n, we arrive at 
+
+P B01 F ≥ C 8
+
+h + 2dnh + 9√d
+
+√nh + 4
+
+√nh + 4
+
+√hd 
+
+!! 
+
+≤ 4e−cn + 8 e−ch + 2 e−cd .
+
+Part of (vi). Notice that 
+
+A02 F ≤ 1
+
+n√h W 0⊤ 
+
+> 1
+
+X⊤Xβ ∗a⊤
+
+> F
+
++ 1
+
+n√h W 0⊤ 
+
+> 1
+
+X⊤ξa ⊤
+
+> F
+
+≤ 1
+
+n√h W 0⊤ 
+
+> 1
+
+X⊤Xβ ∗ a⊤ + 1
+
+n√h W 0⊤ 
+
+> 1
+
+X⊤ξ a⊤
+
+≤ 1
+
+n√h W 01 ∥X∥ (∥X∥ + ∥ξ∥) ∥a∥ (46) Based on ( 38) and ( 40), we obtain 
+
+E( A02 ) ≤ E( A02 )F ≤ C
+
+p(h + d)( n + d)( √n + d + √n)
+
+n√hd 
+
+!
+
+.
+
+Part of (vii). Notice that 
+
+B02 F ≤ 1
+
+nh W 0⊤ 
+
+> 1
+
+X⊤XW 01 W 02 a a⊤
+
+≤ 1
+
+nh ∥X∥2 W 01 
+
+> 2
+
+∥a∥2 W 0⊤ 
+
+> 2
+
+(47) Based on ( 38) and ( 40), we obtain 
+
+E( B02 ) ≤ E( B02 )F ≤ C
+
+ 1
+
+d + 1
+
+h + 1
+
+n + dnh 
+
+
+
+.
+
+Part of (viii). Hence, from( 41) ( 45) and ( 46), we arrive at 
+
+P A02 F ≥ C 2 + 
+
+r hd
+
+!
+
+2
+
+√h + dn√h + 3√d
+
+√nh + t2
+
+n√h + 3t
+
+√nh + 2t√dn√h
+
+!! 
+
+≤ 2( e−cn + 2 e−ch + 2 e−ct 2
+
+).
+
+Thus we can take t = √n to obtain the result that: 
+
+P A02 F ≥ C 12 
+
+√h + 2dn√h + 10 √d
+
+√nh + 6√dd + 5√nn +
+
+√dn
+
+!! 
+
+≤ 2e−cd + 2 e−ch + 6 e−cn .
+
+18 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+Part of (ix). Here we try to give the lower bound of ∥A2∥, since A2 is rank-1 matrix, we have 
+
+A02 
+
+> 2
+
+= 1
+
+n2h W 0⊤ 
+
+> 1
+
+X⊤ya ⊤ 2
+
+= 1
+
+n2h W 0⊤ 
+
+> 1
+
+X⊤ya ⊤ 2
+
+> F
+
+= 1
+
+n2h tr (ay ⊤XW 01 W 0⊤ 
+
+> 1
+
+X⊤ya ⊤)= 1
+
+n2h tr (y⊤XW 01 W 0⊤ 
+
+> 1
+
+X⊤ya ⊤a)= 1
+
+n2h ∥a∥2 W 0⊤ 
+
+> 2
+
+X⊤y 2
+
+≥ 1
+
+n2h ∥a∥2 
+
+ξ⊤XW 01 W 0⊤ 
+
+> 1
+
+X⊤ξ + 2 β∗⊤
+
+X⊤XW 01 W 0⊤ 
+
+> 1
+
+X⊤ξ
+
+
+
+.
+
+Following (Ba et al., 2022), we define events E2, E4 and E5 by 
+
+E2 := 
+
+n
+
+∥X∥ ≤ √d + 2 √n
+
+o
+
+,
+
+E4 := 
+
+
+
+W 01 ≤ 2 + hd
+
+
+
+,
+
+E5 := 
+
+
+
+tr (XW 01 W 0⊤ 
+
+> 1
+
+X⊤) − nh ≤ nh 
+
+2
+
+
+
+.
+
+Based on ( 41) and ( 45), we know that 
+
+P(E2) ≥ 1 − 2e−cn , P(E4) ≥ 1 − 2e−cd .
+
+We also know that by sub-gaussian and sub-exponential concentration inequality 
+
+P( W 01i,j ≤ 1) ≥ 1 − 2e−cd , P( W 01i,j  
+
+> 2
+
+− 1 ≤ 1) ≥ 1 − 2e−c√d. (48) Based on Lemma C.3 and ( 48), we have 
+
+P(E5) ≥ 1 − 2e−cn − 2nhde −cd − 2nh (d2 − d)e−c√d ≥ 1 − 2e−cn − 4nhd 2e−c√d
+
+.Thus condition on E2 ∩ E4, it is easy to find that E XW 01 W 0⊤ 
+
+> 1
+
+X⊤ 2
+
+> F
+
+≤ C4n(n2 + h2), also based on ( 38), by Lemma C.1, we have 
+
+P
+
+
+
+ξ⊤XX ⊤ξ ≤ ρ2
+
+> e
+
+2 nh − t|E2 ∩ E5
+
+
+
+≤ 2e−c min    
+
+> nt2
+> n(n2+h2),tn+h
+> o
+
+.
+
+Choosing t = ρ2 
+
+> e
+> 4
+
+nd , we have 
+
+P
+
+
+
+ξ⊤XW 01 W 0⊤ 
+
+> 1
+
+X⊤ξ ≤ ρ2
+
+> e
+
+8 nh 
+
+
+
+≤ 2e−c min    
+
+> nnh 2(n2+h2),nh n+h
+> o
+
++ 4 e−cn + 4 nhd 2e−c√d. (49) In addition, by Lemma C.2, condition on E2 and E4, we know that 
+
+β∗⊤
+
+X⊤XW 01 W 0⊤ 
+
+> 1
+
+X⊤ξ ψ2
+
+≤ C5
+
+pn(n2 + d2)( h2 + d2)
+
+d ,
+
+19 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+one can easily see that 
+
+P
+
+
+
+β∗⊤
+
+X⊤XW 01 W 0⊤ 
+
+> 1
+
+X⊤ξ ≥ t|E2 ∩ E4
+
+
+
+≤ 2e− cd 2t2 
+
+> n(n2+d2)( h2+d2)
+
+.
+
+Thus, let t = ρ2 
+
+> e
+> 32
+
+nd , we obtain 
+
+P
+
+
+
+β∗⊤
+
+X⊤XW 01 W 0⊤ 
+
+> 1
+
+X⊤ξ ≥ ρ2
+
+> e
+
+32 nd 
+
+
+
+≤ 2e− cnd 4(n2+d2)( h2+d2) + 2 e−cn + 2 e−cd . (50) Based on ( 41),( 49)and( 50) , we arrive at 
+
+P A02 ≤ ρe
+
+√2d
+
+8√nh 
+
+!
+
+≤6
+
+
+
+e−c min      
+
+> nnd 2(n2+d2),nd n+d,nd 4(n2+d2)( h2+d2)
+> o
+
++ e−cn + e−ch 
+
+
+
++ 6 
+
+
+
+e−cd + nhd 2e−c√d
+
+Part of (x). Based on ( 41),( 45) and ( 47), similar to proof of (vii), by choosing t = √d, we arrive at 
+
+P B02 F ≥ C 4
+
+h + 32 dnh + 16 √dh√n + 4
+
+√hd + 16 
+
+√nh + 4
+
+√nd + 4
+
+n + 16 √dn√h
+
+!! 
+
+≤ 8e−cd + 6 e−ch .
+
+Proposition C.8. (Three-layer NN setting under Gaussian initialization.) Under Assumption E.1, there exists some constant 
+
+c∗ > 0 such that for all large n, h, d with probability at least 1 − 32 e−c∗n − 30 n4e−c∗√n, we have gradient approximation, 
+
+G01 − A01 ≤ 1
+
+√n − 1 G01 ,
+
+G02 − A02 ≤ 1
+
+√n − 1 G02 .
+
+(51) 
+
+We obtain the norm control of gradient matrices, 
+
+√h G01 = Θ d, P(1) , √h G01 F = Θ d, P(1) ,
+
+√h G02 = Θ d, P(1) , √h G02 F = Θ d, P(1) . (52) 
+
+Thus, we have 
+
+Small lr : η1 = Θ( √h) ⇒ W 11 − W 01 ≍ W 01 (53) 
+
+η2 = Θ( √h) ⇒ W 12 − W 02 ≍ W 02 (54) 
+
+Large lr : η1 = Θ( h) ⇒ W 11 − W 01 F ≍ W 01 F (55) 
+
+η2 = Θ( h) ⇒ W 12 − W 02 F ≍ W 02 F (56) 
+
+Proof of Proposition E.2. By Lemma C.6, We know that in the proportional regime, there exist constants C∗, c ∗ > 0 such that 
+
+P
+
+
+
+G01 − A01 ≤ C∗ 1
+
+n
+
+
+
+≥ 1 − 14 e−c∗n.
+
+On the other hand, part(iv) in Lemma C.6 implies that 
+
+P
+
+
+
+A01 ≥ C∗ 1
+
+√n
+
+
+
+≥ 1 − 18 e−c∗n.
+
+20 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+Conditioning on the two events stated above, we have 
+
+G01 − A01 ≤ 1
+
+√n A01 ≤ 1
+
+√n ( G01 + G01 − A01 ).
+
+We finally obtain that 
+
+P
+
+
+
+G01 − A01 ≤ 1
+
+√n − 1 G01
+
+
+
+≥ 1 − 34 e−c∗n
+
+Similarly, We know that in the proportional regime, there exist constants C∗, c ∗ > 0 such that 
+
+P
+
+
+
+G02 − A02 ≤ C∗ 1
+
+n
+
+
+
+≥ 1 − 14 e−c∗n.
+
+On the other hand, part(iv) in Lemma C.6 implies that 
+
+P
+
+
+
+A02 ≥ C∗ 1
+
+√n
+
+
+
+≥ 1 − 30 n4e−c∗√n.
+
+Conditioning on the two events stated above, we have 
+
+G02 − A02 ≤ 1
+
+√n A02 ≤ 1
+
+√n ( G01 + G02 − A02 ).
+
+We finally obtain that 
+
+P
+
+
+
+G02 − A02 ≤ 1
+
+√n − 1 G02
+
+
+
+≥ 1 − 14 e−c∗n − 30 n4e−c∗√n.
+
+Also we can get √h G01 = Θ d, P(1) , √h G01 F = Θ d, P(1) , √h G02 = Θ d, P(1) , √h G02 F = Θ d, P(1) .Since we have W 01 = Θ d, P(1) , W 01 F = Θ d, P(√h), W 02 = Θ d, P(1) , W 02 F = Θ d, P(√h), based on Assump-tion E.1, we have 
+
+Small lr : η1 = Θ( √h) ⇒ W 11 − W 01 ≍ W 01
+
+η2 = Θ( √h) ⇒ W 12 − W 02 ≍ W 02
+
+Large lr : η1 = Θ( h) ⇒ W 11 − W 01 F ≍ W 01 F
+
+η2 = Θ( h) ⇒ W 12 − W 02 F ≍ W 02 F
+
+□
+
+C.1.4. T WO -LAYER NEURAL NETWORK CASE UNDER GAUSSIAN INITIALIZATION 
+
+The one-step update equations for the two-layer neural network are as follows: 
+
+W 11 = W 01 − η1G01
+
+W 12 = W 02 − η2G02
+
+(57) where W 01 , W 02 are the initial hidden layer weights, W 11 , W 12 are the updated layer weights, G01 and G02 are the corresponding gradient matrix, where 
+
+G01 = 1
+
+nh 2 X⊤XW 01 W 02 W 0⊤
+
+> 2
+
+| {z }
+
+> B01
+
+− 1
+
+nh X⊤Y W 0⊤
+
+> 2
+
+| {z }
+
+> A01
+
+(58) 
+
+G02 = 1
+
+nh 2 W 0⊤ 
+
+> 1
+
+X⊤XW 01 W 02
+
+| {z }
+
+> B02
+
+− 1
+
+nh W 0⊤ 
+
+> 1
+
+X⊤Y
+
+| {z }
+
+> A02
+
+(59) 21 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+Proposition C.9. (Two-layer neural network under gaussian initialization.) There exists some constants p∗, q ∗ > 0 such that for all large n, h, d with high probability at least 1 − p∗e−q∗n
+
+G01 − A01 ≤ 1
+
+√n − 1 G01 (60) 
+
+G02 − A02 ≤ 1
+
+√n − 1 G02 . (61) 
+
+There exists some constants p, q > 0 such that for all large n, h, d with high probability at least 1 − pe −qn 
+
+Large lr : η1 = Θ( h√h) ⇒ W 11 − W 01 F ≍ W 01 F (62) 
+
+η2 = Θ( h√h) ⇒ W 12 − W 02 F ≍ W 02 F . (63) 
+
+Proof of Proposition C.9. The proof is same to proofs of Proposition E.2 and Lemma C.6. 
+
+C.2. Norm Analysis of Two-step Update Gradient Matrices 
+
+C.2.1. T WO -LAYER NEURAL NETWORK UNDER ORTHOGONAL INITIALIZATION 
+
+Proposition C.10. (Two-layer NN setting under Orthogonal initialization.) Under Assumption 3.2, if η1, η 2 ≤ O(h√h), we have the following gradient approximation, 
+
+G11 − fA11 ≤ 1
+
+√h − 1 G11 ,
+
+G12 − fA12 ≤ 1
+
+√h − 1 G12 .
+
+(64) 
+
+And we have 
+
+Large lr : η1 = Θ( h√h) ⇒ W 21 − gW 11 F
+
+≍ gW 11 F
+
+(65) 
+
+η2 = Θ( h√h) ⇒ W 22 − gW 12 F
+
+≍ gW 12 F
+
+(66) 
+
+Proof of Proposition C.10. Note that fA11 = 1 
+
+> h
+
+M gW 12
+
+> ⊤
+
+, fA12 = 1
+
+> h
+
+gW 11
+
+> ⊤
+
+M . Based on Lemma C.5, it is easy to get 
+
+gW 11 − W 01 ≍ W 01 , gW 12 − W 02 ≍ W 02
+
+gW 11 − W 01 F
+
+≍ W 01 F , gW 12 − W 02 F
+
+≍ W 02 F
+
+We also have fB11 = 1
+
+> h2
+
+gW 11 gW 12 gW 12
+
+> ⊤
+
+, fB12 = 1
+
+> h
+
+gW 11 
+
+> ⊤
+
+gW 11 gW 12 . Thus we can obtain that 
+
+fA11 ≍ A01 , fA11 F
+
+≍ A01 F , fA12 ≍ A02 , fA12 F
+
+≍ A02 F
+
+fB11 ≍ B01 , fB11 F
+
+≍ B01 F , fB12 ≍ B02 , fB12 F
+
+≍ B02 F
+
+Since G11 = fB11 − fA11, G12 = fB12 − fA12, we obtain that 
+
+G11 − fA11 ≤ 1
+
+√h
+
+fA11 ≤ 1
+
+√h (G11 + G11 − fA11 )
+
+G12 − fA12 ≤ 1
+
+√h
+
+fA12 ≤ 1
+
+√h (G12 + G12 − fA12 ).
+
+22 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+Thus, we get that 
+
+G11 − fA11 ≤ 1
+
+√h − 1 G11 ,
+
+G12 − fA12 ≤ 1
+
+√h − 1 G12 .
+
+(67) Based on this, we can get G11 ≍ A01 , G11 F
+
+= A01 F , G12 = A02 , G12 F
+
+= A02 F .Since we have W 01 ≍ gW 11 , W 01 F = gW 11 F
+
+, W 02 = gW 12 , W 02 F = gW 12 F
+
+, based on Assumption E.1, we have 
+
+Large lr : η1 = Θ( h√h) ⇒ W 21 − gW 11 F
+
+≍ gW 11 F
+
+(68) 
+
+η2 = Θ( h√h) ⇒ W 22 − gW 12 F
+
+≍ gW 12 F
+
+(69) 
+
+□
+
+C.2.2. T HREE -LAYER NEURAL NETWORK UNDER ORTHOGONAL INITIALIZATION 
+
+Proposition C.11. (Three-layer NN setting under Orthogonal initialization.) Under Assumption 3.2, if η1, η 2 ≤ O(h), we have the following gradient approximation, 
+
+G11 − fA11 ≤ 1
+
+√h − 1 G11 ,
+
+G12 − fA12 ≤ 1
+
+√h − 1 G12 .
+
+(70) 
+
+And we have 
+
+Small lr : η1 = Θ( √h) ⇒ W 21 − gW 11 ≍ gW 11 (71) 
+
+η2 = Θ( √h) ⇒ W 22 − gW 12 ≍ gW 12 (72) 
+
+Large lr : η1 = Θ( h) ⇒ W 21 − gW 11 F
+
+≍ gW 11 F
+
+(73) 
+
+η2 = Θ( h) ⇒ W 22 − gW 12 F
+
+≍ gW 12 F
+
+(74) 
+
+Proof of Proposition C.11. Note that fA11 = 1 
+
+> h
+
+β∗a⊤ gW 12
+
+> ⊤
+
+, fA12 = 1
+
+> h
+
+gW 11
+
+> ⊤
+
+β∗a⊤. Based on Lemma C.5, it is easy to get 
+
+gW 11 − W 01 ≍ W 01 , gW 12 − W 02 ≍ W 02
+
+gW 11 − W 01 F
+
+≍ W 01 F , gW 12 − W 02 F
+
+≍ W 02 F
+
+We also have fB11 = 1
+
+> h2
+
+gW 11 gW 12 aa ⊤ gW 12
+
+> ⊤
+
+, fB12 = 1
+
+> h
+
+gW 11 
+
+> ⊤
+
+gW 11 gW 12 aa ⊤ . Thus we can obtain that 
+
+fA11 ≍ A01 , fA11 F
+
+≍ A01 F , fA12 ≍ A02 , fA12 F
+
+≍ A02 F
+
+fB11 ≍ B01 , fB11 F
+
+≍ B01 F , fB12 ≍ B02 , fB12 F
+
+≍ B02 F
+
+23 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+Since G11 = fB11 − fA11, G12 = fB12 − fA12, we obtain that 
+
+G11 − fA11 ≤ 1
+
+√h
+
+fA11 ≤ 1
+
+√h (G11 + G11 − fA11 )
+
+G12 − fA12 ≤ 1
+
+√h
+
+fA12 ≤ 1
+
+√h (G12 + G12 − fA12 ).
+
+Thus, we get that 
+
+G11 − fA11 ≤ 1
+
+√h − 1 G11 ,
+
+G12 − fA12 ≤ 1
+
+√h − 1 G12 .
+
+(75) Based on this, we can get G11 ≍ A01 , G11 F
+
+= A01 F , G12 = A02 , G12 F
+
+= A02 F .Since we have W 01 ≍ gW 11 , W 01 F = gW 11 F
+
+, W 02 = gW 12 , W 02 F = gW 12 F
+
+, based on Assumption E.1, we have 
+
+Small lr : η1 = Θ( √h) ⇒ W 21 − gW 11 ≍ gW 11 (76) 
+
+η2 = Θ( √h) ⇒ W 22 − gW 12 ≍ gW 12 (77) 
+
+Large lr : η1 = Θ( h) ⇒ W 21 − gW 11 F
+
+≍ gW 11 F
+
+(78) 
+
+η2 = Θ( h) ⇒ W 22 − gW 12 F ≍ gW 12 F (79) 
+
+□
+
+D. Orthogonal initialization 
+
+Here we give one-step and two-step test loss under whiten initialization, also we give the gap bound between the exact test loss and the approximate test loss. 
+
+Lemma D.1. Consider two stochastic random orthogonal matrices O1, O2 ∈ Rh×h uniformly distributed on the orthogonal group with respect to the Haar measure (i.e. O1O⊤ 
+
+> 1
+
+= O⊤ 
+
+> 1
+
+O1 = I, O2O⊤ 
+
+> 2
+
+= O⊤ 
+
+> 2
+
+O2 = I), we have E[O1] = E[O2] = 
+
+0, E[O21 ] = E[O22 ] = 1 
+
+> h
+
+I, E[O1O2] = 0.
+
+Proof of Lemma D.1. For orthogonal group, one key invariance property is for any fixed R in orthogonal group, the distribution of QR and RQ is same as Q. In particular, note that −I is in orthogonal group, therefore, we have 
+
+Q d
+
+= ( −I)Q = −Q,
+
+so based on this, we take a look at the expectation: E [Q] = E [−Q] = −E [Q], which means we can get E [Q1] = E [Q2] = 
+
+0. Also consider each row row (or column) of Q is a random vector uniformly distributed on the unit sphere in Rh. Hence by the definitions of orthogonal group, we have 
+
+> h
+
+X
+
+> a=1
+
+Q2 
+
+> ia
+
+= 1 ⇒ EQ2
+
+> ia
+
+ = 1
+
+h ,
+
+furthermore, if we consider flipping the sign of one row or one column like left-multiplying by D = diag (−1, 1, 1, · · · , 1) in orthogonal group, which flips the sign of every entry in the first row, but the distribution is unchanged. Thus, the expectation of any product involving an odd number of the entries from that row must be zero. Similarly for the flipping any column, so we can get unless i = j and a = b, E [Qia Qjb ] = 0 , so it is easy to get E Q21
+
+ = E Q22
+
+ = 1 
+
+> h
+
+I. Based on above arguments we can deduce that E [Q1Q2] = 0. □
+
+24 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+D.1. Approximate one-step loss under orthogonal initialization for two-layer NN Theorem D.2. Given Assumption 3.3, 3.2, and in addition assume η1 and η2 are no more than O(h√h), based on Proposition 5.1 and Lemma 5.2, consider the training procedure discussed in Section 3, we obtain the following test loss after one-step and two-step GD update in a two-layer neural network under orthogonal initialization: 
+
+Ltwo-layer (W 11 , W 12 ) = η21
+
+h4 + η22
+
+h4 + 2η1η2
+
+h4 + η21 η22
+
+h7
+
+− 2η1
+
+h2 − 2η2
+
+h2 + 1
+
+h + 2η1η2
+
+h5 + 1 
+
+Ltwo-layer (W 21 , W 22 ) = 1
+
+h (1 + η1η2
+
+h3 )4 + 16 η21 η22
+
+h7
+
++
+
+ 2( η1 + η2)( η1η2 + h3)
+
+h5 − 1
+
+2
+
++ (1 + η1η2
+
+h3 )2 8η1η2
+
+h5
+
+(80) We prove Theorem 5.3 above by the following two subsection D.1 and D.2. For orthogonal initialization we follow assumption 3.2 that n = h = d.Here we consider the whiten initialization which make the setting X⊤X = XX ⊤ = hI, W 0⊤ 
+
+> 1
+
+W 01 = W 01 W 0⊤ 
+
+> 1
+
+=
+
+I, W 0⊤ 
+
+> 2
+
+W 02 = W 02 W 0⊤ 
+
+> 2
+
+= I, M ⊤M = M M ⊤ = 1 
+
+> h
+
+I.We consider a test data ˜x0 under two-layer setting, where 1√h ˜x0 is an random orthogonal vector, we have 
+
+Ltwo-layer (X, W 11 , W 12 , ˜x0)=EW 01 ,W 02 ,ξ, ˜x0,X
+
+1
+
+h ˜x0W 11 W 12 − ˜x0M
+
+> 2
+> F
+
+=tr EW 01 ,W 02 ,ξ, ˜x0,X
+
+" 1
+
+h W 11 W 12 − M
+
+⊤
+
+˜x⊤ 
+
+> 0
+
+˜x0
+
+ 1
+
+h W 11 W 12 − M
+
+#! 
+
+=tr EW 01 ,W 02 ,ξ, ˜x0,X
+
+"
+
+˜x⊤ 
+
+> 0
+
+˜x0
+
+ 1
+
+h W 11 W 12 − M
+
+  1
+
+h W 11 W 12 − M
+
+⊤#! 
+
+=tr EW 01 ,W 02 ,ξ,X
+
+" 1
+
+h W 11 W 12 − M
+
+  1
+
+h W 11 W 12 − M
+
+⊤#! 
+
+=tr 
+
+
+
+EW 01 ,W 02 ,ξ,X
+
+ 1
+
+h2 W 11 W 12 W 12
+
+> ⊤
+
+W 11
+
+> ⊤
+
+ 
+
+−tr 
+
+
+
+EW 01 ,W 02 ,ξ,X
+
+ 1
+
+h M W 12
+
+> ⊤
+
+W 11
+
+> ⊤
+
+ 
+
+−tr 
+
+
+
+EW 01 ,W 02 ,ξ,X
+
+ 1
+
+h W 11 W 12 M ⊤
+
+ 
+
++tr  E M M ⊤ .
+
+(81) Here we define L1, L 2, L 3, L 4, where 
+
+L1 = tr 
+
+
+
+EW 01 ,W 02 ,ξ,X
+
+ 1
+
+h2 W 11 W 12 W 12
+
+> ⊤
+
+W 11
+
+> ⊤
+
+ 
+
+L2 = tr 
+
+
+
+EW 01 ,W 02 ,ξ,X
+
+ 1
+
+h M W 12
+
+> ⊤
+
+W 11
+
+> ⊤
+
+ 
+
+L3 = tr 
+
+
+
+EW 01 ,W 02 ,ξ,X
+
+ 1
+
+h W 11 W 12 M ⊤
+
+ 
+
+L4 = tr  E M M ⊤ 
+
+25 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+Thus 
+
+Ltwo-layer = L1 − L2 − L3 + L4
+
+We have L1 = P16 
+
+i=1 Ti, where 
+
+T1 = tr 
+
+
+
+EW 01 ,W 02 ,X
+
+ 1
+
+h2 W 02
+
+⊤W 01
+
+⊤W 01 W 02
+
+ 
+
+= 1
+
+h ,T2 = tr 
+
+
+
+EW 01 ,W 02 ,X
+
+h η1
+
+h4 W 02
+
+⊤W 01
+
+⊤X⊤Y W 02
+
+⊤W 02
+
+i 
+
+= 0 ,T3 = tr 
+
+
+
+EW 01 ,W 02 ,X
+
+h η2
+
+h4 W 02
+
+⊤W 01
+
+⊤W 01 W 01
+
+⊤X⊤Y
+
+i 
+
+= 0 ,T4 = tr 
+
+
+
+EW 01 ,W 02 ,X
+
+h η1η2
+
+h6 W 02
+
+⊤W 01
+
+⊤X⊤Y W 02
+
+⊤W 01
+
+⊤X⊤Y
+
+i 
+
+= η1η2
+
+h5 ,T5 = tr 
+
+
+
+EW 01 ,W 02 ,X
+
+h η1
+
+h4 W 02
+
+⊤W 02 Y ⊤XW 01 W 02
+
+i 
+
+= 0 ,T6 = tr 
+
+
+
+EW 01 ,W 02 ,X
+
+ η21
+
+h6 W 02
+
+⊤W 02 Y ⊤XX ⊤Y W 02
+
+⊤W 02
+
+ 
+
+= η21
+
+h4 ,T7 = tr 
+
+
+
+EW 01 ,W 02 ,X
+
+h η1η2
+
+h6 W 02
+
+⊤W 02 Y ⊤XW 01 W 01
+
+⊤X⊤Y
+
+i 
+
+= η1η2
+
+h4 ,T8 = tr 
+
+
+
+EW 01 ,W 02 ,X
+
+ η21 η2
+
+h8 W 02
+
+⊤W 02 Y ⊤XX ⊤Y W 02
+
+⊤W 01
+
+⊤X⊤Y
+
+ 
+
+= 0 ,T9 = tr 
+
+
+
+EW 01 ,W 02 ,X
+
+h η2
+
+h4 Y ⊤XW 01 W 01
+
+⊤W 01 W 02
+
+i 
+
+= 0 ,T10 = tr 
+
+
+
+EW 01 ,W 02 ,X
+
+h η1η2
+
+h6 Y ⊤XW 01 W 01
+
+⊤X⊤Y W 02
+
+⊤W 02
+
+i 
+
+= η1η2
+
+h4 ,T11 = tr 
+
+
+
+EW 01 ,W 02 ,X
+
+ η22
+
+h6 Y ⊤XW 01 W 01
+
+⊤W 01 W 01
+
+⊤X⊤Y
+
+ 
+
+= η22
+
+h4 ,T12 = tr 
+
+
+
+EW 01 ,W 02 ,X
+
+ η1η22
+
+h8 Y ⊤XW 01 W 01
+
+⊤X⊤Y W 02
+
+⊤W 01
+
+⊤X⊤Y
+
+ 
+
+= 0 ,T13 = tr 
+
+
+
+EW 01 ,W 02 ,X
+
+h η1η2
+
+h6 Y ⊤XW 01 W 02 Y ⊤XW 01 W 02
+
+i 
+
+= η1η2
+
+h5 ,T14 = tr 
+
+
+
+EW 01 ,W 02 ,X
+
+ η21 η2
+
+h8 Y ⊤XW 01 W 02 Y ⊤XX ⊤Y W 02
+
+⊤W 02
+
+ 
+
+= 0 ,T15 = tr 
+
+
+
+EW 01 ,W 02 ,X
+
+ η1η22
+
+h8 Y ⊤XW 01 W 02 Y ⊤XW 01 W 01
+
+⊤X⊤Y
+
+ 
+
+= 0 ,T16 = tr 
+
+
+
+EW 01 ,W 02 ,X
+
+ η21 η22
+
+h10 Y ⊤XW 01 W 02 Y ⊤XX ⊤Y W 02
+
+⊤W 01
+
+⊤X⊤Y
+
+ 
+
+= η21 η22
+
+h7 .
+
+We have L2 = P20 
+
+i=17 Ti, where 
+
+T17 = tr 
+
+
+
+EW 01 ,W 02 ,X
+
+ 1
+
+h M W 02
+
+⊤W 01
+
+⊤
+
+ 
+
+= 0 ,T18 = tr 
+
+
+
+EW 01 ,W 02 ,X
+
+h η1
+
+h3 M W 02
+
+⊤W 02 Y ⊤X
+
+i 
+
+= η1
+
+h2 ,T19 = tr 
+
+
+
+EW 01 ,W 02 ,X
+
+h η2
+
+h3 M Y ⊤XW 01 W 01
+
+⊤i 
+
+= η2
+
+h2 ,T20 = tr 
+
+
+
+EW 01 ,W 02 ,X
+
+h η1η2
+
+h5 M Y ⊤XW 01 W 02 Y ⊤X
+
+i 
+
+= 0 .
+
+26 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+We have L3 = P24  
+
+> i=21
+
+Ti, where 
+
+T21 = tr 
+
+
+
+EW 01 ,W 02 ,X
+
+ 1
+
+h W 01 W 02 M ⊤
+
+ 
+
+= 0 ,T22 = tr 
+
+
+
+EW 01 ,W 02 ,X
+
+h η1
+
+h3 X⊤Y W 02
+
+> ⊤
+
+W 02 M ⊤i 
+
+= η1
+
+h2 ,T23 = tr 
+
+
+
+EW 01 ,W 02 ,X
+
+h η2
+
+h3 W 01 W 01
+
+> ⊤
+
+X⊤Y M ⊤i 
+
+= η2
+
+h2 ,T24 = tr 
+
+
+
+EW 01 ,W 02 ,X
+
+h η1η2
+
+h5 X⊤Y W 02
+
+> ⊤
+
+W 01
+
+> ⊤
+
+X⊤Y M ⊤i 
+
+= 0 ,
+
+Based on the above computation, we see that for orthogonal initialization, the one-step test loss for 2-layer NN is 
+
+Ltwo-layer (X, W 11 , W 12 , ˜x0) = η21
+
+h4 + η22
+
+h4 + 2η1η2
+
+h4 + η21 η22
+
+h7 − 2η1
+
+h2 − 2η2
+
+h2 + 1
+
+h + 2η1η2
+
+h5 + 1 (82) Here, for the one-step updated loss, we consider the following optimization problem, and we assume the following constraint 
+
+η1 + η2 = 2 hα, our goal is to see whether η1 = η2 = hα is local minima or local maxima. 
+
+Ltwo-layer (X, W 11 , W 12 , ˜x0) = η21
+
+h4 + η22
+
+h4 + 2η1η2
+
+h4 + η21 η22
+
+h7 − 4hα−2 + 1
+
+h + 2η1η2
+
+h5 + 1 (83) It is easy to find that η1 = η2 = hα is a local maxima. □
+
+D.2. Approximate two-step loss for two-layer NN under orthogonal initialization 
+
+Here we consider the orthogonal initialization which make the setting X⊤X = XX ⊤ = hI, W 0⊤ 
+
+> 1
+
+W 01 = W 01 W 0⊤ 
+
+> 1
+
+=
+
+I, W 0⊤ 
+
+> 2
+
+W 02 = W 02 W 0⊤ 
+
+> 2
+
+= I, M ⊤M = M M ⊤ = 1 
+
+> h
+
+I.For the simplification, we only consider replacing G1 with A1 and G2 with A2.
+
+A01 = 1
+
+h M W 0⊤ 
+
+> 2
+
+fA11 = 1
+
+h M gW 12
+
+> ⊤
+
+B01 = 1
+
+h2 W 01 fB11 = 1
+
+h2
+
+gW 11 gW 12 gW 12
+
+> ⊤
+
+A02 = 1
+
+h W 0⊤ 
+
+> 1
+
+M fA12 = 1
+
+h
+
+gW 11
+
+> ⊤
+
+MB02 = 1
+
+h2 W 02 fB12 = 1
+
+h2
+
+gW 11 
+
+> ⊤
+
+gW 11 gW 12
+
+Thus we have 
+
+gW 11 = W 01 + η1A01 = W 01 + η1
+
+h M W 0⊤
+
+> 2
+
+gW 12 = W 02 + η2A02 = W 02 + η2
+
+h W 0⊤ 
+
+> 1
+
+M
+
+gW 21 = gW 11 + η1 fA11 = gW 11 + η1
+
+h M gW 12
+
+> ⊤
+
+= W 01 + 2η1
+
+h M W 0⊤ 
+
+> 2
+
++ η1η2
+
+h3 W 01
+
+gW 22 = gW 12 + η2 fA12 = gW 12 + η2
+
+h
+
+gW 11
+
+> ⊤
+
+M
+
+= W 02 + 2η2
+
+h W 0⊤ 
+
+> 1
+
+M + η1η2
+
+h3 W 02
+
+we can derive that 27 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+gW 21 gW 22 = (1 + η1η2
+
+h3 )2W 01 W 02 + 2( η1 + η2)( η1η2 + h3)
+
+h4 M + 4η1η2
+
+h2 M W 0⊤ 
+
+> 2
+
+W 0⊤ 
+
+> 1
+
+M
+
+Consider the following loss 
+
+Ltwo-layer (X, W 21 , W 22 , ˜x0)
+
+≈Ltwo-layer (X, gW 21 , gW 22 , ˜x0)=EW 01 ,W 02 ,ξ, ˜x0,X
+
+1
+
+h ˜x0 gW 21 gW 22 − ˜x0M
+
+> 2
+> F
+
+=tr 
+
+
+
+EW 01 ,W 02 ,X
+
+ 1
+
+h2
+
+gW 21 gW 22 gW 22 
+
+> ⊤
+
+gW 21
+
+> ⊤
+
+ 
+
+−tr 
+
+
+
+EW 01 ,W 02 ,X
+
+ 1
+
+h M gW 22 
+
+> ⊤
+
+gW 21
+
+> ⊤
+
+ 
+
+−tr 
+
+
+
+EW 01 ,W 02 ,X
+
+ 1
+
+h
+
+gW 21 gW 22 M ⊤
+
+ 
+
++tr  E M M ⊤ .
+
+We first compute tr 
+
+
+
+EW 01 ,W 02 ,X
+
+
+
+> 1
+> h2
+
+gW 21 gW 22 gW 22 
+
+> ⊤
+
+gW 21
+
+> ⊤
+
+ 
+
+, we find that 
+
+1
+
+h2
+
+gW 21 gW 22 gW 22 
+
+> ⊤
+
+gW 21
+
+> ⊤
+
+= 1
+
+h2 (1 + η1η2
+
+h3 )4Ih + (1 + η1η2
+
+h3 )2 2( η1 + η2)( η1η2 + h3)
+
+h6 W 01 W 02 M ⊤
+
++ (1 + η1η2
+
+h3 )2 4η1η2
+
+h4 W 01 W 02 M ⊤W 01 W 02 M ⊤ + (1 + η1η2
+
+h3 )2 2( η1 + η2)( η1η2 + h3)
+
+h6 M W 02
+
+> ⊤
+
+W 01
+
+> ⊤
+
++ 4( η1 + η2)2(η1η2 + h3)2
+
+h11 Ih + 8η1η2(η1 + η2)( η1η2 + h3)
+
+h7 W 01 W 02 M ⊤ + 16 η21 η22
+
+h8 Ih
+
++ (1 + η1η2
+
+h3 )2 4η1η2
+
+h4 M W 0⊤ 
+
+> 2
+
+W 0⊤ 
+
+> 1
+
+M W 0⊤ 
+
+> 2
+
+W 0⊤ 
+
+> 1
+
++ 8η1η2(η1 + η2)( η1η2 + h3)
+
+h9 M W 0⊤ 
+
+> 2
+
+W 0⊤ 
+
+> 1
+
+.
+
+Thus, we have 
+
+tr 
+
+
+
+EW 01 ,W 02 ,ξ,X
+
+ 1
+
+h2
+
+gW 21 gW 22 gW 22 
+
+> ⊤
+
+gW 21
+
+> ⊤
+
+ 
+
+= 1
+
+h (1 + η1η2
+
+h3 )4 + 4( η1 + η2)2(η1η2 + h3)2
+
+h10 
+
++ 16 η21 η22
+
+h7 + (1 + η1η2
+
+h3 )2 8η1η2
+
+h5
+
+Following the similar way, we get that 
+
+tr 
+
+
+
+EW 01 ,W 02 ,X
+
+ 1
+
+h M gW 22 
+
+> ⊤
+
+gW 21
+
+> ⊤
+
+ 
+
+= 2( η1 + η2)( η1η2 + h3)
+
+h5 ,tr 
+
+
+
+EW 01 ,W 02 ,X
+
+ 1
+
+h
+
+gW 21 gW 22 M ⊤
+
+ 
+
+= 2( η1 + η2)( η1η2 + h3)
+
+h5 ,tr  E M M ⊤ = 1 
+
+We have 
+
+Ltwo-layer (X, W 21 , W 22 , ˜x0) = 1
+
+h (1 + η1η2
+
+h3 )4 + 4( η1 + η2)2(η1η2 + h3)2
+
+h10 + 16 η21 η22
+
+h7
+
++ (1 + η1η2
+
+h3 )2 8η1η2
+
+h5 − 4( η1 + η2)( η1η2 + h3)
+
+h5 + 1 
+
+28 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+Ltwo-layer (X, W 21 , W 22 , ˜x0) = 1
+
+h (1 + η1η2
+
+h3 )4 + 16 η21 η22
+
+h7 +
+
+ 2( η1 + η2)( η1η2 + h3)
+
+h5 − 1
+
+2
+
++ (1 + η1η2
+
+h3 )2 8η1η2
+
+h5 (84) 
+
+□
+
+Corollary D.3. Suppose η1 + η2 = 2 hα and we consider 0 < α ≤ 32 . Then, for any α in this range, the point η1 = η2 = hα
+
+is not a local minimum of the loss Ltwo-layer (W 11 , W 12 ). Moreover, for 1 < α ≤ 32 , if h > max {h∗, 256 }, then η1 = η2 = hα
+
+is a local minimum of the loss Ltwo-layer (W 21 , W 22 ), where h∗ is the root of the following equation: 
+
+(1 + o(1)) h1−α + 16 hα−2 + 2 h−α + 8 hα−3 + 6 h3α−6 − 2 = 0 (85) 
+
+Proof of Corollary 5.4. Here, for the two-step updated loss, we consider the following optimization problem, and we assume that η1 + η2 = 2 hα, we want to find whether the local minima for Ltwo-layer is η1 = η2 = hα.Since η1 + η2 = 2 hα, we have 
+
+Ltwo-layer (X, W 21 , W 22 , , ˜x0) = 1
+
+h (1 + η1(2 hα − η1)
+
+h3 )4 + 16 η21 (2 hα − η1)2
+
+h7
+
++
+
+ 4( η1(2 hα − η1) + h3)
+
+h5−α − 1
+
+2
+
++ (1 + η1(2 hα − η1)
+
+h3 )2 8η1(2 hα − η1)
+
+h5
+
+Taking the derivative, we have 
+
+L′
+
+> two-layer
+
+(X, W 21 , W 22 , ˜x0) = 2( hα − η1)
+
+ 4
+
+h4 (1 + η1(2 hα − η1)
+
+h3 )3 + 32 η1(2 hα − η1)
+
+h7
+
+
+
++ 2( hα − η1)
+
+ 8
+
+h5−α
+
+ 4( η1(2 hα − η1) + h3)
+
+h5−α − 1
+
+ 
+
++ 2( hα − η1)
+
+ 8
+
+h5 + 32 η1(2 hα − η1)
+
+h8 + 24 η21 (2 hα − η1)2
+
+h11 
+
+
+
+If we let Ltwo-layer is η1 = η2 = hα be local minima, we must need • 4 > 5 − α ⇒ α > 1
+
+• 3(2 α − 3) − 4 < α − 5 ⇒ α < 85
+
+• 2(2 α − 3) − 4 < α − 5 ⇒ α < 53
+
+• 2α − 7 < α − 5 ⇒ α < 2
+
+• 4α − 10 < α − 5 ⇒ α < 53
+
+• 2α − 8 < α − 5 ⇒ α < 3
+
+• 4α − 11 < α − 5 ⇒ α < 2
+
+Take the intersection, we have 1 < α < 85 . Given the fixed 1 < α < 85 , we will give how large h is to ensure that 
+
+η1 = η2 = hα will are local minima, 
+
+Case 1. If α = 32 , we need 
+
+8h 12 − 32 − 32 − 64 − o(1) > 0,
+
+which means h > 256 + o(1) .29 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+Case 2. If 1 < α < 32 , we find 6α − 13 < 4α − 10 < −4 and 1 − α > α − 2, so we need 
+
+(4 + o(1)) h1−α + 32 hα−2 + (32 + o(1)) hα−2 + 8 h−α + 32 hα−3 + 24 h3α−6 − 8 < 0,
+
+which means 
+
+(1 + o(1)) h1−α + 16 hα−2 + 2 h−α + 8 hα−3 + 6 h3α−6 − 2 < 0,
+
+Case 3. If 32 < α < 85 , we find 6α − 13 > 4α − 10 > −4, so we need 
+
+(4 + o(1)) h3(2 α−3) −α+1 + 32 hα−2 + (32 + o(1)) h3α−5 + 8 h−α + 32 hα−3 + 24 h3α−6 − 8 < 0,
+
+Which means 
+
+(1 + o(1)) h5α−8 + 8 hα−2 + 8 h3α−5 + 2 h−α + 8 hα−3 + 6 h3α−6 − 2 < 0.
+
+□
+
+D.3. Bounded Loss Gap for Approximate two-step loss for two-layer NN under orthogonal initialization 
+
+Here we consider the orthogonal initialization which make the setting X⊤X = XX ⊤ = hI, W 0⊤ 
+
+> 1
+
+W 01 = W 01 W 0⊤ 
+
+> 1
+
+=
+
+I, W 0⊤ 
+
+> 2
+
+W 02 = W 02 W 0⊤ 
+
+> 2
+
+= I, M ⊤M = M M ⊤ = 1 
+
+> h
+
+I.We define that 
+
+A01 = 1
+
+h M W 0⊤ 
+
+> 2
+
+A11 = 1
+
+h M W 1⊤ 
+
+> 2
+
+fA11 = 1
+
+h M ]W 1⊤
+
+> 2
+
+B01 = 1
+
+h2 W 01 B11 = 1
+
+h2 W 11 W 12 W 1⊤ 
+
+> 2
+
+fB11 = 1
+
+h2
+
+gW 11 gW 12 ]W 1⊤
+
+> 2
+
+A02 = 1
+
+h W 0⊤ 
+
+> 1
+
+M A12 = 1
+
+h W 1⊤ 
+
+> 1
+
+M fA12 = 1
+
+h
+
+]W 1⊤ 
+
+> 1
+
+MB02 = 1
+
+h2 W 02 B12 = 1
+
+h2 W 1⊤ 
+
+> 1
+
+W 11 W 12 fB12 = 1
+
+h2
+
+]W 1⊤ 
+
+> 1
+
+gW 11 gW 12 .
+
+And we denote that 
+
+W 11 = W 01 + η1A01 − η1B01 ,
+
+gW 11 = W 01 + η1A01,
+
+W 21 = W 11 + η1A11 − η1B11 ,
+
+gW 21 = gW 11 + η1 fA11,
+
+W 21 = gW 11 + η1 fA11 − η1 fB11 ,
+
+W 12 = W 02 + η2A02 − η2B02 ,
+
+gW 12 = W 02 + η2A02,
+
+W 22 = W 12 + η2A12 − η2B12 ,
+
+gW 22 = gW 12 + η2 fA12,
+
+W 22 = gW 12 + η2 fA12 − η2 fB12 ,
+
+Lemma D.4. Under Assumption 3.3 and 3.2, for η1, η2 ≤ O(h√h), we have 
+
+Ltwo-layer (W 11 , W 12 ) − Ltwo-layer ( gW 11 , gW 12 ) ≤ O( 1
+
+h ).
+
+Ltwo-layer (W 21 , W 22 ) − Ltwo-layer ( gW 21 , gW 22 ) ≤ O( 1
+
+√h ).
+
+30 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+Proof of Lemma 5.2. We first give bounded loss gap for approximate one-step loss under orthogonal initialization for two-layer NN. For one step, we consider η1, η 2 ≤ O(h 32 ).
+
+q
+
+Ltwo-layer (X, W 11 , W 12 , ˜x0) −
+
+q
+
+Ltwo-layer (X, gW 11 , gW 12 , ˜x0)
+
+= EW 01 ,W 02 ,ξ, ˜x0,X
+
+1
+
+h ˜x0W 11 W 12 − ˜x0M F
+
+− EW 01 ,W 02 ,ξ, ˜x0,X
+
+1
+
+h ˜x0 gW 11 gW 12 − ˜x0M F
+
+≤ EW 01 ,W 02 ,ξ, ˜x0,X
+
+ 1
+
+h ˜x0W 11 W 12 − 1
+
+h ˜x0 gW 11 gW 12
+
+> F
+
+
+
+≤ EW 01 ,W 02 ,ξ, ˜x0,X
+
+ 1
+
+h ˜x0
+
+> F
+
+W 11 W 12 − gW 11 gW 12
+
+
+
+= 1
+
+√h EW 01 ,W 02 ,ξ, ˜x0,X
+
+
+
+W 11 W 12 − gW 11 gW 12
+
+
+
+= 1
+
+√h EW 01 ,W 02 ,ξ ˜x0,X
+
+  −η1B01 W 02 − η1η2B01 A02 − η2W 01 B02 − η1η2A01B02 + η1η2B01 B02
+
+
+
+≤ 1
+
+√h E   η1B01 W 02 + η1η2B01 A02 + η2W 01 B02 + η1η2A01B02 + η1η2B01 B02
+
+
+
+(86) Consider similar techniques in Lemma C.6, we get that 
+
+EW 01 ,W 02 ,ξ, ˜x0,X η1B01 W 02 ≤ η1 B01 W 02 ≤ η1
+
+h2 ,
+
+EW 01 ,W 02 ,ξ, ˜x0,X η1η2B01 A02 ≤ η1η2 B01 A02 ≤ η1η2
+
+h3√h ,
+
+EW 01 ,W 02 ,ξ, ˜x0,X η2W 01 B02 ≤ η2 B02 W 01 ≤ η2
+
+h2 ,
+
+EW 01 ,W 02 ,ξ, ˜x0,X η1η2A01B02 ≤ η1η2 B02 A01 ≤ η1η2
+
+h3√h ,
+
+EW 01 ,W 02 ,ξ, ˜x0,X η1η2B01 B02 ≤ η1η2 B02 B01 ≤ η1η2
+
+h4 ,
+
+taking these inequalities into (117), we have 
+
+q
+
+Ltwo-layer (X, W 11 , W 12 , ˜x0) −
+
+q
+
+Ltwo-layer (X, gW 11 , gW 12 , ˜x0)
+
+≤ 1
+
+√h E   η1B1W 02 + ∥η1η2B1A2∥ + η2W 01 B2 + ∥η1η2A1B2∥ + ∥η1η2B1B2∥
+
+≤ 2η1η2
+
+h4 + η1 + η2
+
+h2√h + η1η2
+
+h4√h ≤ O( η1 + η2
+
+h2√h )
+
+(87) Also, q
+
+Ltwo-layer (X, W 11 , W 12 , ˜x0) + 
+
+q
+
+Ltwo-layer (X, gW 11 , gW 12 , ˜x0) ≤ 2
+
+r
+
+max( η21
+
+h4 , η1
+
+h2 , η21 η22
+
+h7 , 1) . (88) We combine (87), (88) and Assumption E.1, finally we get that 
+
+Ltwo-layer (X, W 11 , W 12 , ˜x0) − Ltwo-layer (X, gW 11 , gW 12 , ˜x0) ≤ O η1 + η2
+
+h2√h
+
+r
+
+max( η21
+
+h4 , η1
+
+h2 , η21 η22
+
+h7 , 1) 
+
+!
+
+≤ O( 1
+
+h )
+
+□
+
+31 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+We are here considering the 2-step loss under orthogonal initialization for two-layer NN. We have 
+
+q
+
+Ltwo-layer (X, W 21 , W 22 , ˜x0) −
+
+q
+
+Ltwo-layer (X, gW 21 , gW 22 , ˜x0)
+
+≤
+
+q
+
+Ltwo-layer (X, W 21 , W 22 , ˜x0) −
+
+q
+
+Ltwo-layer (X, W 21 , W 22 , ˜x0)
+
++
+
+q
+
+Ltwo-layer (X, W 21 , W 22 , ˜x0) −
+
+q
+
+Ltwo-layer (X, gW 21 , gW 22 , ˜x0)
+
+(89) We first give bounded loss gap for 
+
+q
+
+Ltwo-layer (X, W 21 , W 22 , ˜x0) −
+
+q
+
+Ltwo-layer (X, gW 21 , gW 22 , ˜x0) . Similar to (86), we have 
+
+q
+
+Ltwo-layer (X, W 21 , W 22 , ˜x0) −
+
+q
+
+Ltwo-layer (X, gW 21 , gW 22 , ˜x0)
+
+= EW 01 ,W 02 ,ξ, ˜x0,X
+
+1
+
+h ˜x0W 21 W 22 − ˜x0M
+
+> F
+
+− EW 01 ,W 02 ,ξ, ˜x0,X
+
+1
+
+h ˜x0 gW 21 gW 22 − ˜x0M
+
+> F
+
+≤ EW 01 ,W 02 ,ξ, ˜x0,X
+
+ 1
+
+h ˜x0W 21 W 22 − 1
+
+h ˜x0 gW 21 gW 22
+
+> F
+
+
+
+≤ EW 01 ,W 02 ,ξ, ˜x0,X
+
+ 1
+
+h ˜x0
+
+> F
+
+W 21 W 22 − gW 21 gW 22
+
+
+
+= 1
+
+√h EW 01 ,W 02 ,ξ, ˜x0,X
+
+
+
+W 21 W 22 − gW 21 gW 22
+
+
+
+= 1
+
+√h EW 01 ,W 02 ,ξ ˜x0,X
+
+
+
+−η1 fB11 gW 12 − η1η2 fB11 fA12 − η2 gW 11 fB12 − η1η2 fA11 fB12 + η1η2 fB11 fB12
+
+
+
+≤ 1
+
+√h E
+
+
+
+η1 fB11 gW 12 + η1η2 fB11 fA12 + η2 gW 11 fB12 + η1η2 fA11 fB12 + η1η2 fB11 fB12
+
+
+
+(90) We know that 
+
+gW 11 = W 01 + η1A01 gW 12 = W 02 + η2A02
+
+A01 = 1
+
+h M W 0⊤ 
+
+> 2
+
+fA11 = 1
+
+h M gW 12
+
+> ⊤
+
+B01 = 1
+
+h2 W 01 fB11 = 1
+
+h2
+
+gW 11 gW 12 gW 12
+
+> ⊤
+
+A02 = 1
+
+h W 0⊤ 
+
+> 1
+
+M fA12 = 1
+
+h
+
+gW 11
+
+> ⊤
+
+MB02 = 1
+
+h2 W 02 fB12 = 1
+
+h2
+
+gW 11 
+
+> ⊤
+
+gW 11 gW 12 .
+
+32 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+Thus, we have 
+
+fA11 = 1
+
+h M W 02 
+
+> ⊤
+
++ η2
+
+h3 W 01
+
+fA12 = 1
+
+h W 01
+
+> ⊤
+
+M + η2
+
+h3 W 02
+
+fB11 =
+
+ 1
+
+h2 + η1η2 + η22
+
+h5
+
+
+
+W 01 +
+
+ η1 + η2
+
+h3 + η1η22
+
+h6
+
+
+
+M W 02
+
+> ⊤
+
++ η2
+
+h3 W 01 W 02 M ⊤W 01 + η1η2
+
+h4 M W 02
+
+> ⊤
+
+W 01
+
+> ⊤
+
+M W 02
+
+> ⊤
+
+fB12 =
+
+ 1
+
+h2 + η1η2 + η21
+
+h5
+
+
+
+W 02 +
+
+ η1 + η2
+
+h3 + η21 η2
+
+h6
+
+
+
+W 01
+
+> ⊤
+
+M
+
++ η1
+
+h3 W 02 M ⊤W 01 W 02 + η1η2
+
+h4 W 01
+
+> ⊤
+
+M W 02
+
+> ⊤
+
+W 01
+
+> ⊤
+
+M
+
+We consider η1, η 2 ≤ O(h 32 ), it is easy to find that 
+
+gW 11 ≤ W 01 + η1
+
+h ∥M ∥ W 02
+
+≤ O(1) + η1
+
+h√h = O(1) 
+
+gW 12 ≤ W 02 + η1
+
+h ∥M ∥ W 02
+
+≤ O(1) + η2
+
+h√h = O(1) 
+
+fA11 ≤ 1
+
+h ∥M ∥ gW 12 ≤ O( 1
+
+h√h )
+
+fA12 ≤ 1
+
+h ∥M ∥ gW 11 ≤ O( 1
+
+h√h )
+
+fB11 ≤ 1
+
+h2
+
+gW 11 gW 12
+
+> 2
+
+≤ O( 1
+
+h2 )
+
+fB12 ≤ 1
+
+h2
+
+gW 12 gW 11
+
+> 2
+
+≤ O( 1
+
+h2 ).
+
+Combining (90), we have 
+
+1
+
+√h E
+
+
+
+η1 fB11 gW 12 + η1η2 fB11 fA12 + η2 gW 11 fB12 + η1η2 fA11 fB12 + η1η2 fB11 fB12
+
+
+
+≤ 2η1η2
+
+h4 + η1 + η2
+
+h2√h + η1η2
+
+h4√h ≤ O( η1 + η2
+
+h2√h )
+
+Follow the same way to (88), we can obtain that 
+
+q
+
+Ltwo-layer (X, W 21 , W 22 , ˜x0) + 
+
+q
+
+Ltwo-layer (X, gW 21 , gW 22 , ˜x0) ≤ O(1) .
+
+Finally we get that 
+
+Ltwo-layer (X, W 21 , W 22 , ˜x0) − Ltwo-layer (X, gW 21 , gW 22 , ˜x0) ≤ O
+
+ η1 + η2
+
+h2√h
+
+
+
+≤ O( 1
+
+h )
+
+We now give bounded loss gap for pLtwo-layer (X, W 21 , W 22 , ˜x0) −
+
+q
+
+Ltwo-layer (X, W 21 , W 22 , ˜x0) .33 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+We have 
+
+W 21 = W 11 + η1A11 − η1B11 = W 01 + η1A01 − η1B01 + η1A11 − η1B11 ,
+
+W 21 = gW 11 + η1 fA11 − η1 fB11 = W 01 + η1A01 + η1 fA11 − η1 fB11 ,
+
+W 22 = W 12 + η2A12 − η2B12 = W 02 + η2A02 − η2B02 + η2A12 − η2B12 ,
+
+W 22 = gW 12 + η2 fA12 − η2 fB12 = W 02 + η2A02 + η2 fA12 − η2 fB12 ,
+
+For W 21 W 22 , we have 
+
+W 21 W 22 = W 01 W 02 + η1A01W 02 − η1B01 W 02 + η1A11W 02 − η1B11 W 02
+
++ η2W 01 A02 + η1η2A01A02 − η1η2B01 A02 + η1η2A11A02 − η1η2B11 A02
+
+− η2W 01 B02 − η1η2A01B02 + η1η2B01 B02 − η1η2A11B02 + η1η2B11 B02
+
++ η2W 01 A12 + η1η2A01A12 − η1η2B01 A12 + η1η2A11A12 − η1η2B11 A12
+
+− η2W 01 B12 − η1η2A01B12 + η1η2B01 B12 − η1η2A11B12 + η1η2B11 B12 ,
+
+(91) For W 21 W 22 , we have 
+
+W 21 W 22 = W 01 W 02 + η1A01W 02 + η1 fA11W 02 − η1 fB11 W 02
+
++ η2W 01 A02 + η1η2A01A02 + η1η2 fA11A02 − η1η2 fB11 A02
+
++ η2W 01 fA12 + η1η2A01 fA12 + η1η2 fA11 fA12 − η1η2 fB11 fA12
+
+− η2W 01 fB12 − η1η2A01 fB12 − η1η2 fA11 fB12 + η1η2 fB11 fB12
+
+(92) Based on (91) and (92), we have 
+
+W 21 W 22 − W 21 W 22 = −η1B01 W 02 + η1(A11 − fA11)W 02 − η1(B11 − fB11 )W 02
+
+− η1η2B01 A02 + η1η2(A11 − fA11)A02 − η1η2(B11 − fB11 )A02
+
++ η2W 01 (A12 − fA12) + η1η2A01(A12 − fA12) − η1η2B01 A12
+
++ η1η2A11A12 − η1η2B11 A12 − η1η2 fA11 fA12 + η1η2 fB11 fA12
+
++ η2W 01 (B12 − fB12 ) + η1η2A01(B12 − fB12 ) + η1η2B01 B12
+
+− η1η2A11B12 + η1η2B11 B12 + η1η2 fA11 fB12 − η1η2 fB11 fB12
+
+− η2W 01 B02 − η1η2A01B02 + η1η2B01 B02 − η1η2A11B02 + η1η2B11 B02
+
+34 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+We know that 
+
+A01 ≤ O( 1
+
+h√h ), A02 ≤ O( 1
+
+h√h ), B01 ≤ O( 1
+
+h2 ), B02 ≤ O( 1
+
+h2 )
+
+gW 11 ≤ W 01 + η1
+
+h ∥M ∥ W 02 ≤ O(1) + η1
+
+h√h = O(1) 
+
+gW 12 ≤ W 02 + η1
+
+h ∥M ∥ W 02 ≤ O(1) + η2
+
+h√h = O(1) 
+
+W 11 ≤ W 01 + η1 A01 + η1 B01 ≤ O(1) 
+
+W 12 ≤ W 02 + η2 A02 + η2 B02 ≤ O(1) 
+
+fA11 ≤ 1
+
+h ∥M ∥ gW 12 ≤ O( 1
+
+h√h ), A11 ≤ 1
+
+h ∥M ∥ W 12 ≤ O( 1
+
+h√h )
+
+fA12 ≤ 1
+
+h ∥M ∥ gW 11 ≤ O( 1
+
+h√h ), A12 ≤ 1
+
+h ∥M ∥ W 11 ≤ O( 1
+
+h√h )
+
+fB11 ≤ 1
+
+h2
+
+gW 11 gW 12
+
+> 2
+
+≤ O( 1
+
+h2 ), B11 ≤ 1
+
+h2 W 11 W 12 
+
+> 2
+
+≤ O( 1
+
+h2 )
+
+fB12 ≤ 1
+
+h2
+
+gW 12 gW 11
+
+> 2
+
+≤ O( 1
+
+h2 ), B12 ≤ 1
+
+h2 W 12 W 11 
+
+> 2
+
+≤ O( 1
+
+h2 ).
+
+We find that 
+
+W 21 W 22 − W 21 W 22 ≤ 3 η1
+
+h2 + 2 η1
+
+h√h + 12 η1η2
+
+h3√h + 6 η1η2
+
+h3 + 5 η1η2
+
+h4 + 2 η2
+
+h√h + 3 η2
+
+h2 ≤ O( η1 + η2
+
+h√h ) (93) Similar to (90) 
+
+q
+
+Ltwo-layer (X, W 21 , W 22 , ˜x0) −
+
+q
+
+Ltwo-layer (X, W 21 , W 22 , ˜x0)
+
+= EW 01 ,W 02 ,ξ, ˜x0,X
+
+1
+
+h ˜x0W 21 W 22 − ˜x0M F
+
+− EW 01 ,W 02 ,ξ, ˜x0,X
+
+1
+
+h ˜x0 gW 21 gW 22 − ˜x0M F
+
+≤ EW 01 ,W 02 ,ξ, ˜x0,X
+
+ 1
+
+h ˜x0W 21 W 22 − 1
+
+h ˜x0 gW 21 gW 22
+
+> F
+
+
+
+≤ EW 01 ,W 02 ,ξ, ˜x0,X
+
+ 1
+
+h ˜x0
+
+> F
+
+W 21 W 22 − gW 21 gW 22
+
+
+
+= 1
+
+√h EW 01 ,W 02 ,ξ, ˜x0,X
+
+
+
+W 21 W 22 − gW 21 gW 22
+
+
+
+≤O( η1 + η2
+
+h2 )
+
+(94) Follow the same way to (88), we can obtain that 
+
+q
+
+Ltwo-layer (X, W 21 , W 22 , ˜x0) + 
+
+q
+
+Ltwo-layer (X, W 21 , W 22 , ˜x0) ≤ O(1) .
+
+Finally we get that 
+
+Ltwo-layer (X, W 21 , W 22 , ˜x0) − Ltwo-layer (X, W 21 , W 22 , ˜x0) ≤ O
+
+ η1 + η2
+
+h2
+
+
+
+≤ O( 1
+
+√h )
+
+Thus, due to (89), we have 35 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+q
+
+Ltwo-layer (X, W 21 , W 22 , ˜x0) −
+
+q
+
+Ltwo-layer (X, gW 21 , gW 22 , ˜x0)
+
+≤
+
+q
+
+Ltwo-layer (X, W 21 , W 22 , ˜x0) −
+
+q
+
+Ltwo-layer (X, W 21 , W 22 , ˜x0)
+
++
+
+q
+
+Ltwo-layer (X, W 21 , W 22 , ˜x0) −
+
+q
+
+Ltwo-layer (X, gW 21 , gW 22 , ˜x0)
+
+≤O( 1
+
+√h ) + O( 1
+
+h ) = O( 1
+
+√h ).
+
+(95) 
+
+□
+
+D.4. Approximate one-step loss under orthogonal initialization for three-layer NN Theorem D.5. Given Assumption 3.3, 3.2, and in addition assume η1 and η2 are no more than O(h) based on Proposition C.4 and C.11, consider the training procedure discussed in Section 3, we derive the test loss after one-step and two-step GD update in a three-layer neural network: 
+
+Ltwo-layer (W 11 , W 12 ) = η21
+
+h2 + η22
+
+h2 + 2η1η2
+
+h2 + η21 η22
+
+h4
+
+− 2η1
+
+h − 2η2
+
+h + 1
+
+h + 2η1η2
+
+h3 + 1 
+
+Lthree-layer (W 21 , W 22 ) = 
+
+ 2( η1 + η2)( h + η1η2)
+
+h2 − 1
+
+2
+
++ 1
+
+h + 2η1η2
+
+h2 + 10 η1η2
+
+h3 + η21 η22
+
+h3
+
++ 37 η21 η22
+
+h4 + 12 η31 η32
+
+h5 + η41 η42
+
+h6
+
+(96) We prove Theorem 5.5 above by the following two subsection D.4 and D.5. For orthogonal initialization we assume n = h = d.Here we consider the orthogonal initialization where we make the setting X⊤X = XX ⊤ = hI, W 0⊤ 
+
+> 1
+
+W 01 = W 01 W 0⊤ 
+
+> 1
+
+=
+
+I, W 0⊤ 
+
+> 2
+
+W 02 = W 02 W 0⊤ 
+
+> 2
+
+= I, a⊤a = 1 , E[aa ⊤] = 1 
+
+> h
+
+I, β∗⊤ β∗ = 1 , E[β∗β∗⊤ ] = 1 
+
+> h
+
+I.36 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+We consider a test data ˜x0 under three-layer setting, where 1√h ˜x0 is an random orthogonal vector, we have 
+
+L(X, W 11 , W 12 , a, ˜x0)=EW 01 ,W 02 ,a,ξ, ˜x0,X
+
+ 1
+
+√h ˜x0W 11 W 12 a − ˜x0β∗
+
+2
+
+=EW 01 ,W 02 ,a,ξ, ˜x0,X
+
+" 1
+
+√h W 11 W 12 a − β∗
+
+⊤
+
+˜x⊤ 
+
+> 0
+
+˜x0
+
+ 1
+
+√h W 11 W 12 a − β∗
+
+#
+
+=tr EW 01 ,W 02 ,a,ξ, ˜x0,X
+
+"
+
+˜x⊤ 
+
+> 0
+
+˜x0
+
+ 1
+
+√h W 11 W 12 a − β∗
+
+  1
+
+√h W 11 W 12 a − β∗
+
+⊤#! 
+
+=tr EW 01 ,W 02 ,a,ξ,X
+
+" 1
+
+√h W 11 W 12 a − β∗
+
+  1
+
+√h W 11 W 12 a − β∗
+
+⊤#! 
+
+=tr 
+
+
+
+EW 01 ,W 02 ,a,ξ,X
+
+ 1
+
+h W 11 W 12 aa ⊤W 12
+
+> ⊤
+
+W 11
+
+> ⊤
+
+ 
+
+−tr 
+
+
+
+EW 01 ,W 02 ,a,ξ,X
+
+ 1
+
+√h β∗a⊤W 12
+
+> ⊤
+
+W 11
+
+> ⊤
+
+ 
+
+−tr 
+
+
+
+EW 01 ,W 02 ,a,ξ,X
+
+ 1
+
+√h W 11 W 12 aβ ∗⊤ 
+
+ 
+
++ tr 
+
+
+
+E
+
+h
+
+β∗β∗⊤ i 
+
+.
+
+(97) Here we define L1, L 2, L 3, L 4, where 
+
+L1 = tr 
+
+
+
+EW 01 ,W 02 ,a,ξ,X
+
+ 1
+
+h W 11 W 12 aa ⊤W 12
+
+> ⊤
+
+W 11
+
+> ⊤
+
+ 
+
+L2 = tr 
+
+
+
+EW 01 ,W 02 ,a,ξ,X
+
+ 1
+
+√h β∗a⊤W 12
+
+> ⊤
+
+W 11
+
+> ⊤
+
+ 
+
+L3 = tr 
+
+
+
+EW 01 ,W 02 ,a,ξ,X
+
+ 1
+
+√h W 11 W 12 aβ ∗⊤ 
+
+ 
+
+L4 = tr 
+
+
+
+E
+
+h
+
+β∗β∗⊤ i 
+
+Thus 
+
+Lthree-layer = L1 − L2 − L3 + L4
+
+37 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+We have L1 = P16 
+
+i=1 Ti, where 
+
+T1 = tr 
+
+
+
+EW 01 ,W 02 ,a,X
+
+ 1
+
+h aa ⊤W 02
+
+⊤W 01
+
+⊤W 01 W 02
+
+ 
+
+= 1
+
+h ,T2 = tr 
+
+
+
+EW 01 ,W 02 ,a,X
+
+ η1
+
+h2√h aa ⊤W 02
+
+⊤W 01
+
+⊤X⊤ya ⊤W 02
+
+⊤W 02
+
+ 
+
+= 0 ,T3 = tr 
+
+
+
+EW 01 ,W 02 ,a,X
+
+ η2
+
+h2√h aa ⊤W 02
+
+⊤W 01
+
+⊤W 01 W 01
+
+⊤X⊤ya ⊤
+
+ 
+
+= 0 ,T4 = tr 
+
+
+
+EW 01 ,W 02 ,a,X
+
+h η1η2
+
+h4 aa ⊤W 02
+
+⊤W 01
+
+⊤X⊤ya ⊤W 02
+
+⊤W 01
+
+⊤X⊤ya ⊤i 
+
+= η1η2
+
+h3 ,T5 = tr 
+
+
+
+EW 01 ,W 02 ,a,X
+
+ η1
+
+h2√h aa ⊤W 02
+
+⊤W 02 ay ⊤XW 01 W 02
+
+ 
+
+= 0 ,T6 = tr 
+
+
+
+EW 01 ,W 02 ,a,X
+
+ η21
+
+h4 aa ⊤W 02
+
+⊤W 02 ay ⊤XX ⊤ya ⊤W 02
+
+⊤W 02
+
+ 
+
+= η21
+
+h2 ,T7 = tr 
+
+
+
+EW 01 ,W 02 ,a,X
+
+h η1η2
+
+h4 aa ⊤W 02
+
+⊤W 02 ay ⊤XW 01 W 01
+
+⊤X⊤ya ⊤i 
+
+= η1η2
+
+h2 ,T8 = tr 
+
+
+
+EW 01 ,W 02 ,a,X
+
+ η21 η2
+
+h5√h aa ⊤W 02
+
+⊤W 02 ay ⊤XX ⊤ya ⊤W 02
+
+⊤W 01
+
+⊤X⊤ya ⊤
+
+ 
+
+= 0 ,T9 = tr 
+
+
+
+EW 01 ,W 02 ,a,X
+
+ η2
+
+h2√h aa ⊤ay ⊤XW 01 W 01
+
+⊤W 01 W 02
+
+ 
+
+= 0 ,T10 = tr 
+
+
+
+EW 01 ,W 02 ,a,X
+
+h η1η2
+
+h4 aa ⊤ay ⊤XW 01 W 01
+
+⊤X⊤ya ⊤W 02
+
+⊤W 02
+
+i 
+
+= η1η2
+
+h2 ,T11 = tr 
+
+
+
+EW 01 ,W 02 ,a,X
+
+ η22
+
+h4 aa ⊤ay ⊤XW 01 W 01
+
+⊤W 01 W 01
+
+⊤X⊤ya ⊤
+
+ 
+
+= η22
+
+h2 ,T12 = tr 
+
+
+
+EW 01 ,W 02 ,a,X
+
+ η1η22
+
+h5√h aa ⊤ay ⊤XW 01 W 01
+
+⊤X⊤ya ⊤W 02
+
+⊤W 01
+
+⊤X⊤ya ⊤
+
+ 
+
+= 0 ,T13 = tr 
+
+
+
+EW 01 ,W 02 ,a,X
+
+h η1η2
+
+h4 aa ⊤ay ⊤XW 01 W 02 ay ⊤XW 01 W 02
+
+i 
+
+= η1η2
+
+h3 ,T14 = tr 
+
+
+
+EW 01 ,W 02 ,a,X
+
+ η21 η2
+
+h5√h aa ⊤ay ⊤XW 01 W 02 ay ⊤XX ⊤ya ⊤W 02
+
+⊤W 02
+
+ 
+
+= 0 ,T15 = tr 
+
+
+
+EW 01 ,W 02 ,a,X
+
+ η1η22
+
+h5√h aa ⊤ay ⊤XW 01 W 02 ay ⊤XW 01 W 01
+
+⊤X⊤ya ⊤
+
+ 
+
+= 0 ,T16 = tr 
+
+
+
+EW 01 ,W 02 ,a,X
+
+ η21 η22
+
+h7 aa ⊤ay ⊤XW 01 W 02 ay ⊤XX ⊤ya ⊤W 02
+
+⊤W 01
+
+⊤X⊤ya ⊤
+
+ 
+
+= η21 η22
+
+h4 .
+
+We have L2 = P20 
+
+i=17 Ti, where 
+
+T17 = tr 
+
+
+
+EW 01 ,W 02 ,a,X
+
+ 1
+
+√h β∗a⊤W 02
+
+⊤W 01
+
+⊤
+
+ 
+
+= 0 ,T18 = tr 
+
+
+
+EW 01 ,W 02 ,a,X
+
+h η1
+
+h2 β∗a⊤W 02
+
+⊤W 02 ay ⊤X
+
+i 
+
+= η1
+
+h ,T19 = tr 
+
+
+
+EW 01 ,W 02 ,a,X
+
+h η2
+
+h2 β∗a⊤ay ⊤XW 01 W 01
+
+⊤i 
+
+= η2
+
+h ,T20 = tr 
+
+
+
+EW 01 ,W 02 ,a,X
+
+ η1η2
+
+h3√h β∗a⊤ay ⊤XW 01 W 02 ay ⊤X
+
+ 
+
+= 0 .
+
+38 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+We have L3 = P24  
+
+> i=21
+
+Ti, where 
+
+T21 = tr 
+
+
+
+EW 01 ,W 02 ,a,X
+
+ 1
+
+√h W 01 W 02 aβ ∗⊤
+
+ 
+
+= 0 ,T22 = tr 
+
+
+
+EW 01 ,W 02 ,a,X
+
+h η1
+
+h2 X⊤ya ⊤W 02
+
+> ⊤
+
+W 02 aβ ∗⊤ i 
+
+= η1
+
+h ,T23 = tr 
+
+
+
+EW 01 ,W 02 ,a,X
+
+h η2
+
+h2 W 01 W 01
+
+> ⊤
+
+X⊤ya ⊤aβ ∗⊤ i 
+
+= η2
+
+h ,T24 = tr 
+
+
+
+EW 01 ,W 02 ,a,X
+
+ η1η2
+
+h3√h X⊤ya ⊤W 02
+
+> ⊤
+
+W 01
+
+> ⊤
+
+X⊤ya ⊤aβ ∗⊤
+
+ 
+
+= 0 ,
+
+Based on the above computation, we see that for orthogonal initialization, the one-step test loss for 3-layer NN is 
+
+Lthree-layer (X, W 11 , W 12 , a1, ˜x0) = η21
+
+h2 + η22
+
+h2 + 2η1η2
+
+h2 + η21 η22
+
+h4 − 2η1
+
+h − 2η2
+
+h + 1
+
+h + 2η1η2
+
+h3 + 1 (98) Here, for the one-step updated loss, we consider the following optimization problem, and we assume the following constraint 
+
+η1 + η2 = 2 hα, our goal is to see whether η1 = η2 = hα is local minima or local maxima. 
+
+Lthree-layer (X, W 11 , W 12 , a1, ˜x0) = η21
+
+h2 + η22
+
+h2 + 2η1η2
+
+h2 + η21 η22
+
+h4 − 4hα−1 + 1
+
+h + 1 + O( η1η2
+
+h3 ) (99) It is easy to find that η1 = η2 = hα is a local maxima. □
+
+D.5. Approximate two-step loss for three-layer NN under orthogonal initialization 
+
+For orthogonal initialization we assume n = h = d.Here we consider the orthogonal initialization where we make the setting X⊤X = XX ⊤ = hI, W 0⊤ 
+
+> 1
+
+W 01 = W 01 W 0⊤ 
+
+> 1
+
+=
+
+I, W 0⊤ 
+
+> 2
+
+W 02 = W 02 W 0⊤ 
+
+> 2
+
+= I, a⊤a = 1 , E[aa ⊤] = 1 
+
+> h
+
+I, β∗⊤ β∗ = 1 , E[β∗β∗⊤ ] = 1 
+
+> h
+
+I.For the simplification, we only consider replacing G1 with A1 and G2 with A2. We consider s = 1
+
+> h
+
+A01 = 1
+
+√h β∗a⊤W 0⊤ 
+
+> 2
+
+fA11 = 1
+
+√h β∗a⊤ gW 12
+
+> ⊤
+
+B01 = 1
+
+h W 01 W 02 aa ⊤W 02 
+
+> ⊤
+
+fB11 = 1
+
+h
+
+gW 11 gW 12 aa ⊤ gW 12
+
+> ⊤
+
+A02 = 1
+
+√h W 0⊤ 
+
+> 1
+
+β∗a⊤ fA12 = 1
+
+√h
+
+gW 11
+
+> ⊤
+
+β∗a⊤
+
+B02 = 1
+
+h W 02 aa ⊤ fB12 = 1
+
+h
+
+gW 11 
+
+> ⊤
+
+gW 11 gW 12 aa ⊤
+
+39 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+Thus we have 
+
+gW 11 = W 01 + η1A01 = W 01 + η1
+
+√h β∗a⊤W 0⊤
+
+> 2
+
+gW 12 = W 02 + η2A02 = W 02 + η2
+
+√h W 0⊤ 
+
+> 1
+
+β∗a⊤
+
+gW 21 = gW 11 + η1 fA11 = gW 11 + η1
+
+√h β∗a⊤ gW 12
+
+> ⊤
+
+= W 01 + 2η1
+
+√h β∗a⊤W 0⊤ 
+
+> 2
+
++ η1η2
+
+h β∗β∗⊤ W 01
+
+gW 22 = gW 12 + η2 fA12 = gW 12 + η2
+
+√h
+
+gW 11
+
+> ⊤
+
+β∗a⊤
+
+= W 02 + 2η2
+
+√h W 0⊤ 
+
+> 1
+
+β∗a⊤ + η1η2
+
+h W 02 aa ⊤
+
+we can derive that 
+
+gW 21 gW 22 = W 01 W 02 + 2η1
+
+√h β∗a⊤ + η1η2
+
+h β∗β∗⊤ W 01 W 02
+
++ 2η2
+
+√h β∗a⊤ + 4η1η2
+
+h β∗a⊤W 0⊤ 
+
+> 2
+
+W 0⊤ 
+
+> 1
+
+β∗a⊤ + 2η1η22
+
+h√h β∗a⊤
+
++ η1η2
+
+h W 01 W 02 aa ⊤ + 2η21 η2
+
+h√h β∗a⊤ + η21 η22
+
+h2 β∗β∗⊤ W 01 W 02 aa ⊤
+
+= W 01 W 02 + ( 2η1
+
+√h + 2η2
+
+√h + 2η1η22
+
+h√h + 2η21 η2
+
+h√h )β∗a⊤ + η1η2
+
+h β∗β∗⊤ W 01 W 02
+
++ 4η1η2
+
+h β∗a⊤W 0⊤ 
+
+> 2
+
+W 0⊤ 
+
+> 1
+
+β∗a⊤ + η1η2
+
+h W 01 W 02 aa ⊤ + η21 η22
+
+h2 β∗β∗⊤ W 01 W 02 aa ⊤
+
+gW 22 
+
+> ⊤
+
+gW 21
+
+> ⊤
+
+= W 02
+
+> ⊤
+
+W 01 
+
+> ⊤
+
++ ( 2η1
+
+√h + 2η2
+
+√h + 2η1η22
+
+h√h + 2η21 η2
+
+h√h )aβ ∗⊤ + η1η2
+
+h W 02
+
+> ⊤
+
+W 01
+
+> ⊤
+
+β∗β∗⊤ 
+
++ 4η1η2
+
+h aβ ∗⊤ W 01 W 02 aβ ∗⊤ + η1η2
+
+h aa ⊤W 02
+
+> ⊤
+
+W 01 
+
+> ⊤
+
++ η21 η22
+
+h2 aa ⊤W 02
+
+> ⊤
+
+W 01
+
+> ⊤
+
+β∗β∗⊤ 
+
+40 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+Thus, we have 
+
+tr 
+
+
+
+EW 01 ,W 02 ,a,β∗,X
+
+ 1
+
+h
+
+gW 21 gW 22 aa ⊤ gW 22 
+
+> ⊤
+
+gW 21
+
+> ⊤
+
+ 
+
+= tr 
+
+
+
+EW 01 ,W 02 ,a,β∗,X
+
+ 1
+
+h aa ⊤ gW 22 
+
+> ⊤
+
+gW 21 
+
+> ⊤
+
+gW 21 gW 22
+
+ 
+
+= 1
+
+h + 2η1η2
+
+h2 + 2η1η2
+
+h3 + 21 η21 η22
+
+h4
+
++ 4η1η2
+
+h2 tr 
+
+
+
+E
+
+h
+
+aa ⊤aβ ∗⊤ W 01 W 02 aβ ∗⊤ W 01 W 02
+
+i 
+
++ 4(( η1 + η2)2(h + η1η2)2)
+
+h4 + 4η31 η32
+
+h5 + η41 η42
+
+h6
+
++ 4η21 η22
+
+h3 tr 
+
+
+
+E
+
+h
+
+aa ⊤aβ ∗⊤ W 01 W 02 aβ ∗⊤ W 01 W 02
+
+i 
+
++ 4η1η2
+
+h2 tr 
+
+
+
+E
+
+h
+
+aa ⊤W 02
+
+> ⊤
+
+W 01
+
+> ⊤
+
+β∗a⊤W 0⊤ 
+
+> 2
+
+W 0⊤ 
+
+> 1
+
+β∗a⊤i 
+
++ 4η21 η22
+
+h3 tr 
+
+
+
+E
+
+h
+
+aa ⊤W 02
+
+> ⊤
+
+W 01
+
+> ⊤
+
+β∗a⊤W 0⊤ 
+
+> 2
+
+W 0⊤ 
+
+> 1
+
+β∗a⊤i 
+
++ 4η21 η22
+
+h3 tr 
+
+
+
+E
+
+h
+
+aa ⊤W 02
+
+> ⊤
+
+W 01
+
+> ⊤
+
+β∗a⊤W 0⊤ 
+
+> 2
+
+W 0⊤ 
+
+> 1
+
+β∗a⊤i 
+
++ 4η31 η32
+
+h4 tr 
+
+
+
+E
+
+h
+
+aa ⊤W 02
+
+> ⊤
+
+W 01
+
+> ⊤
+
+β∗a⊤W 0⊤ 
+
+> 2
+
+W 0⊤ 
+
+> 1
+
+β∗a⊤i 
+
++ 4η21 η22
+
+h3 tr 
+
+
+
+E
+
+h
+
+aa ⊤aβ ∗⊤ W 01 W 02 aβ ∗⊤ W 01 W 02
+
+i 
+
++ 4η31 η32
+
+h4 tr 
+
+
+
+E
+
+h
+
+aa ⊤W 02
+
+> ⊤
+
+W 01
+
+> ⊤
+
+β∗a⊤W 0⊤ 
+
+> 2
+
+W 0⊤ 
+
+> 1
+
+β∗a⊤i 
+
+= 1
+
+h + 2η1η2
+
+h2 + 10 η1η2
+
+h3 + η21 η22
+
+h3 + 37 η21 η22
+
+h4
+
++ 4(( η1 + η2)2(h + η1η2)2
+
+h4 + 12 η31 η32
+
+h5 + η41 η42
+
+h6
+
+tr 
+
+
+
+EW 01 ,W 02 ,a,β∗,X
+
+ 1
+
+√h β∗a⊤ gW 22 
+
+> ⊤
+
+gW 21
+
+> ⊤
+
+ 
+
+= 2( η1 + η2)( h + η1η2)
+
+h2
+
+tr 
+
+
+
+EW 01 ,W 02 ,a,β∗,X
+
+ 1
+
+√h
+
+gW 21 gW 22 aβ ∗⊤ 
+
+ 
+
+= 2( η1 + η2)( h + η1η2)
+
+h2
+
+tr 
+
+
+
+EW 01 ,W 02 ,a,β∗,X
+
+h
+
+β∗β∗⊤ i 
+
+= 1 
+
+Thus, we have 
+
+Lthree-layer (X, W 21 , W 22 , a, ˜x0) = 
+
+ 2( η1 + η2)( h + η1η2)
+
+h2 − 1
+
+2
+
++ 1
+
+h + 2η1η2
+
+h2 + 10 η1η2
+
+h3 + η21 η22
+
+h3 + 37 η21 η22
+
+h4 + 12 η31 η32
+
+h5 + η41 η42
+
+h6
+
+(100) 
+
+□
+
+Corollary D.6. Suppose η1 + η2 = 2 hα and we consider 0 < α < 1. Then, for any α in this range, the point η1 = η2 = hα
+
+is not a local minimum of the loss Lthree-layer (W 11 , W 12 ). Moreover, for 0 < α ≤ 23 , if h > h ∗, then η1 = η2 = hα is a local minimum of the loss Lthree-layer (W 21 , W 22 ), where h∗ is the root of the following equation: 
+
+32 h3α−2 + 33 hα−1 + 74 hα−2 + 2 h−α
+
++10 h−α−1 + 36 h3α−3 + 4 h5α−4 − 8 = 0 (101) 
+
+Proof of Corollary D.6. Here, for the two-step updated loss, we consider the following optimization problem, and we assume that η1 + η2 = 2 hα, we want to find whether the local minima for Lthree-layer is η1 = η2 = hα.41 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+Since η1 + η2 = 2 hα, we have 
+
+Lthree-layer (X, W 21 , W 22 , a, ˜x0) = 
+
+ 4( h + η1(2 hα − η1)) 
+
+h2−α − 1
+
+2
+
++ 1
+
+h + 2η1(2 hα − η1)
+
+h2 + 10 η1(2 hα − η1)
+
+h3
+
++ η21 (2 hα − η1)2
+
+h3 + 37 η21 (2 hα − η1)2
+
+h4 + 12 η31 (2 hα − η1)3
+
+h5 + η41 (2 hα − η1)4
+
+h6
+
+Taking the derivative, we have 
+
+L′
+
+> three-layer
+
+(X, W 21 , W 22 , a, ˜x0) = 2( hα − η1)
+
+ 8
+
+h2−α
+
+ 4( η1(2 hα − η1) + h)
+
+h2−α − 1
+
+ 
+
++ 2( hα − η1)
+
+ 2
+
+h2 + 10 
+
+h3 + (h + 74) η1(2 hα − η1)
+
+h4 + 36 η21 (2 hα − η1)2
+
+h5 + 4η31 (2 hα − η1)3
+
+h6
+
+
+
+If we let Ltwo-layer is η1 = η2 = hα be local minima, we must need • 2 > 2 − α ⇒ α > 0
+
+• 2α − 3 < α − 2 ⇒ α < 1
+
+• 2α − 4 < α − 2 ⇒ α < 2
+
+• 4α − 5 < α − 2 ⇒ α < 1
+
+• 6α − 6 < α − 2 ⇒ α < 45
+
+• 2α − 3 < α − 2 ⇒ α < 1
+
+• 4α − 4 < α − 2 ⇒ α < 23
+
+Take the intersection, we have 0 < α < 23 . Given the fixed 0 < α < 23 , we will give how large h is to ensure that 
+
+η1 = η2 = hα will be the local minima, We need 
+
+32 h3α−2 + 33 hα−1 + 74 hα−2 + 2 h−α + 10 h−α−1 + 36 h3α−3 + 4 h5α−4 − 8 < 0.
+
+□
+
+E. Gaussian Initialization 
+
+In this section, to obtain more general and practical results, we extend the one-step loss analysis to gaussian initialization while also accounting for label noise. 
+
+Assumption E.1. For gaussian initialization, we consider more general case with d = h, we also assume c1n ≤ h ≤ C1n,where C1, c 1 are finite constants. 
+
+Dataset. Here we use linear teacher models to generate the training data of both two-layer and three-layer student networks under gaussian initialization. We sample n data points {x1, · · · , xn} from the isotropic Gaussian xi ∼ N (0h, Ih), ∀i ∈ [n]
+
+as our input data. • Two-layer NN Case. For a given xi ∈ Rh, we use a linear teacher model F : Rh → Rh to generate the corresponding label yi ∈ Rh (Du et al., 2018) as follows 
+
+yi = F (xi) + ξ′ 
+
+> i
+
+= M ⊤xi + ξ′
+
+> i
+
+. (102) Here, M ∈ Rh×h with entries sampled i.i.d as follows h [M ]i,j ∼ N (0 , 1) is the target matrix , and ξ′ 
+
+> i
+
+∈ Rh
+
+with entries sampled i.i.d as follows √h [ξ′
+
+> i
+
+]j ∼ N (0 , ρ 2
+
+> e
+
+) is the independent additive label noise. We represent 
+
+X ∈ Rn×h, Y ∈ Rn×h as the input matrix and the label matrix, respectively. 42 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+• Three-layer NN Case. For a given xi ∈ Rh, we use a linear teacher model F ∗ : Rh → R to generate the corresponding scalar label yi ∈ R as follows: 
+
+yi = F ∗(xi) + ξi = β∗⊤ xi + ξi. (103) Here β∗ ∈ Rh with √hβ∗ ∼ N (0 , 1) is the target direction , and ξi ∼ N (0 , ρ 2
+
+> e
+
+) is the independent additive label noise. We represent X ∈ Rn×h, y ∈ Rn as the input matrix and the label vector, respectively. 
+
+Model. For two-layer and three-layer NNs, we consider the entries sampled i.i.d follows √h W 01
+
+ 
+
+> i,j
+
+∼ N (0 , 1) ,
+
+√h W 02
+
+ 
+
+> i,j
+
+∼ N (0 , 1) , √h [a]i ∼ N (0 , 1) , ∀i ∈ [h], j ∈ [h].
+
+E.1. Norm Analysis of One-step Update Gradient Matrices Under Gaussian Initialization 
+
+We first give the norm analysis of one-step update gradient matrices under gaussian initialization. This analysis is an important step in simplifying the derivation of the theoretical test loss in the next Section (Section E.2). It also provides intuition about the range of learning rates that are beneficial for model training and offers a deeper understanding of the gradient matrices. Here, we follow the work of Ba et al. (2022) and examine the norm properties of the hidden layers’ gradient matrices during a one-step update under both the three-layer and two-layer NN settings. We give the norm analysis of three-layer NN setting as an example, for the norm analysis of two-layer NN setting, please see Appendix C.1.4. The one-step update equations for the three-layer NN are as follows: 
+
+W 11 = W 01 − η1G01, W 12 = W 02 − η2G02, (104) where W 01 , W 02 are the initial hidden layer weights, η1 and η2 are the learning rate for the first layer and second layer, respectively. W 11 and W 12 are the updated layer weights. G1 and G2 are the corresponding gradient matrices, where 
+
+G01 = 1
+
+nh X⊤XW 01 W 02 aa ⊤W 0⊤
+
+> 2
+
+| {z }
+
+> B01
+
+− 1
+
+n√h X⊤ya ⊤W 0⊤
+
+> 2
+
+| {z }
+
+> A01
+
+, (105) 
+
+G02 = 1
+
+nh W 0⊤ 
+
+> 1
+
+X⊤XW 01 W 02 aa ⊤
+
+| {z }
+
+> B02
+
+− 1
+
+n√h W 0⊤ 
+
+> 1
+
+X⊤ya ⊤
+
+| {z }
+
+> A02
+
+. (106) By analyzing the norm of A01, A02, B01 , B02 , we have the following proposition: 
+
+Proposition E.2. (Three-layer NN setting under gaussian initialization.) Under Assumption E.1, there exists some constant 
+
+c∗ > 0 such that for all large n, h with probability at least 1 − 32 e−c∗n − 30 n4e−c∗√n, we have gradient approximation, 
+
+G01 − A01 ≤ 1
+
+√n − 1 G01 ,
+
+G02 − A02 ≤ 1
+
+√n − 1 G02 .
+
+(107) 
+
+We obtain the norm control of gradient matrices, 
+
+√h G01 = Θ h, P(1) , √h G01 F = Θ h, P(1) ,
+
+√h G02 = Θ h, P(1) , √h G02 F = Θ h, P(1) . (108) 
+
+Thus, we have 
+
+Small lr : η1 = Θ( √h) ⇒ W 11 − W 01 ≍ W 01 (109) 
+
+η2 = Θ( √h) ⇒ W 12 − W 02 ≍ W 02 (110) 
+
+Large lr : η1 = Θ( h) ⇒ W 11 − W 01 F ≍ W 01 F (111) 
+
+η2 = Θ( h) ⇒ W 12 − W 02 F ≍ W 02 F (112) 43 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+We provide the complete proof in the Appendix C.1.3. A similar result can be obtained for the two-layer NN setting. See Proposition C.9, we provide the proof in Appendix C.1.4. Proposition E.2 shows that in terms of norm, {A0 
+
+> i
+
+}2 
+
+> i=1
+
+is very close to {G0 
+
+> i
+
+}2
+
+> i=1
+
+, which means {A0 
+
+> i
+
+}2 
+
+> i=1
+
+serves as the leading term in {G0 
+
+> i
+
+}2
+
+> i=1
+
+. This approximation can significantly simplify the subsequent analysis of the theoretical test loss for the three-layer NN when we replace the gradients {G0 
+
+> i
+
+}2 
+
+> i=1
+
+with their approximated version {A0 
+
+> i
+
+}2
+
+> i=1
+
+. For the two-layer NN setting, we similarly replace the original gradient with its leading term, as justified by Proposition C.9 and Lemma E.3, to simplify the test loss analysis. 
+
+E.2. Relationship between Test Loss and Layer-wise Learning Rates 
+
+In this section, we first derive the theoretical test loss after a one-step update for both two-layer and three-layer neural networks under our setup. Based on this theoretical test loss, we vary the learning rates for each layer in these two networks. We aim to determine whether using the same learning rates across layers leads to minimal test loss for networks trained with a one-step GD update when η1 + η2 = 2 hα, where hα ≤ Large lr .E.2.1. T WO -LAYER NEURAL NETWORKS 
+
+Given test data ˜x0 ∼ N (0, Ih), we consider the test loss 
+
+Ltwo-layer = EW 01 ,W 02 ,ξ′,M , ˜x0,X
+
+1
+
+√h ˜x0W1W2 − ˜x0M
+
+> 2
+
+.
+
+The key lemma in this subsection uses the approximate gradient to replace the true gradient updates, thereby simplifying the analysis of the test loss. 
+
+Lemma E.3. We define the following matrices: 
+
+A01 
+
+> ′
+
+= 1
+
+nh X⊤Y W 0⊤ 
+
+> 2
+
+, B01 
+
+> ′
+
+= 1
+
+nh 2 X⊤XW 01 W 02 W 0⊤ 
+
+> 2
+
+,
+
+A02 
+
+> ′
+
+= 1
+
+nh W 0⊤ 
+
+> 1
+
+X⊤Y , B02 
+
+> ′
+
+= 1
+
+nh 2 W 0⊤ 
+
+> 1
+
+X⊤XW 01 W 02 .
+
+We also define gW 11
+
+> ′
+
+= W 01 + η1A01 
+
+> ′
+
+and gW 12
+
+> ′
+
+= W 02 + η2A02
+
+> ′
+
+. Then, under Assumption 3.3 and E.1, for η1, η2 no more than O(h√h), we have 
+
+Ltwo-layer (W 11
+
+> ′
+
+, W 12
+
+> ′
+
+) − Ltwo-layer ( gW 11
+
+> ′
+
+, gW 12
+
+> ′
+
+) ≤ O( 1
+
+h ).
+
+The simplified analysis leads to the following result for two-layer networks. 
+
+Theorem E.4. Given Assumption 3.3, E.1, and in addition assume η1 and η2 are no more than O(h√h), based on Proposition C.9 and Lemma E.3, consider the training procedure discussed in Section 3, we obtain the following test loss after one-step GD update in a two-layer neural network under gaussian initialization: 
+
+Ltwo-layer = 2η21
+
+h4 + 2η21 (1 + ρ2
+
+> e
+
+)
+
+nh 3 + 2η22
+
+h4 + 2η22 (1 + ρ2
+
+> e
+
+)
+
+nh 3
+
+− 2 η1
+
+h2 − 2 η2
+
+h2 + η21 η22
+
+n2h5 + 2η1η2
+
+h4 + 2η1η2
+
+nh 3 + 2η1η2ρ2
+
+> e
+
+nh 3
+
++ η21 η22 (ρ2 
+
+> e
+
++ 1) 2
+
+n2h5 + 2η21 η22
+
+h7 + 2η21 η22 ρ2
+
+> e
+
+n3h4 + 1 + 1
+
+h
+
++ O( η21
+
+h5 ) + O( η52
+
+h2 ) + O( η1η2
+
+h5 ) + O( η21 η22
+
+h8 ).
+
+(113) The complete proof is provided in Appendix E.3. 44 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+Analysis of Special Cases. Here, we consider a special case. Specifically, we take h = n = d and ρe = 0 , under which the loss simplifies to: 
+
+Ltwo-layer = 4η21
+
+h4 + 4η22
+
+h4 − 2 η1
+
+h2 − 2 η2
+
+h2 + 4η1η2
+
+h4 + 4η21 η22
+
+h7
+
++ 1 + 1
+
+h + O( η21
+
+h5 ) + O( η52
+
+h2 ) + O( η1η2
+
+h5 ) + O( η21 η22
+
+h8 ).
+
+(114) Taking special case ( 114) as an example 114, we obtain the following corollary for two-layer neural network under gaussian initialization. 
+
+Corollary E.5. Suppose η1 + η2 = 2 hα and we consider 0 < α ≤ 32 . Then, for any α in this range, the point η1 = η2 = hα
+
+is not a local minimum of the loss Ltwo-layer (W 11
+
+> ′
+
+, W 12
+
+> ′
+
+).
+
+We do simulations in Figure 6 in Appendix F to support Corollary E.5. E.2.2. T HREE -LAYER NEURAL NETWORKS 
+
+Given test data ˜x0 ∼ N (0, Id), we consider the test loss 
+
+Lthree-layer = EW 01 ,W 02 ,a,ξ, ˜x0,X
+
+ 1
+
+√h ˜x0W1W2a − ˜x0β∗
+
+2
+
+Theorem E.6. Given Assumption 3.3, E.1, and in addition assume η1 and η2 are no more than O(h) based on Proposition E.2, consider the training procedure discussed in Section 3, we derive the test loss after one-step GD update in a three-layer neural network: 
+
+Lthree-layer = η21
+
+h2 + η21 (1 + ρ2
+
+> e
+
+)
+
+hn − 2 η1
+
+h + 2η22
+
+h2
+
++ 2η22 (1 + ρ2
+
+> e
+
+)
+
+nh − 2 η2
+
+h + 2η1η2
+
+h2 + 2η1η2(1 + ρ2
+
+> e
+
+)
+
+nh 
+
++ η21 η22 ρ2
+
+> e
+
+nh 3 + η21 η22 ρ2
+
+> e
+
+n2h2 + 4η21 η22
+
+n2h2 + 1 + O
+
+ η21
+
+h3
+
+
+
++ O
+
+ η22
+
+h3
+
+
+
++ O
+
+ η1η2
+
+h3
+
+
+
++ O
+
+ η21 η22
+
+h5
+
+
+
+.
+
+(115) The complete proof is provided in Appendix E.4. 
+
+Analysis of Special Cases. Here we consider a special case. Specifically, we take h = n = d and ρe = 0 , under which the loss becomes: 
+
+Lthree-layer = 2η21
+
+h2 − 2η1
+
+h + 4η22
+
+h2 − 2η2
+
+h + 4η1η2
+
+h2 + 4η21 η22 hn2h3
+
++ 1 + O
+
+ η21
+
+h3
+
+
+
++ O
+
+ η22
+
+h3
+
+
+
++ O
+
+ η1η2
+
+h3
+
+
+
++ O
+
+ η21 η22
+
+h5
+
+
+
+.
+
+(116) Taking special case ( 116) as an example, we obtain the following corollary for three-layer neural network under gaussian initialization. 
+
+Corollary E.7. Suppose η1 + η2 = 2 hα and we consider 0 < α < 1. Then, for any α in this range, the point η1 = η2 = hα
+
+is not a local minimum of the loss Lthree-layer (W 11 , W 12 ).
+
+We do simulations in Figure 8 in Appendix F to support Corollary E.7. 45 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+E.3. Two-layer NN Test Loss under Gaussian initialization Lemma E.8. Consider that 
+
+A01 = 1
+
+nh X⊤Y W 0⊤
+
+> 2
+
+B01 = 1
+
+nh 2 X⊤XW 01 W 02 W 0⊤
+
+> 2
+
+A02 = 1
+
+nh W 0⊤ 
+
+> 1
+
+X⊤YB02 = 1
+
+nh 2 W 0⊤ 
+
+> 1
+
+X⊤XW 01 W 02 ,
+
+under Assumption 3.3, E.1, consider gW 11 = W 01 + η1A01 and gW 12 = W 02 + η2A02, then for η1, η2 ∼ O(h√h), we have 
+
+Ltwo-layer (X, W 11 , W 12 , ˜x0) − Ltwo-layer (X, gW 11 , gW 12 , ˜x0) ≤ O( 1
+
+h )
+
+Proof of Lemma E.8. 
+
+q
+
+Ltwo-layer (X, W 11 , W 12 , ˜x0) −
+
+q
+
+Ltwo-layer (X, gW 11 , gW 12 , ˜x0)
+
+= EW 01 ,W 02 ,ξ, ˜x0,X
+
+1
+
+h ˜x0W 11 W 12 − ˜x0M F
+
+− EW 01 ,W 02 ,ξ, ˜x0,X
+
+1
+
+h ˜x0 gW 11 gW 12 − ˜x0M F
+
+≤ EW 01 ,W 02 ,ξ, ˜x0,X
+
+ 1
+
+h ˜x0W 11 W 12 − 1
+
+h ˜x0 gW 11 gW 12
+
+> F
+
+
+
+≤ EW 01 ,W 02 ,ξ, ˜x0,X
+
+ 1
+
+h ˜x0
+
+> F
+
+W 11 W 12 − gW 11 gW 12
+
+
+
+=
+
+r 1
+
+h EW 01 ,W 02 ,ξ, ˜x0,X
+
+
+
+W 11 W 12 − gW 11 gW 12
+
+
+
+=
+
+r 1
+
+h EW 01 ,W 02 ,ξ ˜x0,X
+
+  −η1B01 W 02 − η1η2B01 A02 − η2W 01 B02 − η1η2A01B02 + η1η2B01 B02
+
+
+
+≤
+
+r 1
+
+h E   η1B01 W 02 + η1η2B01 A02 + η2W 01 B02 + η1η2A01B02 + η1η2B01 B02
+
+
+
+(117) Consider similar techniques in Lemma C.6, we get that 
+
+EW 01 ,W 02 ,ξ, ˜x0,X η1B01 W 02 ≤ η1 B01 W 02 ≤ O( η1
+
+h2 ),
+
+EW 01 ,W 02 ,ξ, ˜x0,X η1η2B01 A02 ≤ η1η2 B01 A02 ≤ O( η1η2
+
+h3√h ),
+
+EW 01 ,W 02 ,ξ, ˜x0,X η2W 01 B02 ≤ η2 B02 W 01 ≤ O( η2
+
+h2 ),
+
+EW 01 ,W 02 ,ξ, ˜x0,X η1η2A01B02 ≤ η1η2 B02 A01 ≤ O( η1η2
+
+h3√h ),
+
+EW 01 ,W 02 ,ξ, ˜x0,X η1η2B01 B02 ≤ η1η2 B02 B01 ≤ O( η1η2
+
+h4 ),
+
+taking these inequalities into (117), we have 
+
+q
+
+Ltwo-layer (X, W 11 , W 12 , ˜x0) −
+
+q
+
+Ltwo-layer (X, gW 11 , gW 12 , ˜x0)
+
+≤
+
+r 1
+
+h E   η1B01 W 02 + η1η2B01 A02 + η2W 01 B02 + η1η2A01B02 + η1η2B01 B02
+
+
+
+≤O( η1 + η2
+
+h2√h ) + O( η1η2
+
+h4 )
+
+(118) 46 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+Also, based on the Assumption 3.3 and theorem E.9, we have 
+
+q
+
+Ltwo-layer (X, W 11 , W 12 , ˜x0) + 
+
+q
+
+Ltwo-layer (X, gW 11 , gW 12 , ˜x0) ≤ O(1) . (119) We combine (118), (119) and Assumption E.1, and assume η1, η 2 ∼ O(h√h), finally we get that 
+
+Ltwo-layer (X, W 11 , W 12 , ˜x0) − Ltwo-layer (X, gW 11 , gW 12 , ˜x0) ≤ O( η1 + η2
+
+h2√h ) ≤ O( 1
+
+h )
+
+□
+
+Theorem E.9. Given Assumption 3.3, E.1, and in addition assume η1 and η2 are no more than O(h√h) based on Proposition C.9, consider training procedure discussed in section 3, we derive the test loss after one-step GD update in a two-layer neural network under guassian initialization: 
+
+Ltwo-layer = 2η21
+
+h4 + 2η21 (1 + ρ2
+
+> e
+
+)
+
+nh 3 − 2 η1
+
+h2
+
++ 2η22
+
+h4 + 2η22 (1 + ρ2
+
+> e
+
+)
+
+nh 3 − 2 η2
+
+h2 + η21 η22
+
+n2h5
+
++ 2η1η2
+
+h4 + 2η1η2
+
+nh 3 + 2η1η2ρ2
+
+> e
+
+nh 3 + η21 η22 (ρ2 
+
+> e
+
++ 1) 2
+
+n2h5 + 2η21 η22
+
+h7 + 2η21 η22 ρ2
+
+> e
+
+n3h4
+
++ 1 + 1
+
+h + O( η21
+
+h5 ) + O( η52
+
+h2 ) + O( η1η2
+
+h5 ) + O( η21 η22
+
+h8 )
+
+(120) 
+
+Proof of Theorem E.4. We consider a test data ˜x0 ∼ N (0, Id) ∈ R1×d under two-layer setting , we have 
+
+Ltwo-layer (X, W 11 , W 12 , ˜x0)=EW 01 ,W 02 ,ξ, ˜x0,X
+
+1
+
+h ˜x0W 11 W 12 − ˜x0M
+
+> 2
+> F
+
+=tr EW 01 ,W 02 ,ξ, ˜x0,X
+
+" 1
+
+h W 11 W 12 − M
+
+⊤
+
+˜x⊤ 
+
+> 0
+
+˜x0
+
+ 1
+
+h W 11 W 12 − M
+
+#! 
+
+=tr EW 01 ,W 02 ,ξ, ˜x0,X
+
+"
+
+˜x⊤ 
+
+> 0
+
+˜x0
+
+ 1
+
+h W 11 W 12 − M
+
+  1
+
+h W 11 W 12 − M
+
+⊤#! 
+
+=tr EW 01 ,W 02 ,ξ,X
+
+" 1
+
+h W 11 W 12 − M
+
+  1
+
+h W 11 W 12 − M
+
+⊤#! 
+
+=tr 
+
+
+
+EW 01 ,W 02 ,ξ,X
+
+ 1
+
+h2 W 11 W 12 W 12
+
+> ⊤
+
+W 11
+
+> ⊤
+
+ 
+
+−tr 
+
+
+
+EW 01 ,W 02 ,ξ,X
+
+ 1
+
+h M W 12
+
+> ⊤
+
+W 11
+
+> ⊤
+
+ 
+
+−tr 
+
+
+
+EW 01 ,W 02 ,ξ,X
+
+ 1
+
+h W 11 W 12 M ⊤
+
+ 
+
++tr  E M M ⊤ .
+
+(121) Here we define L1, L 2, L 3, L 4, where 
+
+L1 = tr 
+
+
+
+EW 01 ,W 02 ,ξ,X
+
+ 1
+
+h2 W 11 W 12 W 12
+
+> ⊤
+
+W 11
+
+> ⊤
+
+ 
+
+L2 = tr 
+
+
+
+EW 01 ,W 02 ,ξ,X
+
+ 1
+
+h M W 12
+
+> ⊤
+
+W 11
+
+> ⊤
+
+ 
+
+L3 = tr 
+
+
+
+EW 01 ,W 02 ,ξ,X
+
+ 1
+
+h W 11 W 12 M ⊤
+
+ 
+
+L4 = tr  E M M ⊤ 
+
+47 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+Thus 
+
+Ltwo-layer = L1 − L2 − L3 + L4
+
+Consider the exact gradient update, 
+
+W 11 = W 01 + η1A01 − η1B01
+
+W 12 = W 02 + η2A02 − η2B02 .
+
+We have 
+
+W 11 W 12 =W 01 W 02 + η1A01W 02 − η1B01 W 02 + η2W 01 A02 + η1η2A01A02
+
+− η1η2B01 A02 − η2W 01 B02 − η1η2A01B02 + η1η2B01 B02 ,
+
+where 
+
+A01B02 = 1
+
+n2h3 X⊤Y W 0⊤ 
+
+> 2
+
+W 0⊤ 
+
+> 1
+
+X⊤XW 01 W 02
+
+B01 A02 = 1
+
+n2h3 X⊤XW 01 W 02 W 0⊤ 
+
+> 2
+
+W 0⊤ 
+
+> 1
+
+X⊤YB01 B02 = 1
+
+n2h4 X⊤XW 01 W 02 W 0⊤ 
+
+> 2
+
+W 0⊤ 
+
+> 1
+
+X⊤XW 01 W 02 .
+
+Based on Lemma E.8, we consider replacing W 12 , W 12 with gW 11 , gW 12 .Thus we have 
+
+W 11 W 12 ≈ gW 11 gW 12 = W 01 W 02 + η1
+
+nh X⊤Y W 02
+
+> ⊤
+
+W 02
+
++ η2
+
+nh W 01 W 01
+
+> ⊤
+
+X⊤Y
+
++ η1η2
+
+n2h2 X⊤Y W 02
+
+> ⊤
+
+W 01
+
+> ⊤
+
+X⊤YW 12
+
+> ⊤
+
+W 11 
+
+> ⊤
+
+≈
+
+ gW 11 gW 12
+
+⊤
+
+= W 02
+
+> ⊤
+
+W 01 
+
+> ⊤
+
++ η1
+
+nh W 02
+
+> ⊤
+
+W 02 Y ⊤X
+
++ η2
+
+nh Y ⊤XW 01 W 01
+
+> ⊤
+
++ η1η2
+
+n2h2 Y ⊤XW 01 W 02 Y ⊤X
+
+48 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+We have L1 = P16 
+
+i=1 Ti, where 
+
+T1 = tr 
+
+
+
+EW 01 ,W 02 ,ξ,X
+
+ 1
+
+h2 W 02
+
+⊤W 01
+
+⊤W 01 W 02
+
+ 
+
+,T2 = tr 
+
+
+
+EW 01 ,W 02 ,ξ,X
+
+h η1
+
+nh 3 W 02
+
+⊤W 01
+
+⊤X⊤Y W 02
+
+⊤W 02
+
+i 
+
+,T3 = tr 
+
+
+
+EW 01 ,W 02 ,ξ,X
+
+h η2
+
+nh 2 W 02
+
+⊤W 01
+
+⊤W 01 W 01
+
+⊤X⊤Y
+
+i 
+
+,T4 = tr 
+
+
+
+EW 01 ,W 02 ,ξ,X
+
+h η1η2
+
+n2h4 W 02
+
+⊤W 01
+
+⊤X⊤Y W 02
+
+⊤W 01
+
+⊤X⊤Y
+
+i 
+
+,T5 = tr 
+
+
+
+EW 01 ,W 02 ,ξ,X
+
+h η1
+
+nh 3 W 02
+
+⊤W 02 Y ⊤XW 01 W 02
+
+i 
+
+,T6 = tr 
+
+
+
+EW 01 ,W 02 ,ξ,X
+
+ η21
+
+n2h4 W 02
+
+⊤W 02 Y ⊤XX ⊤Y W 02
+
+⊤W 02
+
+ 
+
+,T7 = tr 
+
+
+
+EW 01 ,W 02 ,ξ,X
+
+h η1η2
+
+n2h4 W 02
+
+⊤W 02 Y ⊤XW 01 W 01
+
+⊤X⊤Y
+
+i 
+
+,T8 = tr 
+
+
+
+EW 01 ,W 02 ,ξ,X
+
+ η21 η2
+
+n3h5 W 02
+
+⊤W 02 Y ⊤XX ⊤Y W 02
+
+⊤W 01
+
+⊤X⊤Y
+
+ 
+
+,T9 = tr 
+
+
+
+EW 01 ,W 02 ,ξ,X
+
+h η2
+
+nh 3 Y ⊤XW 01 W 01
+
+⊤W 01 W 02
+
+i 
+
+,T10 = tr 
+
+
+
+EW 01 ,W 02 ,ξ,X
+
+h η1η2
+
+n2h4 Y ⊤XW 01 W 01
+
+⊤X⊤Y W 02
+
+⊤W 02
+
+i 
+
+,T11 = tr 
+
+
+
+EW 01 ,W 02 ,ξ,X
+
+ η22
+
+n2h4 Y ⊤XW 01 W 01
+
+⊤W 01 W 01
+
+⊤X⊤Y
+
+ 
+
+,T12 = tr 
+
+
+
+EW 01 ,W 02 ,ξ,X
+
+ η1η22
+
+n3h5√h Y ⊤XW 01 W 01
+
+⊤X⊤Y W 02
+
+⊤W 01
+
+⊤X⊤Y
+
+ 
+
+,T13 = tr 
+
+
+
+EW 01 ,W 02 ,ξ,X
+
+h η1η2
+
+n2h4 Y ⊤XW 01 W 02 Y ⊤XW 01 W 02
+
+i 
+
+,T14 = tr 
+
+
+
+EW 01 ,W 02 ,ξ,X
+
+ η21 η2
+
+n3h5√h Y ⊤XW 01 W 02 Y ⊤XX ⊤Y W 02
+
+⊤W 02
+
+ 
+
+,T15 = tr 
+
+
+
+EW 01 ,W 02 ,ξ,X
+
+ η1η22
+
+n3h5√h Y ⊤XW 01 W 02 Y ⊤XW 01 W 01
+
+⊤X⊤Y
+
+ 
+
+,T16 = tr 
+
+
+
+EW 01 ,W 02 ,ξ,X
+
+ η21 η22
+
+n4h6 Y ⊤XW 01 W 02 Y ⊤XX ⊤Y W 02
+
+⊤W 01
+
+⊤X⊤Y
+
+ 
+
+.
+
+We have L2 = P20 
+
+i=17 Ti, where 
+
+T17 = tr 
+
+
+
+EW 01 ,W 02 ,ξ,X
+
+ 1
+
+h M W 02
+
+⊤W 01
+
+⊤
+
+ 
+
+,T18 = tr 
+
+
+
+EW 01 ,W 02 ,ξ,X
+
+h η1
+
+nh 2 M W 02
+
+⊤W 02 Y ⊤X
+
+i 
+
+,T19 = tr 
+
+
+
+EW 01 ,W 02 ,ξ,X
+
+h η2
+
+nh 2 M Y ⊤XW 01 W 01
+
+⊤i 
+
+,T20 = tr 
+
+
+
+EW 01 ,W 02 ,ξ,X
+
+h η1η2
+
+n2h3 M Y ⊤XW 01 W 02 Y ⊤X
+
+i 
+
+.
+
+49 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+We have L3 = P24  
+
+> i=21
+
+Ti, where 
+
+T21 = tr 
+
+
+
+EW 01 ,W 02 ,ξ,X
+
+ 1
+
+h W 01 W 02 M ⊤
+
+ 
+
+,T22 = tr 
+
+
+
+EW 01 ,W 02 ,ξ,X
+
+h η1
+
+nh 2 X⊤Y W 02
+
+> ⊤
+
+W 02 M ⊤i 
+
+,T23 = tr 
+
+
+
+EW 01 ,W 02 ,ξ,X
+
+h η2
+
+nh 2 W 01 W 01
+
+> ⊤
+
+X⊤Y M ⊤i 
+
+,T24 = tr 
+
+
+
+EW 01 ,W 02 ,ξ,X
+
+h η1η2
+
+n2h3 X⊤Y W 02
+
+> ⊤
+
+W 01
+
+> ⊤
+
+X⊤Y M ⊤i 
+
+,
+
+Thus, we obtain that 
+
+Ltwo-layer =
+
+> 16
+
+X
+
+> i=1
+
+Ti −
+
+> 20
+
+X
+
+> i=17
+
+Ti −
+
+> 24
+
+X
+
+> i=21
+
+Ti + L4
+
+Analysis of T1.
+
+T1 = tr 
+
+
+
+EW 01 ,W 02 ,ξ,X
+
+ 1
+
+h2 W 02
+
+> ⊤
+
+W 01
+
+> ⊤
+
+W 01 W 02
+
+ 
+
+= 1
+
+h (122) 
+
+□
+
+Analysis of T4 and T13 .
+
+T4 = tr 
+
+
+
+EW 01 ,W 02 ,ξ,X
+
+h η1η2
+
+n2h4 W 02
+
+> ⊤
+
+W 01
+
+> ⊤
+
+X⊤Y W 02
+
+> ⊤
+
+W 01
+
+> ⊤
+
+X⊤Y
+
+i 
+
+= η1η2
+
+n2h4 E
+
+> h
+
+X
+
+> i=1
+> h
+
+X
+
+> k=1
+> d
+
+X
+
+> m=1
+> n
+
+X
+
+> p=1
+> d
+
+X
+
+> q=1
+> h
+
+X
+
+> t=1
+> h
+
+X
+
+> k=1
+> d
+
+X
+
+> m=1
+> n
+
+X
+
+> p=1
+> d
+
+X
+
+> q=1
+
+W 02 ki W 01 mk Xpm Xpq Mqt W 02 kt W 01 mk Xpm Xpq Mqi 
+
++ η1η2
+
+n2h4 E
+
+> h
+
+X
+
+> i=1
+> h
+
+X
+
+> k=1
+> d
+
+X
+
+> m=1
+> n
+
+X
+
+> p=1
+> h
+
+X
+
+> t=1
+> h
+
+X
+
+> k=1
+> d
+
+X
+
+> m=1
+> n
+
+X
+
+> p=1
+
+W 02 ki W 01 mk Xpm ξpt W 02 kt W 01 mk Xpm ξpi 
+
+(123) For T erm 1 = η1η2 
+
+> n2h4
+
+E Phi=1 
+
+Phk=1 
+
+Pdm=1 
+
+Pnp=1 
+
+Pdq=1 
+
+Pht=1 
+
+Phk=1 
+
+Pdm=1 
+
+Pnp=1 
+
+Pdq=1 
+
+W 02 ki W 01 mk Xpm Xpq Mqt W 02 kt W 01 mk Xpm Xpq Mqi , we consider the following cases: 
+
+Case 1. k = k, i = t, m = m, q = q, p = p, m ̸ = q.
+
+T erm 11 = η1η2
+
+n2h5 × h × h × (d2 − d) × n × 1
+
+d × 1
+
+d × 1
+
+h = η1η2
+
+nh 4 + O( η1η2
+
+nh 5 ).
+
+Case 2. k = k, i = t, m = m, q = q, p ̸ = p, m = q.
+
+T erm 21 = η1η2
+
+n2h5 × h × h × d × (n2 − n) × 1
+
+d × 1
+
+d × 1
+
+h = η1η2
+
+h5 + O( η1η2
+
+nh 5 ).
+
+Case 3. k = k, i = t, m = m, q = q, p = p, m = q.
+
+T erm 31 = η1η2
+
+n2h5 × h × h × d × n × 1
+
+d × 1
+
+d × 1
+
+h × 3 = O( η1η2
+
+nh 5 ).
+
+Thus we have 
+
+T erm 1 = η1η2
+
+nh 4 + η1η2
+
+h5 + O( η1η2
+
+nh 5 )
+
+50 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+For T erm 2 = η1η2 
+
+> n2h4
+
+E Phi=1 
+
+Phk=1 
+
+Pdm=1 
+
+Pnp=1 
+
+Pht=1 
+
+Phk=1 
+
+Pdm=1 
+
+Pnp=1 
+
+W 02 ki W 01 mk Xpm ξpt W 02 kt W 01 mk Xpm ξpi , we consider the following case: 
+
+Case 1. k = k, i = t, m = m, p = p.
+
+T erm 2 = η1η2
+
+n2h5 × h × h × d × n × 1
+
+d × 1
+
+h × ρ2 
+
+> e
+
+= η1η2ρ2
+
+> e
+
+nh 4 .
+
+Combine T erm 1 and T erm 2
+
+We finally get that 
+
+T4 = O( η1η2
+
+h5 ) (124) 
+
+□
+
+Since it is easy to see that T4 = T13 , we have 
+
+T13 = O( η1η2
+
+h5 ) (125) 
+
+□
+
+Analysis of T6 and T11 .
+
+T6 = tr 
+
+
+
+EW 01 ,W 02 ,ξ,X
+
+ η21
+
+n2h4 W 02
+
+> ⊤
+
+W 02 Y ⊤XX ⊤Y W 02
+
+> ⊤
+
+W 02
+
+ 
+
+= tr 
+
+
+
+EW 01 ,W 02 ,ξ,X
+
+ η21
+
+n2h4 W 02
+
+> ⊤
+
+W 02 W 02
+
+> ⊤
+
+W 02 Y ⊤XX ⊤Y
+
+ 
+
+Similar to 159, we have 
+
+E(W 02
+
+> ⊤
+
+W 02 W 02
+
+> ⊤
+
+W 02 ) = 
+
+
+
+2 + 1
+
+h
+
+
+
+Ih.
+
+Taking E(W 02
+
+> ⊤
+
+W 02 W 02
+
+> ⊤
+
+W 02 ) into T6, we have 
+
+T6 = η21
+
+n2h4
+
+
+
+2 + 1
+
+h
+
+
+
+tr 
+
+
+
+EW 01 ,W 02 ,ξ,X
+
+Y ⊤XX ⊤Y 
+
+= η21
+
+n2h4
+
+
+
+2 + 1
+
+h
+
+
+
+tr 
+
+
+
+EW 01 ,W 02 ,ξ,X
+
+M ⊤X⊤XX ⊤XM + ξ⊤XX ⊤ξ
+
+= η21
+
+n2h4
+
+
+
+2 + 1
+
+h
+
+
+
+tr 
+
+
+
+EW 01 ,W 02 ,ξ,X
+
+M ⊤X⊤XX ⊤XM 
+
++ η21
+
+n2h4
+
+
+
+2 + 1
+
+h
+
+
+
+tr 
+
+
+
+EW 01 ,W 02 ,ξ,X
+
+ξ⊤XX ⊤ξ
+
+= η21
+
+n2h4d
+
+
+
+2 + 1
+
+h
+
+  n2d + nd 2 + nd  + η21
+
+n2h5
+
+
+
+2 + 1
+
+h
+
+  nhdρ 2
+
+> e
+
+
+
+= 2η21
+
+h4 + 2η21 dnh 4 + 2η21 dρ 2
+
+> e
+
+nh 4 + O( η21
+
+h5 )
+
+(126) 
+
+□
+
+51 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+Similar to T6, For T11 we have 
+
+T11 = tr 
+
+
+
+EW 01 ,W 02 ,ξ,X
+
+ η22
+
+n2h4 Y ⊤XW 01 W 01
+
+> ⊤
+
+W 01 W 01
+
+> ⊤
+
+X⊤Y
+
+ 
+
+= tr 
+
+
+
+EW 01 ,W 02 ,ξ,X
+
+ η22
+
+n2h4 X⊤Y Y ⊤XW 01 W 01
+
+> ⊤
+
+W 01 W 01
+
+> ⊤
+
+ 
+
+= η22
+
+n2h4
+
+ h2 + hd + hd2
+
+
+
+tr 
+
+
+
+EW 01 ,W 02 ,ξ,X
+
+X⊤Y Y ⊤X
+
+= η22
+
+n2h4
+
+ h2 + hd + hd2
+
+
+
+tr 
+
+
+
+EW 01 ,W 02 ,ξ,X
+
+X⊤XM M ⊤X⊤X + X⊤ξξ ⊤X
+
+= η22
+
+n2h4d
+
+ h2 + hd + hd2
+
+  n2d + nd 2 + nd  + η22
+
+n2h5
+
+ h2 + hd + hd2
+
+  ndhρ 2
+
+> e
+
+
+
+= η22
+
+d2h2 + η22
+
+dh 3 + η22
+
+ndh 2 + η22
+
+nh 3 + η22 ρ2
+
+> e
+
+ndh 2 + η22 ρ2
+
+> e
+
+nh 3 + O( η22
+
+h5 )
+
+(127) 
+
+□
+
+Analysis of T7 and T10 .
+
+T7 = tr 
+
+
+
+EW 01 ,W 02 ,ξ,X
+
+h η1η2
+
+n2h4 W 02
+
+> ⊤
+
+W 02 Y ⊤XW 01 W 01
+
+> ⊤
+
+X⊤Y
+
+i 
+
+= η1η2
+
+n2h4 tr 
+
+
+
+EW 01 ,W 02 ,ξ,X
+
+h
+
+X⊤Y W 02
+
+> ⊤
+
+W 02 Y ⊤XW 01 W 01
+
+> ⊤
+
+i 
+
+= η1η2
+
+n2h3d tr 
+
+
+
+EW 01 ,W 02 ,ξ,X
+
+h
+
+X⊤Y W 02
+
+> ⊤
+
+W 02 Y ⊤X
+
+i 
+
+= η1η2
+
+n2h3d tr 
+
+
+
+EW 01 ,W 02 ,ξ,X
+
+h
+
+Y ⊤XX ⊤Y W 02
+
+> ⊤
+
+W 02
+
+i 
+
+= η1η2
+
+n2h3d tr 
+
+
+
+EW 01 ,W 02 ,ξ,X
+
+Y ⊤XX ⊤Y 
+
+= η1η2
+
+n2d2h3
+
+ n2d + nd 2 + nd  + η1η2
+
+n2h4d (nhdρ 2
+
+> e
+
+)= η1η2
+
+dh 3 + η1η2
+
+nh 3 + η1η2ρ2
+
+> e
+
+nh 3 + O( η1η2
+
+h5 )
+
+(128) 
+
+□
+
+It is easy to find 
+
+T10 = T7 = η1η2
+
+dh 3 + η1η2
+
+nh 3 + η1η2ρ2
+
+> e
+
+nh 3 + O( η1η2
+
+h5 ) (129) 
+
+□
+
+Analysis of T16 
+
+T16 = tr 
+
+
+
+EW 01 ,W 02 ,ξ,X
+
+ η21 η22
+
+n4h6 Y ⊤XW 01 W 02 Y ⊤XX ⊤Y W 02
+
+> ⊤
+
+W 01
+
+> ⊤
+
+X⊤Y
+
+ 
+
+= η21 η22
+
+n4h6 tr 
+
+
+
+E
+
+h
+
+M ⊤X⊤XW 01 W 02 M ⊤X⊤XX ⊤XM W 02
+
+> ⊤
+
+W 01
+
+> ⊤
+
+X⊤XM 
+
+i 
+
++ η21 η22
+
+n4h6 tr 
+
+
+
+E
+
+h
+
+ξ⊤XW 01 W 02 ξ⊤XX ⊤ξW 02
+
+> ⊤
+
+W 01
+
+> ⊤
+
+X⊤ξ
+
+i 
+
++ 2η21 η22
+
+n4h6 tr 
+
+
+
+E
+
+h
+
+ξ⊤XW 01 W 02 ξ⊤XX ⊤XM W 02
+
+> ⊤
+
+W 01
+
+> ⊤
+
+X⊤XM 
+
+i 
+
++ η21 η22
+
+n4h6 tr 
+
+
+
+E
+
+h
+
+M ⊤X⊤XW 01 W 02 ξ⊤XX ⊤ξW 02
+
+> ⊤
+
+W 01
+
+> ⊤
+
+X⊤XM 
+
+i 
+
++ η21 η22
+
+n4h6 tr 
+
+
+
+E
+
+h
+
+ξ⊤XW 01 W 02 M ⊤X⊤XX ⊤XM W 02
+
+> ⊤
+
+W 01
+
+> ⊤
+
+X⊤ξ
+
+i 
+
+(130) 52 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+For η21 η22 
+
+> n4h6
+
+tr 
+
+
+
+E
+
+h
+
+M ⊤X⊤XW 01 W 02 M ⊤X⊤XX ⊤XM W 02
+
+> ⊤
+
+W 01
+
+> ⊤
+
+X⊤XM 
+
+i 
+
+, we have 
+
+η21 η22
+
+n4h6 tr 
+
+
+
+E
+
+h
+
+M ⊤X⊤XW 01 W 02 M ⊤X⊤XX ⊤XM W 02
+
+> ⊤
+
+W 01
+
+> ⊤
+
+X⊤XM 
+
+i 
+
+= η21 η22
+
+n4h6 E
+
+> h
+
+X
+
+> i=1
+> d
+
+X
+
+> k=1
+> n
+
+X
+
+> m=1
+> d
+
+X
+
+> q=1
+> h
+
+X
+
+> s=1
+> h
+
+X
+
+> t=1
+> d
+
+X
+
+> b=1
+> n
+
+X
+
+> p=1
+> d
+
+X
+
+> c=1
+> n
+
+X
+
+> p=1
+> d
+
+X
+
+> b=1
+> h
+
+X
+
+> t=1
+> h
+
+X
+
+> s=1
+> d
+
+X
+
+> q=1
+> n
+
+X
+
+> m=1
+> d
+
+X
+
+> k=1
+
+Mki Xmk Xmq W 01 qs W 02 st Mbt Xpb Xpc Xpc Xpb Mbt W 02 st W 01 qs Xmq Xmk Mki 
+
+= η21 η22
+
+n4h6 E
+
+> h
+
+X
+
+> i=1
+> d
+
+X
+
+> k=1
+> n
+
+X
+
+> m=1
+> d
+
+X
+
+> q=1
+> h
+
+X
+
+> s=1
+> h
+
+X
+
+> t=1
+> d
+
+X
+
+> b=1
+> n
+
+X
+
+> p=1
+> d
+
+X
+
+> c=1
+> n
+
+X
+
+> p=1
+> d
+
+X
+
+> b=1
+> n
+
+X
+
+> m=1
+> d
+
+X
+
+> k=1
+
+Mki Xmk Xmq W 01 qs 
+
+> 2
+
+W 02 st 
+
+> 2
+
+Mbt Xpb Xpc Xpc Xpb Mbt Xmq Xmk Mki 
+
+We focus only on the case dominated by the leading term. Since other cases will be O( η21 η22 
+
+> h8
+
+).
+
+Case 1. b = b, k = k, i ̸ = t, m = m, p = p, m ̸ = p, k ̸ = q, b ̸ = c.
+
+= η21 η22
+
+n4h6 E
+
+> h
+
+X
+
+> i=1
+> d
+
+X
+
+> k=1
+> n
+
+X
+
+> m=1
+> d
+
+X
+
+> q=1
+> h
+
+X
+
+> s=1
+> h
+
+X
+
+> t=1
+> d
+
+X
+
+> b=1
+> n
+
+X
+
+> p=1
+> d
+
+X
+
+> c=1
+> n
+
+X
+
+> p=1
+> n
+
+X
+
+> m=1
+
+Mki 2W 01 qs 
+
+> 2
+
+W 02 st 
+
+> 2
+
+Mbt 2Xmk Xmq Xpb Xpc Xpc Xpb Xmq Xmk 
+
+= η21 η22
+
+n4h6 E
+
+> h
+
+X
+
+> i=1
+> d
+
+X
+
+> k=1
+> n
+
+X
+
+> m=1
+> d
+
+X
+
+> q=1
+> h
+
+X
+
+> s=1
+> h
+
+X
+
+> t=1
+> d
+
+X
+
+> b=1
+> n
+
+X
+
+> p=1
+> d
+
+X
+
+> c=1
+
+Mki 2W 01 qs 
+
+> 2
+
+W 02 st 
+
+> 2
+
+Mbt 2X2
+
+> mk
+
+X2 
+
+> mq
+
+X2
+
+> pb
+
+X2
+
+> pc
+
+= η21 η22
+
+n4h8 × 1
+
+d × 1
+
+d × 1
+
+d × 1
+
+h × h × (d2 − d) × (n2 − n) × (d2 − d) × (h2 − h)= η21 η22 dn2h5 + O( η21 η22
+
+h8 ).
+
+Case 2. b = b, k = k, i ̸ = t, k = q, b = c, m ̸ = m, p ̸ = p, k ̸ = b, .
+
+Similar to Case 1 , we have 
+
+= η21 η22
+
+n4h6 E
+
+> h
+
+X
+
+> i=1
+> d
+
+X
+
+> k=1
+> n
+
+X
+
+> m=1
+> d
+
+X
+
+> q=1
+> h
+
+X
+
+> s=1
+> h
+
+X
+
+> t=1
+> d
+
+X
+
+> b=1
+> n
+
+X
+
+> p=1
+> d
+
+X
+
+> c=1
+> n
+
+X
+
+> p=1
+> n
+
+X
+
+> m=1
+
+Mki 2W 01 qs 
+
+> 2
+
+W 02 st 
+
+> 2
+
+Mbt 2Xmk Xmq Xpb Xpc Xpc Xpb Xmq Xmk 
+
+= η21 η22
+
+n4h6 E
+
+> h
+
+X
+
+> i=1
+> d
+
+X
+
+> k=1
+> n
+
+X
+
+> m=1
+> h
+
+X
+
+> s=1
+> h
+
+X
+
+> t=1
+> d
+
+X
+
+> b=1
+> n
+
+X
+
+> p=1
+> n
+
+X
+
+> m=1
+> n
+
+X
+
+> p=1
+
+Mki 2W 01 qs 
+
+> 2
+
+W 02 st 
+
+> 2
+
+Mbt 2X2
+
+> mk
+
+X2
+
+> mk
+
+X2
+
+> pb
+
+X2
+
+> pb
+
+= η21 η22
+
+n4h8 × 1
+
+d × 1
+
+d × 1
+
+d × 1
+
+h × h × (n2 − n) × (n2 − n) × (d2 − d) × (h2 − h)= η21 η22
+
+dh 6 + O( η21 η22
+
+h8 ).
+
+□
+
+53 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+Case 3. b = b, k = k, i ̸ = t, k = q, p = p, m ̸ = p, m ̸ = m, b ̸ = c.
+
+= η21 η22
+
+n4h6 E
+
+> h
+
+X
+
+> i=1
+> d
+
+X
+
+> k=1
+> n
+
+X
+
+> m=1
+> d
+
+X
+
+> q=1
+> h
+
+X
+
+> s=1
+> h
+
+X
+
+> t=1
+> d
+
+X
+
+> b=1
+> n
+
+X
+
+> p=1
+> d
+
+X
+
+> c=1
+> n
+
+X
+
+> p=1
+> n
+
+X
+
+> m=1
+
+Mki 2W 01 qs 
+
+> 2
+
+W 02 st 
+
+> 2
+
+Mbt 2Xmk Xmq Xpb Xpc Xpc Xpb Xmq Xmk 
+
+= η21 η22
+
+n4h6 E
+
+> h
+
+X
+
+> i=1
+> d
+
+X
+
+> k=1
+> n
+
+X
+
+> m=1
+> n
+
+X
+
+> m=1
+> h
+
+X
+
+> s=1
+> h
+
+X
+
+> t=1
+> d
+
+X
+
+> b=1
+> n
+
+X
+
+> p=1
+> d
+
+X
+
+> c=1
+
+Mki 2W 01 qs 
+
+> 2
+
+W 02 st 
+
+> 2
+
+Mbt 2X2
+
+> mk
+
+X2 
+
+> mq
+
+X2
+
+> pb
+
+X2
+
+> pc
+
+= η21 η22
+
+n4h8 × 1
+
+d × 1
+
+d × 1
+
+d × 1
+
+h × h × (n2 − n) × (n2 − n) × (d2 − d) × (h2 − h)= η21 η22
+
+dh 6 + O( η21 η22
+
+h8 ).
+
+Case 4. b = b, k = k, m = m, i ̸ = t, , b = c, k ̸ = q, p ̸ = p, k ̸ = b, .
+
+Similar to Case 1 , we have 
+
+= η21 η22
+
+n4h6 E
+
+> h
+
+X
+
+> i=1
+> d
+
+X
+
+> k=1
+> n
+
+X
+
+> m=1
+> d
+
+X
+
+> q=1
+> h
+
+X
+
+> s=1
+> h
+
+X
+
+> t=1
+> d
+
+X
+
+> b=1
+> n
+
+X
+
+> p=1
+> d
+
+X
+
+> c=1
+> n
+
+X
+
+> p=1
+> n
+
+X
+
+> m=1
+
+Mki 2W 01 qs 
+
+> 2
+
+W 02 st 
+
+> 2
+
+Mbt 2Xmk Xmq Xpb Xpc Xpc Xpb Xmq Xmk 
+
+= η21 η22
+
+n4h6 E
+
+> h
+
+X
+
+> i=1
+> d
+
+X
+
+> k=1
+> n
+
+X
+
+> m=1
+> h
+
+X
+
+> s=1
+> h
+
+X
+
+> t=1
+> d
+
+X
+
+> b=1
+> n
+
+X
+
+> p=1
+> d
+
+X
+
+> q=1
+> n
+
+X
+
+> p=1
+
+Mki 2W 01 qs 
+
+> 2
+
+W 02 st 
+
+> 2
+
+Mbt 2X2
+
+> mk
+
+X2 
+
+> mq
+
+X2
+
+> pb
+
+X2
+
+> pb
+
+= η21 η22
+
+n4h8 × 1
+
+d × 1
+
+d × 1
+
+d × 1
+
+h × h × (d2 − d) × (n2 − n) × (d2 − d) × (h2 − h)= η21 η22 dn2h5 + O( η21 η22
+
+h8 ).
+
+□
+
+For η21 η22 
+
+> n4h6
+
+tr 
+
+
+
+E
+
+h
+
+ξ⊤XW 01 W 02 ξ⊤XX ⊤ξW 02
+
+> ⊤
+
+W 01
+
+> ⊤
+
+X⊤ξ
+
+i 
+
+, we have 
+
+η21 η22
+
+n4h6 tr 
+
+
+
+E
+
+h
+
+ξ⊤XW 01 W 02 ξ⊤XX ⊤ξW 02
+
+> ⊤
+
+W 01
+
+> ⊤
+
+X⊤ξ
+
+i 
+
+= η21 η22
+
+n4h3 E
+
+> h
+
+X
+
+> i=1
+> n
+
+X
+
+> k=1
+> d
+
+X
+
+> q=1
+> h
+
+X
+
+> s=1
+> h
+
+X
+
+> t=1
+> n
+
+X
+
+> b=1
+> d
+
+X
+
+> c=1
+> n
+
+X
+
+> b=1
+> h
+
+X
+
+> t=1
+> h
+
+X
+
+> s=1
+> d
+
+X
+
+> q=1
+> n
+
+X
+
+> k=1
+
+ξki Xkq W 01 qs W 02 st ξbt Xbc Xbc ξbt W 02 st W 01 qs Xkq ξki 
+
+= η21 η22
+
+n4h6 E
+
+> h
+
+X
+
+> i=1
+> n
+
+X
+
+> k=1
+> d
+
+X
+
+> q=1
+> h
+
+X
+
+> s=1
+> h
+
+X
+
+> t=1
+> n
+
+X
+
+> b=1
+> d
+
+X
+
+> c=1
+> n
+
+X
+
+> b=1
+> n
+
+X
+
+> k=1
+
+ξki Xkq W 012
+
+> qs
+
+W 022
+
+> st
+
+ξbt Xbc Xbc ξbt Xkq ξki 
+
+We focus only on the case dominated by the leading term. Since other cases will be O( η21 η22 
+
+> h8
+
+).54 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+Case 1. b = b, k = k, i ̸ = t, k ̸ = b.
+
+= η21 η22
+
+n4h6 E
+
+> h
+
+X
+
+> i=1
+> n
+
+X
+
+> k=1
+> d
+
+X
+
+> q=1
+> h
+
+X
+
+> s=1
+> h
+
+X
+
+> t=1
+> n
+
+X
+
+> b=1
+> d
+
+X
+
+> c=1
+
+ξki 2X2 
+
+> kq
+
+W 012
+
+> qs
+
+W 022
+
+> st
+
+ξbt 2X2
+
+> bc
+
+= η21 η22
+
+n4h8 × ρ2 
+
+> e
+
+× ρ2 
+
+> e
+
+× 1
+
+d × 1
+
+h × (h2 − h) × (n2 − n) × d × d × h
+
+= η21 η22 dρ 4
+
+> e
+
+n2h6 + O( η21 η22
+
+h8 ).
+
+□
+
+For 2η21 η22 
+
+> n4h6
+
+tr 
+
+
+
+E
+
+h
+
+ξ⊤XW 01 W 02 ξ⊤XX ⊤XM W 02
+
+> ⊤
+
+W 01
+
+> ⊤
+
+X⊤XM 
+
+i 
+
+, we have 
+
+2η21 η22
+
+n4h6 tr 
+
+
+
+E
+
+h
+
+ξ⊤XW 01 W 02 ξ⊤XX ⊤XM W 02
+
+> ⊤
+
+W 01
+
+> ⊤
+
+X⊤XM 
+
+i 
+
+= η21 η22
+
+n4h6 E
+
+> h
+
+X
+
+> i=1
+> n
+
+X
+
+> k=1
+> d
+
+X
+
+> q=1
+> h
+
+X
+
+> s=1
+> h
+
+X
+
+> t=1
+> n
+
+X
+
+> b=1
+> d
+
+X
+
+> c=1
+> d
+
+X
+
+> b=1
+> h
+
+X
+
+> t=1
+> h
+
+X
+
+> s=1
+> d
+
+X
+
+> q=1
+> d
+
+X
+
+> k=1
+> n
+
+X
+
+> p=1
+> n
+
+X
+
+> m=1
+
+ξki Xkq W 01 qs W 02 st ξbt Xbc Xpc Xpb Mbt W 02 st W 01 qs Xmq Xmk Mki 
+
+= η21 η22
+
+n4h6 E
+
+> h
+
+X
+
+> i=1
+> n
+
+X
+
+> k=1
+> d
+
+X
+
+> q=1
+> h
+
+X
+
+> s=1
+> n
+
+X
+
+> b=1
+> d
+
+X
+
+> c=1
+> n
+
+X
+
+> p=1
+> n
+
+X
+
+> m=1
+> d
+
+X
+
+> k=1
+
+ξki 2Xkq W 012
+
+> qs
+
+W 022
+
+> si
+
+Xkc Xpc Xpk M 2
+
+> ki
+
+Xmq Xmk 
+
+We focus only on the case dominated by the leading term. Case 1. q = c = k, k̸ = p̸ = m. η21 η22
+
+n4h6 E
+
+> h
+
+X
+
+> i=1
+> n
+
+X
+
+> k=1
+> d
+
+X
+
+> q=1
+> h
+
+X
+
+> s=1
+> n
+
+X
+
+> b=1
+> n
+
+X
+
+> p=1
+> n
+
+X
+
+> m=1
+
+ξki 2X2 
+
+> kq
+
+W 012
+
+> qs
+
+W 022
+
+> si
+
+X2 
+
+> pq
+
+M 2
+
+> ki
+
+X2
+
+> mq
+
+= η21 η22
+
+n4h8 × ρ2 
+
+> e
+
+× 1
+
+d × 1
+
+h × 1
+
+d × h × h × d × (n3 − n)= O( η21 η22
+
+h8 ).
+
+□
+
+For η21 η22 
+
+> n4h6
+
+tr 
+
+
+
+E
+
+h
+
+M ⊤X⊤XW 01 W 02 ξ⊤XX ⊤ξW 02
+
+> ⊤
+
+W 01
+
+> ⊤
+
+X⊤XM 
+
+i 
+
+, we have 
+
+η21 η22
+
+n4h6 tr 
+
+
+
+E
+
+h
+
+M ⊤X⊤XW 01 W 02 ξ⊤XX ⊤ξW 02
+
+> ⊤
+
+W 01
+
+> ⊤
+
+X⊤XM 
+
+i 
+
+= η21 η22
+
+n4h5d tr 
+
+
+
+E
+
+h
+
+X⊤XW 01 W 02 ξ⊤XX ⊤ξW 02
+
+> ⊤
+
+W 01
+
+> ⊤
+
+X⊤X
+
+i 
+
+= η21 η22
+
+n4h5d E
+
+> d
+
+X
+
+> i=1
+> n
+
+X
+
+> m=1
+> d
+
+X
+
+> q=1
+> h
+
+X
+
+> s=1
+> h
+
+X
+
+> t=1
+> d
+
+X
+
+> b=1
+> d
+
+X
+
+> c=1
+> d
+
+X
+
+> b=1
+> h
+
+X
+
+> t=1
+> d
+
+X
+
+> q=1
+> h
+
+X
+
+> s=1
+> n
+
+X
+
+> m=1
+
+Xmi Xmq W 01 qs W 02 st ξbt Xbc Xbc ξbt W 02 st W 01 qs Xmq Xmi 
+
+= η21 η22
+
+n4h5d E
+
+> d
+
+X
+
+> i=1
+> n
+
+X
+
+> m=1
+> d
+
+X
+
+> q=1
+> h
+
+X
+
+> s=1
+> h
+
+X
+
+> t=1
+> d
+
+X
+
+> b=1
+> d
+
+X
+
+> c=1
+> n
+
+X
+
+> m=1
+
+Xmi Xmq W 012
+
+> qs
+
+W 022
+
+> st
+
+ξ2
+
+> bt
+
+X2
+
+> bc
+
+Xmq Xmi 
+
+We focus only on the case dominated by the leading term. Case 1. q = i, m ̸ = m.
+
+55 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+η21 η22
+
+n4h5d E
+
+> d
+
+X
+
+> i=1
+> n
+
+X
+
+> m=1
+> d
+
+X
+
+> q=1
+> h
+
+X
+
+> s=1
+> h
+
+X
+
+> t=1
+> d
+
+X
+
+> b=1
+> d
+
+X
+
+> c=1
+> n
+
+X
+
+> m=1
+
+Xmi Xmq W 012
+
+> qs
+
+W 022
+
+> st
+
+ξ2
+
+> bt
+
+X2
+
+> bc
+
+Xmq Xmi 
+
+= η21 η22
+
+n4h5d E
+
+> d
+
+X
+
+> i=1
+> n
+
+X
+
+> m=1
+> h
+
+X
+
+> s=1
+> h
+
+X
+
+> t=1
+> d
+
+X
+
+> b=1
+> d
+
+X
+
+> c=1
+> n
+
+X
+
+> m=1
+
+X2
+
+> mi
+
+W 012
+
+> qs
+
+W 022
+
+> st
+
+ξ2
+
+> bt
+
+X2
+
+> bc
+
+X2
+
+> mi
+
+= η21 η22
+
+n4h7d × ρ2 
+
+> e
+
+× 1
+
+d × 1
+
+h × (n2 − n) × d × h × h × d × d
+
+= η21 η22 dρ 2
+
+> e
+
+n2h6 + O( η21 η22
+
+h8 ).
+
+Case 2. m = m, q ̸ = i.
+
+η21 η22
+
+n4h5d E
+
+> d
+
+X
+
+> i=1
+> n
+
+X
+
+> m=1
+> d
+
+X
+
+> q=1
+> h
+
+X
+
+> s=1
+> h
+
+X
+
+> t=1
+> d
+
+X
+
+> b=1
+> d
+
+X
+
+> c=1
+> n
+
+X
+
+> m=1
+
+Xmi Xmq W 012
+
+> qs
+
+W 022
+
+> st
+
+ξ2
+
+> bt
+
+X2
+
+> bc
+
+Xmq Xmi 
+
+= η21 η22
+
+n4h7d E
+
+> d
+
+X
+
+> i=1
+> n
+
+X
+
+> m=1
+> h
+
+X
+
+> s=1
+> h
+
+X
+
+> t=1
+> d
+
+X
+
+> b=1
+> d
+
+X
+
+> c=1
+> d
+
+X
+
+> q=1
+
+X2
+
+> mi
+
+W 012
+
+> qs
+
+W 022
+
+> st
+
+ξ2
+
+> bt
+
+X2
+
+> bc
+
+X2
+
+> mq
+
+= η21 η22
+
+n4h2d × ρ2 
+
+> e
+
+× 1
+
+d × 1
+
+h × (d2 − d) × n × h × h × d × d
+
+= η21 η22 d2ρ2
+
+> e
+
+n3h6 + O( η21 η22
+
+h8 )
+
+It is easy to see 
+
+η21 η22
+
+n4h6 tr 
+
+
+
+E
+
+h
+
+M ⊤X⊤XW 01 W 02 ξ⊤XX ⊤ξW 02
+
+> ⊤
+
+W 01
+
+> ⊤
+
+X⊤XM 
+
+i 
+
+= η21 η22
+
+n4h6 tr 
+
+
+
+E
+
+h
+
+ξ⊤XW 01 W 02 M ⊤X⊤XX ⊤XM W 02
+
+> ⊤
+
+W 01
+
+> ⊤
+
+X⊤ξ
+
+i 
+
+= η21 η22 dρ 2
+
+> e
+
+n2h6 + η21 η22 d2ρ2
+
+> e
+
+n3h6 + O( η21 η22
+
+h8 )
+
+Finally we get 
+
+T16 = η21 η22 dn2h6 + η21 η22
+
+dh 6 + η21 η22 dρ 4
+
+> e
+
+n2h6 + 2η21 η22 dρ 2
+
+> e
+
+n2h6 + 2η21 η22 d2ρ2
+
+> e
+
+n3h6 + O( η21 η22
+
+h8 ) (131) 
+
+□
+
+Analysis of T2, T3, T5, T8, T9, T12 , T14 , T15 , T17 , T20 , T21 and T24 . All terms involve the product of an odd number of identical random matrices with zero mean, and due to their independence from other random matrices, these terms are all 0.
+
+□
+
+Analysis of T18 .
+
+T18 = tr 
+
+
+
+EW 01 ,W 02 ,ξ,X
+
+h η1
+
+nh 2 M W 02
+
+> ⊤
+
+W 02 Y ⊤X
+
+i 
+
+= η1
+
+nh 2 tr 
+
+
+
+EW 01 ,W 02 ,ξ,X
+
+h
+
+W 02
+
+> ⊤
+
+W 02 Y ⊤XM 
+
+i 
+
+= η1
+
+nh 2 tr 
+
+
+
+EW 01 ,W 02 ,ξ,X
+
+M ⊤X⊤XM 
+
+= η1
+
+h2 .
+
+(132) 
+
+□
+
+56 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+Similar to T18 , we can get 
+
+T19 = η2
+
+dh (133) 
+
+T22 = η1
+
+h2 (134) 
+
+T23 = η2
+
+dh . (135) 
+
+□
+
+Finally, we obtain the exact loss 
+
+Ltwo-layer = 2η21
+
+h4 + 2η21 d(1 + ρ2
+
+> e
+
+)
+
+nh 4 − 2 η1
+
+h2
+
++ η22
+
+d2h2 + η22
+
+dh 3 + η22 (1 + ρ2
+
+> e
+
+)
+
+ndh 2 + η22 (1 + ρ2
+
+> e
+
+)
+
+nh 3 − 2 η2
+
+dh + η21 η22 dn2h6
+
++ 2η1η2
+
+dh 3 + 2η1η2
+
+nh 3 + 2η1η2ρ2
+
+> e
+
+nh 3 + η21 η22 d(ρ2 
+
+> e
+
++ 1) 2
+
+n2h6 + 2η21 η22
+
+dh 6 + 2η21 η22 d2ρ2
+
+> e
+
+n3h6
+
++ 1 + 1
+
+h + O( η21
+
+h5 ) + O( η52
+
+h5 ) + O( η1η2
+
+h2 ) + O( η21 η22
+
+h8 )
+
+(136) Under Assumption E.1, we have 
+
+Ltwo-layer = 2η21
+
+h4 + 2η21 (1 + ρ2
+
+> e
+
+)
+
+nh 3 − 2 η1
+
+h2
+
++ 2η22
+
+h4 + 2η22 (1 + ρ2
+
+> e
+
+)
+
+nh 3 − 2 η2
+
+h2 + η21 η22
+
+n2h5
+
++ 2η1η2
+
+h4 + 2η1η2
+
+nh 3 + 2η1η2ρ2
+
+> e
+
+nh 3 + η21 η22 (ρ2 
+
+> e
+
++ 1) 2
+
+n2h5 + 2η21 η22
+
+h7 + 2η21 η22 ρ2
+
+> e
+
+n3h4
+
++ 1 + 1
+
+h + O( η21
+
+h5 ) + O( η52
+
+h2 ) + O( η1η2
+
+h5 ) + O( η21 η22
+
+h8 )
+
+(137) 
+
+□
+
+E.4. Three-layer NN Test Loss under Gaussian initialization Theorem E.10. Given Assumption 3.3, E.1, and in addition assume η1 and η2 are no more than O(h) based on Proposi-tion E.2, consider training procedure discussed in section 3, we derive the test loss after one-step GD update in a three-layer neural network: 
+
+Lthree-layer = η21
+
+h2 + η21 (1 + ρ2
+
+> e
+
+)
+
+hn − 2 η1
+
+h + 2η22
+
+h2 + 2η22 (1 + ρ2
+
+> e
+
+)
+
+nh − 2 η2
+
+h
+
++ 2η1η2
+
+h2 + 2η1η2(1 + ρ2
+
+> e
+
+)
+
+nh + η21 η22 ρ2
+
+> e
+
+nh 3 + η21 η22 dρ 2
+
+> e
+
+n2h3 + 4η21 η22
+
+n2h2
+
++ 1 + O( η21
+
+h3 ) + O( η22
+
+h3 ) + O( η1η2
+
+h3 ) + O
+
+ η21 η22
+
+h5
+
+
+
+(138) 57 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+Proof of Theorem E.6. Similar to appendix E.3, we consider a test data ˜x0 ∼ N (0, Id) ∈ R1×d.
+
+L(X, W 11 , W 12 , a, ˜x0)=EW 01 ,W 02 ,a,ξ, ˜x0,X
+
+ 1
+
+√h ˜x0W 11 W 12 a − ˜x0β∗
+
+2
+
+=EW 01 ,W 02 ,a,ξ, ˜x0,X
+
+" 1
+
+√h W 11 W 12 a − β∗
+
+⊤
+
+˜x⊤ 
+
+> 0
+
+˜x0
+
+ 1
+
+√h W 11 W 12 a − β∗
+
+#
+
+=tr EW 01 ,W 02 ,a,ξ, ˜x0,X
+
+"
+
+˜x⊤ 
+
+> 0
+
+˜x0
+
+ 1
+
+√h W 11 W 12 a − β∗
+
+  1
+
+√h W 11 W 12 a − β∗
+
+⊤#! 
+
+=tr EW 01 ,W 02 ,a,ξ,X
+
+" 1
+
+√h W 11 W 12 a − β∗
+
+  1
+
+√h W 11 W 12 a − β∗
+
+⊤#! 
+
+=tr 
+
+
+
+EW 01 ,W 02 ,a,ξ,X
+
+ 1
+
+h W 11 W 12 aa ⊤W 12
+
+> ⊤
+
+W 11
+
+> ⊤
+
+ 
+
+−tr 
+
+
+
+EW 01 ,W 02 ,a,ξ,X
+
+ 1
+
+√h β∗a⊤W 12
+
+> ⊤
+
+W 11
+
+> ⊤
+
+ 
+
+−tr 
+
+
+
+EW 01 ,W 02 ,a,ξ,X
+
+ 1
+
+√h W 11 W 12 aβ ∗⊤ 
+
+ 
+
++ tr 
+
+
+
+E
+
+h
+
+β∗β∗⊤ i 
+
+.
+
+(139) Here we define L1, L 2, L 3, L 4, where 
+
+L1 = tr 
+
+
+
+EW 01 ,W 02 ,a,ξ,X
+
+ 1
+
+h W 11 W 12 aa ⊤W 12
+
+> ⊤
+
+W 11
+
+> ⊤
+
+ 
+
+L2 = tr 
+
+
+
+EW 01 ,W 02 ,a,ξ,X
+
+ 1
+
+√h β∗a⊤W 12
+
+> ⊤
+
+W 11
+
+> ⊤
+
+ 
+
+L3 = tr 
+
+
+
+EW 01 ,W 02 ,a,ξ,X
+
+ 1
+
+√h W 11 W 12 aβ ∗⊤ 
+
+ 
+
+L4 = tr 
+
+
+
+E
+
+h
+
+β∗β∗⊤ i 
+
+Thus 
+
+Lthree-layer = L1 − L2 − L3 + L4
+
+Due to Proposition E.2 and Appendix C.1.3, we know that the norm of G1 is dominated by A1, the norm of G2 is dominated by A2, to simplify the gradient, we consider the following approximation. 
+
+W 11 ≈ W 01 + η1
+
+n√h X⊤ya ⊤W 02
+
+> ⊤
+
+. (140) 
+
+W 12 ≈ W 02 + η2
+
+n√h W 01
+
+> ⊤
+
+X⊤ya ⊤. (141) Thus we have 
+
+W 11 W 12 ≈W 01 W 02 + η1
+
+n√h X⊤ya ⊤W 02
+
+> ⊤
+
+W 02
+
++ η2
+
+n√h W 01 W 01
+
+> ⊤
+
+X⊤ya ⊤
+
++ η1η2
+
+n2h X⊤ya ⊤W 02
+
+> ⊤
+
+W 01
+
+> ⊤
+
+X⊤ya ⊤,
+
+(142) 58 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+W 12
+
+⊤W 11
+
+⊤ ≈W 02
+
+⊤W 01
+
+⊤ + η1
+
+n√h W 02
+
+⊤W 02 ay ⊤X
+
++ η2
+
+n√h ay ⊤XW 01 W 01
+
+⊤
+
++ η1η2
+
+n2h ay ⊤XW 01 W 02 ay ⊤X,
+
+(143) we take ( 140) and ( 141) into L1, L 2, L 3.We have L1 = P16 
+
+i=1 Ti, where 
+
+T1 = tr 
+
+
+
+EW 01 ,W 02 ,a,ξ,X
+
+ 1
+
+h aa ⊤W 02
+
+⊤W 01
+
+⊤W 01 W 02
+
+ 
+
+,T2 = tr 
+
+
+
+EW 01 ,W 02 ,a,ξ,X
+
+ η1
+
+nh √h aa ⊤W 02
+
+⊤W 01
+
+⊤X⊤ya ⊤W 02
+
+⊤W 02
+
+ 
+
+,T3 = tr 
+
+
+
+EW 01 ,W 02 ,a,ξ,X
+
+ η2
+
+nh √h aa ⊤W 02
+
+⊤W 01
+
+⊤W 01 W 01
+
+⊤X⊤ya ⊤
+
+ 
+
+,T4 = tr 
+
+
+
+EW 01 ,W 02 ,a,ξ,X
+
+h η1η2
+
+n2h2 aa ⊤W 02
+
+⊤W 01
+
+⊤X⊤ya ⊤W 02
+
+⊤W 01
+
+⊤X⊤ya ⊤i 
+
+,T5 = tr 
+
+
+
+EW 01 ,W 02 ,a,ξ,X
+
+ η1
+
+nh √h aa ⊤W 02
+
+⊤W 02 ay ⊤XW 01 W 02
+
+ 
+
+,T6 = tr 
+
+
+
+EW 01 ,W 02 ,a,ξ,X
+
+ η21
+
+n2h2 aa ⊤W 02
+
+⊤W 02 ay ⊤XX ⊤ya ⊤W 02
+
+⊤W 02
+
+ 
+
+,T7 = tr 
+
+
+
+EW 01 ,W 02 ,a,ξ,X
+
+h η1η2
+
+n2h2 aa ⊤W 02
+
+⊤W 02 ay ⊤XW 01 W 01
+
+⊤X⊤ya ⊤i 
+
+,T8 = tr 
+
+
+
+EW 01 ,W 02 ,a,ξ,X
+
+ η21 η2
+
+n3h2√h aa ⊤W 02
+
+⊤W 02 ay ⊤XX ⊤ya ⊤W 02
+
+⊤W 01
+
+⊤X⊤ya ⊤
+
+ 
+
+,T9 = tr 
+
+
+
+EW 01 ,W 02 ,a,ξ,X
+
+ η2
+
+nh √h aa ⊤ay ⊤XW 01 W 01
+
+⊤W 01 W 02
+
+ 
+
+,T10 = tr 
+
+
+
+EW 01 ,W 02 ,a,ξ,X
+
+h η1η2
+
+n2h2 aa ⊤ay ⊤XW 01 W 01
+
+⊤X⊤ya ⊤W 02
+
+⊤W 02
+
+i 
+
+,T11 = tr 
+
+
+
+EW 01 ,W 02 ,a,ξ,X
+
+ η22
+
+n2h2 aa ⊤ay ⊤XW 01 W 01
+
+⊤W 01 W 01
+
+⊤X⊤ya ⊤
+
+ 
+
+,T12 = tr 
+
+
+
+EW 01 ,W 02 ,a,ξ,X
+
+ η1η22
+
+n3h2√h aa ⊤ay ⊤XW 01 W 01
+
+⊤X⊤ya ⊤W 02
+
+⊤W 01
+
+⊤X⊤ya ⊤
+
+ 
+
+,T13 = tr 
+
+
+
+EW 01 ,W 02 ,a,ξ,X
+
+h η1η2
+
+n2h2 aa ⊤ay ⊤XW 01 W 02 ay ⊤XW 01 W 02
+
+i 
+
+,T14 = tr 
+
+
+
+EW 01 ,W 02 ,a,ξ,X
+
+ η21 η2
+
+n3h2√h aa ⊤ay ⊤XW 01 W 02 ay ⊤XX ⊤ya ⊤W 02
+
+⊤W 02
+
+ 
+
+,T15 = tr 
+
+
+
+EW 01 ,W 02 ,a,ξ,X
+
+ η1η22
+
+n3h2√h aa ⊤ay ⊤XW 01 W 02 ay ⊤XW 01 W 01
+
+⊤X⊤ya ⊤
+
+ 
+
+,T16 = tr 
+
+
+
+EW 01 ,W 02 ,a,ξ,X
+
+ η21 η22
+
+n4h3 aa ⊤ay ⊤XW 01 W 02 ay ⊤XX ⊤ya ⊤W 02
+
+⊤W 01
+
+⊤X⊤ya ⊤
+
+ 
+
+.
+
+59 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+We have L2 = P20  
+
+> i=17
+
+Ti, where 
+
+T17 = tr 
+
+
+
+EW 01 ,W 02 ,a,ξ,X
+
+ 1
+
+√h β∗a⊤W 02
+
+> ⊤
+
+W 01
+
+> ⊤
+
+ 
+
+,T18 = tr 
+
+
+
+EW 01 ,W 02 ,a,ξ,X
+
+h η1
+
+nh β∗a⊤W 02
+
+> ⊤
+
+W 02 ay ⊤X
+
+i 
+
+,T19 = tr 
+
+
+
+EW 01 ,W 02 ,a,ξ,X
+
+h η2
+
+nh β∗a⊤ay ⊤XW 01 W 01
+
+> ⊤
+
+i 
+
+,T20 = tr 
+
+
+
+EW 01 ,W 02 ,a,ξ,X
+
+ η1η2
+
+n2h√h β∗a⊤ay ⊤XW 01 W 02 ay ⊤X
+
+ 
+
+.
+
+We have L3 = P24  
+
+> i=21
+
+Ti, where 
+
+T21 = tr 
+
+
+
+EW 01 ,W 02 ,a,ξ,X
+
+ 1
+
+√h W 01 W 02 aβ ∗⊤
+
+ 
+
+,T22 = tr 
+
+
+
+EW 01 ,W 02 ,a,ξ,X
+
+h η1
+
+nh X⊤ya ⊤W 02
+
+> ⊤
+
+W 02 aβ ∗⊤ i 
+
+,T23 = tr 
+
+
+
+EW 01 ,W 02 ,a,ξ,X
+
+h η2
+
+nh W 01 W 01
+
+> ⊤
+
+X⊤ya ⊤aβ ∗⊤ i 
+
+,T24 = tr 
+
+
+
+EW 01 ,W 02 ,a,ξ,X
+
+ η1η2
+
+n2h√h X⊤ya ⊤W 02
+
+> ⊤
+
+W 01
+
+> ⊤
+
+X⊤ya ⊤aβ ∗⊤
+
+ 
+
+,
+
+Thus, we obtain that 
+
+L =
+
+> 16
+
+X
+
+> i=1
+
+Ti −
+
+> 20
+
+X
+
+> i=17
+
+Ti −
+
+> 24
+
+X
+
+> i=21
+
+Ti + L4
+
+Analysis of T1.
+
+T1 = tr 
+
+
+
+EW 01 ,W 02 ,a,ξ,X
+
+ 1
+
+h aa ⊤W 02
+
+> ⊤
+
+W 01
+
+> ⊤
+
+W 01 W 02
+
+ 
+
+= 1
+
+h (144) 
+
+□
+
+Analysis of T4 and T13 . For T4, we have 
+
+T4 = tr 
+
+
+
+EW 01 ,W 02 ,a,ξ,X
+
+h η1η2
+
+n2h2 aa ⊤W 02
+
+> ⊤
+
+W 01
+
+> ⊤
+
+X⊤ya ⊤W 02
+
+> ⊤
+
+W 01
+
+> ⊤
+
+X⊤ya ⊤i 
+
+= η1η2
+
+n2h2 Etr 
+
+h 
+
+aa ⊤W 02
+
+> ⊤
+
+W 01
+
+> ⊤
+
+X⊤yy ⊤XW 01 W 02 aa ⊤i 
+
+= η1η2
+
+n2h2 tr 
+
+
+
+E aa ⊤aa ⊤ E
+
+h
+
+W 02
+
+> ⊤
+
+W 01
+
+> ⊤
+
+X⊤yy ⊤XW 01 W 02
+
+i 
+
+(145) For E aa ⊤aa ⊤, similar to ( 159), we have 
+
+E  aa ⊤aa ⊤ =
+
+ 1
+
+h + 2
+
+h2
+
+
+
+Ih (146) 60 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+By taking ( 146) in to T4, we have 
+
+T4 = η1η2
+
+n2h2
+
+ 1
+
+h + 2
+
+h2
+
+
+
+tr 
+
+
+
+E
+
+h
+
+W 02
+
+> ⊤
+
+W 01
+
+> ⊤
+
+X⊤yy ⊤XW 01 W 02
+
+i 
+
+= η1η2
+
+n2h2
+
+ 1
+
+h + 2
+
+h2
+
+
+
+tr 
+
+
+
+E
+
+h
+
+W 02 W 02
+
+> ⊤
+
+W 01
+
+> ⊤
+
+X⊤yy ⊤XW 01
+
+i 
+
+= η1η2
+
+n2h2
+
+ 1
+
+h + 2
+
+h2
+
+
+
+tr 
+
+
+
+E
+
+h
+
+W 01
+
+> ⊤
+
+X⊤yy ⊤XW 01
+
+i 
+
+= η1η2
+
+n2h2
+
+ 1
+
+h + 2
+
+h2
+
+
+
+tr 
+
+
+
+E
+
+h
+
+W 01 W 01
+
+> ⊤
+
+X⊤yy ⊤X
+
+i 
+
+= η1η2
+
+n2hd 
+
+ 1
+
+h + 2
+
+h2
+
+
+
+tr  E X⊤yy ⊤X 
+
+= η1η2
+
+n2hd 
+
+ 1
+
+h + 2
+
+h2
+
+  n2 + nd (1 + ρ2
+
+> e
+
+) + n
+
+= O
+
+ η1η2
+
+h3
+
+
+
+.
+
+(147) 
+
+□
+
+It is easy to find that T4 = T13 , so we have 
+
+T13 = O
+
+ η1η2
+
+h3
+
+
+
+. (148) 
+
+□
+
+Analysis of T6 and T11 . For T6, we have 
+
+T6 = η21
+
+n2h2 tr 
+
+
+
+EW 01 ,W 02 ,a,ξ,X
+
+h
+
+aa ⊤W 02
+
+> ⊤
+
+W 02 ay ⊤XX ⊤ya ⊤W 02
+
+> ⊤
+
+W 02
+
+i 
+
+= η21
+
+n2h2 tr 
+
+
+
+EW 01 ,W 02 ,a,ξ,X
+
+h
+
+a⊤W 02
+
+> ⊤
+
+W 02 aa ⊤W 02
+
+> ⊤
+
+W 02 ay ⊤XX ⊤y
+
+i 
+
+= η21
+
+n2h2 EW 01 ,W 02 ,a,ξ,X
+
+h
+
+a⊤W 02
+
+> ⊤
+
+W 02 aa ⊤W 02
+
+> ⊤
+
+W 02 ay ⊤XX ⊤y
+
+i
+
+let S2 = W 02
+
+> ⊤
+
+W 02 . By replacing them into T6,
+
+T6 = η21
+
+n2h2 EW 01 ,W 02 ,a,ξ,X
+
+h
+
+a⊤W 02
+
+> ⊤
+
+W 02 aa ⊤W 02
+
+> ⊤
+
+W 02 ay ⊤XX ⊤y
+
+i
+
+= η21
+
+n2h2 E a⊤S2aa ⊤S2a E y⊤XX ⊤y .
+
+Here we first analyze E a⊤S2aa ⊤S2a = E
+
+h P 
+
+> i,j
+
+aiS2ij aj
+
+  P 
+
+> p,q
+
+apS2pq aq
+
+i 
+
+, This can be reduced to the following three cases, since the expectations in all other cases are zero. 
+
+Case 1 (i, j ) = ( p, q ), i ̸ = j.
+
+E a⊤S2aa ⊤S2a 
+
+> 1
+
+= E
+
+X
+
+> i,j i̸=j
+
+aiS2ij aj
+
+
+
+> 2
+
+
+
+= X
+
+> i,j i̸=j
+
+Ea2 
+
+> i
+
+ES22ij Ea2
+
+> j
+
+= ( h2 − h) × 1
+
+h × 1
+
+h × 1
+
+h × h × 1
+
+h
+
+= 1
+
+h − 1
+
+h2
+
+(149) 61 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+Case 2 (i, j ) = ( q, p ), i ̸ = j. Same to Case 1, 
+
+E a⊤S2aa ⊤S2a 
+
+> 2
+
+= 1
+
+h − 1
+
+h2 (150) 
+
+Case 3 i = j, p = q.
+
+E a⊤S2aa ⊤S2a 
+
+> 3
+
+= E
+
+" X
+
+> i
+
+S2ii a2
+
+> i
+
+! X
+
+> p
+
+S2pp a2
+
+> p
+
+!# 
+
+= X
+
+> i,p
+
+E  S2ii S2pp 
+
+ E  a2 
+
+> i
+
+a2
+
+> p
+
+ 
+
+= X
+
+> i=p
+
+E  S22ii 
+
+ E  a4
+
+> i
+
+ + X
+
+> i̸=p
+
+E  S2ii S2pp 
+
+ E  a2 
+
+> i
+
+a2
+
+> p
+
+ .
+
+(151) For ES22ii , we have 
+
+ES22ii = ES2211 
+
+= E  W 2211 + W 2221 + · · · + W 22h1
+
+2
+
+= h × 3
+
+h2 + ( h2 − h) × 1
+
+h × 1
+
+h
+
+= 1 + 2
+
+h .
+
+(152) It is east to see 
+
+Ea4 
+
+> i
+
+= 3
+
+h2 (153) 
+
+Ei̸=p
+
+ S2ii S2pp 
+
+ = ES2ii ES2pp = 1 (154) 
+
+Ei̸=p
+
+ a2
+
+> ii
+
+a2
+
+> pp
+
+ = Ea2
+
+> ii
+
+Ea2 
+
+> pp
+
+= 1
+
+h2 (155) by combining ( 152) to ( 155), we have 
+
+E a⊤S2aa ⊤S2a 
+
+> 3
+
+= h × (1 + 1
+
+h2 ) × 3
+
+h2 + ( h2 − h) × 1
+
+h2
+
+= 1 + 2
+
+h + 6
+
+h2 .
+
+(156) By combining ( 149),( 150)and( 156), we have 
+
+E a⊤S2aa ⊤S2a = 1 + 4
+
+h + 4
+
+h2 . (157) 
+
+□
+
+We then analyze E y⊤XX ⊤y. note that y = Xβ ∗ + ξ, we have 
+
+E y⊤XX ⊤y = E
+
+h 
+
+β∗⊤
+
+X⊤X + ξ⊤X
+
+  X⊤Xβ ∗ + X⊤ξi
+
+= E
+
+
+
+β∗⊤
+
+X⊤XX ⊤Xβ ∗
+
++ E  ξ⊤XX ⊤ξ
+
+= tr 
+
+h
+
+E  X⊤XX ⊤X E
+
+
+
+β∗β∗⊤ i 
+
++ tr E  XX ⊤ E  ξξ ⊤ .
+
+(158) 62 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+For E  X⊤XX ⊤X, we show that 
+
+E  X⊤X2 
+
+> ii
+
+= E  X⊤X211 
+
+= E
+
+> n
+
+X
+
+> m=1
+
+X2
+
+> m1
+
+!2
+
++ E
+
+
+
+> d
+
+X
+
+> j=2
+> n
+
+X
+
+> k=1
+
+Xk1Xkj 
+
+!2
+
+= 3 n + ( n2 − n) + ( d − 1) n
+
+= n2 + nd + n
+
+E  X⊤X2 
+
+> ij
+
+= E
+
+" nX
+
+> m=1
+
+X2
+
+> m1
+
+! nX
+
+> k=1
+
+Xk1Xk2
+
+!# 
+
++ E
+
+" nX
+
+> m=1
+
+X2
+
+> m2
+
+! nX
+
+> k=1
+
+Xk2Xk1
+
+!# 
+
++
+
+> n
+
+X
+
+> j=3
+
+E
+
+" nX
+
+> k=1
+
+Xk1Xkj 
+
+! nX
+
+> p=1
+
+Xpj Xp2
+
+!# 
+
+= 0 .
+
+(159) Which means E  X⊤XX ⊤X = ( n2 + nd + n)Id.It is easy to see E
+
+
+
+β∗β∗⊤ 
+
+= 1 
+
+> d
+
+Id, E  XX ⊤ = nIn, E  ξξ ⊤ = ρ2
+
+> e
+
+In. Thus, consider ( 158) we have 
+
+E y⊤XX ⊤y = n2 + nd (1 + ρ2
+
+> e
+
+) + n. (160) 
+
+□
+
+By ( 157) and ( 160), we finally get 
+
+T6 = η21
+
+ n2 + nd (1 + ρ2
+
+> e
+
+) + n   1 + 4 
+
+> h
+
++ 4
+
+> h4
+
+
+
+n2h2
+
+= η21
+
+h2 + η21 d(1 + ρ2
+
+> e
+
+)
+
+h2n + O( η21
+
+h3 )
+
+(161) 
+
+□
+
+For T11 , similar to T6, let W 01 W 01 
+
+> ⊤
+
+= S1, we have 
+
+T11 = tr 
+
+
+
+EW 01 ,W 02 ,a,ξ,X
+
+ η22
+
+n2h2 aa ⊤ay ⊤XW 01 W 01
+
+> ⊤
+
+W 01 W 01
+
+> ⊤
+
+X⊤ya ⊤
+
+ 
+
+= tr 
+
+
+
+EW 01 ,W 02 ,a,ξ,X
+
+ η22
+
+n2h2 a⊤aa ⊤ay ⊤XW 01 W 01
+
+> ⊤
+
+W 01 W 01
+
+> ⊤
+
+X⊤y
+
+ 
+
+= η22
+
+n2h2 tr 
+
+
+
+E  a⊤aa ⊤a E
+
+
+
+y⊤XW 01 W 01
+
+> ⊤
+
+W 01 W 01
+
+> ⊤
+
+X⊤y
+
+ 
+
+= η22
+
+n2h2 tr  E  a⊤aa ⊤a E  y⊤XS 21 X⊤y 
+
+For E  a⊤aa ⊤a, we have 63 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+E  a⊤aa ⊤a = E
+
+> h
+
+X
+
+> i=1
+
+a2
+
+> i
+
+!2
+
+= hE  a41
+
+ + ( h2 − h)E  a21a22
+
+
+
+= h × 3
+
+h2 + ( h2 − h) × 1
+
+h × 1
+
+h
+
+= 1 + 2
+
+h
+
+(162) Take ( 162) into T6, we have 
+
+T11 = η22
+
+n2h2
+
+
+
+1 + 2
+
+h
+
+
+
+tr E   y⊤XS 21 X⊤y 
+
+= η22
+
+n2h2
+
+
+
+1 + 2
+
+h
+
+
+
+tr E   X⊤yy ⊤XS 21
+
+ 
+
+= η22
+
+n2h2
+
+
+
+1 + 2
+
+h
+
+
+
+tr E   X⊤yy ⊤X E  S21
+
+ 
+
+.
+
+(163) Similar to compute E  X⊤XX ⊤X, we have 
+
+E  S21
+
+ = h2 + h + hd d2 Id. (164) By taking ( 164) into T11 
+
+T11 = η22
+
+n2h2
+
+
+
+1 + 2
+
+h
+
+ h2 + h + hd d2 tr E   X⊤yy ⊤X . (165) By ( 160), we have 
+
+T11 = η22
+
+n2h2
+
+
+
+1 + 2
+
+h
+
+  h2 + h + hd d2
+
+  n2 + nd (1 + ρ2
+
+> e
+
+) + n
+
+= η22
+
+d2 + η22
+
+hd + η22 (1 + ρ2
+
+> e
+
+)
+
+nh + η22 (1 + ρ2
+
+> e
+
+)
+
+nd + O( η22
+
+h3 ).
+
+(166) 
+
+□
+
+Analysis of T7 and T10 . We have 
+
+T7 = tr 
+
+
+
+EW 01 ,W 02 ,a,ξ,X
+
+h η1η2
+
+n2h2 aa ⊤W 02
+
+> ⊤
+
+W 02 ay ⊤XW 01 W 01
+
+> ⊤
+
+X⊤ya ⊤i 
+
+= η1η2
+
+n2h2 Etr 
+
+h 
+
+W 02
+
+> ⊤
+
+W 02 ay ⊤XW 01 W 01
+
+> ⊤
+
+X⊤ya ⊤aa ⊤i 
+
+= η1η2
+
+n2h2 Etr 
+
+h 
+
+ay ⊤XW 01 W 01
+
+> ⊤
+
+X⊤ya ⊤aa ⊤i 
+
+= η1η2
+
+n2h2 Etr 
+
+h 
+
+W 01 W 01
+
+> ⊤
+
+X⊤ya ⊤aa ⊤ay ⊤X
+
+i 
+
+= η1η2
+
+n2hd Etr   X⊤ya ⊤aa ⊤ay ⊤X 
+
+= η1η2
+
+n2hd Etr   y⊤XX ⊤ya ⊤aa ⊤a 
+
+= η1η2
+
+n2hd E y⊤XX ⊤y E a⊤aa ⊤a .
+
+(167) By ( 160) and ( 162), we show 
+
+T7 = η1η2
+
+n2hd 
+
+ n2 + nd (1 + ρ2
+
+> e
+
+) + n 
+
+1 + 2
+
+h
+
+
+
+= η1η2
+
+hd + η1η2(1 + ρ2
+
+> e
+
+)
+
+nh + O( η1η2
+
+h3 ).
+
+(168) 64 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+□
+
+It is easy to find that T7 = T10 , so we have 
+
+T10 = η1η2
+
+nh + η1η2(1 + ρ2
+
+> e
+
+)
+
+nh + O( η1η2
+
+h3 ). (169) 
+
+□
+
+Analysis of T16 .
+
+T16 = η21 η22
+
+n4h3 tr 
+
+
+
+EW 01 ,W 02 ,a,ξ,X
+
+h
+
+aa ⊤ay ⊤XW 01 W 02 ay ⊤XX ⊤ya ⊤W 02
+
+> ⊤
+
+W 01
+
+> ⊤
+
+X⊤ya ⊤i 
+
+= η21 η22
+
+n4h3 tr 
+
+
+
+E
+
+
+
+aa ⊤a y⊤XW 01 W 02 a⊤ y⊤XX ⊤y
+
+h
+
+a⊤W 02
+
+> ⊤
+
+W 01
+
+> ⊤
+
+X⊤y
+
+i⊤
+
+a⊤
+
+ 
+
+= η21 η22
+
+n4h3 tr 
+
+
+
+E
+
+h
+
+aa ⊤aa ⊤W 02
+
+> ⊤
+
+W 01
+
+> ⊤
+
+X⊤yy ⊤XX ⊤yy ⊤XW 01 W 02 aa ⊤i 
+
+= η21 η22
+
+n4h3 tr 
+
+
+
+E
+
+h
+
+aa ⊤aa ⊤aa ⊤W 02
+
+> ⊤
+
+W 01
+
+> ⊤
+
+X⊤yy ⊤XX ⊤yy ⊤XW 01 W 02
+
+i 
+
+= η21 η22
+
+n4h3 tr 
+
+
+
+E aa ⊤aa ⊤aa ⊤ E
+
+h
+
+W 02
+
+> ⊤
+
+W 01
+
+> ⊤
+
+X⊤yy ⊤XX ⊤yy ⊤XW 01 W 02
+
+i 
+
+(170) For E aa ⊤aa ⊤aa ⊤, we have 
+
+E aa ⊤aa ⊤aa ⊤ 
+
+> 11
+
+= E
+
+
+
+> h
+
+X
+
+> i=1
+
+a2
+
+> i
+
+!2
+
+a21
+
+ = 1
+
+h + O( 1
+
+h2 ),
+
+E aa ⊤aa ⊤aa ⊤ 
+
+> 11
+
+= E
+
+
+
+> h
+
+X
+
+> i=1
+
+a2
+
+> i
+
+!2
+
+a1a2
+
+ = 0 .
+
+(171) Which means E aa ⊤aa ⊤aa ⊤ =   1 
+
+> h
+
++ O( 1 
+
+> h2
+
+) Ih, taking it into T16 
+
+T16 = η21 η22
+
+n4h3
+
+ 1
+
+h + O( 1
+
+h2 )
+
+
+
+tr E
+
+h
+
+W 02
+
+> ⊤
+
+W 01
+
+> ⊤
+
+X⊤yy ⊤XX ⊤yy ⊤XW 01 W 02
+
+i
+
+= η21 η22
+
+n4h3
+
+ 1
+
+h + O( 1
+
+h2 )
+
+
+
+tr E
+
+h
+
+W 02 W 02
+
+> ⊤
+
+W 01
+
+> ⊤
+
+X⊤yy ⊤XX ⊤yy ⊤XW 01
+
+i
+
+= η21 η22
+
+n4h3
+
+ 1
+
+h + O( 1
+
+h2 )
+
+
+
+tr E
+
+h
+
+W 01
+
+> ⊤
+
+X⊤yy ⊤XX ⊤yy ⊤XW 01
+
+i
+
+= η21 η22
+
+n4h3
+
+ 1
+
+h + O( 1
+
+h2 )
+
+
+
+tr E
+
+h
+
+W 01 W 01
+
+> ⊤
+
+X⊤yy ⊤XX ⊤yy ⊤X
+
+i
+
+= η21 η22
+
+n4h2d
+
+ 1
+
+h + O( 1
+
+h2 )
+
+
+
+tr E X⊤yy ⊤XX ⊤yy ⊤X
+
+(172) 65 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+For tr E X⊤yy ⊤XX ⊤yy ⊤X, we have 
+
+tr E X⊤yy ⊤XX ⊤yy ⊤X = tr E
+
+h
+
+X⊤Xβ ∗β∗⊤
+
+X⊤XX ⊤ξξ ⊤X
+
+i
+
++ tr E
+
+h
+
+X⊤ξξ ⊤XX ⊤Xβ ∗β∗⊤
+
+X⊤X
+
+i
+
++ tr E X⊤Xβ ∗ξ⊤XX ⊤Xβ ∗ξ⊤X
+
++ tr E
+
+h
+
+X⊤ξβ ∗⊤
+
+X⊤XX ⊤ξβ ∗⊤
+
+X⊤X
+
+i
+
++ tr E X⊤ξξ ⊤XX ⊤ξξ ⊤X
+
++ tr E
+
+h
+
+X⊤Xβ ∗ξ⊤XX ⊤ξβ ∗⊤
+
+X⊤X
+
+i
+
++ tr E
+
+h
+
+X⊤ξβ ∗⊤
+
+X⊤XX ⊤Xβ ∗ξ⊤X
+
+i
+
++ tr E
+
+h
+
+X⊤Xβ ∗β∗⊤
+
+X⊤XX ⊤Xβ ∗β∗⊤
+
+X⊤X
+
+i
+
+It is easy to see 
+
+tr E
+
+h
+
+X⊤Xβ ∗β∗⊤
+
+X⊤XX ⊤ξξ ⊤X
+
+i
+
+= tr E
+
+h
+
+X⊤ξξ ⊤XX ⊤Xβ ∗β∗⊤
+
+X⊤X
+
+i
+
+= tr E X⊤Xβ ∗ξ⊤XX ⊤Xβ ∗ξ⊤X
+
+= tr E
+
+h
+
+X⊤ξβ ∗⊤
+
+X⊤XX ⊤ξβ ∗⊤
+
+X⊤X
+
+i
+
+= ρ2
+
+> e
+
+d tr E XX ⊤XXX ⊤X
+
+= ρ2
+
+> e
+
+d E XX ⊤X 2
+
+> F
+
+≤ ρ2
+
+> e
+
+d E ∥X∥2 ∥X∥2 ∥X∥2
+
+> F
+
+= O(n3)
+
+It is also easy to see tr E X⊤ξξ ⊤XX ⊤ξξ ⊤X = E XX ⊤ξξ ⊤ 2 
+
+> F
+
+≤ O(n3).Here we focus on computing 
+
+tr E
+
+h
+
+X⊤Xβ ∗ξ⊤XX ⊤ξβ ∗⊤
+
+X⊤X
+
+i
+
+, tr E
+
+h
+
+X⊤Xβ ∗β∗⊤
+
+X⊤XX ⊤Xβ ∗β∗⊤
+
+X⊤X
+
+i
+
+since we have 
+
+tr E
+
+h
+
+X⊤Xβ ∗ξ⊤XX ⊤ξβ ∗⊤
+
+X⊤X
+
+i
+
+= tr E
+
+h
+
+X⊤ξβ ∗⊤
+
+X⊤XX ⊤Xβ ∗ξ⊤X
+
+i
+
+66 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+For tr E
+
+h
+
+X⊤Xβ ∗ξ⊤XX ⊤ξβ ∗⊤
+
+X⊤X
+
+i
+
+, we have 
+
+tr E
+
+h
+
+X⊤Xβ ∗ξ⊤XX ⊤ξβ ∗⊤
+
+X⊤X
+
+i
+
+=tr E
+
+h
+
+ξ⊤XX ⊤ξX ⊤Xβ ∗β∗⊤
+
+X⊤X
+
+i
+
+=tr E
+
+h
+
+β∗β∗⊤
+
+X⊤Xξ ⊤XX ⊤ξX ⊤X
+
+i
+
+= ρ2
+
+> e
+
+d E tr  X⊤X tr  X⊤XX ⊤X 
+
+= ρ2
+
+> e
+
+d E
+
+h
+
+X⊤X 2 
+
+> F
+
+∥X∥2
+
+> F
+
+i
+
+= ρ2
+
+> e
+
+d E
+
+X
+
+> i,j
+
+X2
+
+> ij
+
+ X
+
+> p,q
+
+ X⊤X2
+
+> pq
+
+!
+
+= ρ2
+
+> e
+
+d E
+
+X
+
+> i,j
+
+X2
+
+> ij
+
+
+
+> d
+
+X
+
+> p=1
+> n
+
+X
+
+> m=1
+
+X2
+
+> mp
+
+!2
+
++ X
+
+> p,q p̸=q
+> n
+
+X
+
+> k=1
+
+Xkp Xkq 
+
+!2
+
+
+
+=nρ 2
+
+> e
+
+E
+
+X211 
+
+
+
+> d
+
+X
+
+> p=1
+> n
+
+X
+
+> m=1
+
+X2
+
+> mp
+
+!2
+
++ X
+
+> p,q p̸=q
+> n
+
+X
+
+> k=1
+
+Xkp Xkq 
+
+!2
+
+
+
+(173) 
+
+nρ 2
+
+> e
+
+E
+
+X211 
+
+
+
+> d
+
+X
+
+> p=1
+> n
+
+X
+
+> m=1
+
+X2
+
+> mp
+
+!2
+
+=nd × (d − 1)(3 n + n2 − n) + 15 + 2 × (n − 1) × 3 + n2 − 2 × (n − 1) − 1
+
+=n3dρ 2 
+
+> e
+
++ O(n2d)
+
+(174) 
+
+nρ 2
+
+> e
+
+E
+
+X211 
+
+X
+
+> p,q p̸=q
+> n
+
+X
+
+> k=1
+
+Xkp Xkq 
+
+!2
+
+ = nρ 2 
+
+> e
+
+× (d2 − d − 2) n + 2 × 3n
+
+= n2d2ρ2 
+
+> e
+
++ O(n2d)
+
+(175) By ( 174) and ( 175) we have 
+
+tr E
+
+h
+
+X⊤Xβ ∗ξ⊤XX ⊤ξβ ∗⊤
+
+X⊤X
+
+i
+
+= n3dρ 2 
+
+> e
+
++ n2d2ρ2 
+
+> e
+
++ O(n2d) (176) For tr E
+
+h
+
+X⊤Xβ ∗β∗⊤
+
+X⊤XX ⊤Xβ ∗β∗⊤
+
+X⊤X
+
+i
+
+, we have 
+
+tr E
+
+h
+
+X⊤Xβ ∗β∗⊤
+
+X⊤XX ⊤Xβ ∗β∗⊤
+
+X⊤X
+
+i
+
+=E X⊤Xβ ∗β∗⊤
+
+X⊤X 2
+
+> F
+
+= X
+
+> i,j
+> n
+
+X
+
+> k=1
+> d
+
+X
+
+> m=1
+> d
+
+X
+
+> s=1
+> n
+
+X
+
+> q=1
+
+Xki Xkm β∗
+
+> m
+
+β∗⊤ 
+
+> s
+
+Xqs Xqj 
+
+!2
+
+.
+
+(177) 
+
+Case 1 i̸ = j, m = s. It is easy to see in this case, the main term holds when 3 ≤ m ≤ d and k̸ = q, since other conditions will only have up to O(n2d). Combining with the condition 3 ≤ m ≤ d, we have 
+
+tr E
+
+h
+
+X⊤Xβ ∗β∗⊤
+
+X⊤XX ⊤Xβ ∗β∗⊤
+
+X⊤X
+
+i
+
+> 1
+
+= O(n2d).
+
+67 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+Case 2 i̸ = j, m ̸ = s. It is easy to see in this case, the main term holds when s ≥ 2, m ≥ 2, and other conditions will only have up to O(n2d). Combining with the condition s ≥ 2, m ≥ 2, we have 
+
+tr E
+
+h
+
+X⊤Xβ ∗β∗⊤
+
+X⊤XX ⊤Xβ ∗β∗⊤
+
+X⊤X
+
+i
+
+> 2
+
+= 4 n2d2 + O(n2d).
+
+Case 3 i = j, m = s. In this case, the main term still holds when 3 ≤ m ≤ d and k̸ = q. We have 
+
+tr E
+
+h
+
+X⊤Xβ ∗β∗⊤
+
+X⊤XX ⊤Xβ ∗β∗⊤
+
+X⊤X
+
+i
+
+> 3
+
+= O(n2d).
+
+Case 4 i = j, m ̸ = s. In this case, the main term holds when s ≥ 2, m ≥ 2, we have 
+
+tr E
+
+h
+
+X⊤Xβ ∗β∗⊤
+
+X⊤XX ⊤Xβ ∗β∗⊤
+
+X⊤X
+
+i
+
+> 4
+
+= O(n2d).
+
+By Case 1 to Case 4, We finally get 
+
+tr E
+
+h
+
+X⊤Xβ ∗β∗⊤
+
+X⊤XX ⊤Xβ ∗β∗⊤
+
+X⊤X
+
+i
+
+= 4 n2d2 + O(n2d) (178) Here, we take ( 176) and( 178), we finally get 
+
+T16 = η21 η22
+
+n4h2d
+
+ 1
+
+h + O( 1
+
+h2 )
+
+ (2 n3d + 2 n2d2)ρ2 
+
+> e
+
++ 4 n2d2 + O(n2d)
+
+= η21 η22 ρ2
+
+> e
+
+nh e + η21 η22 dρ 2
+
+> e
+
+n2h3 + 4η21 η22 dn2h3 + O
+
+ η21 η22
+
+h5
+
+ (179) 
+
+□
+
+Analysis of T2, T3, T5, T8, T9, T12 , T14 , T15 , T17 , T20 , T21 and T24 . All terms involve the product of an odd number of identical random matrices with zero mean, and due to their independence from other random matrices, these terms are all 0.
+
+□
+
+Analysis of T18 , T19 , T22 and T23 . We take T18 as an example. 
+
+T18 = tr 
+
+
+
+EW 01 ,W 02 ,a,ξ,X
+
+h η1
+
+nh β∗a⊤W 02
+
+> ⊤
+
+W 02 ay ⊤X
+
+i 
+
+= η1
+
+nh Etr 
+
+h
+
+W 02
+
+> ⊤
+
+W 02 ay ⊤Xβ ∗a⊤i
+
+= η1
+
+nh Etr a⊤ay ⊤Xβ ∗
+
+= η1
+
+nh Etr y⊤Xβ ∗
+
+= η1
+
+nh Etr y⊤Xβ ∗
+
+= η1
+
+nh Etr 
+
+h
+
+β∗⊤
+
+X⊤Xβ ∗i
+
+= η1
+
+nh Etr 
+
+h
+
+X⊤Xβ ∗β∗⊤ i
+
+= η1
+
+h
+
+(180) Similar to T18 , we can get 
+
+T19 = η2
+
+d (181) 
+
+T22 = η1
+
+h (182) 
+
+T23 = η2
+
+d (183) 68 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+□
+
+Finally, we get the exact loss 
+
+Lthree-layer = η21
+
+h2 + η21 d(1 + ρ2
+
+> e
+
+)
+
+h2n − 2 η1
+
+h
+
++ η22
+
+d2 + η22
+
+hd + η22 (1 + ρ2
+
+> e
+
+)
+
+nh + η22 (1 + ρ2
+
+> e
+
+)
+
+nd − 2 η2
+
+d
+
++ 2η1η2
+
+hd + 2η1η2(1 + ρ2
+
+> e
+
+)
+
+nh + η21 η22 ρ2
+
+> e
+
+nh 3 + η21 η22 dρ 2
+
+> e
+
+n2h3 + 4η21 η22 dn2h3
+
++ 1 + O( η21
+
+h3 ) + O( η22
+
+h3 ) + O( η1η2
+
+h3 ) + O
+
+ η21 η22
+
+h5
+
+
+
+(184) Under Assumption E.1, we have 
+
+Lthree-layer = η21
+
+h2 + η21 (1 + ρ2
+
+> e
+
+)
+
+hn − 2 η1
+
+h
+
++ 2η22
+
+h2 + 2η22 (1 + ρ2
+
+> e
+
+)
+
+nh − 2 η2
+
+h
+
++ 2η1η2
+
+h2 + 2η1η2(1 + ρ2
+
+> e
+
+)
+
+nh + η21 η22 ρ2
+
+> e
+
+nh 3 + η21 η22 ρ2
+
+> e
+
+n2h2 + 4η21 η22
+
+n2h2
+
++ 1 + O( η21
+
+h3 ) + O( η22
+
+h3 ) + O( η1η2
+
+h3 ) + O
+
+ η21 η22
+
+h5
+
+
+
+(185) 
+
+□
+
+F. Additional Experiments 
+
+F.1. Spectral Analysis 
+
+To better understand Proposition 5.1, in this subsection, we perform spectral analysis of the key matrices like 
+
+{A0 
+
+> l
+
+}2
+
+> l=1
+
+, {B0 
+
+> l
+
+}2
+
+> l=1
+
+, {G0 
+
+> l
+
+}2
+
+> l=1
+
+, { fA1 
+
+> l
+
+}2
+
+> l=1
+
+, { fB1 
+
+> l
+
+}2
+
+> l=1
+
+, { fG1 
+
+> l
+
+}2 
+
+> l=1
+
+arising after one-step and two-step updates in a two-layer linear neural network under orthogonal initialization. In Figure 3, we consider η1 = η2 = h 32 with h = 1000 , we visualize the empirical spectral densities (ESDs) of the weight matrices, gradient matrices, and the decomposed gradient components represented as A and B. Take {A0 
+
+> l
+
+}2
+
+> l=1
+
+, {B0 
+
+> l
+
+}2
+
+> l=1
+
+, {G0 
+
+> l
+
+}2 
+
+> l=1
+
+as examples, we find that the eigenvalue scales of {A0 
+
+> l
+
+}2
+
+> l=1
+
+and {G0 
+
+> l
+
+}2 
+
+> l=1
+
+are comparable, and are larger than those of {B0 
+
+> l
+
+}2 
+
+> l=1
+
+by an O(h) factor. This matches our norm analysis in Section C.1.2 and C.2.1, showing that A0 
+
+> l
+
+exceeds B0 
+
+> l
+
+) by O(√h), since the ESD is computed from the eigenvalues of W ⊤W . We visualize the norm gap in Figure 3q and 3r, which also confirm that the eigenvalue scales of {A0 
+
+> l
+
+}2
+
+> l=1
+
+and {G0 
+
+> l
+
+}2 
+
+> l=1
+
+are comparable, and are larger than those of {B0 
+
+> l
+
+}2 
+
+> l=1
+
+in magnitude, we also find the eigenvalue scales of 
+
+{ηlG0 
+
+> l
+
+}2 
+
+> l=1
+
+and {ηlA0 
+
+> l
+
+}2 
+
+> l=1
+
+are comparable to { gW 1 
+
+> l
+
+}2
+
+> l=1
+
+, which matches our Proposition 5.1. Consequently, the ESDs provide an intuitive explanation for why {A0 
+
+> l
+
+}2 
+
+> l=1
+
+and {G0 
+
+> l
+
+}2 
+
+> l=1
+
+are close in norm, supporting our use of the approximate gradient when deriving the one-step and two-step exact losses. A similar phenomenon holds for { fA1 
+
+> l
+
+}2 
+
+> l=1
+
+and {G1 
+
+> l
+
+}2
+
+> l=1
+
+,relative to { fB1 
+
+> l
+
+}2
+
+> l=1
+
+.
+
+F.2. Theoretical Simulation 
+
+Here we present more experimental results. 
+
+Orthogonal initialization. In Figure 5 and 7, Under orthogonal initialization, we set h = 1000 and conducted experiments for steps ∈ { 1, 2, 4, 8} under the constraint η1 + η2 ≤ h 32 . Consistent with our earlier findings: after two updates the model exhibits local optimality at balanced layer-wise learning rates. We also try different h and find that when h satisfy the condition on h in Corollary like Corollary 5.4, the balanced learning-rate allocation is locally optimal, otherwise not. See Figure 11, 12 and 13. 69 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 0.00 0.25 0.50 0.75 1.00 1.25 
+
+Eigenvalues ×10 −13 +10 −9 
+
+> 10 12
+> 10 13
+> Density
+
+A 01
+
+(a) A010.00 0.25 0.50 0.75 1.00 1.25 
+
+Eigenvalues ×10 −13 +10 −9 
+
+> 10 12
+> 10 13
+> Density
+
+A 02 (b) A020.950 0.975 1.000 1.025 1.050 
+
+Eigenvalues ×10 −9 
+
+> 10 10
+> Density
+
+G 01 (c) G010.950 0.975 1.000 1.025 1.050 
+
+Eigenvalues ×10 −9 
+
+> 10 10
+> Density
+
+G 02 (d) G020.25 0.50 0.75 1.00 1.25 
+
+Eigenvalues ×10 −16 +10 −12 
+
+> 10 15
+> 10 16
+> Density
+
+B 01
+
+(e) B01−1.00 −0.75 −0.50 −0.25 0.00 0.25 
+
+Eigenvalues ×10 −16 +1.0001 × 10 −12 
+
+> 10 15
+> 10 16
+> Density
+
+B 02 (f) B020.0 1.5 3.0 4.5 
+
+Eigenvalues ×10 −11 
+
+> 10 11
+> 10 13
+> 10 15
+> 10 17
+> Density
+
+̃
+
+B 11 (g) fB110.0 0.6 1.2 1.8 2.4 3.0 
+
+Eigenvalues ×10 −11 
+
+> 10 10
+> 10 11
+> 10 12
+> 10 13
+> 10 14
+> 10 15
+> Density
+
+̃
+
+B 12 (h) fB120.0 0.8 1.6 2.4 3.2 
+
+Eigenvalues ×10 −9 
+
+> 10 8
+> 10 9
+> 10 10
+> Density
+
+̃
+
+A 11
+
+(i) fA110.0 0.8 1.6 2.4 3.2 
+
+Eigenvalues ×10 −9 
+
+> 10 8
+> 10 9
+> 10 10
+> Density
+
+̃
+
+A 12 (j) fA120.0 0.6 1.2 1.8 2.4 3.0 
+
+Eigenvalues ×10 −9 
+
+> 10 8
+> 10 9
+> 10 10
+> Density
+
+G 11 (k) G110.0 0.8 1.6 2.4 3.2 4.0 
+
+Eigenvalues ×10 −9 
+
+> 10 9
+> 10 10
+> Density
+
+G 12 (l) G120.0 0.8 1.6 2.4 3.2 
+
+Eigenvalues 
+
+> 10 −1
+> 10 0
+> 10 1
+> Density
+
+̃ W 11
+
+(m) gW 110.0 0.8 1.6 2.4 3.2 
+
+Eigenvalues 
+
+> 10 −1
+> 10 0
+> 10 1
+> Density
+
+̃ W 12 (n) gW 120.0 0.3 0.6 0.9 1.2 1.5 
+
+Eigenvalues ×10 1
+
+> 10 −1
+> 10 0
+> 10 1
+> 10 2
+> 10 3
+> Density
+
+̃ W 21 (o) gW 210.0 0.3 0.6 0.9 1.2 1.5 
+
+Eigenvalues ×10 1
+
+> 10 −1
+> 10 0
+> 10 1
+> 10 2
+> 10 3
+> Density
+
+̃ W 22 (p) gW 2210 −6 
+
+10 −5 
+
+10 −4 
+
+> Norm
+
+‖G 01 − A 01 ‖
+
+‖G 11 −̃ A 11 ‖
+
+‖G 01 − B 01 ‖
+
+‖G 11 −̃ B 11 ‖
+
+(q) First Layer Norm Gap 10 −6 
+
+10 −5 
+
+10 −4 
+
+> Norm
+
+‖G 02 − A 02 ‖
+
+‖G 12 −̃ A 12 ‖
+
+‖G 02 − B 02 ‖
+
+‖G 12 −̃ B 12 ‖ (r) Second Layer Norm Gap 
+
+Figure 3. We visualize the ESDs of gradient matrices and weight matrices {A0
+
+l }2
+
+l=1 , {B0
+
+l }2
+
+l=1 , {G0
+
+l }2
+
+l=1 , { fA1
+
+l }2
+
+l=1 , { fB1
+
+l }2
+
+l=1 , { fG1
+
+l }2
+
+l=1 ,
+
+{ gW 1
+
+l }2
+
+l=1 and { gW 2
+
+l }2
+
+l=1 and norm gap with η1 = η2 = h 32 and h = 1000 .
+
+Orthogonal initialization. We also ran the same set of experiments under Gaussian initialization In Figure 6 and 8, with h = 1000 and η1 + η2 ≤ h 23 , again for steps ∈ { 1, 2, 4, 8}. The results mirror those under orthogonal initialization: 70 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 0 10000 20000 
+
+η1  
+
+> 0.96
+> 0.98
+> 1.00
+> Test Loss
+> Experiment
+> Theory(Ours)
+> η1=η2
+> 5000
+> 7500
+> 10000
+> 12500
+> 15000
+> 17500
+> 20000
+> 22500
+> η1 + η2
+
+(a) 1-step GD update 0 10000 20000 
+
+η1   
+
+> 0.900
+> 0.925
+> 0.950
+> 0.975
+> 1.000
+> Test Loss
+> Experiment
+> Theory(Ours)
+> η1=η2
+> 5000
+> 7500
+> 10000
+> 12500
+> 15000
+> 17500
+> 20000
+> 22500
+> η1 + η2
+
+(b) 2-step GD update 0 25000 50000 
+
+η1   
+
+> 0.87
+> 0.88
+> 0.89
+> 0.90
+> Test Loss
+> Experiment
+> Theory(Ours)
+> η1=η2
+> 56000
+> 58000
+> 60000
+> 62000
+> 64000
+> η1 + η2
+
+(c) 1-step GD update 0 25000 50000 
+
+η1   
+
+> 0.60
+> 0.65
+> 0.70
+> 0.75
+> 0.80
+> Test Loss
+> Experiment
+> Theory(Ours)
+> η1=η2
+> 56000
+> 58000
+> 60000
+> 62000
+> 64000
+> η1 + η2
+
+(d) 2-step GD update 
+
+Figure 4. Test loss of a 2-layer NN under orthogonal initialization with width h = 1000 . Here we set η1 + η2 ≤ O(h 32 ). Our theory accurately predicts the test loss after 1-step and 2-step gradient descent updates with varying learning rates. In particular, we highlight the role of balancing learning rates across layers (i.e η1 = η2) on the test loss. 
+
+balanced learning rates become locally optimal after two updates, whereas after a single update an asymmetric learning-rate allocation performs better, which is consistent with the special cases of Theorem E.4 and Theorem E.6 for two-layer and three-layer neural networks. 
+
+More discussions in Section 7. For the question about our paper shows symmetric learning rates are suboptimal for one step but optimal for two steps, which may be not exactly the same as using asymmetric learning rates early and symmetric ones later. Here we agree that our theory focuses on the result that symmetric learning rates are suboptimal for a single update step but become optimal after two steps. This suggests that 1. asymmetric learning rates may be preferable at the very beginning of training, 2. symmetric learning rates become optimal as cross-layer interactions develop over subsequent steps, even if the initial learning-rate allocation is not optimal. We believe this also points to a practical strategy that use asymmetric learning rates early in training and more symmetric ones later. To better connect these two regimes, in Figure 16(a)(b) we consider a three layer linear network in which the first step uses an asymmetric learning rate allocation by training only the first layer. For the second step, we then search over the test loss as a function of η1 under the constraint η1 + η2 = C. We find that the same transition still appears: from asymmetry at the first step to balance at the second step. In Figure 16(c)(d)(e), we consider a 3-layer CNN whose first two layers are convolutional layers and whose final layer is a fixed linear readout layer. We consider a synthetic binary image classification problem on 16 × 16 grayscale images. Each sample belongs to one of two classes: Class −1: an image containing a horizontal bar. Class +1 : an image containing a vertical bar. We consider two trainable 3 × 3 convolutional layers with no bias: the first maps from 1 input channel to 8 hidden channels, and the second maps from 8 channels to 8 channels, with a ReLU activation after each convolution. The resulting feature map is then globally average pooled over the spatial dimensions, producing an 8-dimensional representation, which is fed into a fixed random linear readout to produce a single scalar output. In Figure 16(c)(d), for the first step, we consider only updating the first(second) layer, using learning rate C. For the second step, we study layer-wise learning-rate allocation under the constraint η1 + η2 = C. Although the optimum no longer occurs exactly at η1 = η2 because of the changed architecture and the presence of nonlinearities, the optimal performance is still attained when η1 ≈ η2. This indicates that, after an asymmetric first step, learning rates that are approximately symmetric still remain preferable. In Figure 16(e), We study a 3-layer CNN in which the second update step uses a symmetric learning-rate allocation, η1 = η2 = C 
+
+> 2
+
+, while the first step is optimized under the constraint η1 + η2 = C. We find training the second layer (corresponding to η1 = 0 ) at the first step is better than the symmetric allocation. Thus, the CNN experiments lead to similar conclusions as in the 3-layer linear neural network setting, further reinforcing our claim. 71 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 0 10000 
+
+η1
+
+0.965 
+
+0.970 
+
+0.975 
+
+0.980 
+
+> Test Loss
+> 10000
+> 12000
+> 14000
+> 16000
+> 18000
+> 20000
+> η1 + η2
+
+(a) Step=1 0 10000 
+
+η1
+
+0.92 
+
+0.93 
+
+0.94 
+
+0.95 
+
+0.96  
+
+> Test Loss
+> 10000
+> 12000
+> 14000
+> 16000
+> 18000
+> 20000
+> η1 + η2
+
+(b) Step=2 0 10000 
+
+η1
+
+0.80 
+
+0.85 
+
+0.90  
+
+> Test Loss
+> 10000
+> 12000
+> 14000
+> 16000
+> 18000
+> 20000
+> η1 + η2
+
+(c) Step=4 0 10000 
+
+η1
+
+0.4 
+
+0.6 
+
+0.8  
+
+> Test Loss
+> 10000
+> 12000
+> 14000
+> 16000
+> 18000
+> 20000
+> η1 + η2
+
+(d) Step=8 
+
+Figure 5. More-steps-empirical-loss for 2-layer NN under Orthogonal initialization. Here we set η1 + η2 ≤ O(h 32 ) and h = 1000 .0 10000 
+
+η1
+
+0.965 
+
+0.970 
+
+0.975 
+
+0.980 
+
+> Test Loss
+> 10000
+> 12000
+> 14000
+> 16000
+> 18000
+> 20000
+> η1 + η2
+
+(a) Step=1 0 10000 
+
+η1
+
+0.90 
+
+0.92 
+
+0.94 
+
+0.96  
+
+> Test Loss
+> 10000
+> 12000
+> 14000
+> 16000
+> 18000
+> 20000
+> η1 + η2
+
+(b) Step=2 0 10000 
+
+η1
+
+0.7 
+
+0.8 
+
+0.9  
+
+> Test Loss
+> 10000
+> 12000
+> 14000
+> 16000
+> 18000
+> 20000
+> η1 + η2
+
+(c) Step=4 0 10000 
+
+η1
+
+0.5 
+
+0.6 
+
+0.7 
+
+0.8  
+
+> Test Loss
+> 10000
+> 12000
+> 14000
+> 16000
+> 18000
+> 20000
+> η1 + η2
+
+(d) Step=8 
+
+Figure 6. More-steps-empirical-loss for 2-layer NN under Gaussian initialization. Here we set η1 + η2 ≤ O(h 32 ) and h = 1000 .0 20 
+
+η1
+
+0.945 
+
+0.950 
+
+0.955 
+
+0.960 
+
+> Test Loss
+> 30
+> 32
+> 34
+> 36
+> 38
+> 40
+> η1 + η2
+
+(a) Step=1 0 20 
+
+η1
+
+0.82 
+
+0.84 
+
+0.86 
+
+0.88 
+
+0.90  
+
+> Test Loss
+> 30
+> 32
+> 34
+> 36
+> 38
+> 40
+> η1 + η2
+
+(b) Step=2 0 20 
+
+η1
+
+0.2 
+
+0.4 
+
+0.6  
+
+> Test Loss
+> 30
+> 32
+> 34
+> 36
+> 38
+> 40
+> η1 + η2
+
+(c) Step=4 0 20 
+
+η1
+
+0.0 
+
+0.1 
+
+0.2 
+
+0.3  
+
+> Test Loss
+> 30
+> 32
+> 34
+> 36
+> 38
+> 40
+> η1 + η2
+
+(d) Step=8 
+
+Figure 7. More-steps-empirical-loss for 3-layer NN under Orthogonal initialization. Here we set η1 + η2 ≤ O(h 23 ) and h = 1000 .0 20 
+
+η1
+
+0.94 
+
+0.95 
+
+0.96 
+
+> Test Loss
+> 30
+> 32
+> 34
+> 36
+> 38
+> 40
+> η1 + η2
+
+(a) Step=1 0 20 
+
+η1
+
+0.80 
+
+0.85 
+
+0.90  
+
+> Test Loss
+> 30
+> 32
+> 34
+> 36
+> 38
+> 40
+> η1 + η2
+
+(b) Step=2 0 20 
+
+η1
+
+0.4 
+
+0.5 
+
+0.6 
+
+0.7  
+
+> Test Loss
+> 30
+> 32
+> 34
+> 36
+> 38
+> 40
+> η1 + η2
+
+(c) Step=4 0 20 
+
+η1
+
+0.2 
+
+0.3 
+
+0.4 
+
+0.5  
+
+> Test Loss
+> 30
+> 32
+> 34
+> 36
+> 38
+> 40
+> η1 + η2
+
+(d) Step=8 
+
+Figure 8. More-steps-empirical-loss for 3-layer NN under Gaussian initialization. Here we set η1 + η2 ≤ O(h 23 ) and h = 1000 .
+
+72 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+(a) Step=2 (b) Step=4 (c) Step=8 (d) Step=16 
+
+(e) Step=32 (f) Step=64 (g) Step=128 (h) Step=512 
+
+Figure 9. More-steps-empirical-loss for 3-layer NN under Orthogonal initialization up to 512 steps. Here we set η1 + η2 ≤ O(h 23 )
+
+and h = 1000 .
+
+(a) 2-layer NN Step=1 
+
+(b) 2-layer NN Step=2 
+
+(c) 3-layer NN Step=1 
+
+(d) 3-layer NN Step=2 
+
+Figure 10. (a)(b) 2-layer NN with label noise ξ ∈ N (0 , ρ ) under orthogonal initialization. Here we set η1 +η2 ≤ O(h 32 ) with h = 1000 
+
+and ρ = 0 .001 . (c)(d) 3-layer NN with label noise ξ ∈ N (0 , ρ ) under orthogonal initialization. Here we set η1 + η2 ≤ O(h 23 ) with 
+
+h = 1000 and ρ = 0 .001 .0 250000 500000 
+
+η1
+
+0.945 
+
+0.950 
+
+0.955 
+
+0.960 
+
+> Test Loss
+> 500000
+> 525000
+> 550000
+> 575000
+> 600000
+> 625000
+> 650000
+> 675000
+> 700000
+> η1 + η2
+
+(a) 1-step (theory) 0 250000 500000 
+
+η1
+
+0.945 
+
+0.950 
+
+0.955 
+
+0.960  
+
+> Test Loss
+> 500000
+> 525000
+> 550000
+> 575000
+> 600000
+> 625000
+> 650000
+> 675000
+> 700000
+> η1 + η2
+
+(b) 1-step (experiment) 0 250000 500000 
+
+η1
+
+0.80 
+
+0.85 
+
+0.90  
+
+> Test Loss
+> 500000
+> 525000
+> 550000
+> 575000
+> 600000
+> 625000
+> 650000
+> 675000
+> 700000
+> η1 + η2
+
+(c) 2-step (theory) 0 250000 500000 
+
+η1
+
+0.825 
+
+0.850 
+
+0.875 
+
+0.900  
+
+> Test Loss
+> 500000
+> 525000
+> 550000
+> 575000
+> 600000
+> 625000
+> 650000
+> 675000
+> 700000
+> η1 + η2
+
+(d) 2-step (experiment) 
+
+Figure 11. 2-layer NN under orthogonal initialization. Here we set η1 + η2 ≤ O(h 32 ) and h = 5000 .
+
+73 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 0 200 
+
+η1
+
+0.90 
+
+0.92 
+
+0.94 
+
+> Test Loss
+> 160
+> 180
+> 200
+> 220
+> 240
+> 260
+> 280
+> 300
+> η1 + η2
+
+(a) 1-step (theory) 0 200 
+
+η1
+
+0.92 
+
+0.94 
+
+0.96  
+
+> Test Loss
+> 160
+> 180
+> 200
+> 220
+> 240
+> 260
+> 280
+> 300
+> η1 + η2
+
+(b) 1-step (experiment) 0 200 
+
+η1
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8  
+
+> Test Loss
+> 160
+> 180
+> 200
+> 220
+> 240
+> 260
+> 280
+> 300
+> η1 + η2
+
+(c) 2-step (theory) 0 200 
+
+η1
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8  
+
+> Test Loss
+> 160
+> 180
+> 200
+> 220
+> 240
+> 260
+> 280
+> 300
+> η1 + η2
+
+(d) 2-step (experiment) 
+
+Figure 12. 3-layer NN under orthogonal initialization. Here we set η1 + η2 ≤ O(h 23 ) and h = 5000 .0 1000 
+
+η1
+
+0.65 
+
+0.70 
+
+0.75 
+
+0.80 
+
+> Test Loss
+> 1000
+> 1200
+> 1400
+> 1600
+> 1800
+> 2000
+> η1 + η2
+
+(a) 1-step (theory) 0 1000 
+
+η1
+
+0.65 
+
+0.70 
+
+0.75 
+
+0.80  
+
+> Test Loss
+> 1000
+> 1200
+> 1400
+> 1600
+> 1800
+> 2000
+> η1 + η2
+
+(b) 1-step (experiment) 0 1000 
+
+η1
+
+0.3 
+
+0.4 
+
+0.5 
+
+0.6  
+
+> Test Loss
+> 1000
+> 1200
+> 1400
+> 1600
+> 1800
+> 2000
+> η1 + η2
+
+(c) 2-step (theory) 0 1000 
+
+η1
+
+0.3 
+
+0.4 
+
+0.5 
+
+0.6  
+
+> Test Loss
+> 1000
+> 1200
+> 1400
+> 1600
+> 1800
+> 2000
+> η1 + η2
+
+(d) 2-step (experiment) 
+
+Figure 13. 2-layer NN under orthogonal initialization. Here we set η1 + η2 ≤ O(h 32 ) and h = 100 . We can see since h does not satisfy the condition on h in Corollary 5.4, the balanced learning-rate allocation is not locally optimal. 
+
+(a) 4-Layer 1-step (b) 4-Layer 2-step (c) 8-Layer 1-step (d) 8-Layer 2-step 
+
+Figure 14. 4-layer and 8-layer NN under orthogonal initialization for 1 and 2-step updates. For 4-NN, we set η1 + η2 + η3 =
+
+C ≤ O(h 23 ) with h = 1000 and we set η2 = η3 = C−η1
+
+2 . For 8-NN, we set η1 + η2 + η3 + η4 + η5 + η6 + η7 = C ≤ O(h 23 ) with 
+
+h = 1000 and we set η2 = η3 = η4 = η5 = η6 = η7 = C−η1
+
+6 .
+
+74 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+(a) 1-step (b) 2-step 
+
+Figure 15. 3-NN nonlinear under orthogonal initialization for 1 and 8-step updates. Here we consider student model is f (xi) =  
+
+> 1√h
+
+σ(σ(x⊤ 
+
+> i
+
+W1)W2)a, and the teacher model is yi = σ(β∗⊤ xi), with σ being the ReLU activation. 
+
+75 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+(a) 3-layer NN, step 1: first-layer-only update (b) 3-layer NN, step 2: symmetric two-layer update 
+
+(c) 3-layer CNN step 1: first-layer-only update 
+
+(d) 3-layer CNN step 1: second-layer-only update 
+
+(e) 3-layer CNN step 2: symmetric two-layer update 
+
+Figure 16. (a) 3-layer NN under orthogonal initialization for special 2-step update. Here we set η1 + η2 = C ≤ O(h 23 ) with h = 1000 .
+
+We set the first step update step to use an asymmetric learning-rate allocation: the first layer is updated with learning rate C, while the second layer is not trained. For the second update step, we then optimize under the constraint η1 + η2 = C. (b) 3-layer NN under orthogonal initialization for special 2-step update. Here we set η1 + η2 = C. We set the second update step to use an symmetric learning-rate allocation: η1 = η2 = C 
+
+> 2
+
+. For the first update step, we optimize under the constraint η1 + η2 = C. (c) 3-layer CNN for special 2-step update. Here we set η1 + η2 = C. We set the first update step to use an asymmetric learning-rate allocation: the first layer is updated with learning rate C, while the second layer is not trained. For the second update step, we then optimize under the constraint 
+
+η1 + η2 = C. (d) 3-layer CNN for special 2-step update. Here we set η1 + η2 = C. We set the first update step to use an asymmetric learning-rate allocation: the second layer is updated with learning rate C, while the first layer is not trained. For the second update step, we then optimize under the constraint η1 + η2 = C. (e) 3-layer CNN for special 2-step update. Here we set η1 + η2 = C. We set the second update step to use an symmetric learning-rate allocation: η1 = η2 = C 
+
+> 2
+
+. For the first update step, we optimize under the constraint 
+
+η1 + η2 = C. 
+
+76 Balancing Learning Rates Across Layers: Exact Two-Step Dynamics and Optimal Scaling in Linear Neural Networks 
+
+(a) train loss(lin-lin) (b) test loss(lin-lin) (c) train loss(log-log) (d) test loss(log-log) 
+
+(e) train loss(later stage) (f) test loss(later stage) (g) Frobenius norm Gap 
+
+Figure 17. Insights for designing layer-wise lr scheduler. Here we condier W1 ∈ R60 ×100 , W2 ∈ R100 ×60 and M ∈ R60 ×60 , with 
+
+∥W1∥F = 1 and ∥W2∥F = 6 at initialization. We use 100 training samples and 20 test samples, base lr = 0 .0001 , adopt the MSE loss, and train the model using gradient descent for 200 iterations. 
+
+77
