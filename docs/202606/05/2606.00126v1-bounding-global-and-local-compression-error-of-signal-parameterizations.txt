@@ -1,0 +1,2703 @@
+Title: Bounding Global and Local Compression Error of Signal Parameterizations
+
+URL Source: https://arxiv.org/pdf/2606.00126v1
+
+Published Time: Tue, 02 Jun 2026 00:04:54 GMT
+
+Number of Pages: 36
+
+Markdown Content:
+# Bounding Global and Local Compression Error of Signal Parameterizations 
+
+Quang Luong Nhat Nguyen Sara Fridovich-Keil 
+
+School of Electrical and Computer Engineering Georgia Institute of Technology 
+
+{qnguyen95, sfk}@gatech.edu 
+
+## Abstract 
+
+Differentiable signal parameterizations such as implicit neural representations (INRs) and hybrid models are increasingly central to computational imaging, yet principled tools for evaluating reconstruction fidelity at finite model size remain limited when ground truth is unavailable. We introduce a framework for predicting the reconstruction error of compressive signal parameterizations, yielding non-asymptotic, signal-specific bounds that are both theoretically sound and efficiently computable without access to the ground truth signal. Specifically, we prove that when parameterization-based compression satisfies certain natural properties, the compression error at any compression level is bounded by a simple scaled difference between model predictions at different compression levels. We verify these properties for representative model families including interpolated grids, Fourier feature networks, multi-resolution hash encodings, and tensor factorizations, and show empirically that the resulting worst-case guarantees can be efficiently adapted into signal-specific error predictors that are tight and generalizable. Across direct fitting of synthetic and natural signals, and inverse problems including radiance field and MRI reconstruction, our method closely tracks global error curves and yields informative local error heatmaps without ground-truth access. Code is available at https://github.com/voilalab/global_error_bound .
+
+## 1 Introduction 
+
+Computational imaging seeks to recover high-fidelity signals from indirect, noisy measurements, and modern applications increasingly demand higher resolution, higher dimensionality, and dynamic content, ranging from gigavoxel volumetric MRI [ 1] to spatiotemporal neural radiance fields [ 2, 3 ]. These applications introduce severe bottlenecks in memory and compute. Compressive signal repre-sentations have therefore become indispensable, and a growing body of work has explored compact parameterizations for computational imaging, including sparse grids [ 4], basis decompositions [ 5, 6], coordinate-based neural networks [ 7 – 12 ], multi-resolution hash encodings [ 13 ], discrete mesh or point-based models [ 14 –16 ], low-rank factorizations [ 17 – 19 ], and other hybrid models [ 20 , 21 ] that combine several of these strategies. Despite their empirical success, these models offer limited practical guidance about what is lost under compression at finite model size. Moreover, their fidelity is often assessed by empirical comparison against a known ground truth signal [ 12 ], which is not usually available in computational imaging applications. In fields such as biomedical imaging and robotic perception, quantifying reconstruction fidelity in the absence of ground truth is essential for clinical diagnostics [ 1 , 22 –24 ]and operational safety [ 25 – 28 ]. Similar needs arise in remote sensing and edge or bandwidth-limited imaging systems [29–35], where communication, memory, and compute are tightly constrained. 
+
+> Preprint.
+> arXiv:2606.00126v1 [eess.IV] 28 May 2026
+
+While compression loss, or rate-distortion, is a well-studied problem in information theory [ 36 ], existing compression results do not immediately extend to the differentiable and often implicit neural parameterizations that are now common in computational imaging. Where theoretical ap-proximation error bounds do exist for neural networks, they often remain confined to asymptotic or overparametrized regimes [ 37 , 38 ], providing guarantees that are too coarse to inform signal-specific compression in practice. Consequently, there exist no principled tools to determine, without exhaus-tive search or access to ground truth, whether a given compressed parameterization is sufficiently accurate for a target application. To address this gap, we derive finite-parameter error bounds for widely used differentiable pa-rameterizations, including Fourier Feature Networks (FFN [ 11 ]), multi-resolution hash encodings (Instant-NGP [ 13 ]), and tensor-factorized feature grids (Geometric Algebra Planes [ 19 ]), by establish-ing three structural properties of their optimal error curves: monotonicity, convexity, and zero error beyond a critical parameter budget. We further complement these guarantees with a simple prediction scheme that requires fitting only a few models at nearby compression levels, translating conservative worst-case bounds into efficiently computable and empirically tight error estimates. We validate this framework across two settings: direct signal fitting, spanning synthetic signals and natural images, and imaging inverse problems, including radiance field and accelerated MRI reconstruction. Concretely, we make the following contributions: • We propose a framework for bounding the compression error of any signal parameterization that satisfies three natural properties: the compression error decreases monotonically with model size, is convex in model size, and is zero above some finite critical parameter budget. Under these assumptions, the compression error of a model can be rigorously bounded using only comparisons between models with nearby parameter counts, without any knowledge of the ground truth signal. • We prove that interpolated grids as well as three representative and popular parameterizations from the computer vision literature (Fourier feature networks [ 11 ], multi-resolution hash encodings [13], and tensor factorizations [19]) satisfy these properties. • While our theoretical bounds are provably valid, they are not empirically tight in their worst-case form. We introduce a simple method to adapt these bounds into practically useful error estimates for each model family that generalize well across diverse signals and model sizes. • We validate our error bounds empirically across all four representations and a variety of data types and inverse problems, including fitting natural images, synthetic signals, 3D objects, and synthetic volumes as well as 3D radiance field and MRI reconstruction. • Although our formal theory is stated for global reconstruction error, we demonstrate empirically that the same approach also yields informative local pixel-level error estimates that align well with the true error map, enabling efficient visualization and localization of compression artifacts without access to ground truth. 
+
+## 2 Related Work 
+
+Compressive parameterizations. Compact signal parameterizations have found broad application in computational imaging tasks where memory and compute are tightly constrained, including accel-erated MRI [ 1, 22 – 24 ], robotic perception [ 25 – 28 ], remote sensing [ 29 – 32 ], and edge-constrained imaging [ 33 – 35 ]. Recent architectures for these tasks have converged around a few families of differentiable parameterizations, including coordinate-based neural networks [ 7– 12 ], trainable spatial encodings [ 13 ], and tensor-factorized models [ 17 – 19 ]. In this work we focus on Fourier Feature Networks (FFNs) [ 11 ], Instant-NGP [ 13 ], and Geometric Algebra Planes (GA-Planes) [ 19 ] as repre-sentative models of each type. All three models contain an MLP component, which we restrict (for the sake of analysis) to be a shallow single-hidden-layer MLP with finite width. A more detailed discussion of each model architecture is provided in Appendix A.1. 
+
+Rate-distortion theory, compression bounds, and approximation theory. Prior theory addresses neighboring but ultimately different questions. Classical rate-distortion theory [ 36 , 39 ] and neural compression pipelines based on quantization or entropy coding [ 12 , 40 – 42 ] study compression through distributional distortion limits or explicit coding schemes, while complementary research [ 43 ]studies the model size required for lossless neural representation of a discrete signal. These results either assume a known source distribution or rely on nondifferentiable operations such as quantization 2and entropy encoding, whereas the representations we consider are continuously parameterized and fully differentiable throughout optimization, which is essential in computational imaging where we cannot directly measure the signal of interest. Separately, approximation theory [ 37 , 38 , 44 ] and universal approximation results [ 45 – 47 ] for neural networks characterize expressivity, approximation rates, and the existence of exact representations as width grows. These works provide important motivation and technical ingredients, but they do not yield non-asymptotic, signal-specific error bounds for compressive parameterizations as a function of model size that are both theoretically justified and computable without access to ground truth. Our work instead studies the geometry of the optimal error curve and shows how adjacent-model differences can be converted into non-asymptotic error bounds and practically useful predictors of compression error. We provide an expanded discussion of rate-distortion theory, approximation rates, and universal approximation results in Appendices A.2–A.4. 
+
+## 3 Theoretical Results 
+
+We first formalize the properties that allow us to translate model differences between neighboring compression levels into rigorous error bounds. Let x ∈ Rn denote the true signal we aim to represent, such as an image or volume, and let gd : Rd → Rn be a chosen compressive parameterization at compression level d/n , with learnable parameters θ ∈ Rd. For each parameter budget d, we define the optimal compression error as 
+
+∥x − g⋆d ∥ := min 
+
+> θ∈Rd
+
+∥x − gd(θ)∥, (1) where g⋆d denotes the optimal size-d representation of x under parameterization architecture g.Directly evaluating this quantity is generally intractable: the ground-truth signal x is unobserved for many computational imaging applications, and even when x is accessible the minimization over θ
+
+is nonconvex for neural or hybrid models g. This motivates our goal of bounding ∥x − g⋆d ∥ using only the observable difference between trained models gd1 and gd2 at adjacent compression levels. For notational simplicity, we state the theory using consecutive parameter budgets d and d + 1 ; in practice, the parameter count of most architectures cannot be increased by exactly one, so we instead compare neighboring feasible budgets d < d ′. The same telescoping argument applies by treating the interval [d, d ′] as a block of compression increments. To enable this analysis, we assume the optimal error curve d → ∥ x − g⋆d ∥ obeys three natural structural properties, which we state formally below. 
+
+Assumption 1 (Monotonicity). For all d ≥ 0,
+
+∥x − g⋆d ∥ ≥ ∥ x − g⋆d+1 ∥. (A1) That is, enlarging the parameter budget cannot worsen the optimal fit. 
+
+Assumption 2 (Discrete convexity). For all d ≥ 0,
+
+∥x − g⋆d ∥ − ∥ x − g⋆d+1 ∥ ≥ ∥ x − g⋆d+1 ∥ − ∥ x − g⋆d+2 ∥. (A2) This is a discrete diminishing-returns condition: the marginal improvement obtained by increasing model size is larger at small d and becomes progressively smaller as d increases. 
+
+Assumption 3 (Zero error). There exists a finite d⋆ such that 
+
+∥x − g⋆d⋆ ∥ = 0 . (A3) In other words, at some sufficiently large model size, the model g can exactly parameterize x.Together, Assumptions A1–A3 impose a simple yet powerful geometry on the optimal error curve: it decreases monotonically and at a diminishing rate, converging to zero at a finite model size d⋆. This geometry is what enables the gap between optimal models at adjacent compression levels to control the compression error relative to an unknown ground truth. We make this precise in the following sections. 
+
+3.1 Main Result 
+
+We begin with the idealized setting in which the globally optimal models g⋆d and g⋆d+1 are available. Theorem 1 is the core of our analysis in this setting: it shows that the compression error at parameter budget d can be bounded by the difference between two neighboring optimal compressive representa-tions, scaled by the remaining gap to the exact-fit regime. Put differently, if increasing the model size by one parameter only changes the optimal representation a little, then the model at size d is already close to the ground-truth signal. 3Theorem 1 (Global Error Bound) . Under Assumptions A1–A3, for any parameter budget d ≤ d⋆,the compression error is bounded by 
+
+∥x − g⋆d ∥ ≤ (d⋆ − d)∥g⋆d − g⋆d+1 ∥. (2) 
+
+Proof. Writing ∥x − g⋆d ∥ as a telescoping sum and applying Assumption A3 yields 
+
+∥x − g⋆d ∥ =
+
+> d⋆−d
+
+X
+
+> i=1
+
+∥x − g⋆d+i−1∥ − ∥ x − g⋆d+i∥.
+
+Assumption A2 ensures each summand is no larger than the first, so 
+
+∥x − g⋆d ∥ ≤ (d⋆ − d)( ∥x − g⋆d ∥ − ∥ x − g⋆d+1 ∥) ≤ (d⋆ − d)∥g⋆d − g⋆d+1 ∥,
+
+where the last step follows from the triangle inequality ∥g⋆d − g⋆d+1 ∥ ≥ ∥ x − g⋆d ∥ − ∥ x − g⋆d+1 ∥.Theorem 1 is model-agnostic and efficiently computable: it reduces the unknown error ∥x − g⋆d ∥
+
+relative to the ground truth to an efficiently computable quantity involving only two models at adjacent compression levels, where the scale factor (d⋆ − d) can be determined analytically from the architecture specification of g. Critically, this bound does not require any knowledge of the target signal x, only the difference between two model outputs and the known zero-error budget d⋆.
+
+Remark 1 (Squared-error variant) . For architectures where Assumption A2 holds only for the squared error, i.e. ∥x − g⋆d ∥2 − ∥ x − g⋆d+1 ∥2 ≥ ∥x − g⋆d+1 ∥2 − ∥ x − g⋆d+2 ∥2, an analogous telescoping argument using Assumption A1 yields 
+
+∥x − g⋆d ∥ ≤ 2( d⋆ − d)∥g⋆d − g⋆d+1 ∥,
+
+a bound that differs from Theorem 1 only by a constant factor of 2. This variant is useful for architectures whose approximation theory is more naturally expressed in terms of squared residuals. 
+
+In practice, estimating ∥g⋆d − g⋆d+1 ∥ from a single adjacent pair of models can be sensitive to training instabilities. In Appendix B, we provide a batched variant of Theorem 1 that averages the measured gap over a contiguous block of b compression increments (parameter counts), yielding smoother bound estimates at the cost of b additional model fits. 
+
+3.2 Handling the Optimization Gap 
+
+Theorem 1 and its batched variant are stated in terms of globally optimal models, meaning the minimization in Equation (1) is solved exactly. In practice, compressive parameterizations g are often fit by nonconvex optimization, making it difficult to ensure that the trained model at a given parameter count is globally optimal. To account for this gap between theory and practice, let ˜gd
+
+denote the output of a model trained to practical convergence at size d, and define the optimization error ηd := ˜ gd − g⋆d as the gap between the trained model output and optimal size-d model output. Theorem 2 shows that our global error bound extends cleanly to this setting, with the bound degrading in proportion to the size and consistency of optimization errors across compression levels. 
+
+Theorem 2 (Error Bound with Optimization Gap) . Under Assumptions A1–A3, for any converged model outputs ˜gd, ˜gd+1 with optimization errors ηd, η d+1 , the compression error is bounded by 
+
+∥x − ˜gd∥ ≤ (d⋆ − d)∥˜gd − ˜gd+1 ∥ + ( d⋆ − d)∥ηd+1 − ηd∥ + ∥ηd∥. (3) The three terms in Theorem 2 admit clear interpretations. The first is the same neighboring-model discrepancy that appears in Theorem 1 and is directly computable. The second penalizes inconsistency in optimization across adjacent compression levels: if one model is trained substantially better than its neighbor, the observed gap ∥˜gd − ˜gd+1 ∥ becomes a poor surrogate for ∥g⋆d − g⋆d+1 ∥. The third is the irreducible optimization error at the parameter budget of interest. When ηd = ηd+1 = 0 , the bound in Theorem 2 reduces exactly to the bound in Theorem 1. More broadly, this result highlights that the local gap between nearby trained models remains a useful estimate of the true compression error as long as optimization behavior does not vary too erratically across adjacent compression levels. 40.0 0.2 0.4 0.6 0.8 1.0                           
+
+> 0
+> 4
+> 8
+> 12
+> 16
+> error
+> 2D DIV2K
+> Grid
+> 0.0 0.5 1.0
+> 0
+> 10
+> 20
+> 30
+> 40
+> FFN
+> 0.50 0.75 1.00 1.25 1.50 1.75
+> 0
+> 8
+> 16
+> 24
+> 32
+> Instant-NGP
+> 0.5 1.0 1.5 2.0 2.5
+> 0
+> 2.5
+> 5
+> 7.5
+> 10
+> GA-Planes
+> 0.0 0.2 0.4 0.6 0.8
+> 25
+> 50
+> 75
+> 100
+> error
+> 3D Dragon
+> 0.0 0.5 1.0 1.5
+> 0
+> 50
+> 100
+> 150
+> 200
+> 0123
+> 0
+> 20
+> 40
+> 60
+> 80
+> 0.0 0.5 1.0 1.5
+> 0
+> 80
+> 160
+> 240
+> 0
+> 100
+> 200
+> 300
+> 400
+> 0
+> 250
+> 500
+> 750
+> 1000
+> 0
+> 400
+> 800
+> 1200
+> 0
+> 5000
+> 10000
+> 15000
+> 20000
+> 0
+> 60
+> 120
+> 180
+> 240
+> 0
+> 250
+> 500
+> 750
+> 1000
+> 0
+> 100
+> 200
+> 300
+> 400
+> Theoretical bound
+> 0
+> 600
+> 1200
+> 1800
+> 2400
+> Theoretical bound
+> Compression Level
+> Actual error Predicted error Theoretical error bound
+
+Figure 1: Global error curves for direct fitting of signals. We fit Grid, FFN, Instant-NGP, and GA-Planes directly to a 2D natural image from DIV2K [ 48 ] and the 3D Stanford Dragon surface volume [ 49 ]. The actual error (blue, left axis) is the ℓ2 distance between reconstruction and ground truth, the optimization-gap-adjusted theoretical bound (green, right axis) follows from Theorem 2 as a function of compression level, and the predicted error (orange, left axis) rescales this bound by the per-architecture constant c from Section 4.1. Although the theoretical bounds are conservative by orders of magnitude, the calibrated predictions track the actual error across architectures, signals, and dimensionalities. 
+
+3.3 Adaptation to Upper/Lower Bound Envelopes 
+
+For some model families, Assumption A2 cannot be readily verified for the true optimal error 
+
+∥x − g⋆d ∥. In such cases, it suffices to replace the optimal error curve with tractable upper and lower envelopes that preserve the desired geometry. This allows us to retain the same general strategy to bound the compression error, at the cost of an additive slack term reflecting the width of the envelope. Concretely, suppose there exist functions L, U : Z+ → R+ satisfying 
+
+L(d) ≤ ∥ x − g⋆d ∥ ≤ U (d) ∀d, U (d⋆) = L(d⋆) = 0 ,
+
+where the upper bound U is monotone and discretely convex. The lower envelope L need not be convex; it serves only to quantify how loose the upper envelope may be at each parameter budget. 
+
+Theorem 3 (Error Bound via Envelopes) . Suppose the error curve satisfies Assumptions A1 and A3, and suppose there exist envelopes L and U satisfying the conditions above, with U monotone and discretely convex. Then the compression error is bounded by 
+
+∥x − g⋆d ∥ ≤ (d⋆ − d) ∥g⋆d − g⋆d+1 ∥ + U (d) − L(d). (4) 
+
+With optimization gap, 
+
+∥x − ˜gd∥ ≤ (d⋆ − d) ∥˜gd − ˜gd+1 ∥ + ∥ηd+1 − ηd∥ + U (d) − L(d) + ∥ηd∥. (5) Theorem 3 is important conceptually because it broadens the scope of the framework in Theorem 1 by showing that discrete convexity of the true error curve is not strictly necessary. What matters is that the error curve can be bounded between surrogates with appropriate properties. The slack term 
+
+U (d) − L(d) quantifies the price of this relaxation: when U = L, the bound reduces to Theorem 1, while looser envelopes yield valid but more conservative bounds on the compression error. 
+
+3.4 Verification for Representative Architectures 
+
+The previous theorems are abstract and apply to any signal parameterization whose error curve satisfies the stated structural assumptions. We now verify that the four representations we study satisfy the appropriate conditions, and identify which theorem governs each representation. The four models are: a Grid baseline (direct interpolated pixel/voxel parameterization), Fourier feature networks (FFN) [11], Instant-NGP [13], and 2D linear-decoder GA-Planes [19] (see the GA-Planes formulations in Appendix C.7). 
+
+Theorem 4. Let x ∈ Rn. Then 
+
+51. Grid, FFN, Instant-NGP, and GA-Planes each satisfy Assumptions A1 and A3. 2. Grid satisfies Assumption A2 for the squared error when x has a radially nonincreasing power spectrum. GA-Planes satisfies Assumption A2 for the squared error without additional signal assumptions. In both cases, the bound of Remark 1 applies. 3. FFN and Instant-NGP admit monotone, discretely convex upper bound U (d) and lower bound L(d) with L(d) ≤ ∥ x − g⋆d ∥ ≤ U (d), so Theorem 3 applies. 
+
+Proofs and additional theoretical results are provided in Appendices B and C. 
+
+## 4 Experiments (a) (b) 
+
+Figure 2: Global error curves for inverse problems. We evaluate Grid, FFN, Instant-NGP, and GA-Planes on three imaging tasks across two settings: (a) on 2D and 3D MRI reconstruction, and (b) radiance field reconstruction. MRI results are plotted against compression level d/n while NeRF results are plotted against model size, as the ground-truth signal dimension is not well-defined for radiance fields. For MRI, the actual error (blue, left axis) is the ℓ2 distance between reconstruction and ground truth; for NeRF, it is the average ℓ2 distance between rendered test views and the corresponding ground-truth test views. The optimization-gap-adjusted theoretical bound (green, right axis) follows from Theorem 2 as a function of model size, and the predicted error (orange, left axis) rescales this bound by the per-architecture constant c from Section 4.1. Despite the indirect supervision of these inverse problems, the predicted error continues to track the actual reconstruction error across compression levels and model sizes. 
+
+4.1 Calibrating worst-case bounds into practical predictors 
+
+The bounds in Section 3 are provably valid and distribution-free, but conservative: the factor (d⋆ − d)
+
+reflects the worst-case geometry over all error curves satisfying Assumptions A1–A3. In practice, however, we find that the local difference between neighboring compressed reconstructions already captures the shape of the true error curve, while the worst-case scale is overly conservative. We therefore use the theorems as a structural template and introduce a single architecture-specific constant 
+
+c that converts the theoretical bound into a practical, signal-adaptive predictor of compression error. Let B(d) denote the adjacent-model discrepancy appearing in the theoretical bound. For each architecture, we choose the smallest c such that the predictor cB (d) dominates the observed errors on 6Grid     
+
+> Ground Truth Small Model Prediction Large Model Prediction Predicted Error Actual Error
+> FFN Instant-NGP GA-Planes
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 0.05
+> 0.10
+> 0.15
+> 0.20
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> 0.0
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+
+Figure 3: Local error heatmaps for direct fitting of a DIV2K [ 48 ] natural image. Each row corresponds to a different architecture, with small and large models at compression levels d/n ≈ 0.2
+
+and 0.4, respectively. Across all four representations, the predicted error heatmap c|˜gsmall − ˜glarge |
+
+captures the spatial structure of the actual error heatmap |˜gsmall − x|, showing that local compression artifacts can be estimated efficiently without ground-truth access. a calibration signal. Once c is determined, the predictor requires only trained model outputs and no ground-truth access, yet generalizes well to new signals. This calibration is deliberately minimal: we fit one scalar per architecture, not per signal, dataset, or compression level, and hold it fixed across all subsequent evaluations. As shown in Figures 1 and 2, the resulting predictions closely track the true error curves for all four parameterization models across different datasets and tasks, while remaining orders of magnitude tighter than the worst-case theoretical bounds. These results suggest that the adjacent-model difference identified by our theory is a stable proxy for reconstruction error, and that the looseness of the worst-case bound is architecture-dependent rather than signal-dependent or task-dependent. 
+
+4.2 Estimating the optimization gap 
+
+Theorem 2 introduces the optimization error ηd = ˜ gd − g⋆d , the gap between the converged recon-struction and the global optimum at compression level d/n . Since g⋆d is unobservable, we estimate 
+
+∥ηd∥ from restart variability. For a fixed signal, architecture, and compression level, we obtain the reconstructions ˜g(1)  
+
+> d
+
+, ˜g(2)  
+
+> d
+
+, . . . , ˜g(m) 
+
+> d
+
+by training the model m times from independent random initializations with identical hyperparameters and convergence criteria, and compute the maximum pairwise ℓ2 distance hm = max i̸=j ∥˜g(i) 
+
+> d
+
+− ˜g(j) 
+
+> d
+
+∥. Since hm is nondecreasing in m, we add restarts until |hm − hm−1| falls below a tolerance, and use the resulting plateau value as a practical estimate of a bound on ∥ηd∥ at compression level d/n .The intuition is that variability across independently converged solutions provides an observable proxy for how far practical training may be from the ideal optimum. If at least one restart is close to 
+
+g⋆d , then hm controls the optimization error of every other restart via the triangle inequality; if all runs converge to similar outputs, the estimated ∥ηd∥ is small. This estimate cannot be certified as an upper bound on ∥ηd∥ since multiple runs may still converge to the same suboptimal minimum, but it provides a practical, ground-truth-free diagnostic for optimization stability. In our experiments, 7Grid     
+
+> Ground Truth Small Model Prediction Large Model Prediction Predicted Error Actual Error
+> FFN Instant-NGP GA-Planes
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+> 0.02
+> 0.04
+> 0.06
+> 0.08
+> 0.05
+> 0.10
+> 0.15
+> 0.20
+> 0.025
+> 0.050
+> 0.075
+> 0.100
+> 0.125
+
+Figure 4: Local error heatmaps for 3D MRI volume reconstruction. Each row corresponds to a different architecture, with small and large models at compression levels d/n ≈ 0.2 and 0.4,respectively. Each model maps 3D coordinates to signal values and is supervised indirectly through a k-space loss on a 3D volume from the ATLAS dataset [ 50 ]. A single axial slice is shown for visualization. Across all four representations, the predicted error heatmap c|˜gsmall − ˜glarge | captures the spatial structure of the actual error heatmap |˜gsmall − x|, indicating that reconstruction artifacts can be localized efficiently without ground-truth access, even for 3D inverse problems. all reported predictors include this estimated correction through Theorem 2, and the error curves in Figures 1 and 2 reflect the full optimization-gap-adjusted bound. 
+
+4.3 Global error curves 
+
+Figures 1 and 2 evaluate the calibrated adjacent-model predictor across direct fitting and inverse problem settings, varying the primary capacity parameter of each architecture while holding other hyperparameters fixed. Across all settings, the predicted error captures the overall shape and scale of the true error curves across architectures, datasets, and tasks. The theoretical bounds remain valid but conservative, whereas the calibrated predictions are substantially tighter and preserve the qualitative decay of the true reconstruction error. The actual error curves are also approximately convex and monotonically decreasing up to optimization variability, providing empirical support for the structural assumptions underlying our theory. These results suggest that adjacent-model differences provide a stable global proxy for reconstruction error in both direct fitting and inverse-problem settings, despite the latter involving indirect supervision and nontrivial forward models. We note that the NeRF experiments extend beyond our formal shallow-decoder theory in two ways: the decoders are deeper, multi-layer nonlinear MLPs (rather than the single-hidden-layer decoders covered by our proofs), and they take additional view-direction inputs to model view-dependent radiance, as is standard in NeRF [ 51 ]. Full architectural details are in Appendix D.2. These experiments are therefore intended as empirical stress tests of whether the adjacent-model predictor remains useful for more challenging tasks like radiance field reconstruction. Additional details on test signals and global error curves for synthetic signals are provided in Appendices D.1 and D.3. 8Grid     
+
+> Ground Truth Small Model Prediction Large Model Prediction Predicted Error Actual Error
+> FFN Instant-NGP GA-Planes
+> 0.0
+> 0.5
+> 1.0
+> 1.5
+> 0.0
+> 0.5
+> 1.0
+> 1.5
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> 1.2
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> 1.2
+
+Figure 5: Local error heatmaps for 3D radiance field reconstruction. Each row corresponds to a different architecture, with small and large models having 2.5 × 10 5 and 1.6 × 10 6 parameters, respectively. Each model represents a 3D radiance field supervised through a photometric loss on training views from the Lego scene in NeRF-Blender [ 51 ]; a single test viewpoint is shown. Across all four representations, the predicted error heatmap c|˜gsmall − ˜glarge | captures the spatial structure of the true error heatmap, indicating that reconstruction artifacts can be localized efficiently at novel viewpoints without access to the ground-truth test view. 
+
+4.4 Local error heatmaps 
+
+Although our theory is stated for global (Euclidean norm) reconstruction error, the same adjacent-model principle can be applied pointwise to obtain spatially resolved error estimates. Given a small and large model from the same representation family, we compute the predicted error heatmap 
+
+c|˜gsmall − ˜glarge | using the constant c from Section 4.1. This estimate requires only the two trained reconstructions and no access to ground truth. For evaluation only, we compare it against the actual error heatmap |˜gsmall − x|.We evaluate local error prediction for direct fitting on 2D natural images from DIV2K [ 48 ] (Figure 3), 3D MRI volume reconstruction from k-space measurements using the ATLAS dataset [ 50 ] (Figure 4), and 3D radiance field reconstruction of the Lego scene [ 51 ] (Figure 5). Across all architectures and tasks, regions of high predicted error consistently coincide with high actual error, while low-error regions are correctly identified. We note that these heatmaps carry no formal theoretical guarantee, as our bounds are stated for the global ℓ2 norm, not pointwise or region-wise error. However, the consistency of the heatmaps across architectures and tasks suggests that adjacent-model differences are informative not only in aggregate, but also about the spatial locations where a compressed reconstruction is likely to be unreliable. Further implementation details and additional local error heatmaps for other tasks may be found in Appendices D.2 and D.4. 
+
+## 5 Discussion 
+
+In this work, we present, to our knowledge, the first framework for non-asymptotic, signal-specific error bounds for compressive signal parameterizations that are computable without access to ground truth. Under three structural conditions on the optimal error curve, which we show hold for represen-9tative signal parameterizations, we prove that the reconstruction error at a given model size is bounded by the difference between compressed reconstructions at adjacent model sizes. We complement our theory with a simple scalar adaptation that yields predicted error curves closely tracking the true error across diverse applications. We further find empirically that the same local-comparison principle produces informative pixel-level error heatmaps, despite our theory being stated only for global error. 
+
+Limitations and future work. Our theoretical guarantees rely on structural assumptions about the optimal error curve that we verify only for the model families studied here, each using shallow, scalar-output MLP decoders. Extending these results to deeper, vector-output decoders and a broader set of architectures and input encodings is an important direction for future work. Our scalar adaptation from worst-case bounds to practical predictions is estimated via a simple heuristic calibration; a more principled calibration procedure could yield tighter error estimates. Finally, our theoretical results bound global reconstruction error; the local heatmaps remain empirical error estimates rather than proven error bounds. Extending our main theorems and assumptions to local seminorms or region-of-interest metrics would provide theoretical grounding for the spatially resolved predictions that our experiments suggest are informative, and would strengthen the connection to safety-critical applications where localized compression artifacts can matter more than average error. 
+
+## References 
+
+[1] Frank Ong, Xucheng Zhu, Joseph Y Cheng, Kevin M Johnson, Peder EZ Larson, Shreyas S Vasanawala, and Michael Lustig. Extreme MRI: Large-scale volumetric dynamic imaging from continuous non-gated acquisitions. Magnetic Resonance in Medicine , 84(4):1763–1780, 2020. [2] Chenyue Jiao, Chongke Bi, and Lu Yang. FFEINR: Flow Feature-Enhanced Implicit Neural Representation for Spatiotemporal Super-Resolution. Journal of Visualization , 27(2):273–289, 2024. [3] Albert Pumarola, Enric Corona, Gerard Pons-Moll, and Francesc Moreno-Noguer. D-NeRF: Neural Radiance Fields for Dynamic Scenes. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pages 10318–10327, 2021. [4] Sara Fridovich-Keil, Alex Yu, Matthew Tancik, Qinhong Chen, Benjamin Recht, and Angjoo Kanazawa. Plenoxels: Radiance Fields without Neural Networks. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pages 5501–5510, 2022. [5] Richard H Bartels, John C Beatty, and Brian A Barsky. An Introduction to Splines for Use in Computer Graphics and Geometric Modeling . Morgan Kaufmann, 1995. [6] S Allen Broughton and Kurt Bryan. Discrete Fourier Analysis and Wavelets: Applications to Signal and Image Processing . John Wiley & Sons, 2018. [7] Yinbo Chen, Sifei Liu, and Xiaolong Wang. Learning Continuous Image Representation with Local Implicit Image Function. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pages 8628–8638, 2021. [8] David B. Lindell, Dave Van Veen, Jeong Joon Park, and Gordon Wetzstein. BACON: Band-limited Coordinate Networks for Multiscale Scene Representation. In 2022 IEEE/CVF Con-ference on Computer Vision and Pattern Recognition (CVPR) , pages 16231–16241, 2022. doi: 10.1109/CVPR52688.2022.01577. [9] Vishwanath Saragadam, Daniel LeJeune, Jasper Tan, Guha Balakrishnan, Ashok Veeraraghavan, and Richard G Baraniuk. WIRE: Wavelet Implicit Neural Representations. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pages 18507–18516, 2023. [10] Vincent Sitzmann, Julien N.P. Martel, Alexander W. Bergman, David B. Lindell, and Gordon Wetzstein. Implicit Neural Representations with Periodic Activation Functions. In Advances in Neural Information Processing Systems (NeurIPS) , 2020. [11] Matthew Tancik, Pratul Srinivasan, Ben Mildenhall, Sara Fridovich-Keil, Nithin Raghavan, Utkarsh Singhal, Ravi Ramamoorthi, Jonathan Barron, and Ren Ng. Fourier Features Let Networks Learn High Frequency Functions in Low Dimensional Domains. Advances in Neural Information Processing Systems (NeurIPS) , 33:7537–7547, 2020. 10 [12] Yannick Strümpler, Janis Postels, Ren Yang, Luc Van Gool, and Federico Tombari. Implicit Neural Representations for Image Compression. In European Conference on Computer Vision ,pages 74–91. Springer, 2022. [13] Thomas Müller, Alex Evans, Christoph Schied, and Alexander Keller. Instant Neural Graphics Primitives with a Multiresolution Hash Encoding. ACM Transactions on Graphics (TOG) , 41 (4):1–15, 2022. [14] Bernhard Kerbl, Georgios Kopanas, Thomas Leimkühler, and George Drettakis. 3D Gaussian Splatting for Real-Time Radiance Field Rendering. ACM Transactions on Graphics , 42(4), July 2023. URL https://repo-sam.inria.fr/fungraph/3d-gaussian-splatting/ .[15] Yawar Siddiqui, Antonio Alliegro, Alexey Artemov, Tatiana Tommasi, Daniele Sirigatti, Vladislav Rosov, Angela Dai, and Matthias Nießner. MeshGPT: Generating Triangle Meshes with Decoder-Only Transformers. arXiv preprint arXiv:2311.15475 , 2023. [16] Yuan Yin, Matthieu Kirchmeyer, Jean-Yves Franceschi, Alain Rakotomamonjy, and patrick gallinari. Continuous PDE Dynamics Forecasting with Implicit Neural Representations. In 
+
+NeurIPS 2022 AI for Science: Progress and Promises , 2022. URL https://openreview. net/forum?id=iB3KkHR4gc .[17] Anpei Chen, Zexiang Xu, Andreas Geiger, Jingyi Yu, and Hao Su. TensoRF: Tensorial Radiance Fields. In Computer Vision – ECCV 2022: 17th European Conference, Tel Aviv, Israel, October 23–27, 2022, Proceedings, Part XXXII , page 333–350, Berlin, Heidelberg, 2022. Springer-Verlag. ISBN 978-3-031-19823-6. doi: 10.1007/978-3-031-19824-3_20. URL 
+
+https://doi.org/10.1007/978-3-031-19824-3_20 .[18] Sara Fridovich-Keil, Giacomo Meanti, Frederik Warburg, Benjamin Recht, and Angjoo Kanazawa. K-Planes: Explicit Radiance Fields in Space, Time, and Appearance. In Computer Vision and Pattern Recognition (CVPR) , 2023. [19] Irmak Sivgin, Sara Fridovich-Keil, Gordon Wetzstein, and Mert Pilanci. Geometric Algebra Planes: Convex Implicit Neural Volumes. In Forty-second International Conference on Machine Learning , 2025. URL https://openreview.net/forum?id=yHpWI6a2xT .[20] Anpei Chen, Zexiang Xu, Xinyue Wei, Siyu Tang, Hao Su, and Andreas Geiger. Dictionary Fields: Learning a Neural Basis Decomposition. ACM Trans. Graph. , 42(4), July 2023. ISSN 0730-0301. doi: 10.1145/3592135. URL https://doi.org/10.1145/3592135 .[21] Stephen Lombardi, Tomas Simon, Gabriel Schwartz, Michael Zollhoefer, Yaser Sheikh, and Jason Saragih. Mixture of Volumetric Primitives for Efficient Neural Rendering. ACM Trans. Graph. , 40(4), 2021. ISSN 0730-0301. doi: 10.1145/3450626.3459863. URL https://doi. org/10.1145/3450626.3459863 .[22] Reinhard Heckel, Mathews Jacob, Akshay Chaudhari, Or Perlman, and Efrat Shimron. Deep Learning for Accelerated and Robust MRI Reconstruction: a Review, 2024. URL https: //arxiv.org/abs/2404.15692 .[23] Michael Lustig, David Donoho, and John M. Pauly. Sparse MRI: The application of compressed sensing for rapid MR imaging. Magnetic Resonance in Medicine , 58(6):1182–1195, 2007. doi: https://doi.org/10.1002/mrm.21391. URL https://onlinelibrary.wiley.com/doi/abs/ 10.1002/mrm.21391 .[24] Amirali Molaei, Amirhossein Aminimehr, Armin Tavakoli, Amirhossein Kazerouni, Bobby Azad, Reza Azad, and Dorit Merhof. Implicit Neural Representation in Medical Imaging: A Comparative Survey, 2023. URL https://arxiv.org/abs/2307.16142 .[25] Guangming Wang, Lei Pan, Songyou Peng, Shaohui Liu, Chenfeng Xu, Yanzi Miao, Wei Zhan, Masayoshi Tomizuka, Marc Pollefeys, and Hesheng Wang. NeRFs in Robotics: A Survey, 2025. URL https://arxiv.org/abs/2405.01333 .11 [26] Bernardo Araújo, João F. Teixeira, Joaquim Fonseca, Ricardo Cerqueira, and Sofia C. Beco. The Road to Safety: A Review of Uncertainty and Applications to Autonomous Driving Perception. Entropy , 26(8), 2024. ISSN 1099-4300. doi: 10.3390/e26080634. URL https: //www.mdpi.com/1099-4300/26/8/634 .[27] Zihan Zhu, Songyou Peng, Viktor Larsson, Weiwei Xu, Hujun Bao, Zhaopeng Cui, Martin R. Oswald, and Marc Pollefeys. NICE-SLAM: Neural Implicit Scalable Encoding for SLAM. In 
+
+Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) ,2022. [28] Edgar Sucar, Shikun Liu, Joseph Ortiz, and Andrew Davison. iMAP: Implicit Mapping and Positioning in Real-Time. In Proceedings of the International Conference on Computer Vision (ICCV) , 2021. [29] KS Gunasheela and HS Prasantha. Satellite Image Compression-Detailed Survey of the Algo-rithms. In Proceedings of International Conference on Cognition and Recognition: ICCR 2016 ,pages 187–198. Springer, 2018. [30] Carlos Gomes, Isabelle Wittmann, Damien Robert, Johannes Jakubik, Tim Reichelt, Stefano Maurogiovanni, Rikard Vinge, Jonas Hurst, Erik Scheurer, Rocco Sedona, Thomas Brun-schwiler, Stefan Kesselheim, Matej Batiˇ c, Philip Stier, Jan Dirk Wegner, Gabriele Caval-laro, Edzer Pebesma, Michael Marszalek, Miguel A. Belenguer-Plomer, Kennedy Adriko, Paolo Fraccaro, Romeo Kienzler, Rania Briq, Sabrina Benassou, Michele Lazzarini, and Conrad M. Albrecht. Lossy Neural Compression for Geospatial Analytics: A review. IEEE Geo-science and Remote Sensing Magazine , 13(3):97–135, September 2025. ISSN 2473-2397. doi: 10.1109/mgrs.2025.3546527. URL http://dx.doi.org/10.1109/MGRS.2025.3546527 .[31] Mireille Louys, Jean-Luc Starck, Simona Mei, François Bonnarel, and Fionn Murtagh. Astro-nomical image compression. Astronomy and Astrophysics Supplement Series , 136(3):579–590, 1999. [32] AR Offringa. Compression of interferometric radio-astronomical data. Astronomy & Astro-physics , 595:A99, 2016. [33] Dat Ngo, Hyun-Cheol Park, and Bongsoon Kang. Edge Intelligence: A Review of Deep Neural Network Inference in Resource-Limited Environments. Electronics , 14(12), 2025. ISSN 2079-9292. doi: 10.3390/electronics14122495. URL https://www.mdpi.com/2079-9292/ 14/12/2495 .[34] Zengshan YIN, Changhao WU, Chongbin GUO, Yuanchun LI, Mengwei XU, Weiwei GAO, and Chuanxiu CHI. A Comprehensive Survey on Orbital Edge Computing: Systems, Applications, and Algorithms. Chinese Journal of Aeronautics , 38(7):103316, July 2025. ISSN 1000-9361. doi: 10.1016/j.cja.2024.11.026. URL http://dx.doi.org/10.1016/j.cja.2024.11.026 .[35] R. Del Prete, P. K. Thind, A. Mazzeo, M. Whitley, L. Papa, N. Longépé, and G. Meoni. Optimizing deep learning models for on-orbit deployment through neural architecture search. 
+
+Scientific Reports , 15(1), 2025. doi: 10.1038/s41598-025-21467-8. URL https://doi.org/ 10.1038/s41598-025-21467-8 .[36] Thomas M. Cover and Joy A. Thomas. Elements of Information Theory . Wiley-Interscience, Hoboken, NJ, 2 edition, 2006. [37] El Mehdi Achour, Armand Foucault, Sébastien Gerchinovitz, and Francois Malgouyres. A general approximation lower bound in L p norm, with applications to feed-forward neural networks. In Alice H. Oh, Alekh Agarwal, Danielle Belgrave, and Kyunghyun Cho, editors, 
+
+Advances in Neural Information Processing Systems , 2022. URL https://openreview.net/ forum?id=tfkeJG9yAX .[38] Jonathan W. Siegel and Jinchao Xu. Approximation Rates for Neural Networks with General Activation Functions. Neural Networks , 128:313–321, 2020. ISSN 0893-6080. doi: https:// doi.org/10.1016/j.neunet.2020.05.019. URL https://www.sciencedirect.com/science/ article/pii/S0893608020301891 .12 [39] C. E. Shannon. Probability of Error for Optimal Codes in a Gaussian Channel. Bell System Technical Journal , 38:611–656, 1959. doi: 10.1002/j.1538-7305.1959.tb03905.x. [40] Hao Chen, Bo He, Hanyu Wang, Yixuan Ren, Ser-Nam Lim, and Abhinav Shrivastava. NeRV: Neural Representations for Videos. In NeurIPS , 2021. [41] G. Dai, R. Zhang, Q. Wuwu, and et al. Implicit Neural Image Field for Biological Microscopy Image Compression. Nature Computational Science , 5:1041–1050, 2025. doi: 10.1038/ s43588-025-00889-4. URL https://doi.org/10.1038/s43588-025-00889-4 .[42] Zongyu Guo, Gergely Flamich, Jiajun He, Zhibo Chen, and José Miguel Hernández-Lobato. Compression with Bayesian Implicit Neural Representations. In A. Oh, T. Nau-mann, A. Globerson, K. Saenko, M. Hardt, and S. Levine, editors, Advances in Neu-ral Information Processing Systems , volume 36, pages 1938–1956. Curran Associates, Inc., 2023. URL https://proceedings.neurips.cc/paper_files/paper/2023/file/ 060b2af0081a460f7f466f7f174d9052-Paper-Conference.pdf .[43] Woo Kyoung Han, Byeonghun Lee, Hyunmin Cho, Sunghoon Im, and Kyong Hwan Jin. Towards Lossless Implicit Neural Representation via Bit Plane Decomposition. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , 2025. [44] Andrew R. Barron. Universal Approximation Bounds for Superpositions of a Sigmoidal Function. IEEE Transactions on Information Theory , 39(3):930–945, 1993. doi: 10.1109/18. 256500. [45] Kurt Hornik, Maxwell Stinchcombe, and Halbert White. Multilayer Feedforward Networks are Universal Approximators. Neural Networks , 2(5):359–366, 1989. doi: 10.1016/0893-6080(89) 90020-8. [46] Sejun Park, Chulhee Yun, Jaeho Lee, and Jinwoo Shin. Minimum Width for Universal Approximation. In International Conference on Learning Representations , 2021. URL 
+
+https://openreview.net/forum?id=O-XJwyoIF-k .[47] Namjun Kim, Chanho Min, and Sejun Park. Minimum width for universal approximation using ReLU networks on compact domain. In The Twelfth International Conference on Learning Representations , 2024. URL https://openreview.net/forum?id=dpDw5U04SU .[48] Eirikur Agustsson and Radu Timofte. NTIRE 2017 Challenge on Single Image Super-Resolution: Dataset and Study. In The IEEE Conference on Computer Vision and Pattern Recognition (CVPR) Workshops , July 2017. [49] Brian Curless and Marc Levoy. A Volumetric Method for Building Complex Models from Range Images. In Proceedings of the 23rd annual conference on Computer graphics and interactive techniques , pages 303–312, 1996. [50] Sook-Lei Liew, Bethany Lo, Miranda R. Donnelly, Artemis Zavaliangos-Petropulu, Jessica N. Jeong, Giuseppe Barisano, Alexandre Hutton, Julia P. Simon, Julia M. Juliano, Anisha Suri, Tyler Ard, Nerisa Banaj, Michael R. Borich, Lara A. Boyd, Amy Brodtmann, Cathrin M. Buetefisch, Lei Cao, Jessica M. Cassidy, Valentina Ciullo, Adriana B. Conforto, Steven C. Cramer, Rosalia Dacosta-Aguayo, Ezequiel de la Rosa, Martin Domin, Adrienne N. Dula, Wuwei Feng, Alexandre R. Franco, Fatemeh Geranmayeh, Alexandre Gramfort, Chris M. Gregory, Colleen A. Hanlon, Brenton G. Hordacre, Steven A. Kautz, Mohamed Salah Khlif, Hosung Kim, Jan S. Kirschke, Jingchun Liu, Martin Lotze, Bradley J. MacIntosh, Maria Mataró, Feroze B. Mohamed, Jan E. Nordvik, Gilsoon Park, Amy Pienta, Fabrizio Piras, Shane M. Redman, Kate P. Revill, Mauricio Reyes, Andrew D. Robertson, Na Jin Seo, Surjo R. Soekadar, Gianfranco Spalletta, Alison Sweet, Maria Telenczuk, Gregory Thielman, Lars T. Westlye, Carolee J. Winstein, George F. Wittenberg, Kristin A. Wong, and Chunshui Yu. A large, curated, open-source stroke neuroimaging dataset to improve lesion segmentation algorithms. medRxiv ,2021. doi: 10.1101/2021.12.09.21267554. URL https://www.medrxiv.org/content/ early/2021/12/11/2021.12.09.21267554 .13 [51] Ben Mildenhall, Pratul P. Srinivasan, Matthew Tancik, Jonathan T. Barron, Ravi Ramamoorthi, and Ren Ng. NeRF: Representing Scenes as Neural Radiance Fields for View Synthesis. In Andrea Vedaldi, Horst Bischof, Thomas Brox, and Jan-Michael Frahm, editors, Computer Vision – ECCV 2020 , pages 405–421, Cham, 2020. Springer International Publishing. ISBN 978-3-030-58452-8. [52] Namhoon Kim and Sara Fridovich-Keil. Grids Often Outperform Implicit Neural Representation at Compressing Dense Signals. In The Thirty-ninth Annual Conference on Neural Information Processing Systems , 2025. URL https://openreview.net/forum?id=OZljvntsto .[53] A. van der Schaaf and J. H. van Hateren. Modelling the Power Spectra of Natural Images: Statistics and Information. Vision Research , 36(17):2759–2770, 1996. [54] Antonio Torralba and Aude Oliva. Statistics of natural image categories. Network: Computation in Neural Systems , 14(3):391–412, 2003. [55] Y. Xu et al. Systematic Differences Between Perceptually Relevant Image Statistics of Brain MRI and Natural Images. Frontiers in Neuroinformatics , 13:46, 2019. [56] Peter L. Bartlett, Nick Harvey, Christopher Liaw, and Abbas Mehrabian. Nearly-tight VC-dimension and Pseudodimension Bounds for Piecewise Linear Neural Networks. Journal of Machine Learning Research , 20(63):1–17, 2019. URL http://jmlr.org/papers/v20/ 17-612.html .[57] Roman Vershynin. Introduction to the non-asymptotic analysis of random matrices, 2011. URL 
+
+https://arxiv.org/abs/1011.3027 .[58] Matthias Teschner, Bruno Heidelberger, Matthias Müller, D Pomerantes, Markus Gross, et al. Optimized Spatial Hashing for Collision Detection of Deformable Objects. In Proc. VMV , pages 47–54, 2003. [59] Nelson Max. Optical Models for Direct Volume Rendering. IEEE Transactions on Visualization and Computer Graphics , 1(2):99–108, 2002. 14 Appendices 
+
+Norm notation. Throughout the appendices, we use Lp to denote the function-space norms on continuous domains, consistent with the approximation theory literature [ 37 , 38 , 44 ], whereas ℓp
+
+denotes the finite-dimensional norm on sampled signals used in the main text. On the finite sample grid used in our experiments, the L2 and ℓ2 norms coincide up to a fixed normalization, so the bounds we adopt translate directly to the ℓ2 norms used in the main text. 
+
+## A Related Work 
+
+We provide here an expanded discussion of the four lines of prior work summarized in Section 2. 
+
+A.1 Representative approaches to compressive parameterizations 
+
+Compressive, continuous signal representations have found broad application in computational imaging tasks where memory and compute are tightly constrained, including accelerated MRI [ 1 , 22 –24 ], robotic perception [ 25 – 28 ], remote sensing [ 29 –32 ], and edge-constrained imaging [ 33 –35 ]. Recent architectures for these tasks have converged around three design paradigms: coordinate-based neural networks [ 7– 12 ], trainable spatial encodings [ 13 ], and tensor-factorized models [ 17 –19 ]. Fourier Feature Networks (FFNs) [ 11 ] preprocess input coordinates with a sinusoidal feature lifting before passing them to a ReLU MLP, transforming the effective neural tangent kernel into a stationary kernel with tunable bandwidth and improving the learning of high-frequency structures. Instant-NGP [ 13 ] stores learnable features in a multi-resolution hash table indexed by input coordinates, and decodes the resulting concatenated multi-scale features with a lightweight MLP. This multi-resolution construction helps the decoder disambiguate hash collisions, enabling high fidelity within a compact parameter budget. Geometric Algebra Planes (GA-Planes) [ 19 ] combines line, plane, and volume features with a neural decoder, and admits convex and semi-convex optimization formulations that in the 2D setting are provably equivalent to a (masked) low-rank plus low-resolution matrix factorization. Together, these models span three qualitatively different compression mechanisms—spectral lifting, multi-resolution feature sharing, and structured low-dimensional factorization—and approximately sample the current Pareto frontier of model size, expressiveness, and optimizability [ 19 ]. We therefore focus our theoretical and experimental analysis on these three models as well as an interpolated Grid baseline [52]. 
+
+A.2 Rate-distortion theory and compression bounds 
+
+Classical rate-distortion theory characterizes the fundamental tradeoff between compression rate and reconstruction fidelity for stochastic sources, providing a lower bound on the distortion achievable at any given bit budget [ 36 , 39 ]. A growing line of work has brought rate-distortion ideas into implicit neural representation-based compression pipelines for images, volumes, and video, typically by combining trained neural fields with quantization, entropy coding, or related coding mechanisms [ 12 ,40 – 42 ]. A complementary direction studies the model size required for lossless neural representation: Han et al. [ 43 ] derive explicit upper bounds on the number of parameters needed for an INR to achieve a given bit precision on a discrete signal, showing that this threshold grows exponentially with bit depth. These works make important progress toward INR-based compression, but their primary emphasis remains codec or representation design, and evaluation is largely empirical rather than oriented around signal-specific theoretical guarantees on representation error. In particular, classical rate-distortion theory assumes a known or estimable probability distribution over sources [ 36 ], whereas our goal is to bound the representation error of a single signal at finite model size without distributional assumptions. Moreover, practical neural codecs generally rely on nondifferentiable operations such as quantization and entropy coding, while the representations we consider are continuously parameterized and fully differentiable throughout optimization. To our knowledge, no prior work provides non-asymptotic, signal-specific error bounds for compressive representations as a function of model size, that are both theoretically justified and computable without access to ground truth. Our framework addresses this gap by replacing distributional assumptions with three structural properties of the optimal error curve, which we verify for each architecture we study. 15 A.3 Approximation rates for neural networks 
+
+A substantial body of theoretical work characterizes how accurately neural networks of fixed size can approximate functions drawn from classical function spaces. Early results of Barron [ 44 ] established dimension-independent L2 rates for two-layer networks approximating functions with bounded spectral norm. Siegel and Xu [ 38 ] generalized these results to broader activation families, providing approximation rates for polynomially decaying non-sigmoidal activations and any bounded integrable activations, and characterized how the error scales with network width and depth. Achour et al. [ 37 ]complemented these upper bounds with tight lower bounds for piecewise-polynomial feed-forward networks on Hölder balls and multivariate monotone functions. A structural implication shared by both works is that the approximation error of an MLP is bounded above by a convex, decreasing function of the number of parameters, a key property that we leverage in our main theorem. In particular, we adopt the upper bound of Siegel and Xu [38] and the lower bound of Achour et al. [37] ,adapted to account for the Fourier feature embedding of FFNs, as the convex envelope for the error curve in our proof of Theorem 4. 
+
+A.4 Universal approximation for neural networks 
+
+The classical Universal Approximation Theorem [ 45 ] guarantees that a sufficiently wide single-hidden-layer MLP can approximate any continuous function on a compact domain, but provides no constructive bound on the width required. Park et al. [ 46 ] resolved this question by identifying 
+
+max {dx + 1 , d y } as the exact minimum-width threshold for universal approximation of ReLU networks on Rdx , ruling out any strictly smaller width and establishing this threshold as a fundamental architectural limit. Here dx denotes the input dimension and dy the output dimension (number of scalar signal channels predicted by the decoder). Kim et al. [ 47 ] further refined this guarantee for the practically relevant compact-domain setting, proving that the minimum width for Lp approximation of Lp functions on [0 , 1] dx drops to max {dx, d y , 2} for ReLU-like activations, including ReLU, GELU, and Softplus. These results are the key ingredient in our proof that all three compressive representations with MLP decoders we consider satisfy Assumption A3: the existence of a finite model size at which the optimal representation error vanishes. They are invoked most directly in the proof for FFNs, where the coordinate domain is normalized to [0 , 1] k and the effective decoder is a ReLU MLP composed with a Fourier feature embedding. 
+
+## B Batched Global Error Bound 
+
+In practice, estimating ∥g⋆d − g⋆d+1 ∥ from a single adjacent-size pair of models can be sensitive to training instabilities. The following theorem addresses this by averaging the measured gap over a contiguous block of b compression increments, at the cost of b additional model fits. 
+
+Theorem 5 (Batched Global Error Bound) . Under Assumptions A1 - A3, for any parameter budget 
+
+d ≤ d⋆ and any block size 1 ≤ b ≤ d⋆ − d, the compression error is bounded by 
+
+∥x − g⋆d ∥ ≤ (d⋆ − d) · 1
+
+b
+
+> b
+
+X
+
+> i=1
+
+∥g⋆d+i−1 − g⋆d+i∥. (6) 
+
+Proof. We prove the batched version by averaging the one-step decreases of the optimal error curve over the first block of size b, and then using discrete convexity to show that every subsequent block has no larger average decrease. Define the one-step improvement 
+
+δi := ∥x − g⋆i ∥ − ∥ x − g⋆i+1 ∥, i = d, d + 1 , . . . , d ⋆ − 1.
+
+By Assumption A1, every δi ≥ 0, and by Assumption A2, the sequence δd ≥ δd+1 ≥ · · · ≥ δd⋆−1 ≥
+
+0 is non-increasing. Since ∥x − g⋆d⋆ ∥ = 0 by Assumption A3, the error telescopes as 
+
+∥x − g⋆d ∥ =
+
+> d⋆−d
+
+X
+
+> i=1
+
+δd+i−1. (7) We partition the d⋆ − d indices into B = ⌈(d⋆ − d)/b ⌉ consecutive blocks: the first B − 1 blocks each have size b, and the last block has size b′ = d⋆ − d − (B − 1) b ≤ b. If B = 1 , then the partition 16 consists only of the first block, so the block-sum argument will reduce to the telescoping identity 
+
+∥x − g⋆d ∥ = Pbi=1 δd+i−1, and the stated bound follows directly by applying the triangle inequality to each δd+i−1. We thus consider B > 1 and bound each block’s contribution separately, using the sum of the first block as a common majorant. 
+
+Blocks k = 1 , . . . , B − 1 (size b). For the first block k = 1 , the inequality Pbi=1 δd+i−1 ≤
+
+Pbi=1 δd+i−1 holds trivially. For each subsequent block k ≥ 2, monotonicity of δ gives 
+
+δd+( k−1) b+i−1 ≤ δd+i−1 for each i = 1 , . . . , b , since (k − 1) b ≥ b ≥ 1. Summing over i,
+
+> b
+
+X
+
+> i=1
+
+δd+( k−1) b+i−1 ≤
+
+> b
+
+X
+
+> i=1
+
+δd+i−1.
+
+Last block (size b′ ≤ b). Every index in this block satisfies d + ( B − 1) b + i − 1 ≥ d + b for 
+
+B ≥ 2, so each summand obeys δd+( B−1) b+i−1 ≤ δd+b−1. Since δd+b−1 is the minimum of the first block, it is at most the block average: 
+
+> b′
+
+X
+
+> i=1
+
+δd+( B−1) b+i−1 ≤ b′ δd+b−1 ≤ b′ · 1
+
+b
+
+> b
+
+X
+
+> i=1
+
+δd+i−1.
+
+Substituting these bounds into Equation (7) yields 
+
+∥x − g⋆d ∥ =
+
+> B−1
+
+X
+
+> k=1
+> b
+
+X
+
+> i=1
+
+δd+( k−1) b+i−1 +
+
+> b′
+
+X
+
+> i=1
+
+δd+( B−1) b+i−1
+
+≤ (B − 1) 
+
+> b
+
+X
+
+> i=1
+
+δd+i−1 + b′ · 1
+
+b
+
+> b
+
+X
+
+> i=1
+
+δd+i−1
+
+= (B − 1) b + b′ · 1
+
+b
+
+> b
+
+X
+
+> i=1
+
+δd+i−1
+
+= ( d⋆ − d) · 1
+
+b
+
+> b
+
+X
+
+> i=1
+
+δd+i−1,
+
+where the last line follows from our construction (B − 1) b + b′ = d⋆ − d. Finally, the triangle inequality gives δd+i−1 = ∥x − g⋆d+i−1∥ − ∥ x − g⋆d+i∥ ≤ ∥ g⋆d+i−1 − g⋆d+i∥ for each i, so 
+
+∥x − g⋆d ∥ ≤ (d⋆ − d) · 1
+
+b
+
+> b
+
+X
+
+> i=1
+
+∥g⋆d+i−1 − g⋆d+i∥.
+
+Setting b = 1 recovers Theorem 1. Empirically, averaging over a small block of nearby model pairs yields smoother, tighter, and more reliable bound estimates while preserving the same local-to-global interpretation. We therefore use the single-step version as the core theorem and reserve the batched version as a practical refinement requiring training a few additional models at different sizes. 
+
+## C Proofs of Theorems 
+
+Notation for proofs. Proofs follow the same notational conventions as the main text. For a fixed parameter budget d, let g⋆d denote the globally optimal representation, ˜gd denote the output of a model trained to practical convergence, and ηd = ˜ gd − g⋆d be the optimization error. 
+
+C.1 Proof of Remark 1 
+
+Proof. Suppose Assumption A2 holds only for the squared error, i.e., ∥x − g⋆d ∥2 − ∥ x − g⋆d+1 ∥2 ≥∥x − g⋆d+1 ∥2 − ∥ x − g⋆d+2 ∥2 for all d ≥ 0. Writing ∥x − g⋆d ∥2 as a telescoping sum and applying 17 Assumption A3 yields 
+
+∥x − g⋆d ∥2 =
+
+> d⋆−d
+
+X
+
+> i=1
+
+∥x − g⋆d+i−1∥2 − ∥ x − g⋆d+i∥2.
+
+It follows from the assumption that each summand is no larger than the first, so 
+
+∥x − g⋆d ∥2 ≤ (d⋆ − d)( ∥x − g⋆d ∥2 − ∥ x − g⋆d+1 ∥2).
+
+Factoring the difference of squares and applying the triangle inequality ∥x − g⋆d ∥ − ∥ x − g⋆d+1 ∥ ≤ ∥g⋆d − g⋆d+1 ∥, we obtain 
+
+∥x − g⋆d ∥2 − ∥ x − g⋆d+1 ∥2 = ( ∥x − g⋆d ∥ − ∥ x − g⋆d+1 ∥)( ∥x − g⋆d ∥ + ∥x − g⋆d+1 ∥)
+
+≤ ∥ g⋆d − g⋆d+1 ∥(∥x − g⋆d ∥ + ∥x − g⋆d+1 ∥)
+
+≤ ∥ g⋆d − g⋆d+1 ∥(∥x − g⋆d ∥ + ∥x − g⋆d ∥) = 2 ∥g⋆d − g⋆d+1 ∥∥ x − g⋆d ∥,
+
+where the third line uses Assumption A1. Combining the two inequalities gives 
+
+∥x − g⋆d ∥2 ≤ 2( d⋆ − d)∥g⋆d − g⋆d+1 ∥∥ x − g⋆d ∥.
+
+If ∥x − g⋆d ∥ = 0, the bound is trivially true; otherwise, dividing both sides by ∥x − g⋆d ∥ yields 
+
+∥x − g⋆d ∥ ≤ 2( d⋆ − d)∥g⋆d − g⋆d+1 ∥.
+
+C.2 Proof of Theorem 2 
+
+Proof. By the triangle inequality and the identity ˜gd = g⋆d + ηd, we have 
+
+∥x − ˜gd∥ = ∥x − g⋆d − ηd∥ ≤ ∥ x − g⋆d ∥ + ∥ηd∥.
+
+From Theorem 1, we have 
+
+∥x − g⋆d ∥ ≤ (d⋆ − d)∥g⋆d − g⋆d+1 ∥.
+
+Therefore, 
+
+∥x − ˜gd∥ ≤ (d⋆ − d)∥g⋆d − g⋆d+1 ∥ + ∥ηd∥.
+
+Substituting g⋆d = ˜ gd − ηd and g⋆d+1 = ˜ gd+1 − ηd+1 , we obtain 
+
+∥x − ˜gd∥ ≤ (d⋆ − d)∥˜gd − ηd − (˜ gd+1 − ηd+1 )∥ + ∥ηd∥≤ (d⋆ − d)
+
+
+
+∥˜gd − ˜gd+1 ∥ + ∥ηd+1 − ηd∥
+
+
+
++ ∥ηd∥
+
+= ( d⋆ − d)∥˜gd − ˜gd+1 ∥ + ( d⋆ − d)∥ηd+1 − ηd∥ + ∥ηd∥,
+
+which is exactly the claimed bound. 
+
+C.3 Proof of Theorem 3 
+
+Proof. Define the slack 
+
+ξd := U (d) − ∥ x − g⋆d ∥.
+
+Since L(d) ≤ ∥ x − g⋆d ∥ ≤ U (d) by assumption, it follows that 
+
+0 ≤ ξd ≤ U (d) − L(d).
+
+Since U is monotone, discretely convex, and satisfies U (d⋆) = 0 , the same telescoping and discrete-convexity argument used in the proof of Theorem 1 applies directly to U . In particular, 
+
+U (d) = 
+
+> d⋆−d
+
+X
+
+> i=1
+
+ U (d + i − 1) − U (d + i) ≤ (d⋆ − d) U (d) − U (d + 1) .
+
+18 It therefore remains to bound the one-step decrement U (d)−U (d+1) . Since ∥x−g⋆d+1 ∥ ≤ U (d+1) ,we have 
+
+U (d) − U (d + 1) ≤ U (d) − ∥ x − g⋆d+1 ∥
+
+=  U (d) − ∥ x − g⋆d ∥ +  ∥x − g⋆d ∥ − ∥ x − g⋆d+1 ∥
+
+= ξd + ∥x − g⋆d ∥ − ∥ x − g⋆d+1 ∥≤ ξd + ∥g⋆d − g⋆d+1 ∥,
+
+where the last step follows from the triangle inequality. Substituting this bound into the previous inequality and using ξd ≤ U (d) − L(d) yields 
+
+U (d) ≤ (d⋆ − d) ∥g⋆d − g⋆d+1 ∥ + U (d) − L(d).
+
+Since ∥x − g⋆d ∥ ≤ U (d), we can conclude that 
+
+∥x − g⋆d ∥ ≤ (d⋆ − d) ∥g⋆d − g⋆d+1 ∥ + U (d) − L(d).
+
+We now incorporate the optimization gap. By the triangle inequality and the identity ˜gd = g⋆d + ηd,
+
+∥x − ˜gd∥ ≤ ∥ x − g⋆d ∥ + ∥ηd∥.
+
+Applying the bound just established for ∥x − g⋆d ∥ and substituting 
+
+g⋆d = ˜ gd − ηd, g⋆d+1 = ˜ gd+1 − ηd+1 ,
+
+we obtain 
+
+∥g⋆d − g⋆d+1 ∥ = ∥(˜ gd − ˜gd+1 ) − (ηd − ηd+1 )∥≤ ∥ ˜gd − ˜gd+1 ∥ + ∥ηd+1 − ηd∥,
+
+exactly as in the proof of Theorem 2. Combining the preceding inequality gives 
+
+∥x − ˜gd∥ ≤ (d⋆ − d) ∥˜gd − ˜gd+1 ∥ + ∥ηd+1 − ηd∥ + U (d) − L(d) + ∥ηd∥,
+
+which proves the result. 
+
+C.4 Proof of Theorem 4: Grid 
+
+We prove the Grid representation case by indexing the model family by its spatial resolution rather than by raw parameter count. Let the target signal x be sampled on an N D lattice (which can be done losslessly for any bandlimited continuous signal, for large enough N ), and let a Grid model of per-axis resolution r use dr = rD parameters, one value at each coarse lattice point. We assume ideal sinc interpolation from the coarse rD lattice to the fine N D lattice. Under this interpolation, the set of signals representable by a resolution-r grid is exactly the subspace Sr of discrete signals whose Fourier coefficients are supported on the hypercube {k : ∥k∥∞ ≤ ⌊ r/ 2⌋} . Consequently, the optimal Grid reconstruction g⋆dr is the orthogonal projection of x onto Sr , and the optimal squared error decomposes cleanly via Parseval’s theorem: 
+
+∥x − g⋆dr ∥2 = X
+
+> ∥k∥∞>⌊r/ 2⌋
+
+|X[k]|2,
+
+where X[k] denotes the D-dimensional discrete Fourier transform of x. This spectral characterization of the optimal error is the foundation for all three lemmas below. 
+
+Lemma G.1 (Grid satisfies Assumption A1) . For each per-axis resolution r ≥ 0,
+
+∥x − g⋆dr ∥ ≥ ∥ x − g⋆dr+1 ∥.
+
+Proof. Since ⌊(r + 1) /2⌋ ≥ ⌊ r/ 2⌋, the bandlimited subspace Sr is contained in Sr+1 . The set of frequencies excluded at resolution r + 1 is therefore a subset of those excluded at resolution r, so 
+
+∥x − g⋆dr ∥2 − ∥ x − g⋆dr+1 ∥2 = X
+
+> ⌊r/ 2⌋<∥k∥∞≤⌊ (r+1) /2⌋
+
+|X[k]|2 ≥ 0.
+
+Since the square root function is monotone increasing, the inequality ∥x − g⋆dr ∥2 ≥ ∥ x − g⋆dr+1 ∥2
+
+implies ∥x − g⋆dr ∥ ≥ ∥ x − g⋆dr+1 ∥.19 Lemma G.2 (Grid satisfies Assumption A2 for squared error, under radial spectral decay) . Assume in addition that the target signal x has a radially nonincreasing power spectrum, meaning |X[k]|2 ≥|X[k′]|2 whenever ∥k′∥∞ ≥ ∥ k∥∞. Then for each per-axis resolution r ≥ 0, the optimal square error satisfies the discrete diminishing-returns condition: 
+
+∥x − g⋆dr ∥2 − ∥ x − g⋆dr+1 ∥2 ≥ ∥ x − g⋆dr+1 ∥2 − ∥ x − g⋆dr+2 ∥2.
+
+Proof. From the projection characterization above, the decrease in optimal squared error from resolution r to resolution r + 1 is exactly the Fourier energy contained in the shell ⌊r/ 2⌋ < ∥k∥∞ ≤⌊(r + 1) /2⌋, or equivalently, 
+
+∥x − g⋆dr ∥2 − ∥ x − g⋆dr+1 ∥2 = X
+
+> ⌊r/ 2⌋<∥k∥∞≤⌊ (r+1) /2⌋
+
+|X[k]|2.
+
+Likewise, the decrease from resolution r + 1 to resolution r + 2 is exactly the energy in the next shell 
+
+⌊(r + 1) /2⌋ < ∥k∥∞ ≤ ⌊ (r + 2) /2⌋, or equivalently, 
+
+∥x − g⋆dr+1 ∥2 − ∥ x − g⋆dr+2 ∥2 = X
+
+> ⌊(r+1) /2⌋<∥k∥∞≤⌊ (r+2) /2⌋
+
+|X[k]|2.
+
+Under the radial spectral decay assumption on |X[k]|2, the frequencies in the earlier shell carry at least as much power as frequencies in the later shell, so the first shell energy dominates the second. Hence, the one-step improvement in squared error is nonincreasing with resolution, which is exactly discrete convexity for the squared residual. 
+
+Remark 2. The radial spectral decay condition is a natural regularity assumption that is broadly satisfied by many targets of interest in computational imaging, whose power spectral densities typically follow a power-law or exponential decay with frequency [ 23 , 53 –55 ]. Under this common low-pass structure, the energy captured by successively added frequency shells decreases with resolution, so the squared-error discrete convexity established in Lemma G.2 matches the expected approximation behavior of Grid representations with sinc interpolation. 
+
+Lemma G.3 (Grid satisfies Assumption A3) . There exists a finite per-axis resolution r⋆ such that 
+
+∥x − g⋆dr⋆ ∥ = 0 .Proof. At full resolution r⋆ = N , each grid parameter can be set to the corresponding target signal sample. Since ideal sinc interpolation reproduces the data at its own interpolation nodes, the resulting reconstruction agrees with x at every point of the N D lattice, yielding a zero optimal reconstruction error. The critical parameter budget is therefore d⋆ = N D total parameters, corresponding to per-axis resolution r⋆ = N .
+
+C.5 Proof of Theorem 4: FFN 
+
+Throughout this subsection, we consider an FFN [ 11 ] with Fourier feature embedding dimension q, a single-hidden layer ReLU MLP of width w, and input coordinates v ∈ [0 , 1] k. The Fourier feature embedding is 
+
+γq (v) =  a1 cos(2 πb ⊤ 
+
+> 1
+
+v), a 1 sin(2 πb ⊤ 
+
+> 1
+
+v), . . . , a q cos(2 πb ⊤ 
+
+> q
+
+v), a q sin(2 πb ⊤ 
+
+> q
+
+v) ⊤ ∈ R2q
+
+where bl ∼ N (0 , σ 2 
+
+> b
+
+Ik) and al ∼ N (0 , σ 2
+
+> a
+
+) for l = 1 , . . . , q . The FFN output is gd(θ) = MLP θ
+
+ γq (v), where d = P (L, w, q ) := ( L − 1) w2 + (2 q + L + 1) w + 1 denotes the total parameter count. In our analysis, we index the model family by the MLP width w while holding the embedding dimension q and number of hidden layers L = 1 fixed, unless stated otherwise. This is the regime in which the approximation-rate results from Siegel and Xu [ 38 ] and the lower-bound result of Achour et al. [ 37 ] can be applied most cleanly. For a target signal x ∈ Rn sampled at coordinates 
+
+v1, . . . , v n, the optimal reconstruction error at parameter budget d is 
+
+∥x − g⋆d ∥ = min 
+
+> gd∈G d
+
+∥x − gd∥ = min 
+
+> θ∈Rd
+
+∥x − gd(θ)∥,
+
+where Gd = { gd(θ) : θ ∈ Rd} is the set of all outputs realizable by an FFN with parameter budget d.20 Lemma F.1 (FFN satisfies Assumption A1) . For all d ≥ 0,
+
+∥x − g⋆d ∥ ≥ ∥ x − g⋆d+1 ∥.
+
+Proof. It suffices to show that Gd ⊂ G d′ whenever d′ > d . We consider three cases corresponding to the three ways of increasing the parameter count. 
+
+Case 1: Increasing the embedding dimension: d′ = P (L, w, q + 1) . An FFN with q + 1 embedding frequencies can replicate any FFN with q embedding frequencies by appending the two new Fourier features and setting the corresponding incoming weights in the first affine layer to zero. The realized function is unchanged by this operation, so Gd ⊂ G d′ .
+
+Case 2: Increasing the hidden width: d′ = P (L, w + 1 , q ). An FFN with hidden width w + 1 
+
+can replicate any width-w FFN by padding the first-layer weight matrix with an all-zero row and extending subsequent weight matrices and bias vectors with zeros to maintain consistent dimensions. The additional neuron contributes zero to the output, and the realized function is identical. Thus, 
+
+Gd ⊂ G d′ .
+
+Case 3: Increasing the number of hidden layers: d′ = P (L + 1 , w, q ). An FFN with L + 1 hidden layers can replicate any L-layer FFN by inserting an identity layer between any existing ReLU and the next affine layer. The input to the inserted layer is the output of a preceding ReLU and is therefore nonnegative; setting the inserted layer’s weights to the identity and its biases to zero, the subsequent ReLU acts as the identity on this nonnegative input. The realized function remains the same, so 
+
+Gd ⊂ G d′ .In all three cases, Gd ⊂ G d′ , so the infimum of the reconstruction error over the strictly larger set Gd′
+
+is no greater than over Gd. Therefore, the optimal error is nonincreasing with parameter budget. 
+
+Lemma F.2 (FFN admits a convex and monotone upper envelope for Assumption (A2) ). Fix the Fourier feature embedding dimension q and consider one-hidden-layer ReLU FFNs of width w. Let 
+
+Ω ⊂ R2q be a bounded domain containing the range of the embedding γq , and assume there exists a function f : Ω → R in the Barron space B1 (i.e. R 
+
+> R2q
+
+(1 + |ω|)| ˆf (ω)|dω is bounded) such that 
+
+xi = f (γq (vi)) for all i = 1 , . . . , n . Then the approximation error is bounded above by a monotone, discretely convex envelope of the form 
+
+U (w) = Kw − 12 ,
+
+or equivalently, 
+
+U (d) = Cud− 12 .
+
+Here K > 0 is a constant depending on the function f and the embedding range Ω, but independent of w. The constant Cu > 0 is the corresponding constant after rewriting the width-dependent bound in terms of the parameter count d.Proof. Let F2qw (σ) be the class of width-w single-hidden-layer ReLU networks on R2q , where σ
+
+denotes the ReLU activation function. Following the norm convention stated at the beginning of the appendix, ∥f − fw∥L2(Ω) agrees with ∥x − gw(θ)∥ℓ2 up to a fixed sample-grid normalization. It follows that the optimal error at width w satisfies 
+
+min  
+
+> θ
+
+∥x − gw(θ)∥ ∝ inf   
+
+> fw∈F 2qw(σ)
+
+∥f − fw∥L2(Ω) .
+
+Applying Corollary 1 (see below) with n0 = 3 for the ReLU activation function [ 38 ], the L2
+
+approximation error satisfies 
+
+inf   
+
+> fw∈F 2qw(σ)
+
+∥f − fw∥L2(Ω) = inf   
+
+> fw∈F 2qw(σ)
+
+∥f − fw∥H0(Ω) ≤ | Ω| 12 C(c, 0, diam (Ω) , σ )√3∥f ∥B1 w− 12 ,
+
+for some c > 0. We can rewrite this as 
+
+min  
+
+> θ
+
+∥x − gw(θ)∥ ≤ U (w) = Kw − 12 ,
+
+for some K > 0 that depends on ∥f ∥B1 , |Ω| 12 , C(c, 0, diam (Ω) , σ ), and the fixed normalization, but is independent of w. Note that w− 12 is convex on (0 , ∞). Thus, U (w) is discretely convex in w. For 21 L = 1 and fixed q, the parameter count d = (2 q + 2) w + 1 is affine in w. Thus, the upper bound can be rewritten as a function of d:
+
+U (d) = Cud− 12 ,
+
+and U (d) inherits monotonicity and discrete convexity from U (w).
+
+Theorem 6 (Siegel and Xu, 2020 [ 38 ]) . Let Ω ⊂ Rd be a bounded domain. If the activation function 
+
+σ ∈ W m, ∞(R) is non-zero and satisfies the polynomial decay condition 
+
+|σ(k)(t)| ≤ Cp(1 + |t|)−p (8) 
+
+for 0 ≤ k ≤ m and some p > 1, we have 
+
+inf   
+
+> fn∈F nd(σ)
+
+∥f − fn∥Hm(Ω) ≤ | Ω| 12 C(p, m, diam(Ω) , σ )n− 12 ∥f ∥Bm+1 ,
+
+for any f ∈ B m+1 .
+
+Corollary 1 (Siegel and Xu, 2020 [ 38 ]) . Let W m, ∞ 
+
+> loc
+
+(R) denote the space of functions whose weak derivatives up to order m are essentially bounded on every compact subset of R. Let σ ∈ W m, ∞ 
+
+> loc
+
+(R)
+
+be an activation function and suppose that there exists a ν ∈ F n0 
+
+> 1
+
+(σ) which satisfies the polynomial decay condition (8) in Theorem 6, we have 
+
+inf   
+
+> fn∈F nd(σ)
+
+∥f − fn∥Hm(Ω) ≤ | Ω| 12 C(p, m, diam(Ω) , σ )√n0∥f ∥Bm+1 n− 12 .
+
+This follows immediately from Theorem 6 and the observation that ν ∈ F n0 
+
+> 1
+
+(σ) implies that 
+
+Fnd (ν) ⊂ F nn 0 
+
+> d
+
+(σ).
+
+Lemma F.3 (FFN admits a lower envelope for Assumption A2) . Fix the Fourier feature embedding dimension q and consider one-hidden-layer ReLU FFNs of width w. Let 1 ≤ p < +∞ and X be a measurable space endowed with a probability measure μ. Let F be a set of measurable functions from 
+
+X to [−1, 1] such that log M (ε, F, ∥ · ∥ Lp(μ)) ≥ c0ε−α for some c0, ε 0, α > 0 and all ε ≤ ε0. Here, 
+
+M (ε, F, ∥ · ∥ Lp(μ)) denotes the ϵ-packing number of F under ∥ · ∥ Lp(μ), defined as the maximum number of points in F that are pairwise more than ϵ apart. Then, there exist a positive integer 
+
+dmin and c1 > 0 such that, for any d ≥ dmin , the approximation error is bounded below by a monotonically decreasing envelope 
+
+L(d) = c1d− 1 
+
+> α
+
+log − 3 
+
+> α
+
+(d).
+
+Proof. Define the FFN function class at width w as 
+
+Gw = {v → ψ(γq (v)) : ψ ∈ Ψw, 2q },
+
+where Ψw, 2q denotes the class of single-hidden-layer, width-w ReLU networks taking inputs in 
+
+R2q . We first relate the complexity of Gw to the complexity of Ψw, 2q . For a class S of real-valued functions on a domain Z, a set of points {z1, . . . , z m} ⊆ Z is said to be pseudo-shattered by S
+
+if there exists r1, . . . , r m ∈ R such that for every sign pattern o ∈ {− 1, +1 }m there exists s ∈ S
+
+satisfying sign (s(zi) − ri) = oi for all i = 1 , . . . , m . The pseudo-dimension Pdim (S) is the largest integer m such that some m points are pseudo-shattered by S.A related notion is the fat-shattering dimension [ 37 ]. For γ > 0, a set of points {z1, . . . , z m} ⊆ Z
+
+is γ-shattered by S if there exists r1, . . . , r m ∈ R such that for every sign pattern o ∈ {− 1, +1 }m
+
+there exists s ∈ S satisfying s(zi) ≥ ri + γ when oi = +1 and s(zi) ≤ ri − γ when oi = −1 for 
+
+i = 1 , . . . , m . The γ-fat-shattering dimension fat γ (S) is the largest integer m such that some m
+
+points are γ-shattered by S, with the convention fat γ (S) = 0 if no such set exists and fat γ (S) = + ∞
+
+if arbitrarily large such sets exist. The fat-shattering dimension is dominated by the pseudo-dimension, fat γ (S) ≤ Pdim (S) for all γ > 0. Thus, once we show that Gw has finite pseudo-dimension, the condition Pdim (G) < +∞ required by Theorem 7 follows automatically. We claim Pdim (Gw) ≤ Pdim (Ψ w, 2q ).
+
+Indeed, if a set of points {vi}ni=1 ⊂ X is pseudo-shattered by Gw with (r1, . . . , r n), then for every o ∈ {− 1, +1 }n, there exists g ∈ G w with sign (g(vi) − ri) = oi for all i. By constructing 22 g = ψ ◦ γq for some ψ ∈ Ψw, 2q , the corresponding embedded points {γq (vi)}ni=1 ⊂ R2q are then pseudo-shattered by Ψw, 2q with the same (r1, . . . , r n), so n ≤ Pdim (Ψ w, 2q ). It follows that Pdim (Gw) ≤ Pdim (Ψ w, 2q ). This argument does not require the Fourier embedding to preserve the full complexity of the decoder class; it only uses the fact that composing with a fixed embedding cannot increase pseudo-dimension. The number of trainable parameters in Ψw, 2q is d = (2 q+2) w+1 . By the classical pseudo-dimension bound for ReLU networks with d weights and depth L = 1 [ 56 ], Pdim (Ψ w, 2q ) = O(d log d), or equivalently, Pdim (Ψ w, 2q ) ≤ Cd log d for a universal constant C. Combining this with the previous inequality gives Pdim (Gw) ≤ Cd log d. 
+
+Applying Theorem 7 to the function class Gw yields 
+
+sup  
+
+> f∈F
+
+inf 
+
+> g∈G w
+
+∥f − g∥Lp(μ) ≥ min 
+
+n
+
+ε1, c 2Pdim (Gw)− 1 
+
+> α
+
+log − 2 
+
+> α
+
+(Pdim (Gw)) 
+
+o
+
+,
+
+for some constants ϵ1, c 2 > 0. Let dmin be a positive integer such that for any d > d min , the second term is smaller than ϵ1. Since t− 1 
+
+> α
+
+log − 2 
+
+> α
+
+(t) is decreasing in t, we can substitute the bound Pdim (Gw) ≤ Cd log d to obtain 
+
+sup  
+
+> f∈F
+
+inf 
+
+> g∈G w
+
+∥f − g∥Lp(μ) ≥ c2(Cd log d)− 1 
+
+> α
+
+log − 2 
+
+> α
+
+(Cd log d).
+
+Absorbing all logarithmic constants c1 yields 
+
+sup  
+
+> f∈F
+
+inf 
+
+> g∈G w
+
+∥f − g∥Lp(μ) ≥ c1d− 1 
+
+> α
+
+log − 3 
+
+> α
+
+(d).
+
+In other words, L(d) = c1d− 1 
+
+> α
+
+log − 3 
+
+> α
+
+(d) is the desired lower envelope for the global representation error over the target class F .
+
+Theorem 7 (Achour, 2022 [ 37 ]) . Let 1 ≤ p < +∞ and X be a measurable space endowed with a probability measure μ. Let F, G be two sets of measurable functions from X to R, such that all functions in F have the same [a, b ] for some a < b , and such that fat γ (G) < +∞ for all γ > 0. If 
+
+log M (ε, F, ∥ · ∥ Lp(μ)) ≥ c0ε−α for some c0, ε 0, α > 0 and all ε ≤ ε0, and if Pdim (G) < +∞, then there exist constants c1, ε 1 > 0 depending only on b − a, p, c 0, ε 0 and α such that 
+
+sup  
+
+> f∈F
+
+inf  
+
+> g∈G
+
+∥f − g∥Lp(μ) ≥ min 
+
+n
+
+ε1, c 1Pdim (G)− 1 
+
+> α
+
+log − 2 
+
+> α
+
+(Pdim (G)) 
+
+o
+
+.
+
+Here Pdim (G) denotes the pseudo-dimension of G.
+
+Lemma F.4 (FFN satisfies Assumption A3) . There exists a finite parameter budget d⋆ such that 
+
+∥x − g⋆d⋆ ∥ = 0 with high probability. Proof. The proof proceeds in two steps. First, we show that there exists a finite embedding dimension 
+
+q⋆ such that the Fourier feature matrix has full row rank, guaranteeing exact interpolation of the target signal at all sample points. Second, we invoke the minimum-width universal approximation results to show that a single-hidden-layer ReLU MLP of finite width can realize the required linear map on the embedded coordinates. 
+
+Step 1: Full row rank of the Fourier feature matrix. Let S = {v1, v 2, . . . , v n} be the finite set of distinct sampled coordinates at which the signal x is defined, and form the Fourier feature matrix 
+
+ΦS := 
+
+
+
+γq (v1)⊤
+
+...
+
+γq (vn)⊤
+
+ ∈ Rn×2q .
+
+We claim that there exists q⋆ with 2q⋆ ≥ n such that rank(Φ S ) = n with high probability over the ran-dom draws of the embedding frequencies. To establish this, factor ΦS = Φ ′ 
+
+> S
+
+diag( a1, a 1, . . . , a q , a q )
+
+where 
+
+Φ′ 
+
+> S
+
+=
+
+
+
+cos(2 πb ⊤ 
+
+> 1
+
+v1), sin(2 πb ⊤ 
+
+> 1
+
+v1) · · · cos(2 πb ⊤ 
+
+> q
+
+v1), sin(2 πb ⊤ 
+
+> q
+
+v1)
+
+... . . . ...
+
+cos(2 πb ⊤ 
+
+> 1
+
+vn), sin(2 πb ⊤ 
+
+> 1
+
+vn) · · · cos(2 πb ⊤ 
+
+> q
+
+vn), sin(2 πb ⊤ 
+
+> q
+
+vn)
+
+ .
+
+23 Since al ∼ N (0 , σ 2
+
+> a
+
+) for l = 1 , . . . , q , all 2q entries on the diagonal are nonzero almost surely, so the diagonal matrix diag( a1, a 1, . . . , a q , a q ) has full rank with probability one. Hence, rank(Φ S ) = rank(Φ ′ 
+
+> S
+
+) with probability one and it suffices to show that Φ′ 
+
+> S
+
+has full row rank with high probability. Consider the Gram matrix G = Φ ′ 
+
+> S
+
+(Φ ′ 
+
+> S
+
+)⊤ = Pql=1 Gl, where each Gl ∈ Rn×n is the symmetric positive semidefinite matrix with entries Gl[i, j ] = cos(2 πb ⊤ 
+
+> l
+
+(vi − vj )) . We note that Gl = UlU ⊤
+
+> l
+
+where 
+
+Ul =
+
+
+
+cos(2 πb ⊤ 
+
+> l
+
+v1) sin(2 πb ⊤ 
+
+> l
+
+v1)cos(2 πb ⊤ 
+
+> l
+
+v2) sin(2 πb ⊤ 
+
+> l
+
+v2)
+
+... ...
+
+cos(2 πb ⊤ 
+
+> l
+
+vn) sin(2 πb ⊤ 
+
+> l
+
+vn)
+
+ ∈ Rn×2.
+
+It follows that Gl ⪰ 0 and ∥Gl∥ ≤ ∥ Ul∥2 ≤ ∥ Ul∥2 
+
+> F
+
+= tr (U ⊤ 
+
+> l
+
+Ul) = n. Let Σ = E[Gl]. Then the 
+
+(i, j ) entry of Σ is 
+
+Σ[ i, j ] = E[cos(2 πb ⊤ 
+
+> l
+
+(vi − vj ))] = exp  −2π2σ2 
+
+> b
+
+∥vi − vj ∥22
+
+ ,
+
+which is the Gaussian RBF kernel evaluated at vi − vj . Since the points v1, . . . , v n are distinct, Σ is a Gram matrix of a Gaussian RBF kernel on distinct points and is therefore strictly positive definite. Let λ = λmin (Σ) > 0 be the smallest eigenvalue of Σ.Define the centered, rescaled matrices Wl = Σ −1/2GlΣ−1/2. Then Wl is symmetric and positive semidefinite by construction. We also have that 
+
+E[Wl] = Σ −1/2E[Gl]Σ −1/2 = Σ −1/2ΣΣ −1/2 = In, and 
+
+∥Wl∥ ≤ ∥ Σ−1/2∥∥ Gl∥∥ Σ−1/2∥ = ∥Σ−1/2∥2∥Gl∥ = 1
+
+pλmin (Σ) 
+
+!2
+
+∥Gl∥ ≤ nλ .
+
+Let the diagonalization of Wl be Wl = P DP ⊤, where P is orthogonal and D = diag( λ1, . . . , λ n).By definition, for all i ∈ [n], λi ≤ λmax (Wl) = ∥Wl∥ and λ2 
+
+> i
+
+≤ ∥ Wl∥λi. It follows that D2 ⪯∥Wl∥D and W 2 
+
+> l
+
+= P D 2P ⊤ ⪯ ∥ Wl∥P DP ⊤ = ∥Wl∥Wl. Define G′ 
+
+> l
+
+= 1 
+
+> q
+
+(Wl − I). We have 
+
+∥G′
+
+> l
+
+∥ ≤ 1
+
+q (∥Wl∥ + ∥In∥) ≤ 1
+
+q
+
+ nλ + 1 
+
+
+
+,
+
+E[G′
+
+> l
+
+] = 1
+
+q (E[Wl] − In) = 0 n, and 
+
+E[( G′
+
+> l
+
+)2] = 1
+
+q2 E[W 2 
+
+> l
+
+− 2Wl + In]= 1
+
+q2 E[W 2 
+
+> l
+
+] − 2In + In
+
+⪯ 1
+
+q2 (∥Wl∥E[Wl] − In)
+
+⪯ 1
+
+q2
+
+ nλ − 1
+
+
+
+In ⪯ nq2λ In.
+
+Thus, G′ 
+
+> l
+
+are independent centered self-adjoint random n × n matrices with 
+
+∥G′
+
+> l
+
+∥ ≤ 1
+
+q
+
+ nλ + 1 
+
+
+
+and 
+
+> q
+
+X
+
+> l=1
+
+E[( G′
+
+> l
+
+)2] ≤ nqλ .
+
+Applying the non-commutative Bernstein inequality (Theorem 8) to the G′ 
+
+> l
+
+matrices, we have that for every ϵ ≥ 0,
+
+δ = P
+
+(
+
+∥
+
+> q
+
+X
+
+> l=1
+
+G′
+
+> l
+
+∥ ≥ ϵ
+
+)
+
+≤ 2n · exp −ϵ2/2 
+
+> nqλ
+
++ (n/λ +1) ϵ
+
+> 3q
+
+!
+
+= 2 n · exp 
+
+ −ϵ2q 
+
+> nλ
+
+· 2ϵ+6 3 + 2ϵ
+
+> 3
+
+
+
+.
+
+Pick ϵ = 1 /2. We get 
+
+P
+
+(
+
+∥
+
+> q
+
+X
+
+> l=1
+
+G′
+
+> l
+
+∥ < 12
+
+)
+
+= 1 − δ ≥ 1 − 2n · exp 
+
+ −q 
+
+> nλ
+
+· 28 3 + 43
+
+
+
+.
+
+24 This implies that if q ≥ C nλ ln 2nδ for some absolute constant C, then P ∥ Pql=1 G′
+
+> l
+
+∥ < 12 ≥ 1 − δ.We can write 
+
+∥
+
+> q
+
+X
+
+> l=1
+
+G′
+
+> l
+
+∥ < 12 ⇐⇒ ∥ 
+
+> q
+
+X
+
+> l=1
+
+ 1
+
+q Wl − 1
+
+q In
+
+
+
+∥ < 12 ⇐⇒ ∥ 1
+
+q
+
+> q
+
+X
+
+> l=1
+
+Wl
+
+!
+
+− In∥ < 12 .
+
+Since Wl is symmetric, 
+
+ 1
+
+> q
+
+Pql=1 Wl
+
+
+
+− In is also symmetric and λmax 
+
+ 1
+
+> q
+
+Pql=1 Wl
+
+
+
+− In
+
+
+
+=
+
+∥
+
+ 1
+
+> q
+
+Pql=1 Wl
+
+
+
+− In∥. It follows that λmax 
+
+ 1
+
+> q
+
+Pql=1 Wl
+
+
+
+− In
+
+
+
+< 12 and all eigenvalues of 
+
+ 1
+
+> q
+
+Pql=1 Wl
+
+
+
+− In lie in (− 12 , 12 ). As a result, all eigenvalues 1
+
+> q
+
+Pql=1 Wl lies in ( 12 , 32 ). It follows that 
+
+1
+
+q
+
+> q
+
+X
+
+> l=1
+
+Wl ⪰ 12 In ⇐⇒ Σ−1/2
+
+> q
+
+X
+
+> l=1
+
+Gl
+
+!
+
+Σ−1/2 ⪰ q
+
+2 In
+
+⇐⇒ G ⪰ q
+
+2 Σ
+
+⇐⇒ λmin (G) ≥ q
+
+2 λ > 0.
+
+Therefore, we can conclude that for q ≥ C nλ ln 2nδ for some absolute constant C, then rank(Φ ′ 
+
+> S
+
+) = rank( G) = n with probability at least 1 − δ.Since ΦS has full row rank, there exists a vector c ∈ R2q⋆
+
+such that ΦS c = xS (for instance, the minimum-norm solution c = Φ ⊤ 
+
+> S
+
+(Φ S Φ⊤ 
+
+> S
+
+)−1xS )). The linear map v → c⊤γq⋆ (v) therefore interpolates x exactly at all n sampled points. 
+
+Step 2: Realization by a finite-width ReLU MLP. It remains to show that the linear map z → c⊤z
+
+can be realized by a single-hidden-layer ReLU MLP of finite width. This is immediate: a width-4q⋆
+
+network with weights 
+
+W1 =
+
+ I2q⋆
+
+−I2q⋆
+
+
+
+∈ R4q⋆×2q⋆
+
+, b1 = 0 ∈ R4q⋆
+
+, Wout = c⊤ − c⊤ ∈ R1×4q⋆
+
+, bout = 0 ∈ R
+
+satisfies Wout · ReLU( W1z) = c⊤(ReLU( z) − ReLU( −z)) = c⊤z for all z, since ReLU( z) −
+
+ReLU( −z) = z. In particular, evaluating at z = γq⋆ (vi) yields c⊤γq⋆ (vi) = xS,i for all i =1, . . . , n .More generally, for the effective input dimension dx = 2 q and output dimension dy = 1 ,the minimum width for Lp-approximation of any function in Lp([0 , 1] dx , Rdy ) by ReLU networks with at least 2 hidden layers is wmin = max {dx, d y , 2}, as established by Kim et al. [ 47 ]. This guarantees that any continuous function on the compact domain of the Fourier embedding, including the above interpolant, can be approximated to arbitrary precision by a ReLU MLP of at least 2 hidden layers and width at least 2q. The critical parameter budget is therefore either d⋆ = P (L = 1 , w = 4 q⋆, q = q⋆)
+
+or d⋆ = P (L = 2 , w = 2 q⋆, q = q⋆), which are both finite. 
+
+Theorem 8 (Non-commutative Bernstein-type inequality (Vershynin, 2011 [ 57 ])) . Consider a finite sequence Xi of independent centered self-adjoint random n × n matrices. Assume we have for some numbers K and σ that 
+
+∥Xi∥ ≤ K almost surely, ∥ X
+
+> i
+
+EX2 
+
+> i
+
+∥ ≤ σ2.
+
+Then, for every t ≥ 0 we have 
+
+P
+
+(
+
+∥ X
+
+> i
+
+Xi∥ ≥ t
+
+)
+
+≤ 2n · exp 
+
+ −t2/2
+
+σ2 + Kt/ 3
+
+
+
+.
+
+C.6 Proof of Theorem 4: Instant-NGP 
+
+We consider an Instant-NGP [ 13 ] model with L resolution levels, T entries per level hash table, F
+
+feature dimensions per entry, and a single-hidden-layer ReLU MLP decoder of width w. The number 25 of trainable encoding parameters is T LF , and the total parameter count d = T LF + dM LP includes both encoding and decoder parameters. Define the full concatenated encoding at coordinate v ∈ Rk
+
+as 
+
+z(v) = [ e1(v) e2(v) · · · eL(v) ξ(v)] ∈ RLF +E ,
+
+where el(v) is the interpolated hash-grid feature at level l and ξ(v) ∈ RE denotes an auxiliary non-spatial encoding. Following [ 13 ], we index the model family by the encoding hyperparameters 
+
+(T, L ) while holding F , the spatial input dimension k, the coarsest resolution Nmin , and the decoder architecture fixed. For a target signal x ∈ Rn sampled at coordinates v1, . . . , v n ∈ Rk, the optimal reconstruction error at parameter budget d is 
+
+∥x − g⋆d ∥ = min  
+
+> θ, Φ
+
+∥x − gd(θ, Φ) ∥,
+
+where θ denotes the hash table feature parameters and Φ encompasses the MLP weights and biases. To analyze the error curve, we adopt two standard structural assumptions on the spatial hash function used in the multi-resolution encoding [58]: • Uniform Hashing. Let ˆhT denote the spatial hash function used by the multi-resolution encoding. Then Pr[ ˆhT (u) = ˆhT (v)] ≤ 1 
+
+> T
+
+for any two distinct integer vertices u̸ = v.• Independence Across Levels. Hash collision events at different resolution levels are mutually independent. These assumptions reflect the design objectives of the per-dimension linear-congruential XOR hash used in Instant-NGP, namely decorrelating the contribution of the input dimensions and approximately uniform distribution over the table. 
+
+Lemma I.1 (Instant-NGP satisfies Assumption A1) . For all parameter budgets d ≥ 0,
+
+∥x − g⋆d ∥ ≥ ∥ x − g⋆d+1 ∥.
+
+Proof. It suffices to show that the model class Gd is contained in Gd′ whenever d′ > d . We first consider increasing the number of levels. A model with L levels computes an encoding of the form 
+
+z(v) = [ e1(v) e2(v) · · · eL(v) ξ(v)] ∈ RLF +E ,
+
+where el(v) is the interpolated hash-grid feature at level l and ξ(v) ∈ RE denotes any auxiliary non-spatial encoding. Let the first affine layer of the decoder have weights 
+
+W = [ Whash Wξ ] ,
+
+where Whash acts on the LF -dimensional concatenated hash features. A model with L + 1 levels has encoding 
+
+z(v) = [ e1(v) e2(v) · · · eL(v) eL+1 (v) ξ(v)] ∈ R(L+1) F +E .
+
+It can reproduce the original L-level model by choosing the new first-layer weights as 
+
+W = [ Whash 0 Wξ ] ,
+
+setting the new incoming weights from level L + 1 to zero and keeping all remaining decoder weights unchanged. The additional level may contain arbitrary feature values, but it contributes nothing to the output. Thus every reconstruction realizable with L levels is also realizable with L + 1 levels. We now consider increasing the hash table size by an integer multiple. Let T ′ = mT for an integer 
+
+m ≥ 1. At a fixed level, the spatial hash function has the form 
+
+ˆhT (p) = H(p) mod T, 
+
+where p is an integer grid vertex and H(p) = Lki=1 piπi is the pre-modulo hash value with πi being unique, large prime numbers. Given any table θ(l) ∈ RT ·F for the smaller model, define the larger table features θ′(l) ∈ RT ′·F by 
+
+θ′(l) 
+
+> j
+
+= θ(l)  
+
+> jmod T
+
+Since T ′ = mT , we have ˆhT ′ (p) mod T = ˆhT (p). Then, for any level l and corner p, the looked-up feature in the larger model θ′(l)ˆhT ′ (p) = θ(l)ˆhT ′ (p) mod T = θ(l)ˆhT (p) matches the corresponding lookup 26 in the smaller model. With this construction of the larger model, the interpolation weights depend only on the input coordinate and grid resolution, not on T , so the interpolated feature at every level is identical in the two models. Keeping the weights fixed gives the same output for every input coordinate vi for i = 1 , . . . , n . Thus, GT ⊆ G mT .In both cases (increasing the number of levels L or hash table size T ), the model class is nested, so the infimum of reconstruction error over the larger class is no greater than over the smaller class. Therefore, ∥x − g⋆d ∥ is nonincreasing in d.
+
+Lemma I.2 (For Assumption A2, Instant-NGP admits a monotone, discretely convex upper envelope for the expected optimal squared error, where the expectation is taken over the random hash function) .
+
+Under the uniform hashing and level-independence assumptions, the expected squared optimal reconstruction error of Instant-NGP, taken over the random spatial hash function, satisfies 
+
+E[∥x − g⋆d ∥2] ≤ Cn
+
+ Ck
+
+T
+
+L
+
+= U (d)2,
+
+where Cn = 12
+
+ n
+
+> 2
+
+, C k = 4 k, and d⋆ is the critical parameter budget identified in Lemma I.4 (below). The upper envelope U (d) is monotone decreasing and discretely convex in T (with L, F fixed) and in 
+
+L (with T, F fixed). Proof. Let Ul(vi) be the set of 2k integer grid vertices involved in the k-linear interpolation of vi at level l. For the level-l interpolated feature vectors for vi and vj to be indistinguishable, at least one of the queried vertices for vi must collide with one of the queried vertices for vj . By union bound and the uniform hashing assumption, 
+
+Pr[ A(l) 
+
+> ij
+
+] ≤ Pr 
+
+ [
+
+> ui∈Ul(vi)
+
+[  
+
+> uj∈Ul(vj)
+
+{h(ui) = h(uj )}
+
+
+
+≤ X
+
+> ui∈Ul(vi)
+
+X  
+
+> uj∈Ul(vj)
+
+Pr[ h(ui) = h(uj )] 
+
+≤ | Ul(vi)| · | Ul(vj )| · 1
+
+T
+
+≤ 2k · 2k · 1
+
+T = Ck
+
+T ,
+
+where A(l) 
+
+> ij
+
+is the event that the level-l encoded features for vi and vj collide, and Ck = 4 k. Since the full encoding concatenates all L levels, the two samples are indistinguishable to the decoder only if they are indistinguishable at every level. By independence across levels, 
+
+Pr[ Aij ] = 
+
+> L
+
+Y
+
+> l=1
+
+Pr[ A(l) 
+
+> ij
+
+] ≤
+
+ Ck
+
+T
+
+L
+
+,
+
+where Aij = TLl=1 A(l) 
+
+> ij
+
+is the event that the interpolated feature vectors vi and vj are indistinguishable at all levels. Whenever Aij occurs, the decoder receives the same input for vi and vj , and therefore every Instant-NGP reconstruction must assign the same predicted value to these samples. More generally, the relation of structural indistinguishability partitions {1, . . . , n } into equivalence classes 
+
+C ∈ ΠT,L , and every reconstruction is constant on each such class. The optimal MLP outputs the within-class mean ¯xC on each class C, so 
+
+∥x − g⋆T,L ∥2 = X
+
+> C∈ΠT ,L
+
+X
+
+> i∈C
+
+(xi − ¯xC )2
+
+= X
+
+> C∈ΠT ,L
+
+X
+
+> i∈C
+
+(xi − 1
+
+|C|
+
+X
+
+> j∈C
+
+xj )2
+
+= X
+
+> C∈ΠT ,L
+
+1
+
+|C|
+
+X
+
+> i,j ∈C
+
+(xi − xj )2
+
+= X
+
+> C∈ΠT ,L
+
+12|C|
+
+X
+
+> i,j ∈Ci<j
+
+(xi − xj )2.
+
+27 Using 1/|C| ≤ 1 ∀C ∈ ΠT,L and the normalization xi ∈ [0 , 1] , we can write 
+
+∥x − g⋆T,L ∥2 ≤ 12
+
+X
+
+> C∈ΠT ,L
+
+X
+
+> i,j ∈Ci<j
+
+(xi − xj )2 ≤ 12
+
+X
+
+> i<j
+
+1[Aij ].
+
+Taking expectation over the random hash function gives the upper envelope: 
+
+E[∥x − g⋆T,L ∥2] ≤ 12
+
+X
+
+> i<j
+
+Pr[ Aij ]
+
+≤ 12
+
+n
+
+2
+
+  Ck
+
+T
+
+L
+
+, since there are 
+
+n
+
+2
+
+
+
+pairs of input coordinates 
+
+= Cn
+
+ Ck
+
+T
+
+L
+
+= U (T, L )2, where Cn is a constant depending on n.It remains to verify the monotone discrete convexity of the upper envelope. For fixed L,
+
+U (T, L ) = CT −L/ 2
+
+for a constant C > 0. The function f (t) = t−L/ 2 is decreasing and convex on (0 , ∞), for L ≥ 1,since its first derivative is negative and its second derivative is positive. Therefore, its restriction to integer table sizes is discretely convex: 
+
+U (T − 1, L ) − U (T, L ) ≥ U (T, L ) − U (T + 1 , L ).
+
+For fixed T > C k, let q = ( Ck/T )1/2 ∈ (0 , 1) . Then 
+
+U (T, L ) = Cq L
+
+for a constant C > 0. Hence 
+
+U (T, L −1) −U (T, L )−(U (T, L )−U (T, L +1)) = C(qL−1 −2qL +qL+1 ) = Cq L−1(q −1) 2 > 0.
+
+Thus the upper envelope is monotone decreasing and discretely convex in either T or L.
+
+Lemma I.3 (For Assumption A2, Instant-NGP admits a lower envelope for the expected optimal squared error, where the expectation is taken over the random hash function) . Under the uniform hashing and level-independence assumptions, the expected squared optimal reconstruction error of Instant-NGP, taken over the random spatial hash function, satisfies 
+
+E[∥x − g⋆d ∥2] ≥ δx · 1{d ≤ d⋆} · T −2k L = L(d)2,
+
+where δx > 0 is a positive signal-dependent constant and d⋆ is the critical parameter budget identified in Lemma I.4 (below). The lower envelope L(d) need not be convex. Proof. In contrast to the upper-bound argument in Lemma I.2, which uses the necessary condition that indistinguishability at level l requires at least one collision among the queried corner vertices, the lower bound needs the stricter sufficient event that all corresponding corner vertices collide, which guarantees that the interpolated features are identical. This restriction is what allows the upper envelope and the lower bound to be expressed in compatible terms. Let A(l) 
+
+> ij
+
+be the event that the level-l encoded features for vi and vj collide. Consider any pair (vi, v j ) that lie at the same relative position within distinct voxels at every level l, so that the k-linear interpolation weights match. For such a pair, the event A(l) 
+
+> ij
+
+reduces to the requirement that each of the 2k corners of vi’s voxel hashes to the same bucket as the corresponding corner of vj ’s voxel. Treating the 2k corner pairs as independent uniform draws, 
+
+Pr[ A(l) 
+
+> ij
+
+] ≥
+
+ 1
+
+T
+
+2k
+
+,
+
+and by independence across levels, 
+
+Pr[ Aij ] ≥
+
+ 1
+
+T
+
+2k L
+
+,
+
+28 where Aij = TLl=1 A(l) 
+
+> ij
+
+is the event that the interpolated feature vectors vi and vj are indistinguishable at all levels. Whenever Aij occurs, the decoder receives the same input for vi and vj , and therefore every Instant-NGP reconstruction must assign the same predicted value to these samples. More generally, the relation of structural indistinguishability partitions {1, . . . , n } into equivalence classes 
+
+C ∈ ΠT,L , and every reconstruction is constant on each such class. The optimal MLP outputs the within-class mean ¯xC on each class C, so 
+
+∥x − g⋆T,L ∥2 = X
+
+> C∈ΠT ,L
+
+X
+
+> i∈C
+
+(xi − ¯xC )2
+
+= X
+
+> C∈ΠT ,L
+
+X
+
+> i∈C
+
+(xi − 1
+
+|C|
+
+X
+
+> j∈C
+
+xj )2
+
+= X
+
+> C∈ΠT ,L
+
+1
+
+|C|
+
+X
+
+> i,j ∈C
+
+(xi − xj )2
+
+= X
+
+> C∈ΠT ,L
+
+12|C|
+
+X
+
+> i,j ∈Ci<j
+
+(xi − xj )2.
+
+Using 1/|C| ≥ 1/n ∀C ∈ ΠT,L , we can write 
+
+∥x − g⋆T,L ∥2 ≥ 12n
+
+X
+
+> i<j
+
+1[Aij ]( xi − xj )2.
+
+Let P be the set of pairs (i, j ) at matching relative positions within their voxels and let δmin =min (i,j )∈P (xi − xj )2 > 0 for a target signal whose sampled values are pairwise distinct on P.Taking expectation over the random hash function yields 
+
+E[∥x − g⋆T,L ∥2] ≥ δmin |P| 
+
+2n · T −2k L = δx · T −2k L,
+
+where δx absorbs all signal-dependent constants. When d ≥ d⋆, Lemma I.4 gives ∥x − g⋆T ⋆,L ⋆ ∥2 = 0 ,so we set L(d) = 0 in this regime. Combining the two regimes yields a valid lower envelope 
+
+L(d) = 
+
+
+
+δx · 1{d ≤ d⋆} · T −2k L1/2
+
+.
+
+Lemma I.4 (Instant-NGP satisfies Assumption A3) . There exists a finite parameter budget d⋆ such that ∥x − g⋆d⋆ ∥ = 0 .Proof. Since the target signal is observed on finitely many sample coordinates v1, . . . , v n, choose the number of levels L⋆ such that finest grid resolution Nmax is large enough for each sample coordinate to be represented by a distinct finest-level grid vertex. For grid-sampled images, volume, or radiance-field data, it suffices to take Nmax ≥ R, where R denotes the resolution of x along each spatial axis. Next, choose the finest-level hash table size so that T ⋆ ≥ N k
+
+> max
+
+. Then every finest-level grid vertex can be assigned a unique table entry, so the finest level behaves as a dense feature grid with no hash collisions. That is, each input coordinate vi is assigned a unique feature vector θ(L) 
+
+> i
+
+at level L, and the encoding is injective: z(vi)̸ = z(vj ) for all i̸ = j.We now construct an exact representation. Set all decoder weights connected to coarser levels to zero and let the decoder depend only on the finest-level feature block. Assign the finest-level feature vector at the vertex corresponding to vi so that a linear readout returns xi. For scalar-valued signals, one feature channel is sufficient; concretely, set MLP Φ(z(vi)) = MLP Φ
+
+h 
+
+θ(0)  
+
+> i
+
+· · · θ(l) 
+
+> i
+
+· · · θ(L)
+
+> i
+
+i 
+
+= MLP Φ
+
+h 
+
+0 · · · 0 θ(L)
+
+> i
+
+i 
+
+= xi.
+
+For vector-valued signals, one may either use one feature channel per output coordinate or a finite-width linear output layer. Since the Instant-NGP decoder ends in a linear layer, this readout can be implemented by the MLP by choosing the hidden layers to act as an identity map on the relevant feature coordinates, or equivalently by using the final affine layer to read out the stored value directly. With this construction, gd⋆ (vi) = xi for every i = 1 , . . . , n . Hence, the optimal error at the corresponding finite budget d⋆ = T ⋆L⋆F + dM LP is zero. 29 C.7 Proof of Theorem 4: GA-Planes 
+
+We prove the GA-Planes [ 19 ] case for the two-dimensional nonconvex variant introduced in [ 19 ]and index the model family by its line feature dimension k1, holding the line resolution r1, plane resolution r2, and plane feature dimension k2 = 1 fixed. Let the target signal x ∈ Rn be arranged as a matrix M ∈ RN ×N with n = N 2, and write the model output at integer coordinate (i, j ) as 
+
+gd(θ)[ i, j ] = W ⊤
+
+> line
+
+(e1[i] ◦ e2[j]) + W ⊤
+
+> plane
+
+e12 [i, j, :] + b, 
+
+where e1, e 2 are linearly interpolated from line feature grids g1, g 2 ∈ Rr1×k1 , e12 is bilinearly interpolated from a plane feature grid g12 ∈ Rr2×r2×k2 , ◦ denotes elementwise multiplication along the feature dimension, and θ = ( g1, g 2, g 12 , W line , W plane , b ) are the trainable parameters. A central tool in the analysis is the matrix-completion equivalence established in [ 19 ] for the 2D linear-decoder setting: the reconstructed matrix ˆM ∈ RN ×N produced by gd admits the decomposition 
+
+ˆM = U V T + φ(L),
+
+with U = g1 diag( Wline ) ∈ RN ×k1 , V = g2 ∈ RN ×k1 , L ∈ Rr2r2 encoding the rescaled and bias-shifted plane grid, and φ : Rr2×r2 → RN ×N the bilinear upsampling operator. The optimal squared compression loss at line feature dimension k1 therefore equals 
+
+∥x − g⋆k1 ∥2 = min  
+
+> U,V,L
+
+∥M − (U V T + φ(L)) ∥2 
+
+> F
+
+. (9) This casts the analysis of 2D GA-Planes as a low-rank plus low-resolution matrix completion problem. 
+
+Lemma GAP.1 (GA-Planes satisfies Assumption A1) . For all k1 ≥ 0,
+
+∥x − g⋆k1 ∥ ≥ ∥ x − g⋆k1+1 ∥.
+
+Proof. Let Gk1 denote the set of model outputs realizable at line feature dimension k1. It suffices to show Gk1 ⊆ G k1+1 . Let g ∈ G k1 be represented by the parameters (g1, g 2, g 12 , W line , W plane , b ).Construct a model in Gk1+1 by zero-padding the line components 
+
+g′ 
+
+> 1
+
+= [ g1, 0] ∈ Rr1×(k1+1) , g′ 
+
+> 2
+
+= [ g2, 0] ∈ Rr1×(k1+1) , W ′ 
+
+> line
+
+=
+
+Wline 
+
+0
+
+
+
+∈ Rk1+1 
+
+while keeping the plane and bias components unchanged: g′ 
+
+> 12
+
+= g12 , W ′ 
+
+> plane
+
+= Wplane , b ′ = b. Since linear interpolation is applied channelwise, the new interpolated line features satisfy 
+
+e′ 
+
+> 1
+
+=
+
+e1
+
+0
+
+
+
+, e′ 
+
+> 2
+
+=
+
+e2
+
+0
+
+
+
+, and hence (e′ 
+
+> 1
+
+◦ e′
+
+> 2
+
+) = 
+
+(e1 ◦ e2)0
+
+
+
+.
+
+The appended channel of W ′ 
+
+> line
+
+is zero, so 
+
+W ′⊤ 
+
+> line
+
+(e′ 
+
+> 1
+
+◦ e′
+
+> 2
+
+) + W ′⊤ 
+
+> plane
+
+e′ 
+
+> 12
+
++ b′ = W ⊤
+
+> line
+
+(e1 ◦ e2) + W ⊤
+
+> plane
+
+e12 + b, 
+
+which equals the output of g ∈ G k1 . Therefore, Gk1 ⊆ G k1+1 and the optimal reconstruction error is nonincreasing in k1.
+
+Lemma GAP.2 (GA-Planes satisfies Assumption A2 for squared error) . For all k1 ≥ 0,
+
+∥x − g⋆k1 ∥2 − ∥ x − g⋆k1+1 ∥2 ≥ ∥ x − g⋆k1+1 ∥2 − ∥ x − g⋆k1+2 ∥2.
+
+Proof. By the matrix-completion equivalence in eq. (9), the squared optimal error decomposes as a joint minimization over a rank-≤ k1 component U V ⊤ and a low-resolution component φ(L).Following [ 19 ], for fixed r2, this joint optimization is equivalent to fitting the optimal low-resolution component first and then approximating the residual with a rank-≤ k1 matrix. Let L⋆ be the optimal low-resolution fit and define the residual 
+
+R = M − φ(L⋆).
+
+Substituting U V ⊤ as the rank-k1 approximation of R into eq. (9) and applying the Eckart-Young theorem yields 
+
+∥x − g⋆k1 ∥2 = min 
+
+> rank( A)≤k1
+
+∥R − A∥2 
+
+> F
+
+= X
+
+> i>k 1
+
+σi(R)2,
+
+30 where σ1(R) ≥ σ2(R) ≥ · · · ≥ 0 are the singular values of R. We can write the consecutive differences as 
+
+∥x − g⋆k1 ∥2 − ∥ x − g⋆k1+1 ∥2 = X
+
+> i>k 1
+
+σi(R)2 − X
+
+> i>k 1+1
+
+σi(R)2 = σk1+1 (R)2
+
+and 
+
+∥x − g⋆k1+1 ∥2 − ∥ x − g⋆k1+2 ∥2 = X
+
+> i>k 1+1
+
+σi(R)2 − X
+
+> i>k 1+2
+
+σi(R)2 = σk1+2 (R)2.
+
+Since the singular values are nonincreasing, σk1+1 (R) ≥ σk1+2 (R), and so 
+
+(∥x − g⋆k1 ∥2 − ∥ x − g⋆k1+1 ∥2) − (∥x − g⋆k1+1 ∥2 − ∥ x − g⋆k1+2 ∥2) = σk1+1 (R)2 − σk1+2 (R)2 ≥ 0,
+
+which is exactly discrete convexity of the squared optimal error in k1.
+
+Remark 3. The proof above is stated for the residual low-rank interpretation of 2D GA-Planes: the low-resolution plane component is fixed before analyzing the rank-k1 line component. This is the clean setting in which the Eckart-Young theorem gives an exact expression for the optimal error curve. For a fully joint nonconvex optimization over the low-resolution plane component and the low-rank line component at every k1, the optimal plane component may in principle depend on k1. In that more general setting, the same conclusion will require additional conditions to ensure that the optimal low-resolution component does not change in a way that violates the diminishing-returns behavior. 
+
+Lemma GAP.3 (GA-Planes satisfies Assumption A3) . There exists a finite k⋆ 
+
+> 1
+
+such that 
+
+∥x − g⋆k⋆ 
+
+> 1
+
+∥ = 0 .
+
+Proof. Fix r1 = N so that the linear interpolation at integer coordinates returns the stored grid values exactly. Let r = rank( M ) ≤ N and let M = U ΣV ⊤ be the singular value decomposition with 
+
+Σ = diag( σ1, . . . , σ r ). We exhibit a parameter setting at line feature dimension k⋆ 
+
+> 1
+
+= r that realizes 
+
+M exactly. It follows from r1 = N that e1[i] = g1[i, :] and e2[j] = g2[j, :] for every (i, j ). Set 
+
+g1[i, l ] = √σlU [i, l ], g2[j, l ] = √σlV [j, l ], Wline [l] = 1 ,
+
+for l = 1 , . . . , r . Zero out the plane and bias components g12 = 0 , W plane = 0 , b = 0 . Substituting into the model output gives, for every (i, j ),
+
+gd(θ) = W ⊤
+
+> line
+
+(e1 ◦ e2) + W ⊤
+
+> plane
+
+e12 + b
+
+=
+
+> k1
+
+X
+
+> l=1
+
+1 · g1[i, l ] · g2[j, l ]=
+
+> r
+
+X
+
+> l=1
+
+σlU [i, l ]V [j, l ] = M [i, j ],
+
+which is the SVD reconstruction of M . Hence, the reconstruction error vanishes at k⋆ 
+
+> 1
+
+= r ≤ N with 
+
+r1 = N and any arbitrary r2, k 2.
+
+## D Experimental Details 
+
+D.1 Test Signals 
+
+We evaluate our framework on a diverse suite of synthetic and real signals spanning 2D and 3D domains, drawn from the benchmark of Kim and Fridovich-Keil [52] and standard datasets in the computational imaging literature. All signals are either generated at or resized to resolution 128 2 for 2D and 64 3 for 3D, ensuring that the model parameter budgets used in our experiments remain in the compressive regime. 31 Model Hyperparameter Value               
+
+> FFN Learning Rate 1e-3 Embedding Size 256 Hidden Layers 1
+> σ20 Instant-NGP Learning Rate 5e-4 Hidden Layers 1 (2-layer MLP)
+> L5
+> F2Hidden Layer Width 64 GA-Planes Learning Rate 5e-3 Line Resolution size per axis of signal Plane Resolution 2Grid Learning Rate 5e-2
+
+Table 1: Fixed hyperparameters for 2D signals. We use these settings for 2D direct fitting and 2D MRI experiments. For GA-Planes, we use a linear decoder, consistent with the theoretical analysis.                   
+
+> Model Hyperparameter Value
+> FFN Learning Rate 8e-4 Embedding Size 1520 Hidden Layers 1
+> σ5Instant-NGP Learning Rate 5e-4 Hidden Layers 1 (2-layer MLP)
+> L4
+> F2Hidden Layer Width 64 GA-Planes Learning Rate 8e-3 Line Resolution size per axis of signal Plane Resolution size per axis of signal Volume Resolution 2Volume Feature Dimension 1Grid Learning Rate 5e-2
+
+Table 2: Fixed hyperparameters for 3D signals. We use these settings for 3D direct fitting and 3D MRI experiments. For GA-Planes, we use a linear decoder, consistent with the theoretical analysis. 
+
+Synthetic signals (2D, 3D). We construct two families of 2D and 3D synthetic signals parameter-ized by an explicit notion of effective bandwidth, following Kim and Fridovich-Keil [52] . Bandlimited 
+
+signals are generated by sampling random noise and applying radial low-pass filters with exponen-tially spaced cutoffs in the Fourier domain. This yields signals whose frequency content, and thus approximation difficulty, can be smoothly varied from low to high bandwidth. Sphere signals consist of randomly placed filled disks (2D) or balls (3D) whose complexity is governed by the number and scale of the primitives: fewer larger objects produce “low-bandwidth" signals, while many small objects produce fine-grained “high-bandwidth" structure. We use a fixed intermediate bandwidth for both of these signals for all synthetic-signal experiments. 
+
+Real signals. To complement the controlled synthetic setting, we evaluate on representative real-world data spanning natural images and volumetric signals. For direct signal fitting, we use resized high-resolution images from the DIV2K dataset [ 48 ] and 3D Stanford Dragon surface volume [ 49 ]. For inverse problems, we consider two settings with qualitatively different forward models. In MRI reconstruction, we use brain volumes from the ATLAS stroke lesion dataset [ 50 ], which constitutes an underdetermined linear inverse problem. In radiance field reconstruction, we use the Lego scene from the NeRF-Blender synthetic dataset [ 51 ], where the forward model is the nonlinear volume rendering integral [ 51 , 59 ] and supervision is provided through a photometric loss on posed training images. Together, these datasets introduce broadband spectral content, sharp geometric boundaries, and nontrivial spatial correlations that are not present in synthetic signals but are critical for assessing the performance of our framework beyond idealized settings. 32 Model Hyperparameter Value                    
+
+> FFN Learning Rate 5e-4 Embedding Size 512 Hidden Layers 4
+> σ8Instant-NGP Learning Rate 5e-4 Hidden Layers 2 (3-layer MLP)
+> L13
+> F2Hidden Layer Width 64 GA-Planes Learning Rate 5e-4 Line Resolution 200 Plane Resolution 16 Volume Resolution 8Volume Feature Dimension 4Hidden Layer Width 128 Hidden Layers 2Grid Learning Rate 5e-2 Total Variation Weight 1e-5
+
+Table 3: Fixed hyperparameters for radiance fields. For radiance field reconstruction, we depart from the shallow decoder theoretical setting by using deeper nonlinear MLP decoders for FFN, Instant-NGP, and GA-Planes. We also use total variation regularization for Grid.                
+
+> Model Task Calibration constant c
+> FFN NeRF 3.9 All other tasks 1.4 Instant-NGP NeRF 2.2 All other tasks 0.9 GA-Planes NeRF 4.4 All other tasks 4.2 Grid NeRF 3.1 All other tasks 4.5
+
+Table 4: Calibrated constants used for predicted error estimates. For each architecture, the constant c rescales the adjacent-model difference B(d) into the practical predictor cB (d), as described in Section 4.1. We use a separate constant for radiance fields (“NeRF") because radiance-field reconstruction uses a different rendering pipeline, model-size scale, and view-dependent output structure from the direct fitting and MRI experiments. Within each group of tasks, c is fixed across all datasets, signals, and compression levels. 
+
+Design rationale. This combination of synthetic and real signals, and direct and indirect training supervision, provides a structured and realistic testbed for validating both the theoretical predictions and empirical behavior of our framework. It ensures that the observed trends, such as the scaling of reconstruction error with model size and the tightness of adjacent-model error predictors, are not artifacts of a specific data regime but instead reflect general properties of differentiable compressive parameterizations. 
+
+D.2 Implementation Details 
+
+To construct the global error curves, we vary one primary capacity parameter for each architecture while holding all other hyperparameters fixed. Specifically, we vary grid resolution for Grid, MLP width for FFN, hash table size for Instant-NGP, and feature dimension for GA-Planes. The fixed hyperparameters are reported in Table 1 for 2D direct fitting and 2D MRI, Table 2 for 3D direct fitting and 3D MRI, and Table 3 for radiance field reconstruction. For 2D and 3D signal fitting and MRI, we use shallow MLP decoders consistent with the theoretical setting. For radiance field reconstruction, we use deeper nonlinear decoders with view-direction inputs, following the standard NeRF setup [ 51 ], to improve rendering quality in the more challenging view-synthesis setting. All non-radiance-field experiments are implemented in PyTorch while radiance-field experiments are implemented in JAX. For direct signal fitting, models are optimized against the observed signal values in image or volume space. For MRI reconstruction, models map spatial coordinates to image intensities and are supervised 33 0.0 0.2 0.4 0.6 0.8 1.0                                                        
+
+> 10
+> 20
+> 30
+> 40
+> error
+> 2D Bandlimited
+> Grid
+> 0.00 0.25 0.50 0.75 1.00 1.25
+> 0
+> 20
+> 40
+> 60
+> FFN
+> 0.5 1.0 1.5 2.0 2.5
+> 0
+> 10
+> 20
+> 30
+> 40
+> Instant-NGP
+> 0.5 1.0 1.5
+> 0
+> 15
+> 30
+> 45
+> GA-Planes
+> 0.0 0.2 0.4 0.6 0.8 1.0
+> 8
+> 16
+> 24
+> 32
+> error
+> 2D Sphere
+> 0.0 0.5 1.0 1.5
+> 0
+> 20
+> 40
+> 60
+> 80
+> 0.5 1.0 1.5 2.0 2.5 3.0
+> 0
+> 8
+> 16
+> 24
+> 32
+> 0.5 1.0 1.5 2.0
+> 0
+> 5
+> 10
+> 15
+> 20
+> 0.0 0.2 0.4 0.6 0.8
+> 30
+> 60
+> 90
+> 120
+> 150
+> error
+> 3D Bandlimited
+> 0.0 0.5 1.0 1.5
+> 0
+> 60
+> 120
+> 180
+> 240
+> 0123
+> 0
+> 30
+> 60
+> 90
+> 120
+> 0.0 0.5 1.0 1.5
+> 0
+> 100
+> 200
+> 300
+> 400
+> 0.0 0.2 0.4 0.6 0.8
+> 50
+> 100
+> 150
+> 200
+> error
+> 3D Sphere
+> 0.0 0.5 1.0 1.5
+> 0
+> 80
+> 160
+> 240
+> 320
+> 0123
+> 0
+> 40
+> 80
+> 120
+> 160
+> 0.0 0.5 1.0 1.5
+> 0
+> 100
+> 200
+> 300
+> 400
+> 0
+> 200
+> 400
+> 600
+> 800
+> 0
+> 200
+> 400
+> 600
+> 0
+> 250
+> 500
+> 750
+> 1000
+> 0
+> 500
+> 1000
+> 1500
+> 2000
+> 0
+> 500
+> 1000
+> 1500
+> 2000
+> 0
+> 600
+> 1200
+> 1800
+> 2400
+> 0
+> 6000
+> 12000
+> 18000
+> 24000
+> 0
+> 10000
+> 20000
+> 30000
+> 0
+> 80
+> 160
+> 240
+> 0
+> 80
+> 160
+> 240
+> 320
+> 0
+> 400
+> 800
+> 1200
+> 0
+> 500
+> 1000
+> 1500
+> 0
+> 300
+> 600
+> 900
+> 1200
+> Theoretical bound
+> 0
+> 150
+> 300
+> 450
+> 600
+> Theoretical bound
+> 0
+> 800
+> 1600
+> 2400
+> 3200
+> Theoretical bound
+> 0
+> 1000
+> 2000
+> 3000
+> Theoretical bound
+> Compression Level
+> Actual error Predicted error Theoretical error bound
+
+Figure 6: Global error curves for direct fitting of synthetic signals. We fit Grid, FFN, Instant-NGP, and GA-Planes directly to 2D and 3D synthetic signals, including bandlimited and sphere targets. The actual error (blue, left axis) is the ℓ2 distance between reconstruction and ground truth, the optimization-gap-adjusted theoretical bound (green, right axis) follows from Theorem 2 as a function of compression level, and the predicted error (orange, left axis) rescales this bound by the per-architecture constant c from Section 4.1. Although the theoretical bounds are conservative by orders of magnitude, the calibrated predictions track the actual error across architectures, signal types, and dimensionalities. through a Fourier-domain k-space loss. For radiance-field reconstruction, models are trained from posed images using the standard photometric rendering loss. In all experiments, predicted global errors are computed from adjacent trained models using the calibrated architecture-specific constant described in Section 4.1, and local error heatmaps use the same constant applied pointwise to the difference between small- and large-model reconstructions. For radiance fields, the model outputs used to compute both the global error bounds and local error heatmaps are rendered from a single held-out test view, matching the evaluation procedure for the actual reconstruction error. We note that since the radiance field experiments use deeper, view-dependent decoders that lie outside our shallow-decoder theoretical setting, we calibrate c separately for radiance fields and for all remaining tasks. Table 4 reports the resulting constants, fit once per architecture per setting following Section 4.1 and held fixed across all signals, datasets, and compression levels. All models are trained with the Adam optimizer using β1 = 0 .9 and β2 = 0 .999 . For optimization gap estimation, we require at least 5 random restarts before considering the restart plateau, and we use a tolerance of 10 −6 for the change in the maximum pairwise reconstruction distance across restarts. Fourier feature networks use Gaussian-initialized Fourier embeddings, following prior work [ 11 ]. For the radiance field experiments, we additionally apply total variation regularization to the Grid baseline to encourage spatial smoothness and improve reconstruction quality, similar to [ 4 ]. All experiments were conducted on an NVIDIA RTX A6000 GPU with 48GB VRAM; memory usage did not impose a limiting constraint in our experiments. 34 Grid     
+
+> Ground Truth Small Model Prediction Large Model Prediction Predicted Error Actual Error
+> FFN Instant-NGP GA-Planes
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> 0.02
+> 0.04
+> 0.06
+> 0.08
+> 0.10
+> 0.12
+> 0.05
+> 0.10
+> 0.15
+> 0.20
+> 0.05
+> 0.10
+> 0.15
+> 0.20
+> 0.25
+
+Figure 7: Local error heatmaps for 2D MRI slice reconstruction. Each row corresponds to a different architecture, with small and large models at compression levels d/n ≈ 0.2 and 0.4,respectively. Each model maps 2D pixel coordinates to signal values and is supervised indirectly through a k-space loss on a single axial slice from the ATLAS dataset [ 50 ]. Across all four representations, the predicted error heatmap c|˜gsmall − ˜glarge | captures the spatial structure of the actual error heatmap |˜gsmall − x|, indicating that reconstruction artifacts can be localized without ground-truth access in the inverse-problem setting. 
+
+D.3 Global Error Curves: Extended Results 
+
+We provide additional global error curves for direct fitting of synthetic signals in Figure 6. For each synthetic signal, we vary the model parameter budget while fixing the complexity parameter (effective bandwidth) at 0.3 for sphere signals and 0.9 for bandlimited signals. Across 2D and 3D bandlimited and sphere targets, the raw optimization-gap-adjusted theoretical bound is conservative, but the calibrated adjacent-model predictor follows the decay of the true reconstruction error. These results support the trend observed in the main text: adjacent-model differences provide a stable proxy for global compression error across architectures, signals, and dimensionalities. 
+
+D.4 Local Error Heatmaps: Extended Results 
+
+We present additional local error heatmaps for two settings: 2D MRI reconstruction from k-space measurements (Figure 7) and direct fitting of the 3D Stanford Dragon surface volume (Figure 8). Across architectures, the predicted heatmaps recover the main spatial structure of the actual error maps, suggesting that adjacent-model differences remain informative for localizing compression artifacts in both direct-fitting and inverse-problem settings. 35 Grid     
+
+> Ground Truth Small Model Prediction Large Model Prediction Predicted Error Actual Error
+> FFN Instant-NGP GA-Planes
+> 0.5
+> 1.0
+> 1.5
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+
+Figure 8: Local error heatmaps for direct fitting of 3D Stanford Dragon surface volume [ 49 ]. 
+
+Each row corresponds to a different architecture, with small and large models at compression levels d/n ≈ 0.2 and 0.4, respectively. Across all four representations, the predicted error heatmap 
+
+c|˜gsmall − ˜glarge | captures the spatial structure of the actual error heatmap |˜gsmall − x|, showing that local compression artifacts can be estimated without ground-truth access for 3D volumes. 36
