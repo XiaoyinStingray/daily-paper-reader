@@ -6,70 +6,56 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-06-05
-- 运行时间：2026-06-05 22:06:59 UTC
+- 最新运行日期：2026-06-06
+- 运行时间：2026-06-06 20:17:43 UTC
 - 运行状态：成功
-- 本次总论文数：16
-- 精读区：4
-- 速读区：12
+- 本次总论文数：12
+- 精读区：5
+- 速读区：7
 
 ### 今日简报（AI）
-今天收录16篇论文，精读2篇高分工作聚焦神经视频压缩与引导式标记化图像压缩。  
-最值得关注《Ultra-Fast Neural Video Compression》和《Balancing Image Compression and Generation with Bootstrapped Tokenization》，分别实现超快视频压缩和图像压缩生成平衡。  
-建议普通读者优先精读这两篇9分论文，了解前沿压缩技术对效率与质量的革新。
-- 详情：[/202606/05/README](/202606/05/README)
+今日推荐5篇精读，其中两篇高分论文分别聚焦数据自由量化下的视觉Transformer选择性对齐，以及超快神经视频压缩。最值得关注的方向是掩码注意力对齐实现免数据ViT量化，以及极低比特率视频编解码。建议优先精读这两篇高分论文，深入研究其技术创新与实验设计。
+- 详情：[/202606/06/README](/202606/06/README)
 
 ### 精读区论文标签
-1. [Ultra-Fast Neural Video Compression](/202606/05/2606.04410v1-ultra-fast-neural-video-compression)  
+1. [Selective Coupling of Decoupled Informative Regions: Masked Attention Alignment for Data-Free Quantization of Vision Transformers](/202606/06/2606.04373v1-selective-coupling-of-decoupled-informative-regions-masked-attention-alignment-for-data-free-quantization-of-vision-transformers)  
    标签：评分：9.0/10、query:compress
-   evidence：基于分块的神经视频编码与率失真优化，与神经图像压缩直接相关
-2. [Balancing Image Compression and Generation with Bootstrapped Tokenization](/202606/05/2606.05552v1-balancing-image-compression-and-generation-with-bootstrapped-tokenization)  
+   evidence：视觉Transformer的数据无关量化，涉及压缩流水线中的量化策略
+2. [Ultra-Fast Neural Video Compression](/202606/06/2606.04410v1-ultra-fast-neural-video-compression)  
    标签：评分：9.0/10、query:compress
-   evidence：通过自引导令牌化实现图像压缩与生成
-3. [$A^2$: Smaller Self-Supervised ViTs Localize Better than Larger Ones](/202606/05/2606.03148v1-a2-smaller-self-supervised-vits-localize-better-than-larger-ones)  
-   标签：评分：8.0/10、query:neural-arch
-   evidence：通过解耦定位与特征提取改进ViT性能
-4. [Adapting Diffusion Language Models for Lossless Pixel-Level Image Transmission](/202606/05/2606.06273v1-adapting-diffusion-language-models-for-lossless-pixel-level-image-transmission)  
+   evidence：端到端视频压缩中的率失真优化
+3. [KD-NVC: A Search-and-Distill Framework to Accelerate Neural Video Coding](/202606/06/2606.04595v1-kd-nvc-a-search-and-distill-framework-to-accelerate-neural-video-coding)  
+   标签：评分：9.0/10、query:compress
+   evidence：搜索与蒸馏框架加速神经视频编码，涉及率失真优化
+4. [Balancing Image Compression and Generation with Bootstrapped Tokenization](/202606/06/2606.05552v1-balancing-image-compression-and-generation-with-bootstrapped-tokenization)  
+   标签：评分：9.0/10、query:compress
+   evidence：自引导令牌化平衡图像压缩与生成
+5. [Adapting Diffusion Language Models for Lossless Pixel-Level Image Transmission](/202606/06/2606.06273v1-adapting-diffusion-language-models-for-lossless-pixel-level-image-transmission)  
    标签：评分：8.0/10、query:compress
-   evidence：扩散语言模型用于无损图像传输
+   evidence：使用扩散语言模型实现无损图像传输，与图像压缩相关
 
 ### 速读区论文标签
-1. [PARCEL: Pool-Anchored Resampling with Conditioned Elastic Queries for Efficient Vision-Language Understanding](/202606/05/2605.30126v1-parcel-pool-anchored-resampling-with-conditioned-elastic-queries-for-efficient-vision-language-understanding)  
-   标签：评分：7.0/10、query:neural-arch
-   evidence：弹性视觉token压缩用于高效视觉语言理解
-2. [Bounding Global and Local Compression Error of Signal Parameterizations](/202606/05/2606.00126v1-bounding-global-and-local-compression-error-of-signal-parameterizations)  
+1. [ChannelTok: Efficient Flexible-Length Vision Tokenization](/202606/06/2606.04461v1-channeltok-efficient-flexible-length-vision-tokenization)  
    标签：评分：7.0/10、query:compress
-   evidence：为隐式神经表示等信号参数化提供压缩误差界
-3. [HiTokSR: A Coarse-to-Fine Tokenizer with Hierarchical Codebooks for High-Fidelity Real-World Image Super-Resolution](/202606/05/2606.01157v1-hitoksr-a-coarse-to-fine-tokenizer-with-hierarchical-codebooks-for-high-fidelity-real-world-image-super-resolution)  
+   evidence：轻量级通道标记化器实现灵活长度压缩，与端到端有损图像压缩的神经网络架构相关
+2. [Toward Multi-Domain and Long-Tailed Quantization via Feature Alignment and Scaling](/202606/06/2606.04920v1-toward-multi-domain-and-long-tailed-quantization-via-feature-alignment-and-scaling)  
    标签：评分：7.0/10、query:compress
-   evidence：使用层次化码本的向量量化方法可迁移至图像压缩量化
-4. [EvoCut: Multi-Layer Evolution-Aware Visual Token Compression for Efficient Large Vision-Language Models](/202606/05/2606.01756v1-evocut-multi-layer-evolution-aware-visual-token-compression-for-efficient-large-vision-language-models)  
+   evidence：多域长尾量化方法可应用于图像压缩管线
+3. [BMCR: Adaptive Backbone Module Composition via Reinforcement Learning for Remote Sensing Object Detection](/202606/06/2606.05586v1-bmcr-adaptive-backbone-module-composition-via-reinforcement-learning-for-remote-sensing-object-detection)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：视觉token压缩用于高效视觉-语言模型
-5. [Do Value Vectors in Deep Layers Need Context from the Residual Stream?](/202606/05/2606.02780v1-do-value-vectors-in-deep-layers-need-context-from-the-residual-stream)  
+   evidence：面向视觉任务的适应性骨干组合遥感检测
+4. [Parallel Jacobi Decoding for Fast Autoregressive Image Generation](/202606/06/2606.05703v1-parallel-jacobi-decoding-for-fast-autoregressive-image-generation)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：发现深层使用无上下文值向量可提升性能，指导性能改进技术
-6. [Tiny Collaborative Inference for Occlusion-Robust Object Detection](/202606/05/2606.02894v2-tiny-collaborative-inference-for-occlusion-robust-object-detection)  
-   标签：评分：7.0/10、query:neural-arch
-   evidence：遮挡鲁棒目标检测的协作推理与量化方法
-7. [Quantifying and Optimizing Simplicity via Polynomial Representations](/202606/05/2605.29823v1-quantifying-and-optimizing-simplicity-via-polynomial-representations)  
-   标签：评分：6.0/10、query:neural-arch
-   evidence：优化神经网络简单性以提升泛化的技术
-8. [Reducing the GPU Memory Bottleneck with Lossless Compression for ML -- Extended](/202606/05/2605.30728v1-reducing-the-gpu-memory-bottleneck-with-lossless-compression-for-ml----extended)  
-   标签：评分：6.0/10、query:neural-arch
-   evidence：无损压缩减少机器学习GPU内存瓶颈
-9. [MergeTok: Unified Continuous and Discrete Visual Tokenization via Token Merging](/202606/05/2605.30904v1-mergetok-unified-continuous-and-discrete-visual-tokenization-via-token-merging)  
+   evidence：并行雅可比解码加速自回归图像生成，属于性能提升技术
+5. [Beyond Single Solution: Multi-Hypothesis Collaborative Deep Unfolding Network for Image Compressive Sensing](/202606/06/2606.03666v1-beyond-single-solution-multi-hypothesis-collaborative-deep-unfolding-network-for-image-compressive-sensing)  
    标签：评分：6.0/10、query:compress
-   evidence：通过类似自动编码器的编码-解码结构统一连续和离散视觉分词，与神经网络压缩模型相关
-10. [Normalized Relevance Measure as a Unifying Framework to Explain Neural Network Latent Structures](/202606/05/2606.00557v1-normalized-relevance-measure-as-a-unifying-framework-to-explain-neural-network-latent-structures)  
+   evidence：提出了一种用于压缩感知的深度展开网络，与学习型图像压缩架构方法论相似
+6. [HYolo: An Intelligent IoT-Based Object Detection System Using Hypergraph Learning](/202606/06/2606.04345v1-hyolo-an-intelligent-iot-based-object-detection-system-using-hypergraph-learning)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：解释神经网络潜在结构，有助于理解和改进架构
-11. [DeepLatent: Think with Images via Parallel Latent Visual Reasoning](/202606/05/2606.00562v1-deeplatent-think-with-images-via-parallel-latent-visual-reasoning)  
+   evidence：将超图学习集成到YOLO中改进目标检测，属于计算机视觉架构改进技术
+7. [Knowledge Distillation for Visual Autoregressive Models](/202606/06/2606.06078v1-knowledge-distillation-for-visual-autoregressive-models)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：用于视觉-语言模型的并行潜在视觉推理框架
-12. [LLM Compression with Jointly Optimizing Architectural and Quantization choices](/202606/05/2606.04063v1-llm-compression-with-jointly-optimizing-architectural-and-quantization-choices)  
-   标签：评分：6.0/10、query:neural-arch
-   evidence：联合优化架构和混合精度量化以实现LLM压缩
+   evidence：视觉自回归模型的知识蒸馏模型压缩
 
 
 <div class="dpr-home-promo-card">
