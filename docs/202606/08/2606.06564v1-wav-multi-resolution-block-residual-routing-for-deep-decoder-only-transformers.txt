@@ -1,0 +1,452 @@
+Title: WAV: Multi-Resolution Block Residual Routing for Deep Decoder-Only Transformers
+
+URL Source: https://arxiv.org/pdf/2606.06564v1
+
+Published Time: Mon, 08 Jun 2026 00:02:29 GMT
+
+Number of Pages: 6
+
+Markdown Content:
+# Multi-Resolution Residual Routing for Deep Decoder-Only Transformers 
+
+Kehan Wang Chongqing University 7696718@qq.com 
+
+Abstract 
+
+Residual connections are central to training deep Transformers, but standard PreNorm residual streams aggregate sublayer updates with fixed unit weights. Recent Attention Residuals replace this fixed accumulation with content-dependent depth-wise routing, and Block Attention Residuals make the mechanism efficient by routing over block-level residual summaries. However, a single block summary stores only the low-frequency, total residual displacement inside a block, discarding directional structure such as attention-vs-MLP imbalance and early-vs-late block dynamics. We propose Multi-Resolution Residual Routing , instantiated as WAV v1, a lightweight extension of Block Attention Residuals that augments every block representation with two zero-sum directional detail bases: a phase basis contrasting attention and MLP updates, and a split basis contrasting the first and second halves of a block. These detail bases are routed by the same depth-wise softmax mixer as the block summary, but are introduced with a negative bias and RMS matching to preserve early training stability. On character-level GPT decoder-only language modeling with TinyStories and Text8, WAV v1 shows a strong depth-dependent trend: it is not beneficial at 12 layers, becomes competitive at 24 layers, and achieves the best validation loss at 48 layers on both datasets. At 48 layers, WAV v1 improves over Block AttnRes by 0.0222 validation loss on TinyStories and 0.0057 on Text8, while leaving the attention and MLP modules unchanged. These preliminary results suggest that deep residual routing benefits not only from selecting which block to read, but also from routing the internal directional structure of each block. 
+
+1 Introduction 
+
+Modern decoder-only Transformers are typically trained with PreNorm residual connections, where each sublayer contributes an additive update to the residual stream. This simple structure has enabled stable training of very deep networks, but it also imposes a rigid aggregation rule: every residual update is accumulated with fixed unit weight. As depth increases, this uniform accumulation can dilute individual layer contributions and make the residual stream increasingly redundant. Attention Residuals address this issue by replacing fixed residual accu-mulation with learned softmax attention over previous layer outputs, enabling each layer to perform content-dependent depth-wise routing [ 3]. Block Attention Residuals further reduce the memory and communication overhead by compress-ing multiple layers into block-level residual summaries. The central hypothesis of this work is that a single block summary is still an incomplete representation of the residual trajectory inside a block. If a block contains a sequence of sublayer updates {𝑢 𝑏,𝑖 }𝑚 𝑖 =1, Block AttnRes stores only their sum, 𝐶 𝑏 = Í𝑖 𝑢 𝑏,𝑖 . This is analogous to preserving a low-frequency or DC component of the block trajectory. Yet the internal shape of the trajectory may carry useful information. For example, the block may be attention-dominant or MLP-dominant; its early updates may point in a direction different from its late updates. Such directional information is lost when the block is represented only by 𝐶 𝑏 .We introduce WAV v1, a minimal multi-resolution exten-sion of Block AttnRes. For every block, WAV v1 stores the original block sum 𝐶 𝑏 together with two zero-sum detail bases: 
+
+𝐷 phase  
+
+> 𝑏
+
+, the difference between attention and MLP updates, and 
+
+𝐷 split  
+
+> 𝑏
+
+, the difference between the first-half and second-half updates. These bases are cheap to compute because they are accumulated online as residual updates are produced. They are also conservative: the main attention and MLP functions are unchanged, detail sources receive a negative initial bias, details are RMS-matched to the corresponding block summary, and the final prediction mixer does not use detail sources by default. Our preliminary experiments evaluate 12-, 24-, and 48-layer GPT decoder-only models on TinyStories and Text8. The results reveal a clear depth-dependent pattern. At 12 layers, WAV v1 underperforms Block AttnRes, suggesting that directional detail sources are not useful when residual depth is shallow. At 24 layers, WAV v1 becomes competitive. At 48 layers, WAV v1 is consistently best, improving over Block AttnRes on both datasets and substantially outperforming ReZero and LayerScale. This pattern supports the view that multi-resolution residual information becomes increasingly valuable as the residual trajectory length grows. This draft makes three contributions: 1. We formulate block residual routing as a multi-resolution representation problem: block summaries provide low-frequency state information, while directional detail bases provide intra-block trajectory information. 2. We propose WAV v1, a drop-in extension of Block AttnRes that augments each block with phase and split detail bases while preserving the original attention and MLP modules. 1
+
+> arXiv:2606.06564v1 [cs.LG] 4 Jun 2026
+
+3. We provide preliminary scaling evidence on two character-level language modeling datasets, showing that WAV v1 becomes stronger with depth and achieves the best 48-layer validation losses among the evaluated residual mechanisms. 
+
+2 Related Work 
+
+Residual connections in deep networks. Residual learning was popularized by ResNets [ 1], where identity skip connec-tions make optimization of very deep networks substantially easier. Transformers [ 2] inherit this residual principle and commonly use PreNorm variants for stability. However, stan-dard residual addition fixes the aggregation coefficient of every update to one, which may become suboptimal in very deep architectures. 
+
+Learned residual scaling. Several methods improve deep training by scaling residual updates. ReZero introduces a scalar residual gate initialized at zero, enabling stable signal propagation at large depth [ 5]. LayerScale uses per-channel learnable residual scaling and has been shown to improve deep vision transformers [ 6 ]. These methods modulate resid-ual magnitude, but they do not perform content-dependent selection over previous residual states. 
+
+Attention Residuals and block routing. Attention Residuals replace additive residual accumulation with learned attention over preceding representations [ 3 ]. Block AttnRes compresses this mechanism by grouping layers into blocks and routing over block-level representations. This greatly reduces the cost relative to attending over every preceding layer. A related recent direction, Delta Attention Residuals, routes over residual deltas instead of cumulative hidden states, emphasizing that the choice of routed representation is crucial [ 4]. Our work is complementary: we keep the block-level efficiency of Block AttnRes but enrich each block representation with structured directional details. 
+
+3 Method 
+
+3.1 Preliminaries: Block Residual Routing 
+
+Consider a decoder-only Transformer with 𝐿 layers. Each Transformer layer contains an attention sublayer and an MLP sublayer. We treat every sublayer output as a residual update. For a block 𝑏 containing 𝑚 sublayer updates {𝑢 𝑏,𝑖 }𝑚 𝑖 =1, Block AttnRes stores a block-level residual summary 
+
+𝐶 𝑏 =
+
+> 𝑚
+
+∑︁ 
+
+> 𝑖 =1
+
+𝑢 𝑏,𝑖 . (1) At a later sublayer, the depth-wise mixer receives a source set such as 
+
+Sblock = {𝑒, 𝐶 0, 𝐶 1, . . . , 𝐶 𝑏 −1, 𝑃 𝐶 }, (2) where 𝑒 is the token embedding source and 𝑃 𝐶 is the current partial block sum. Given source tensors {𝑠 𝑗 }𝑆 𝑗 =1, a query vector 𝑞 , and source biases {𝛽 𝑗 }, the mixer computes 
+
+ℓ𝑗 = 𝑞 ⊤ RMSNorm (𝑠 𝑗 ) + 𝛽 𝑗 , (3) 
+
+𝛼 𝑗 = exp (ℓ𝑗 )
+
+Í𝑆 𝑘 =1 exp (ℓ𝑘 ) , (4) 
+
+ℎ =
+
+> 𝑆
+
+∑︁ 
+
+> 𝑗 =1
+
+𝛼 𝑗 𝑠 𝑗 . (5) The resulting ℎ is used as the context input for either the attention or MLP sublayer. 
+
+3.2 Multi-Resolution Block Basis 
+
+WAV v1 preserves the original block summary 𝐶 𝑏 but augments it with two zero-sum detail bases. Let 𝑎 𝑖 ∈ {+ 1, −1} indicate whether update 𝑢 𝑏,𝑖 comes from an attention sublayer or an MLP sublayer: 
+
+𝑎 𝑖 =
+
+(
+
++1, 𝑢 𝑏,𝑖 is from attention ,
+
+−1, 𝑢 𝑏,𝑖 is from MLP . (6) The phase basis is 
+
+𝐷 phase  
+
+> 𝑏
+
+=
+
+> 𝑚
+
+∑︁ 
+
+> 𝑖 =1
+
+𝑎 𝑖 𝑢 𝑏,𝑖 . (7) This basis captures whether the block’s residual displacement is dominated by attention-like or MLP-like updates. Similarly, let 𝑟 𝑖 ∈ {+ 1, −1} indicate whether a sublayer update is in the first or second half of the block: 
+
+𝑟 𝑖 =
+
+(
+
++1, 𝑖 ≤ 𝑚 /2,
+
+−1, 𝑖 > 𝑚 /2. (8) The split basis is 
+
+𝐷 split  
+
+> 𝑏
+
+=
+
+> 𝑚
+
+∑︁ 
+
+> 𝑖 =1
+
+𝑟 𝑖 𝑢 𝑏,𝑖 . (9) This basis captures coarse early-vs-late movement inside the block. The resulting source set is 
+
+SWAV = {𝑒,𝐶 0, ˜𝐷 phase 0 , ˜𝐷 split 0 , . . . , 𝐶 𝑏 −1, ˜𝐷 phase  
+
+> 𝑏 −1
+
+, ˜𝐷 split 
+
+> 𝑏 −1
+
+, 𝑃 𝐶 , ˜𝑃 phase , ˜𝑃 split }. (10) 
+
+3.3 Stable Detail Injection 
+
+Directly adding detail sources to the depth mixer can destabilize early training. We therefore use two conservative mechanisms. 
+
+Negative detail bias. The two detail sources are initialized with a negative source bias, 𝛽 𝐷 = −2.0, while the embedding and 𝐶 sources use zero bias. This makes WAV v1 close to Block AttnRes at initialization and lets the model gradually increase detail usage only when beneficial. 2Setting Value Model type Decoder-only GPT Model dimension 128 Attention heads 8MLP dimension 1024 Sequence length 512 Depths 12 / 24 / 48 layers Normalization PreNorm RMSNorm Activation SwiGLU Residual blocks 4 fixed blocks Optimizer AdamW, 𝛽 1 = 0.9, 𝛽 2 = 0.95          
+
+> Learning rate 3×10 −4
+> Batch size 16 Training steps 50,000 Validation interval 2,000 steps Vocabulary size 256 character tokens Approx. parameters 5.5M / 11M / 22M
+> Table 1: Experimental setup used for the preliminary arXiv draft.
+
+Detached RMS matching. For a detail tensor 𝐷 associated with block summary 𝐶 , we compute 
+
+˜𝐷 = 𝐷 · stopgrad 
+
+
+
+clip 
+
+ RMS (𝐶 )
+
+RMS (𝐷 ) + 𝜖 , 1
+
+𝜌 , 𝜌 
+
+ 
+
+, (11) where 𝜌 is a maximum scale factor. This prevents detail sources from becoming active only because their raw scale is larger than 𝐶 . In our implementation, the final prediction mixer reads only embedding and 𝐶 sources, not detail sources. 
+
+3.4 Computational Cost 
+
+WAV v1 leaves the attention, MLP, token embedding, and output head unchanged. Its additional cost comes from in-creasing the number of block-level routing sources. If a model has 𝑁 residual blocks, Block AttnRes routes over approxi-mately 𝑂 (𝑁 ) block summaries, while WAV v1 routes over approximately 𝑂 (3𝑁 ) block-basis sources. The asymptotic cost remains block-level, rather than layer-level, because it does not attend over all previous sublayer states. The additional parameters are negligible: each layer has two detail biases for the attention mixer and two for the MLP mixer, i.e., four scalar parameters per Transformer layer. 
+
+4 Experiments 
+
+4.1 Setup 
+
+We evaluate character-level GPT decoder-only language models on TinyStories [ 9 ] and Text8 [ 10 ]. All models use PreNorm RMSNorm [ 7], causal self-attention, and SwiGLU MLPs [ 8 ]. We compare five residual mechanisms: Standard Residual, Block AttnRes, ReZero, LayerScale, and WAV v1. The current arXiv draft reports the validation losses consolidated in our experiment summary; error bars will be added after raw logs are fully consolidated. 
+
+4.2 Main Results 
+
+Table 2 shows the final validation losses. The most important result is the depth-dependent trend. At 12 layers, WAV v1 is worse than Block AttnRes on both datasets. At 24 layers, WAV v1 becomes competitive: it slightly improves TinyStories and is close on Text8. At 48 layers, WAV v1 is the best method on both datasets. On TinyStories, it reduces validation loss from 0.4960 to 0.4738 relative to Block AttnRes. On Text8, it reduces validation loss from 0.9363 to 0.9305. 
+
+4.3 Training Dynamics at 48 Layers 
+
+Figure 4 compares 48-layer training curves. On TinyStories, WAV v1 separates from Block AttnRes early and maintains a persistent advantage throughout training. On Text8, the advantage is smaller but consistent by the end of training. These curves suggest that the improvement is not only a late-stage artifact: multi-resolution sources can affect the optimization trajectory once the model is sufficiently deep. 
+
+4.4 Ranking Summary 
+
+The ranking in Table 3 highlights a key qualitative distinction. Block AttnRes is highly competitive at shallow and medium depth, but WAV v1 becomes strongest in the deepest evaluated configuration. This supports the interpretation that direction-aware block bases are most useful when each block summarizes a longer residual trajectory. 
+
+5 Analysis 
+
+5.1 Why Does WAV Improve with Depth? 
+
+The detail bases in WAV v1 are zero-sum directional summaries. They do not replace the block state 𝐶 𝑏 ; instead, they expose structured deviations around it. With very shallow models, there are few completed blocks and limited residual history, so detail sources may behave like noise or redundant features. With deeper models, each block contains more sublayer updates and later layers can access more completed multi-resolution block summaries. Under this regime, 𝐷 phase and 𝐷 split become informative signals for depth-wise routing. This explains the observed scaling pattern: WAV v1 under-performs at 12 layers, is roughly tied at 24 layers, and clearly improves at 48 layers. The result also suggests that future work should not evaluate residual-routing methods only at shallow depth, because their benefits may be tied to the length and structure of the residual trajectory. 
+
+5.2 Comparison to Residual Scaling 
+
+ReZero and LayerScale are designed to improve residual opti-mization by controlling update magnitude. In our experiments, however, both are consistently weaker than Block AttnRes and WAV v1 at 48 layers. This indicates that the central issue is not only how much residual signal to add, but which residual information to read. WAV v1 directly changes the representa-tion available to the depth-wise mixer, while residual scaling methods preserve the standard sequential residual path. 
+
+5.3 Relation to Delta Routing 
+
+Delta Attention Residuals argue that cumulative hidden states can be redundant and that residual deltas are more structurally diverse [ 4]. WAV v1 is consistent with this perspective but uses a different efficiency trade-off. Instead of routing over every individual delta, WAV v1 compresses deltas inside a 3(a) (b) 
+
+> (c)
+> Attn
+> u1
+> MLP
+> u1
+> Attn
+> u2
+> MLP
+> u2
+> Attn
+> u3
+> MLP
+> u3
+> Attn
+> u4
+> MLP
+> u4
+
+Cb
+
+Dph b
+
+Dsp bCb = ∑         
+
+> i
+> ub,iDph b=∑
+> i
+> aiub,iDsp b=∑
+> i
+> riub,i
+
+e C0 C1 Cb − 1 
+
+PC    
+
+> depth-wise
+> softmax mixer
+> CDph Dsp
+> CDph Dsp
+> PC
+> Pph
+> Psp
+> shared depth-wise
+> softmax mixer
+
+source pool depth-wise 
+
+> softmax mixer
+> Attn
+> PreNorm + SA
+> attn update
+> uattn
+
+PC
+
+Pph 
+
+Psp            
+
+> PC←PC+uattn
+> Pph ←Pph + (+1) uattn
+> Psp ←Psp +rattn uattn
+> refreshed
+> source pool
+> depth-wise
+> softmax mixer
+> MLP
+> PreNorm + FFN
+> mlp update
+> umlp
+
+e C0 C1 CB final 
+
+> mixer
+
+Residual block partition and online basis construction Source pool expansion: Block AttnRes vs WAV v1 
+
+One forward step inside the current block   
+
+> Each block aggregates sublayer updates into one state basis Cband two directional detail bases.
+
+Current residual block b                  
+
+> ai= +1 ai= −1 ai= +1 ai= −1 ai= +1 ai= −1 ai= +1 ai= −1
+> first half ( ri= +1 )second half ( ri= −1 )
+> WAV keeps the Block AttnRes state summary and augments each completed / partial block with two detail sources.
+
+Block AttnRes  
+
+> source pool at a sublayer in block b
+
+, , , ⋯ ,     
+
+> Block = { e,C0, …, Cb− 1 ,PC}
+
+WAV v1 
+
+> completed blocks + current partial block
+> completed
+> block 0
+> completed
+> block 1
+
+⋯                   
+
+> current
+> partial block
+> WAV = { e,C0,Dph
+> 0,Dsp
+> 0, …, PC,Pph ,Psp }
+> The MLP branch sees the current block after the attention update has already been written into the partial basis.
+> {e,C*,D*,P*}
+> partial basis
+> +write
+> MLP reads the updated partial basis
+
+Final prediction readout 
+
+⋯  
+
+> Only embedding and Csources are used at the output head.
+
+Stabilization details                
+
+> •detail bias initialized to −2.0 so training starts close to Block AttnRes
+> •detail tensors are detached-RMS-matched to their corresponding Csource
+> • additional parameters are tiny: 4 scalar detail biases per Transformer layer
+> •routing cost grows from about O(N) to O(3 N) block-level sources
+> embedding Cstate basis PCpartial state phase detail split detail attention branch MLP branch
+
+Figure 1: Detailed overview of WAV v1. (a) Within each residual block, sublayer updates are accumulated into one state basis 𝐶 𝑏 and two directional detail bases, 𝐷 phase 
+
+𝑏 and 𝐷 split 
+
+𝑏 . (b) Compared with Block AttnRes, the depth-wise mixer receives an expanded source pool that includes completed-block and partial-block detail sources. (c) During a forward step, the MLP branch reads the partial basis after the attention update has been written; the final prediction readout uses only embedding and 𝐶 sources. Detail sources are stabilized by a negative initial bias and detached RMS matching. 12 24 48 
+
+Transformer depth (layers) 
+
+−0.02 
+
+−0.01 
+
+0.00 
+
+0.01 
+
+0.02 
+
+0.03 
+
+> Validation loss delta: WAV v1 - Block AttnRes
+
+WAV v1 becomes stronger as depth increases 
+
+> TinyStories
+> Text8
+
+Figure 2: Depth-dependent gain of WAV v1 over Block AttnRes. Negative values mean WAV v1 is better. The method is not beneficial at shallow depth but becomes clearly stronger at 48 layers. 
+
+block into a low-frequency state 𝐶 𝑏 and two coarse detail components. Thus it can be viewed as a block-level, multi-resolution approximation to delta routing. 
+
+6 Limitations and Future Work 
+
+This paper is an initial arXiv draft. There are several limitations that should be addressed before formal conference submission. First, the current draft reports consolidated validation losses but does not yet include standard deviations across seeds. Second, the experiments are limited to small character-level language models; larger-scale token-level language modeling should be evaluated. Third, WAV v1 currently uses two hand-designed detail bases. Future versions should study soft orthogonal detail bases, polarity-aligned detail routing, and learnable block wavelet bases. Finally, computational measurements should be reported with diagnostics disabled and with a fused or cached implementation to separate method cost from Python overhead. 
+
+7 Conclusion 
+
+We presented WAV v1, a lightweight multi-resolution extension of Block Attention Residuals for deep decoder-only Transform-ers. Instead of representing each residual block only by its total update 𝐶 𝑏 , WAV v1 additionally stores phase and split detail bases that expose attention-vs-MLP and early-vs-late directional structure. Preliminary experiments on TinyStories and Text8 show that WAV v1 has a strong depth-dependent benefit: it is not useful at 12 layers, becomes competitive at 24 layers, and achieves the best final validation loss at 48 layers. These results suggest that deep residual routing should pre-serve not only coarse block states but also structured residual directions. 4Dataset Depth Standard Block LayerScale ReZero WAV v1 Δ vs Block PPL red. Text8 12 0.9955 0.9801 1.0057 1.0404 1.0085 +0.0284 -2.88% Text8 24 0.9736 0.9592 1.0068 1.0183 0.9610 +0.0018 -0.18% Text8 48 0.9543 0.9363 0.9919 1.0003 0.9305 -0.0057 +0.57% TinyStories 12 0.5268 0.5261 0.5366 0.5470 0.5325 +0.0065 -0.65% TinyStories 24 0.5095 0.5036 0.5240 0.5210 0.5012 -0.0024 +0.24% TinyStories 48 0.4909 0.4960 0.5291 0.5298 0.4738 -0.0222 +2.19% 
+
+Table 2: Final validation loss at 50k steps. Lower is better. Δ vs Block is WAV v1 minus Block AttnRes, so negative values indicate improvement. PPL reduction is computed from validation loss as 1 − exp (L WAV )/ exp (L Block ).12L 24L 48L   
+
+> Depth
+> 0.0
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> Validation loss at 50k steps
+> TinyStories
+> Standard
+> Block AttnRes
+> LayerScale
+> ReZero
+> WAV v1
+> 12L 24L 48L
+> Depth
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Validation loss at 50k steps
+> Text8
+> Final validation loss across model depths
+
+Figure 3: Final validation loss across depths and datasets. WAV v1 is strongest in the 48-layer regime, while Block AttnRes is strongest or competitive at shallower depths. Dataset Depth Best Runner-up Text8 12 Block AttnRes (0.9801) Standard (0.9955) Text8 24 Block AttnRes (0.9592) WAV v1 (0.9610) Text8 48 WAV v1 (0.9305) Block AttnRes (0.9363) TinyStories 12 Block AttnRes (0.5261) Standard (0.5268) TinyStories 24 WAV v1 (0.5012) Block AttnRes (0.5036) TinyStories 48 WAV v1 (0.4738) Standard (0.4909) 
+
+Table 3: Best and second-best methods by final validation loss. 
+
+A Implementation Notes 
+
+Online basis update. For each sublayer update 𝑢 , WAV v1 updates 𝐶 , 𝐷 phase , and 𝐷 split online. Attention updates are added with positive phase sign, while MLP updates are added with negative phase sign. Updates in the first half of a block use positive split sign, while those in the second half use negative split sign. 
+
+Default safety settings. The preliminary implementation uses detail bias −2.0, RMS matching with a clipped detached scale, and disables detail sources in the final output mixer. These choices make the model close to Block AttnRes at initialization. 
+
+Recommended additional ablations. The next arXiv update should include: (1) 𝐷 phase only, (2) 𝐷 split only, (3) both details without RMS matching, (4) detail bias sensitivity, and (5) varying the number of residual blocks. 
+
+B Reproducibility Checklist 
+
+The draft package includes the parsed result CSV files and plotting scripts. Raw training logs, seed-wise standard devia-tions, and the exact training code should be released with the next version. 
+
+References 
+
+[1] Kaiming He, Xiangyu Zhang, Shaoqing Ren, and Jian Sun. 2016. Deep residual learning for image recognition. In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition .[2] Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N. Gomez, Lukasz Kaiser, and Illia Polosukhin. 2017. Attention is all you need. In 
+
+Advances in Neural Information Processing Systems .[3] Kimi Team, Guangyu Chen, Yu Zhang, Jianlin Su, and others. 2026. Attention residuals. arXiv preprint arXiv:2603.15031 .50 10 20 30 40 50      
+
+> Training step (k)
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> 0.9
+> 1.0
+> Validation loss
+> TinyStories, 48-layer
+> Standard
+> Block AttnRes
+> LayerScale
+> ReZero
+> WAV v1
+> 010 20 30 40 50
+> Training step (k)
+> 1.0
+> 1.1
+> 1.2
+> 1.3
+> 1.4
+> Validation loss
+> Text8, 48-layer
+> Training curves at 48 layers
+
+Figure 4: Validation loss curves for 48-layer models. WAV v1 obtains the best final validation loss on both TinyStories and Text8. 
+
+[4] Cheng Luo, Zefan Cai, and Junjie Hu. 2026. Delta attention residuals. arXiv preprint arXiv:2605.18855 .[5] Thomas Bachlechner, Bodhisattwa Prasad Majumder, Huanru Henry Mao, Garrison W. Cottrell, and Julian McAuley. 2020. ReZero is all you need: Fast convergence at large depth. arXiv preprint arXiv:2003.04887 .[6] Hugo Touvron, Matthieu Cord, Alexandre Sablayrolles, Gabriel Synnaeve, and Hervé Jégou. 2021. Going deeper with image transformers. In Proceedings of the IEEE/CVF International Conference on Computer Vision .[7] Biao Zhang and Rico Sennrich. 2019. Root mean square layer normalization. In Advances in Neural Information Processing Systems .[8] Noam Shazeer. 2020. GLU variants improve Transformer. 
+
+arXiv preprint arXiv:2002.05202 .[9] Ronen Eldan and Yuanzhi Li. 2023. TinyStories: How small can language models be and still speak coherent English? arXiv preprint arXiv:2305.07759 .[10] Matt Mahoney. 2011. Large text compression benchmark. 
+
+http://mattmahoney.net/dc/textdata.html .6

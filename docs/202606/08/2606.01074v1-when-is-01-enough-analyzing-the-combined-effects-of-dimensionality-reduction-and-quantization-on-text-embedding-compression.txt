@@ -1,0 +1,1194 @@
+Title: When Is 0.1
+
+URL Source: https://arxiv.org/pdf/2606.01074v1
+
+Published Time: Tue, 02 Jun 2026 01:16:55 GMT
+
+Number of Pages: 14
+
+Markdown Content:
+## When Is 0.1% Enough? Analyzing the Combined Effects of Dimensionality Reduction and Quantization on Text Embedding Compression 
+
+Riku Kisako Hayato Tsukagoshi Ryohei Sasano 
+
+Graduate School of Informatics, Nagoya University {kisako.riku.n3@s.mail, sasano@i}.nagoya-u.ac.jp research.tsukagoshi.hayato@gmail.com 
+
+Abstract 
+
+Recent high-performing text embedding mod-els often output high-dimensional real-valued vectors, resulting in substantial storage and computational costs. To address this issue, compression methods based on dimensional-ity reduction or quantization have been pro-posed; however, the effects of combining di-mensionality reduction and quantization have not been sufficiently investigated. In this paper, we systematically examine the effectiveness of compressing text embeddings by combining di-mensionality reduction and quantization, using four MTEB task families and four pretrained embedding models. The experimental results demonstrate that combining dimensionality re-duction and quantization enables substantially stronger compression than using either method alone, that in some settings embeddings can be reduced to as little as 0.1% of their original size with almost no performance degradation, and that the optimal compression strategy depends on the task. 
+
+1 Introduction 
+
+Text embeddings are widely used as intermedi-ate representations in NLP systems. They map texts into vector spaces where similarity or dis-tance can be used for retrieval, classification, clus-tering, and semantic textual similarity (STS). Re-cent embedding models, including LLM-based instruction-following models, have substantially improved performance across diverse benchmark tasks by producing task-adaptive representations. However, high-performing embedding models of-ten output high-dimensional real-valued vectors, which increases storage and similarity-computation costs. This is especially problematic in retrieval and retrieval-augmented generation (RAG), where large collections of document embeddings must be stored and compared against query embeddings. Therefore, reducing embedding size while preserv-6 8 10 12 14 16      
+
+> log2(dim x bits)
+> 78
+> 80
+> 82
+> 84
+> 86
+> 88
+> 90
+> Score (%)
+> Classification
+> Quantization only
+> Dimension reduction only
+> Best combination
+> 6810 12 14 16
+> log2(dim x bits)
+> 50
+> 52
+> 54
+> 56
+> 58
+> 60
+> 62
+> Retrieval
+
+Figure 1: An excerpt from the experimental results ob-tained by applying head-based dimensionality reduction and quantization to Qwen3-Embedding-8B . The left fig-ure presents performance changes in the classification task, and the right figure presents those in the retrieval task, for quantization alone, dimensionality reduction alone, and their best combination. 
+
+ing downstream performance is an important prac-tical problem. Two common approaches to embedding com-pression are quantization and dimensionality re-duction. Quantization represents each coordinate with fewer bits, reducing numerical precision while keeping the dimensionality fixed. Dimensionality reduction instead reduces the number of retained coordinates. Despite progress in both directions, the interaction between quantization and dimen-sionality reduction remains insufficiently under-stood. These two methods control different as-pects of compression: quantization determines how precisely each dimension is represented, whereas dimensionality reduction determines how many di-mensions are retained. Consequently, under the same total bit budget, a high-dimensional low-bit representation and a low-dimensional high-bit representation may preserve different information. This raises the question of how text embeddings should balance dimensionality and bit-width under strong compression. In this paper, we systemati-cally evaluate the joint effect of quantization and dimensionality reduction on text embedding com-
+
+> arXiv:2606.01074v1 [cs.CL] 31 May 2026
+
+pression. We conduct experiments on four MTEB task families: classification, clustering, retrieval, and STS, with four pretrained embedding models. Figure 1 illustrates our key finding. When only quantization is applied, the performance degrada-tion tends to be small, but the achievable reduction is limited. Since the original embeddings in this example are represented with 32-bit values, reduc-ing them to 1-bit representations still provides only a 1/32 reduction in storage. Dimensionality reduc-tion alone, on the other hand, can achieve much stronger compression, but aggressive dimensional-ity reduction results in a substantial performance drop. In contrast, an appropriate combination of dimensionality reduction and quantization not only reduces performance degradation beyond what is achieved by quantization alone, but also enables much larger reductions in storage size. Among the results shown in Figure 1, for the classification task, even when the original vectors are compressed to 1/128 of their original size, the performance drop is limited, from 89.51 to 89.26. Even when they are compressed to 1/1024 of their original size, the performance remains at 88.62. As in this exam-ple, under certain conditions, we observed cases where performance degradation remained limited even when the original embeddings were reduced to 0.1% of their original size. 
+
+2 Background and Related Work 
+
+2.1 Text Embeddings 
+
+Early sentence embedding methods derived sentence-level representations from word embed-dings or shallow encoders (Arora et al., 2017; Con-neau et al., 2017; Cer et al., 2018). Later methods such as Sentence-BERT and SimCSE improved semantic representations by fine-tuning pretrained language models (Reimers and Gurevych, 2019; Gao et al., 2021). More recent embedding mod-els are evaluated across diverse task families using benchmarks such as MTEB (Muennighoff et al., 2023). Strong general-purpose embedding models have been developed using large-scale contrastive learning, weak supervision, task-specific prefixes, or natural language instructions (Wang et al., 2022; Su et al., 2023; Asai et al., 2023; Li et al., 2023; Xiao et al., 2024; Nussbaum et al., 2025; Wang et al., 2024; Lee et al., 2025a). These models provide strong downstream performance, but their high-dimensional outputs motivate efficient com-pression. 
+
+2.2 Embedding Compression 
+
+Embedding compression reduces the cost of storing and comparing vectors. We focus on two comple-mentary post-hoc compression axes: quantization, which reduces the number of bits per coordinate, and dimensionality reduction, which reduces the number of coordinates. 
+
+2.2.1 Quantization 
+
+Quantization is widely used for neural model com-pression, including reduced precision weights and activations for BERT and LLMs (Zafrir et al., 2019; Frantar et al., 2022; Xiao et al., 2023; Lin et al., 2024). It has also been applied directly to embed-dings. Isotropic Iterative Quantization compresses word embeddings into binary vectors (Liao et al., 2020), while product quantization has been used to reduce the memory and search cost of dense re-trieval indexes (Zhan et al., 2021; Qiu et al., 2022). Recent work has further examined low-bit vector quantization for RAG and vector search (Jeong, 2024; Zandieh et al., 2025). 
+
+2.2.2 Dimensionality Reduction 
+
+Dimensionality reduction compresses embeddings by decreasing the number of coordinates. Clas-sical post-processing methods such as PCA, ran-dom orthogonal rotation, Isomap, and UMAP can be applied without retraining the embedding model (Abdi and Williams, 2010; Achlioptas, 2003; Tenenbaum et al., 2000; McInnes et al., 2018). An-other line of work trains models to support variable-dimensional representations. Matryoshka Repre-sentation Learning (MRL) makes prefixes of an em-bedding useful at multiple dimensionalities (Kusu-pati et al., 2022), and this idea has been adopted in recent embedding models such as Gemini Em-bedding and Qwen3-Embedding (Lee et al., 2025b; Zhang et al., 2025). Recent work also shows that post-hoc dimen-sionality reduction can preserve performance even for models not explicitly trained with MRL. Tsuk-agoshi and Sasano (2025) showed that prompt-based text embeddings are highly robust to di-mensionality reduction, especially for classification and clustering. Takeshita et al. (2025) found that randomly removing up to half of the dimensions causes only minor degradation in retrieval and clas-sification. Other studies have begun to evaluate dimensionality reduction and quantization jointly in embedding storage or compression frameworks (Huerga-Pérez et al., 2025; Caspari et al., 2026). However, the trade-off between bit-width and di-mensionality has not been systematically charac-terized across task families. Our work addresses this gap by evaluating combinations of post-hoc dimensionality reduction and low-bit quantization under a unified compression budget. 
+
+3 Experimental Setup 
+
+3.1 Tasks and Evaluation Metrics 
+
+We evaluate embedding compression on selected English datasets from the Massive Text Embedding Benchmark (MTEB) (Muennighoff et al., 2023), covering four task families: classification, clus-tering, retrieval, and semantic textual similarity (STS). For each dataset, we report the official MTEB 
+
+main_score . When aggregating results, we first average scores over datasets within each task family and then report task-family-level averages. We use the test split when available; otherwise, we follow the official MTEB evaluation split. 
+
+3.2 Experimental Models 
+
+We evaluate four pretrained text embedding mod-els, following the model selection strategy of prior work on the dimensional redundancy of prompt-based text embeddings (Tsukagoshi and Sasano, 2025). Prior work categorizes prompt-based text embedding models into instruction-based models, which use natural language task instructions, and prefix-based models, which prepend predefined task-specific prefixes to input texts. Following this distinction, we include two LLM-based instruction embedding models, gte-Qwen2-7B-instruct and 
+
+E5-mistral-7b-instruct (Wang et al., 2024), and one encoder-based prefix embedding model, 
+
+E5-large-v2 (Wang et al., 2022). In addi-tion, we evaluate Qwen3-Embedding-8B (Zhang et al., 2025), a Matryoshka-compatible embedding model, to examine whether a model natively de-signed for variable-dimensional embeddings ex-hibits different behavior under dimensionality re-duction and quantization. More details about the evaluated models and their input formats are pro-vided in Appendix A. The dataset-specific instruc-tions used for each task are provided in Appendix B. For each model, we only evaluate target dimensions that do not exceed its original embedding dimen-sionality. 
+
+3.3 Dimensionality Reduction Methods 
+
+Let f (x) ∈ RD be the original embedding of in-put x. We compare two dimensionality reduction methods that produce z(x) ∈ Rd.
+
+Head This baseline keeps the first d coordinates: 
+
+z(x) = f (x)1: d.
+
+It requires no fitted projection. 
+
+PCA+ROR We use PCA-based dimensionality reduction followed by a deterministic random or-thogonal rotation. Let μ ∈ RD be the mean vector of the calibration embeddings, and let Ud ∈ RD×d
+
+be the matrix whose columns are the top d principal components. A standard PCA projection first maps the embedding to 
+
+˜z(x) = ( f (x) − μ)Ud.
+
+However, the coordinates of ˜z(x) are ordered by explained variance, which can concentrate most of the variance in a small number of dimensions. This coordinate-wise variance imbalance can be undesirable when the reduced embeddings are sub-sequently quantized, because scalar quantization is applied independently to each coordinate. To mitigate this issue, we multiply the PCA-projected vector by a deterministic random orthog-onal matrix: 
+
+z(x) = ( f (x) − μ)UdRd,
+
+where Rd ∈ Rd×d is obtained by QR decomposi-tion of a Gaussian random matrix with a fixed seed. Since Rd is orthogonal, this rotation preserves Eu-clidean distances and inner products within the PCA subspace, while redistributing the variance across coordinates. Throughout the main experi-ments, we refer to this method as PCA+ROR (PCA followed by random orthogonal rotation). Results for standard PCA without the random orthogonal rotation are discussed separately in Section 5.1. PCA is fitted without using task labels. When more than 10,000 calibration embeddings are available, we sample 10,000 embeddings for fitting. 
+
+3.4 Quantization 
+
+After dimensionality reduction, we apply post-training embedding quantization. All compressed embeddings are dequantized back to float32 be-fore evaluation, allowing us to simulate com-pressed storage while keeping the MTEB evalu-ation pipeline unchanged. We evaluate six bit-width settings, with b bits per scalar: 
+
+b ∈ { 1, 2, 4, 8, 16 , 32 }.
+
+The 32-bit setting uses the original float32 values. The 16-bit setting casts embeddings to float16 
+
+and then converts them back to float32 . The 1-bit setting applies sign quantization by replacing each scalar with +1 if it is non-negative and −1
+
+otherwise. For 8-, 4-, and 2-bit quantization, we do not use low-precision floating-point formats directly. The embedding models used in our experiments output L2-normalized embeddings. Consequently, especially in high-dimensional embeddings, indi-vidual scalar values tend to have very small mag-nitudes and are highly concentrated around zero. Under coarse low-bit floating-point representations, many such values can collapse to zero or to a small number of representable levels, leaving much of the available bit budget ineffective for distinguish-ing embedding values. To avoid this, we use a distribution-adaptive lookup-table quantizer that allocates the available 2b levels according to the empirical distribution of embedding values. Specifically, for each task, target dimension d,and bit-width b, we construct a global equal-count scalar quantizer. We first flatten the calibration embeddings into a single set of scalar values, sort them, and divide them into 2b bins with approxi-mately equal numbers of values. Each bin is repre-sented by the mean of the values assigned to that bin. At quantization time, each scalar is replaced by the representative value of the bin to which it belongs. The quantization table is fitted separately for each task and dimensionality setting. To ex-amine how much this design choice affects the re-sults, Section 5.2 further compares our equal-count lookup-table quantizer with fixed quantization for-mats that do not use such a table. 
+
+3.5 Calibration Protocol 
+
+For each model–task pair, we fit the dimensionality-reduction and quantization parameters using an unlabeled calibration set constructed from the em-beddings produced during a warm-up pass over the corresponding MTEB task inputs. PCA parame-ters are fitted on up to 10,000 embeddings sam-pled from this cache, or on all cached embeddings when fewer than 10,000 are available. Equal-count quantization tables are fitted separately for each task, target dimensionality, and bit-width using the scalar values of the corresponding reduced embed-dings. This calibration is task-specific and does not use task labels, relevance judgments, or evaluation scores. 
+
+3.6 Compression Budget 
+
+We measure the nominal per-vector storage cost of each compressed embedding by the number of stored bits: 
+
+C(d, b ) = db, 
+
+where d is the reduced dimensionality and b is the bit-width. This budget counts only the bits assigned to each stored embedding vector. For the equal-count quan-tizer, the lookup table and bin boundaries introduce additional global storage. However, these parame-ters are shared by all embeddings in the same task, dimensionality, and bit-width setting. If a quanti-zation table with 2b representative values and its bin boundaries are stored in 32-bit floating point, the additional cost is O(2 b) bits per configuration, and its amortized cost per embedding decreases as 
+
+O(2 b/N ), where N is the number of stored embed-dings. Therefore, for large embedding collections, this overhead is negligible compared with the per-vector cost db .
+
+4 Experiments 
+
+Using the compression budget defined in Sec-tion 3.6, we analyze how much the embedding representations can be compressed while preserv-ing downstream performance. For all experimental patterns, it was found that combining dimensionality reduction with quantiza-tion enables information compression while main-taining performance. Figure 2 shows gte-Qwen2 results when us-ing Head as the dimensionality reduction method, while Figure 3 displays results when using PCA+ROR. Table 1 below presents the dimension-ality × bit patterns for each experimental configu-ration, with thresholds set at 99% and 90% of the original performance respectively. Other models’ figures are provided in Appendix C. 
+
+4.1 Differences in trends by task 
+
+The effects of dimensionality reduction and quan-tization tend to vary depending on the task being processed. 3 6 9 12 15             
+
+> 65
+> 70
+> 75
+> 80
+> 85
+> Score (%)
+> classification
+> 36912 15
+> 20
+> 30
+> 40
+> 50
+> 60
+> 70
+> clustering
+> 36912 15
+> log2(dim x bits)
+> 0
+> 10
+> 20
+> 30
+> 40
+> 50
+> 60
+> 70
+> Score (%)
+> retrieval
+> 36912 15
+> log2(dim x bits)
+> 20
+> 30
+> 40
+> 50
+> 60
+> 70
+> 80
+> sts
+> dim=2
+> dim=4
+> dim=8
+> dim=16
+> dim=32
+> dim=64
+> dim=128
+> dim=256
+> dim=512
+> dim=1024
+> dim=2048
+> dim=3584
+> bits=1
+> bits=2
+> bits=4
+> bits=8
+> bits=16
+> bits=32
+
+Figure 2: Performance of Head-based dimensionality reduction for gte-Qwen2 across different bit-widths and task types. The horizontal axis is logarithmic. The dot shapes represent the number of bits, while the dot colors indicate the number of dimensions. Results with the same number of bits are connected by gray lines. 3 6 9 12 15             
+
+> 65
+> 70
+> 75
+> 80
+> 85
+> Score (%)
+> classification
+> 36912 15
+> 20
+> 30
+> 40
+> 50
+> 60
+> 70
+> clustering
+> 36912 15
+> log2(dim x bits)
+> 0
+> 10
+> 20
+> 30
+> 40
+> 50
+> 60
+> 70
+> Score (%)
+> retrieval
+> 36912 15
+> log2(dim x bits)
+> 20
+> 30
+> 40
+> 50
+> 60
+> 70
+> 80
+> sts
+> dim=2
+> dim=4
+> dim=8
+> dim=16
+> dim=32
+> dim=64
+> dim=128
+> dim=256
+> dim=512
+> dim=1024
+> dim=2048
+> dim=3584
+> bits=1
+> bits=2
+> bits=4
+> bits=8
+> bits=16
+> bits=32
+
+Figure 3: Performance of PCA+ROR for gte-Qwen2 
+
+across different bit-widths and task types. The horizon-tal axis is logarithmic. The dot shapes represent the number of bits, while the dot colors indicate the number of dimensions. Results with the same number of bits are connected by gray lines. 
+
+Classification For classification tasks, perfor-mance can be maintained even under substantial compression. For the three high-dimensional mod-els, a relative compression budget below 0.1% is sufficient to reproduce 99% of the original per-formance. Unlike the other three task families, classification tends to place greater importance on bit-width than on dimensionality. As shown in the Classification panel of Figure 2, high-bit settings (8–32 bits) show only minor performance degrada-tion even when the embeddings are compressed to two dimensions, whereas at 1–4 bits, even a 3584-dimensional representation performs worse than the two-dimensional 8-bit setting. 
+
+Clustering For clustering tasks, all three models except E5-large maintained 99% of their original performance with a relative compression budget below 1%. The relationship between bits and di-mensions is dominated by dimensionality. When comparing performance at the same compression budget, patterns with larger dimensionality consis-tently show higher scores. 
+
+Retrieval Among the four task families, retrieval was the most sensitive to embedding compression. Under the 99% performance threshold, retrieval required the largest relative compression budget, indicating that it was the least compressible. This sensitivity is especially clear for dimensionality reduction: for example, with gte-Qwen2 , classi-fication, clustering, and STS maintain nearly flat performance down to 256 dimensions, whereas re-trieval already shows degradation at 1024 dimen-sions. 
+
+STS For STS tasks, all three models except 
+
+E5-large maintained 99% of their original perfor-mance with a relative compression budget below 1%. The relationship between bits and dimensions is relatively sensitive to dimensionality. Like clus-tering and retrieval, when comparing performance at the same compression budget, patterns with larger dimensionality consistently achieve higher scores. 
+
+Overall Overall, the dominant compression axis differs across task families. Classification is more sensitive to bit-width: because MTEB classifica-tion trains a logistic regression classifier on the compressed embeddings, sufficient scalar preci-sion can preserve learnable decision boundaries even at very low dimensionality. Increasing the bit-width preserves within-coordinate order and Model tL Method Classification Clustering Retrieval STS                                                                                                                                     
+
+> gte-Qwen2
+> 99% Head 32 ×4(0.11% )256 ×4(0.89% )3584 ×16 (50% )1024 ×1(0.89% )PCA+ROR 2×4(0.0070% )64 ×2(0.11% )–256 ×2(0.45% )90% Head 8×1(0.0070% )32 ×2(0.06% )512 ×2(0.89% )64 ×2(0.11% )PCA+ROR 2×1(0.0017% )32 ×1(0.028% )512 ×2(0.89% )128 ×1(0.11% )
+> Qwen3-Emb.
+> 99% Head 64 ×2(0.098% )512 ×2(0.78% )2048 ×4(6.25% )256 ×4(0.78% )PCA+ROR 2×4(0.0061% )64 ×2(0.098% )3584 ×8(22% )–90% Head 4×1(0.0030% )64 ×2(0.098% )256 ×2(0.39% )16 ×4(0.049% )PCA+ROR 2×1(0.0015% )64 ×1(0.049% )256 ×2(0.39% )128 ×1(0.098% )
+> E5-mistral
+> 99% Head 4×4(0.012% )512 ×2(0.78% )3584 ×2(5.47% )512 ×2(0.78% )PCA+ROR 4×8(0.024% )64 ×2(0.098% )2048 ×2(3.13% )512 ×2(0.78% )90% Head 4×2(0.0061% )128 ×2(0.20% )512 ×2(0.78% )32 ×4(0.098% )PCA+ROR 2×1(0.0015% )32 ×1(0.024% )512 ×2(0.78% )128 ×1(0.098% )
+> E5-large
+> 99% Head 1024 ×2(6.25% )1024 ×4(12 .5% )1024 ×4(12 .5% )256 ×4(3.13% )PCA+ROR 16 ×4(0.20% )256 ×4(3.13% )––90% Head 128 ×2(0.78% )512 ×2(3.13% )1024 ×2(6.25% )32 ×4(0.39% )PCA+ROR 2×1(0.0061% )128 ×1(0.39% )512 ×2(3.13% )128 ×1(0.39% )
+
+Table 1: Minimum compression settings required to achieve at least 99% or 90% of the original full-dimensional 32-bit performance. Each cell reports the reduced dimensionality d, bit-width b, and the relative compression budget 
+
+100 · C(d, b )/C (D, 32) in parentheses. ( D is the original embedding dimensionality of the model.) A dash indicates that no evaluated configuration reaches the threshold. 
+
+margins, whereas very low-bit quantization can collapse examples even when many dimensions are retained. By contrast, clustering, STS, and retrieval depend more directly on the geometry of the com-pressed embeddings. Without a supervised classi-fier to compensate for missing coordinates, these tasks benefit more from retaining dimensions that preserve neighborhood and similarity structure. 
+
+4.2 Effect of Dimensionality Reduction Methods 
+
+Focusing on Table 1, we observe that the preferred dimensionality reduction method depends on the target performance threshold. At the strict 99% threshold, Head-based reduction is more reliable: it reaches the threshold for all model–task combina-tions in our experiments. In contrast, PCA followed by random orthogonal rotation (PCA+ROR) fails to reach the 99% threshold in several settings, as indicated by the dashes in the table. These failures mainly appear in retrieval and STS tasks, suggest-ing that PCA+ROR can distort the fine-grained similarity structure required for these tasks when near-original performance must be preserved. This does not mean that Head-based reduction al-ways requires a smaller budget. When PCA+ROR reaches the 99% threshold, it often does so with a smaller compression budget, especially for clas-sification and clustering tasks. For example, in 
+
+gte-Qwen2 , PCA+ROR reaches the 99% threshold for classification with 2 × 4 bits, whereas Head-based reduction requires 32 ×4 bits. A similar trend is observed for clustering. Thus, PCA+ROR can be highly efficient when the target task is tolerant to the transformation, but it is less reliable under a strict near-original performance requirement. The trend changes more clearly at the relaxed 90% threshold. In this setting, PCA+ROR requires a smaller or comparable compression budget in most model–task combinations. This indicates that PCA+ROR provides a smoother compression– performance trade-off: it may lose a small amount of performance before reaching the near-original regime, but its degradation under aggressive com-pression is more gradual. In contrast, Head-based reduction is better suited when the goal is to pre-serve almost the original performance. Figures 2 and 3 provide a representative example using gte-Qwen2 . Compared with Head-based re-duction, PCA+ROR tends to achieve higher scores in low-budget regions, particularly for classifica-tion and clustering. This supports the observation from Table 1 that PCA+ROR is effective for ag-gressive compression. However, for retrieval, both methods require much larger budgets to approach the original performance, and PCA+ROR does not reach the 99% threshold for gte-Qwen2 . This again suggests that retrieval is more sensitive to dimen-sionality reduction methods than classification and clustering. 
+
+4.3 Effect of Original Embedding Dimensionality 
+
+Table 1 shows that E5-large , whose original di-mensionality is smaller than those of the LLM-based embedding models, generally requires a larger fraction of the original compression bud-get to reach the 99% threshold. For example, with Head-based reduction, E5-large requires 1024 ×2
+
+bits for classification and 1024 × 4 bits for cluster-ing and retrieval, whereas the higher-dimensional models often reach the same threshold with much smaller relative budgets. This suggests that the original embedding di-mensionality affects the amount of redundant ca-pacity available for post-hoc compression. High-dimensional embedding models can discard or quantize a large portion of their representations while preserving near-original performance. In con-trast, models with smaller original dimensionality have less redundant capacity, and therefore require a larger relative budget to maintain the same per-formance level. 
+
+4.4 Effect of Matryoshka Compatibility 
+
+We also examine whether Matryoshka compat-ibility leads to qualitatively different behav-ior under Head-based dimensionality reduction. 
+
+Qwen3-Embedding is designed to support variable-dimensional embeddings, and therefore one might expect it to be particularly robust to Head-based truncation. As shown in Table 1, however, its over-all behavior is not fundamentally different from that of the other high-dimensional embedding mod-els. Head-based reduction reaches the 99% thresh-old for all task types, but the same is also true for 
+
+gte-Qwen2 and E5-mistral .This result suggests that the robustness to Head-based truncation observed in our experiments is not unique to Matryoshka-compatible models. Rather, it appears to be a broader property of recent high-dimensional text embedding models. At the same time, Qwen3-Embedding can require a smaller bud-get in some settings, especially retrieval, indicating that Matryoshka-style training may still improve the efficiency of truncation in certain cases. 3 6 9 12 15             
+
+> 50
+> 55
+> 60
+> 65
+> 70
+> 75
+> 80
+> 85
+> Score (%)
+> classification
+> 36912 15
+> 20
+> 30
+> 40
+> 50
+> 60
+> 70
+> clustering
+> 36912 15
+> log2(dim x bits)
+> 0
+> 10
+> 20
+> 30
+> 40
+> 50
+> 60
+> 70
+> Score (%)
+> retrieval
+> 36912 15
+> log2(dim x bits)
+> 20
+> 30
+> 40
+> 50
+> 60
+> 70
+> 80
+> sts
+> dim=2
+> dim=4
+> dim=8
+> dim=16
+> dim=32
+> dim=64
+> dim=128
+> dim=256
+> dim=512
+> dim=1024
+> dim=2048
+> dim=3584
+> bits=1
+> bits=2
+> bits=4
+> bits=8
+> bits=16
+> bits=32
+
+Figure 4: Performance of PCA without random orthog-onal rotation for gte-Qwen2 across different task types, bit-widths, and target dimensions. 
+
+5 Further Analysis 
+
+5.1 Effect of Random Orthogonal Rotation after PCA 
+
+We further examine the role of random orthogonal rotation after PCA. PCA alone produces coordi-nates ordered by explained variance, which can interact poorly with scalar quantization because coordinate scales are highly imbalanced. Figure 4 shows that, for gte-Qwen2 , increasing the num-ber of retained PCA dimensions does not always improve performance at a fixed bit-width. This non-monotonic behavior is counterintuitive because adding dimensions should, in principle, preserve more information before quantization. We hypoth-esize that additional low-variance components can be strongly affected by discretization noise, while high-variance components dominate the geome-try of the embedding space. As a result, adding more PCA dimensions can introduce noisy or unsta-ble coordinates rather than consistently improving downstream performance. Random orthogonal rotation mitigates this is-sue by redistributing information within the PCA subspace and balancing coordinate-wise variance while preserving inner products. The compari-son between PCA and PCA+ROR therefore sug-gests that this rotation is important for combining 3 6 9 12 15             
+
+> 55
+> 60
+> 65
+> 70
+> 75
+> 80
+> 85
+> Score (%)
+> classification
+> 36912 15
+> 0
+> 10
+> 20
+> 30
+> 40
+> 50
+> 60
+> 70
+> clustering
+> 36912 15
+> log2(dim x bits)
+> 0
+> 10
+> 20
+> 30
+> 40
+> 50
+> 60
+> 70
+> Score (%)
+> retrieval
+> 36912 15
+> log2(dim x bits)
+> 0
+> 10
+> 20
+> 30
+> 40
+> 50
+> 60
+> 70
+> 80
+> sts
+> dim=2
+> dim=4
+> dim=8
+> dim=16
+> dim=32
+> dim=64
+> dim=128
+> dim=256
+> dim=512
+> dim=1024
+> dim=2048
+> dim=3584
+> bits=1
+> bits=2
+> bits=4
+> bits=8
+> bits=16
+> bits=32
+
+Figure 5: Effect of fixed quantization formats on 
+
+gte-Qwen2 with Head-based dimensionality reduction. 
+
+PCA-based dimensionality reduction with low-bit quantization. We observed the same qualitative tendency across models, indicating that the insta-bility of PCA-only compression is not specific to 
+
+gte-Qwen2 .
+
+5.2 Sensitivity to Quantization Format 
+
+Our main experiments use a global equal-count lookup-table quantizer for 2-, 4-, and 8-bit quanti-zation, rather than applying low-precision floating-point formats directly. This choice is motivated by the value distribution of text embeddings: since the embedding models used in this study output L2-normalized vectors, individual coordinates tend to have small magnitudes and are highly concen-trated around zero. We further examine this design choice by evaluating fixed quantization formats on 
+
+gte-Qwen2 with Head-based dimensionality reduc-tion. For this analysis, we replace the equal-count quantizer with fixed representable value sets. For 2-bit quantization, we use the codebook 
+
+{− 0.75 , −0.25 , 0.25 , 0.75 }. For 4-bit quantiza-tion, we use a floating-point format with one sign bit, one exponent bit, two mantissa bits, bias 2, subnormal values enabled, and no reserved special exponent. For 8-bit quantization, we use a floating-point format with one sign bit, four exponent bits, three mantissa bits, and bias 7. Figure 5 shows that the 4-bit floating-point set-ting performs substantially worse than the neigh-boring 2-bit and 8-bit settings across several task families. This result is counterintuitive if bit-width alone is considered, but it is consistent with the scale of L2-normalized high-dimensional embed-dings. In the 4-bit format used here, the repre-sentable values near zero are too coarse, so many small-magnitude coordinates are rounded to zero. This zero collapse can remove directional infor-mation from the embedding, which is especially harmful for similarity-based evaluation. By con-trast, the 2-bit codebook does not contain zero and therefore preserves at least the sign of every co-ordinate, while the 8-bit floating-point format has sufficiently finer resolution around zero. This re-sult supports our use of equal-count quantization, which matches representable levels to the empir-ical embedding distribution and avoids excessive collapse of small but informative coordinates. 
+
+6 Conclusion and Future Work 
+
+We investigated how dimensionality reduction and quantization jointly affect text embedding com-pression. Across four embedding models and four MTEB task families, we found that these two com-pression axes are complementary: many model– task settings can retain near-original performance with only a small fraction of the original storage budget. The best compression strategy, however, depends strongly on the task and model. Clas-sification and clustering often tolerate aggressive compression, whereas retrieval generally requires a larger retained subspace to preserve fine-grained similarity structure. Our analysis further shows that the choice of dimensionality reduction and quantization format matters. PCA followed by random orthogonal rotation is effective under aggressive compres-sion, while Head-based truncation is more reliable when preserving almost the original performance. We also find that fixed low-bit floating-point for-mats can behave unexpectedly for normalized high-dimensional embeddings, highlighting the impor-tance of matching the quantizer to the embedding distribution. Future work should develop methods for predict-ing suitable dimensionality and bit-width settings from small calibration sets, and should further ana-lyze why different tasks and models exhibit differ-ent redundancy patterns. Limitations 
+
+This study has three main limitations. First, we evaluate only a limited set of compression meth-ods. For dimensionality reduction, we focus on Head-based truncation and PCA followed by ran-dom orthogonal rotation, and for quantization, we use simple post-training scalar quantization with a fixed set of bit-widths. Thus, our experiments do not exhaustively cover the design space of embed-ding compression. Other methods, such as learned projections, product quantization, vector quantiza-tion, or adaptive quantization, may produce differ-ent compression–performance trade-offs. Second, our evaluation is limited to a subset of MTEB. Although we consider four major task families, classification, clustering, retrieval, and STS, the number of datasets is limited and all ex-periments are conducted in English. Therefore, it remains unclear whether the observed task- and model-dependent trends generalize to other lan-guages, domains, or task types. Future work should validate these findings on larger and more diverse benchmarks, including multilingual and domain-specific datasets. Third, our calibration protocol is task-specific and transductive. PCA parameters and equal-count quantization tables are fitted from embeddings of the inputs used by each MTEB task during a warm-up pass. Although this procedure does not use labels or relevance judgments, it assumes access to the evaluation input distribution when constructing the compressor. This setting is useful for analyzing the achievable compression–performance trade-off for each task, but it may overestimate performance compared with a deployment setting where com-pression parameters must be fitted once on a sepa-rate calibration corpus and then reused for unseen tasks or future queries. 
+
+References 
+
+Hervé Abdi and Lynne J Williams. 2010. Principal component analysis. WIREs computational statistics ,2(4):433–459. Dimitris Achlioptas. 2003. Database-friendly ran-dom projections: Johnson-Lindenstrauss with binary coins. Journal of Computer and System Sciences (JCSS) , 66(4):671–687. Sanjeev Arora, Yingyu Liang, and Tengyu Ma. 2017. A Simple but Tough-to-Beat Baseline for Sentence Em-beddings. In International Conference on Learning Representations (ICLR) .Akari Asai, Timo Schick, Patrick Lewis, Xilun Chen, Gautier Izacard, Sebastian Riedel, Hannaneh Ha-jishirzi, and Wen-tau Yih. 2023. Task-aware Re-trieval with Instructions. In Findings of the Asso-ciation for Computational Linguistics (ACL) , pages 3650–3675, Toronto, Canada. Association for Com-putational Linguistics. Laura Caspari, Michael Dinzinger, Kanishka Ghosh Dastidar, Christofer Fellicious, Jelena Mitrovi´ c, and Michael Granitzer. 2026. CoRECT: A Framework for Evaluating Embedding Compression Techniques at Scale. In European Conference on Information Retrieval (ECIR) , pages 383–398. Springer. Daniel Cer, Yinfei Yang, Sheng yi Kong, Nan Hua, Nicole Limtiaco, Rhomni St. John, Noah Constant, Mario Guajardo-Cespedes, Steve Yuan, Chris Tar, Yun-Hsuan Sung, Brian Strope, and Ray Kurzweil. 2018. Universal Sentence Encoder. Preprint ,arXiv:1803.11175. Alexis Conneau, Douwe Kiela, Holger Schwenk, Loïc Barrault, and Antoine Bordes. 2017. Supervised Learning of Universal Sentence Representations from Natural Language Inference Data. In Proceedings of the 2017 Conference on Empirical Methods in Natu-ral Language Processing (EMNLP) , pages 670–680, Copenhagen, Denmark. Association for Computa-tional Linguistics. Elias Frantar, Saleh Ashkboos, Torsten Hoefler, and Dan Alistarh. 2022. GPTQ: Accurate Post-Training Quantization for Generative Pre-trained Transform-ers. arXiv preprint arXiv:2210.17323 .Tianyu Gao, Xingcheng Yao, and Danqi Chen. 2021. SimCSE: Simple Contrastive Learning of Sentence Embeddings. In Proceedings of the 2021 conference on empirical methods in natural language processing (EMNLP) , pages 6894–6910. Naamán Huerga-Pérez, Rubén Álvarez, Rubén Ferrero-Guillén, Alberto Martínez-Gutiérrez, and Javier Díez-González. 2025. Optimization of embed-dings storage for RAG systems using quantization and dimensionality reduction techniques. Preprint ,arXiv:2505.00105. Taehee Jeong. 2024. 4bit-Quantization in Vector-Embedding for RAG. In 2024 International Con-ference on Machine Learning and Applications (ICMLA) , pages 1037–1042. IEEE. Aditya Kusupati, Gantavya Bhatt, Aniket Rege, Matthew Wallingford, Aditya Sinha, Vivek Ramanu-jan, William Howard-Snyder, Kaifeng Chen, Sham Kakade, Prateek Jain, and Ali Farhadi. 2022. Ma-tryoshka Representation Learning. In Advances in Neural Information Processing Systems (NeurIPS) ,volume 35, pages 30233–30249. Curran Associates, Inc. Chankyu Lee, Rajarshi Roy, Mengyao Xu, Jonathan Raiman, Mohammad Shoeybi, Bryan Catanzaro, and Wei Ping. 2025a. NV-Embed: Improved Techniques for Training LLMs as Generalist Embedding Models. In International Conference on Learning Representa-tions (ICLR) , volume 2025, pages 79310–79333. Jinhyuk Lee, Feiyang Chen, Sahil Dua, Daniel Cer, Madhuri Shanbhogue, Iftekhar Naim, Gus-tavo Hernández Ábrego, Zhe Li, Kaifeng Chen, Henrique Schechter Vera, Xiaoqi Ren, Shanfeng Zhang, Daniel Salz, Michael Boratko, Jay Han, Blair Chen, Shuo Huang, Vikram Rao, Paul Sug-anthan, and 28 others. 2025b. Gemini Embedding: Generalizable Embeddings from Gemini. Preprint ,arXiv:2503.07891. Zehan Li, Xin Zhang, Yanzhao Zhang, Dingkun Long, Pengjun Xie, and Meishan Zhang. 2023. Towards General Text Embeddings with Multi-stage Con-trastive Learning. arXiv preprint arXiv:2308.03281 .Siyu Liao, Jie Chen, Yanzhi Wang, Qinru Qiu, and Bo Yuan. 2020. Embedding Compression with Isotropic Iterative Quantization. In Proceedings of the AAAI conference on artificial intelligence (AAAI) ,volume 34, pages 8336–8343. Ji Lin, Jiaming Tang, Haotian Tang, Shang Yang, Wei-Ming Chen, Wei-Chen Wang, Guangxuan Xiao, Xingyu Dang, Chuang Gan, and Song Han. 2024. AWQ: Activation-aware Weight Quantization for On-Device LLM Compression and Acceleration. Pro-ceedings of machine learning and systems (MLSys) ,6:87–100. Leland McInnes, John Healy, and James Melville. 2018. UMAP: Uniform Manifold Approximation and Pro-jection for Dimension Reduction. arXiv preprint arXiv:1802.03426 .Niklas Muennighoff, Nouamane Tazi, Loic Magne, and Nils Reimers. 2023. MTEB: Massive Text Embed-ding Benchmark. In Proceedings of the 17th Con-ference of the European Chapter of the Association for Computational Linguistics (EACL) , pages 2014– 2037, Dubrovnik, Croatia. Association for Computa-tional Linguistics. Zach Nussbaum, John Xavier Morris, Andriy Mul-yar, and Brandon Duderstadt. 2025. Nomic Embed: Training a Reproducible Long Context Text Embed-der. Transactions on Machine Learning Research .Reproducibility Certification. Zexuan Qiu, Qinliang Su, Jianxing Yu, and Shijing Si. 2022. Efficient Document Retrieval by End-to-End Refining and Quantizing BERT Embedding with Contrastive Product Quantization. In Proceedings of the 2022 Conference on Empirical Methods in Natural Language Processing (EMNLP) , pages 853– 863. Nils Reimers and Iryna Gurevych. 2019. Sentence-BERT: Sentence Embeddings using Siamese BERT-Networks. In Proceedings of the 2019 conference on empirical methods in natural language processing and the 9th international joint conference on natural language processing (EMNLP-IJCNLP) , pages 3982– 3992. Hongjin Su, Weijia Shi, Jungo Kasai, Yizhong Wang, Yushi Hu, Mari Ostendorf, Wen-tau Yih, Noah A. Smith, Luke Zettlemoyer, and Tao Yu. 2023. One Embedder, Any Task: Instruction-Finetuned Text Embeddings. In Findings of the Association for Computational Linguistics (ACL) , pages 1102–1121, Toronto, Canada. Association for Computational Lin-guistics. Sotaro Takeshita, Yurina Takeshita, Daniel Ruffinelli, and Simone Paolo Ponzetto. 2025. Randomly Re-moving 50% of Dimensions in Text Embeddings has Minimal Impact on Retrieval and Classification Tasks. In Proceedings of the 2025 Conference on Empirical Methods in Natural Language Processing (EMNLP) ,pages 27705–27726, Suzhou, China. Association for Computational Linguistics. Joshua B Tenenbaum, Vin de Silva, and John C Langford. 2000. A Global Geometric Framework for Nonlinear Dimensionality Reduction. Science ,290(5500):2319–2323. Hayato Tsukagoshi and Ryohei Sasano. 2025. Re-dundancy, Isotropy, and Intrinsic Dimensionality of Prompt-based Text Embeddings. In Findings of the Association for Computational Linguistics (ACL) ,pages 25915–25930, Vienna, Austria. Association for Computational Linguistics. Liang Wang, Nan Yang, Xiaolong Huang, Binxing Jiao, Linjun Yang, Daxin Jiang, Rangan Majumder, and Furu Wei. 2022. Text Embeddings by Weakly-Supervised Contrastive Pre-training. arXiv preprint arXiv:2212.03533 .Liang Wang, Nan Yang, Xiaolong Huang, Linjun Yang, Rangan Majumder, and Furu Wei. 2024. Improving Text Embeddings with Large Language Models. In 
+
+Proceedings of the 62nd Annual Meeting of the Asso-ciation for Computational Linguistics (ACL) , pages 11897–11916. Guangxuan Xiao, Ji Lin, Mickael Seznec, Hao Wu, Julien Demouth, and Song Han. 2023. SmoothQuant: Accurate and Efficient Post-Training Quantization for Large Language Models. In International conference on machine learning (ICML) , pages 38087–38099. PMLR. Shitao Xiao, Zheng Liu, Peitian Zhang, Niklas Muen-nighoff, Defu Lian, and Jian-Yun Nie. 2024. C-Pack: Packed Resources For General Chinese Embeddings. In Proceedings of the 47th international ACM SIGIR conference on research and development in informa-tion retrieval (SIGIR) , pages 641–649. Ofir Zafrir, Guy Boudoukh, Peter Izsak, and Moshe Wasserblat. 2019. Q8BERT: Quantized 8Bit BERT. In 2019 Fifth Workshop on Energy Efficient Machine Learning and Cognitive Computing-NeurIPS Edition (EMC2-NIPS) , pages 36–39. IEEE. Amir Zandieh, Majid Daliri, Majid Hadian, and Vahab Mirrokni. 2025. TurboQuant: Online Vector Quanti-zation with Near-optimal Distortion Rate. Preprint ,arXiv:2504.19874. Jingtao Zhan, Jiaxin Mao, Yiqun Liu, Jiafeng Guo, Min Zhang, and Shaoping Ma. 2021. Jointly Optimizing Query Encoder and Product Quantization to Improve Retrieval Performance. In Proceedings of the 30th ACM International Conference on Information & Knowledge Management (CIKM) , pages 2487–2496. Yanzhao Zhang, Mingxin Li, Dingkun Long, Xin Zhang, Huan Lin, Baosong Yang, Pengjun Xie, An Yang, Dayiheng Liu, Junyang Lin, Fei Huang, and Jingren Zhou. 2025. Qwen3 Embedding: Advancing Text Embedding and Reranking Through Foundation Mod-els. Preprint , arXiv:2506.05176. 
+
+A Model Details Used in Our Experiments 
+
+Table 2 summarizes the pretrained text embedding models used in our experiments. For the instruction-based models in Table 2, we encode input texts with task-specific instructions for all tasks. For classification, clustering, and STS tasks, we use the following general prompt format: 
+
+Instruct: {instruction}\nInput: {text} .
+
+For retrieval tasks, we encode queries as 
+
+Instruct: {instruction}\nQuery: {text} ,
+
+whereas corpus documents are encoded without an instruction prompt, following the standard asym-metric retrieval setting. For E5-large , the prefix-based model in our ex-periments, we use its standard input format. Specif-ically, query-side texts are encoded with the query: 
+
+prefix, and corpus or document-side texts are en-coded with the passage: prefix. Thus, for retrieval tasks, queries are encoded as query: {text} ,while corpus documents are encoded as passage: {text} . For classification, clustering, and STS tasks, where there is no explicit corpus/document side, we encode each input text as a query-side text using the query: prefix. 
+
+B Details of Evaluation Tasks and Prompts 
+
+Table 3 lists the dataset-specific instructions used for instruction-based embedding models. These instructions are prepended to input texts when en-coding classification, clustering, STS, and retrieval queries. For retrieval tasks, corpus documents are encoded without these instructions, following the asymmetric retrieval setting. 
+
+C Experimental Results for Other Models 
+
+Figures 6, 7, and 8 show the performance of Head-based dimensionality reduction and PCA followed by random orthogonal rotation for 
+
+Qwen3-Embedding , E5-mistral , and E5-large 
+
+respectively, across different bit-widths and task types. These figures complement the results for 
+
+gte-Qwen2 presented in the main text, provid-ing a comprehensive view of the compression– performance trade-offs for all evaluated models. Model HuggingFace License Prompt Dim. #Params MRL 
+
+gte-Qwen2 Alibaba-NLP/gte-Qwen2-7B-instruct Apache-2.0 Instruction 3584 7.61B No 
+
+Qwen3-Embedding Qwen/Qwen3-Embedding-8B Apache-2.0 Instruction 4096 8B Yes 
+
+E5-mistral intfloat/E5-mistral-7b-instruct MIT Instruction 4096 7.11B No 
+
+E5-large intfloat/e5-large-v2 MIT Prefix 1024 335M No 
+
+Table 2: Details of the text embedding models used in our experiments. License identifiers follow the corresponding Hugging Face model cards. 
+
+Task Instruction 
+
+AmazonCounterfactualClassification Classify a given Amazon customer review text as either counterfactual or not-counterfactual AmazonPolarityClassification Classify Amazon reviews into positive or negative sentiment AmazonReviewsClassification Classify the given Amazon review into its appropriate rating category ImdbClassification Classify the sentiment expressed in the given movie review text from the IMDB dataset ToxicConversationsClassification Classify the given comments as either toxic or not toxic ArxivClusteringS2S Identify the main and secondary category of Arxiv papers based on the titles RedditClustering Identify the topic or theme of Reddit posts based on the titles StackExchangeClustering Identify the topic or theme of StackExchange posts based on the titles MIRACLRetrievalHardNegatives Given a question, retrieve Wikipedia passages that answer the question QuoraRetrievalHardNegatives Given a question, retrieve questions that are semantically equivalent to the given question HotpotQAHardNegatives Given a multi-hop question, retrieve documents that can help answer the question DBPediaHardNegatives Given a query, retrieve relevant entity descriptions from DBPedia NQHardNegatives Given a question, retrieve Wikipedia passages that answer the question MSMARCOHardNegatives Given a web search query, retrieve relevant passages that answer the query STS-12 Retrieve semantically similar text STS-13 Retrieve semantically similar text STS-14 Retrieve semantically similar text STS-15 Retrieve semantically similar text STS-16 Retrieve semantically similar text STS-Benchmark Retrieve semantically similar text SICK-R Retrieve semantically similar text 
+
+Table 3: Dataset-specific instructions used for instruction-based embedding models. 3 6 9 12 15 
+
+72.5 
+
+75.0 
+
+77.5 
+
+80.0 
+
+82.5 
+
+85.0 
+
+87.5 
+
+90.0 
+
+> Score (%)
+
+classification 
+
+3 6 9 12 15 
+
+10 
+
+20 
+
+30 
+
+40 
+
+50 
+
+60 
+
+70 
+
+clustering 
+
+3 6 9 12 15 
+
+log2(dim x bits) 
+
+0
+
+10 
+
+20 
+
+30 
+
+40 
+
+50 
+
+60 
+
+> Score (%)
+
+retrieval 
+
+3 6 9 12 15 
+
+log2(dim x bits) 
+
+30 
+
+40 
+
+50 
+
+60 
+
+70 
+
+80 
+
+90 
+
+sts 
+
+dim=2 
+
+dim=4 
+
+dim=8 
+
+dim=16 
+
+dim=32 
+
+dim=64 
+
+dim=128 
+
+dim=256 
+
+dim=512 
+
+dim=1024 
+
+dim=2048 
+
+dim=3584 
+
+dim=4096 
+
+bits=1 
+
+bits=2 
+
+bits=4 
+
+bits=8 
+
+bits=16 
+
+bits=32 3 6 9 12 15 
+
+72.5 
+
+75.0 
+
+77.5 
+
+80.0 
+
+82.5 
+
+85.0 
+
+87.5 
+
+90.0 
+
+> Score (%)
+
+classification 
+
+3 6 9 12 15 
+
+10 
+
+20 
+
+30 
+
+40 
+
+50 
+
+60 
+
+70 
+
+clustering 
+
+3 6 9 12 15 
+
+log2(dim x bits) 
+
+0
+
+10 
+
+20 
+
+30 
+
+40 
+
+50 
+
+60 
+
+> Score (%)
+
+retrieval 
+
+3 6 9 12 15 
+
+log2(dim x bits) 
+
+30 
+
+40 
+
+50 
+
+60 
+
+70 
+
+80 
+
+90 
+
+sts 
+
+dim=2 
+
+dim=4 
+
+dim=8 
+
+dim=16 
+
+dim=32 
+
+dim=64 
+
+dim=128 
+
+dim=256 
+
+dim=512 
+
+dim=1024 
+
+dim=2048 
+
+dim=3584 
+
+dim=4096 
+
+bits=1 
+
+bits=2 
+
+bits=4 
+
+bits=8 
+
+bits=16 
+
+bits=32 Figure 6: Performance of Head-based dimension-ality reduction (top) and PCA+ROR (bottom) for 
+
+Qwen3-Embedding across different bit-widths and task types. 3 6 9 12 15 
+
+60.0 
+
+62.5 
+
+65.0 
+
+67.5 
+
+70.0 
+
+72.5 
+
+75.0 
+
+77.5 
+
+80.0 
+
+> Score (%)
+
+classification 
+
+3 6 9 12 15 
+
+20 
+
+30 
+
+40 
+
+50 
+
+60 
+
+clustering 
+
+3 6 9 12 15 
+
+log2(dim x bits) 
+
+0
+
+10 
+
+20 
+
+30 
+
+40 
+
+50 
+
+60 
+
+> Score (%)
+
+retrieval 
+
+3 6 9 12 15 
+
+log2(dim x bits) 
+
+20 
+
+30 
+
+40 
+
+50 
+
+60 
+
+70 
+
+80 
+
+sts 
+
+dim=2 
+
+dim=4 
+
+dim=8 
+
+dim=16 
+
+dim=32 
+
+dim=64 
+
+dim=128 
+
+dim=256 
+
+dim=512 
+
+dim=1024 
+
+dim=2048 
+
+dim=3584 
+
+dim=4096 
+
+bits=1 
+
+bits=2 
+
+bits=4 
+
+bits=8 
+
+bits=16 
+
+bits=32 3 6 9 12 15 
+
+60.0 
+
+62.5 
+
+65.0 
+
+67.5 
+
+70.0 
+
+72.5 
+
+75.0 
+
+77.5 
+
+80.0 
+
+> Score (%)
+
+classification 
+
+3 6 9 12 15 
+
+20 
+
+30 
+
+40 
+
+50 
+
+60 
+
+clustering 
+
+3 6 9 12 15 
+
+log2(dim x bits) 
+
+0
+
+10 
+
+20 
+
+30 
+
+40 
+
+50 
+
+60 
+
+> Score (%)
+
+retrieval 
+
+3 6 9 12 15 
+
+log2(dim x bits) 
+
+20 
+
+30 
+
+40 
+
+50 
+
+60 
+
+70 
+
+80 
+
+sts 
+
+dim=2 
+
+dim=4 
+
+dim=8 
+
+dim=16 
+
+dim=32 
+
+dim=64 
+
+dim=128 
+
+dim=256 
+
+dim=512 
+
+dim=1024 
+
+dim=2048 
+
+dim=3584 
+
+dim=4096 
+
+bits=1 
+
+bits=2 
+
+bits=4 
+
+bits=8 
+
+bits=16 
+
+bits=32 
+
+Figure 7: Performance of Head-based dimensionality re-duction (top) and PCA+ROR (bottom) for E5-mistral 
+
+across different bit-widths and task types. 3 6 9 12 15 
+
+50 
+
+55 
+
+60 
+
+65 
+
+70 
+
+75 
+
+> Score (%)
+
+classification 
+
+3 6 9 12 15 
+
+10 
+
+20 
+
+30 
+
+40 
+
+50 
+
+clustering 
+
+3 6 9 12 15 
+
+log2(dim x bits) 
+
+0
+
+10 
+
+20 
+
+30 
+
+40 
+
+50 
+
+> Score (%)
+
+retrieval 
+
+3 6 9 12 15 
+
+log2(dim x bits) 
+
+10 
+
+20 
+
+30 
+
+40 
+
+50 
+
+60 
+
+70 
+
+80 
+
+sts 
+
+dim=2 
+
+dim=4 
+
+dim=8 
+
+dim=16 
+
+dim=32 
+
+dim=64 
+
+dim=128 
+
+dim=256 
+
+dim=512 
+
+dim=1024 
+
+bits=1 
+
+bits=2 
+
+bits=4 
+
+bits=8 
+
+bits=16 
+
+bits=32 3 6 9 12 15 
+
+50 
+
+55 
+
+60 
+
+65 
+
+70 
+
+75 
+
+> Score (%)
+
+classification 
+
+3 6 9 12 15 
+
+10 
+
+20 
+
+30 
+
+40 
+
+50 
+
+clustering 
+
+3 6 9 12 15 
+
+log2(dim x bits) 
+
+0
+
+10 
+
+20 
+
+30 
+
+40 
+
+50 
+
+> Score (%)
+
+retrieval 
+
+3 6 9 12 15 
+
+log2(dim x bits) 
+
+10 
+
+20 
+
+30 
+
+40 
+
+50 
+
+60 
+
+70 
+
+80 
+
+sts 
+
+dim=2 
+
+dim=4 
+
+dim=8 
+
+dim=16 
+
+dim=32 
+
+dim=64 
+
+dim=128 
+
+dim=256 
+
+dim=512 
+
+dim=1024 
+
+bits=1 
+
+bits=2 
+
+bits=4 
+
+bits=8 
+
+bits=16 
+
+bits=32 Figure 8: Performance of Head-based dimensionality reduction (top) and PCA+ROR (bottom) for E5-large 
+
+across different bit-widths and task types.

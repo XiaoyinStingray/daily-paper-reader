@@ -6,68 +6,67 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-06-07
-- 运行时间：2026-06-07 20:49:57 UTC
+- 最新运行日期：2026-06-08
+- 运行时间：2026-06-08 22:02:30 UTC
 - 运行状态：成功
-- 本次总论文数：16
-- 精读区：4
+- 本次总论文数：15
+- 精读区：3
 - 速读区：12
 
 ### 今日简报（AI）
-今日精选16篇论文，其中精读4篇；最值得关注的是图像压缩与生成结合的Bootstrapped Tokenization（9.0分）及视觉语言模型的状态化编码器（8.0分）；建议优先精读这两篇高评分论文，并速读其余7分以上的地形、超分和Transformer加速工作。
-- 详情：[/202606/07/README](/202606/07/README)
+今日推荐聚焦图像压缩生成与瓶颈自编码器理论，以及注意力机制、地点识别和文本压缩优化。  
+最值得精读两篇8分论文：《Balancing Image Compression and Generation with Bootstrapped Tokenization》和《Beyond Linear and Overcomplete Regimes: A Mean-Field Analysis of Bottleneck Autoencoders》，分别关注图像压缩生成平衡与瓶颈自编码器的平均场分析。  
+普通读者可从这两篇入手，深入理解前沿图像处理与表示学习理论。
+- 详情：[/202606/08/README](/202606/08/README)
 
 ### 精读区论文标签
-1. [Balancing Image Compression and Generation with Bootstrapped Tokenization](/202606/07/2606.05552v1-balancing-image-compression-and-generation-with-bootstrapped-tokenization)  
-   标签：评分：9.0/10、query:compress
-   evidence：通过引导式分词平衡图像压缩与生成，提升效率
-2. [Stateful Visual Encoders for Vision-Language Models](/202606/07/2606.04433v1-stateful-visual-encoders-for-vision-language-models)  
-   标签：评分：8.0/10、query:neural-arch
-   evidence：状态视觉编码器，基于先前视觉特征编码当前图像
-3. [KD-NVC: A Search-and-Distill Framework to Accelerate Neural Video Coding](/202606/07/2606.04595v1-kd-nvc-a-search-and-distill-framework-to-accelerate-neural-video-coding)  
+1. [Balancing Image Compression and Generation with Bootstrapped Tokenization](/202606/08/2606.05552v1-balancing-image-compression-and-generation-with-bootstrapped-tokenization)  
    标签：评分：8.0/10、query:compress
-   evidence：神经视频编码中的率失真优化与架构搜索用于有损压缩
-4. [PivCo-Huffman](/202606/07/2606.05765v1-pivco-huffman)  
+   evidence：通过自引导令牌化实现图像压缩与生成的平衡
+2. [Beyond Linear and Overcomplete Regimes: A Mean-Field Analysis of Bottleneck Autoencoders](/202606/08/2606.07120v1-beyond-linear-and-overcomplete-regimes-a-mean-field-analysis-of-bottleneck-autoencoders)  
    标签：评分：8.0/10、query:compress
-   evidence：基于小波树的新型哈夫曼编码方法用于高效压缩
+   evidence：瓶颈自编码器理论分析、平均场动力学、非线性自编码器
+3. [AdaTok: Self-Budgeting Image Tokenization with Quality-Preserving Dynamic Tokens](/202606/08/2606.07185v1-adatok-self-budgeting-image-tokenization-with-quality-preserving-dynamic-tokens)  
+   标签：评分：8.0/10、query:compress
+   evidence：用于图像压缩的自预算图像令牌化，动态分配令牌数
 
 ### 速读区论文标签
-1. [Rethinking Amortized Neural Representations for High-Resolution Terrain Elevation Data](/202606/07/2606.00404v1-rethinking-amortized-neural-representations-for-high-resolution-terrain-elevation-data)  
-   标签：评分：7.0/10、query:compress
-   evidence：使用共享解码器的摊销神经表示用于地形数据压缩
-2. [VICR: Visual In-Context Restoration for Real-World Image Super-Resolution](/202606/07/2606.00704v1-vicr-visual-in-context-restoration-for-real-world-image-super-resolution)  
+1. [Don't Read Everything: A Curvature-Conditioned Query for Linear Attention](/202606/08/2606.01294v1-dont-read-everything-a-curvature-conditioned-query-for-linear-attention)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：基于扩散Transformer的图像超分辨率框架
-3. [Fast Transformer Inference on ARM-Based HMPSoCs](/202606/07/2606.02836v1-fast-transformer-inference-on-arm-based-hmpsocs)  
-   标签：评分：7.0/10、query:neural-arch
-   evidence：在ARM边缘设备上加速Transformer推理
-4. [Low-Frequency Shortcuts in Texture-Driven Visual Learning](/202606/07/2606.03493v1-low-frequency-shortcuts-in-texture-driven-visual-learning)  
-   标签：评分：7.0/10、query:neural-arch
-   evidence：纹理驱动视觉学习中的低频捷径分析，有助于优化神经网络架构设计
-5. [AAD-1: Asymmetric Adversarial Distillation for One-Step Autoregressive Video Generation](/202606/07/2606.03972v2-aad-1-asymmetric-adversarial-distillation-for-one-step-autoregressive-video-generation)  
-   标签：评分：7.0/10、query:neural-arch
-   evidence：非对称对抗蒸馏用于一步视频生成
-6. [CIPER: A Unified Framework for Cross-view Image-retrieval and Pose-estimation](/202606/07/2606.05011v1-ciper-a-unified-framework-for-cross-view-image-retrieval-and-pose-estimation)  
-   标签：评分：7.0/10、query:neural-arch
-   evidence：跨视角检索与位姿估计的统一架构
-7. [MsFEM-Inspired CNNs with Transfer Learning for Multiscale Model Reduction](/202606/07/2606.01259v1-msfem-inspired-cnns-with-transfer-learning-for-multiscale-model-reduction)  
+   evidence：基于曲率的线性注意力查询，深度学习模型优化策略
+2. [One Channel to Rule Them All: Rethinking Input Representation for Visual Place Recognition](/202606/08/2606.00936v1-one-channel-to-rule-them-all-rethinking-input-representation-for-visual-place-recognition)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：基于CNN的模型约简迁移学习策略，与模型优化和架构设计相关
-8. [Gate the Filter, Not the Message: Node-Channel Mixtures for Pre-Propagation GNNs](/202606/07/2606.01660v1-gate-the-filter-not-the-message-node-channel-mixtures-for-pre-propagation-gnns)  
+   evidence：重新思考视觉位置识别的输入表示，灰度与RGB比较，架构设计
+3. [When Is 0.1% Enough? Analyzing the Combined Effects of Dimensionality Reduction and Quantization on Text Embedding Compression](/202606/08/2606.01074v1-when-is-01-enough-analyzing-the-combined-effects-of-dimensionality-reduction-and-quantization-on-text-embedding-compression)  
+   标签：评分：6.0/10、query:compress
+   evidence：维度缩减与量化在文本嵌入压缩中的组合效果，与压缩管道中的量化策略相关
+4. [On the Limits of Token Reduction for Efficient Unified Vision Language Training](/202606/08/2606.01503v1-on-the-limits-of-token-reduction-for-efficient-unified-vision-language-training)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：GNN中的节点-通道混合滤波器共享策略
-9. [Beyond Encoder Accumulation: Measuring Encoder Roles in Multi-Encoder VLMs](/202606/07/2606.03879v1-beyond-encoder-accumulation-measuring-encoder-roles-in-multi-encoder-vlms)  
+   evidence：令牌缩减实现高效统一视觉语言训练，与高效神经网络架构设计相关
+5. [Self-Improving Small Object Grounding in LVLMs](/202606/08/2606.01612v1-self-improving-small-object-grounding-in-lvlms)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：分析多编码器VLM中的编码器角色以改进架构
-10. [Deciphering Two Training Clocks in Grokking via Deep Linear Network Theory with Conditional ReLU Reduction](/202606/07/2606.05863v1-deciphering-two-training-clocks-in-grokking-via-deep-linear-network-theory-with-conditional-relu-reduction)  
+   evidence：利用注意力模式自我改进小物体定位无需微调，性能提升技术
+6. [Restoring Initial Noise Sensitivity in Text-to-Image Distillation via Geometric Alignment](/202606/08/2606.01651v1-restoring-initial-noise-sensitivity-in-text-to-image-distillation-via-geometric-alignment)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：训练动力学和泛化理论分析，与模型优化策略相关
-11. [Video-Rate Streaming Stylization on a Vision-Aware MLLM-Conditioned Edit Diffusion: Asymmetric Batched Inference on a Distilled UNet + MLLM Text Encoder](/202606/07/2606.05981v1-video-rate-streaming-stylization-on-a-vision-aware-mllm-conditioned-edit-diffusion-asymmetric-batched-inference-on-a-distilled-unet--mllm-text-encoder)  
+   evidence：一种用于深度学习模型优化的蒸馏方法
+7. [Low-Frequency Shortcuts in Texture-Driven Visual Learning](/202606/08/2606.03493v1-low-frequency-shortcuts-in-texture-driven-visual-learning)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：非对称批推理流水线用于蒸馏扩散模型
-12. [Pretraining Recurrent Networks without Recurrence](/202606/07/2606.06479v1-pretraining-recurrent-networks-without-recurrence)  
+   evidence：识别低频捷径并提出剪枝以提升性能
+8. [Video2LoRA: Parametric Video Internalization for Vision-Language Models](/202606/08/2606.04351v1-video2lora-parametric-video-internalization-for-vision-language-models)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：无反向传播的RNN监督记忆训练
+   evidence：计算机视觉架构改进：通过LoRA实现高效视频内化
+9. [Selective Coupling of Decoupled Informative Regions: Masked Attention Alignment for Data-Free Quantization of Vision Transformers](/202606/08/2606.04373v2-selective-coupling-of-decoupled-informative-regions-masked-attention-alignment-for-data-free-quantization-of-vision-transformers)  
+   标签：评分：6.0/10、query:compress
+   evidence：用于视觉Transformer的无数据量化方法
+10. [Adapting Diffusion Language Models for Lossless Pixel-Level Image Transmission](/202606/08/2606.06273v1-adapting-diffusion-language-models-for-lossless-pixel-level-image-transmission)  
+   标签：评分：6.0/10、query:compress
+   evidence：基于离散扩散模型的无损图像传输框架，涉及源信道编码
+11. [WAV: Multi-Resolution Block Residual Routing for Deep Decoder-Only Transformers](/202606/08/2606.06564v1-wav-multi-resolution-block-residual-routing-for-deep-decoder-only-transformers)  
+   标签：评分：6.0/10、query:neural-arch
+   evidence：多分辨率残差路由改进Transformer架构设计
+12. [CFRNet: Cycle-Consistent Fixed-Point Training for Real-Time Blind Face Restoration on Consumer Embedded NPUs](/202606/08/2606.06850v1-cfrnet-cycle-consistent-fixed-point-training-for-real-time-blind-face-restoration-on-consumer-embedded-npus)  
+   标签：评分：6.0/10、query:neural-arch
+   evidence：模型优化：通过定点训练实现边缘NPU上的高效人脸恢复
 
 
 <div class="dpr-home-promo-card">
