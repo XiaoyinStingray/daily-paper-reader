@@ -6,67 +6,70 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-06-08
-- 运行时间：2026-06-08 22:02:30 UTC
+- 最新运行日期：2026-06-09
+- 运行时间：2026-06-09 22:12:34 UTC
 - 运行状态：成功
-- 本次总论文数：15
-- 精读区：3
+- 本次总论文数：16
+- 精读区：4
 - 速读区：12
 
 ### 今日简报（AI）
-今日推荐聚焦图像压缩生成与瓶颈自编码器理论，以及注意力机制、地点识别和文本压缩优化。  
-最值得精读两篇8分论文：《Balancing Image Compression and Generation with Bootstrapped Tokenization》和《Beyond Linear and Overcomplete Regimes: A Mean-Field Analysis of Bottleneck Autoencoders》，分别关注图像压缩生成平衡与瓶颈自编码器的平均场分析。  
-普通读者可从这两篇入手，深入理解前沿图像处理与表示学习理论。
-- 详情：[/202606/08/README](/202606/08/README)
+1) 今日精读两篇高分论文，覆盖图像压缩生成与稀疏专家模型，速读聚焦深层向量上下文与量化优化。  
+2) 最值得精读《Balancing Image Compression and Generation with Bootstrapped Tokenization》（9.0分）和《Sparsely gated tiny linear experts》（8.0分），前者突破生成与压缩平衡，后者展现高效稀疏线性架构。  
+3) 普通读者可优先阅读这两篇精读论文，把握前沿方向；对实际应用感兴趣者可进一步关注速读中多领域量化技术。
+- 详情：[/202606/09/README](/202606/09/README)
 
 ### 精读区论文标签
-1. [Balancing Image Compression and Generation with Bootstrapped Tokenization](/202606/08/2606.05552v1-balancing-image-compression-and-generation-with-bootstrapped-tokenization)  
+1. [Balancing Image Compression and Generation with Bootstrapped Tokenization](/202606/09/2606.05552v1-balancing-image-compression-and-generation-with-bootstrapped-tokenization)  
+   标签：评分：9.0/10、query:compress
+   evidence：端到端图像压缩结合自引导标记化
+2. [Sparsely gated tiny linear experts](/202606/09/2606.07414v1-sparsely-gated-tiny-linear-experts)  
+   标签：评分：8.0/10、query:neural-arch
+   evidence：稀疏门控线性专家提升计算效率和可解释性
+3. [Generalizing Geometry-Guided Mamba as a Plug-and-Play Context Module for CNN-based Semantic Segmentation](/202606/09/2606.08866v1-generalizing-geometry-guided-mamba-as-a-plug-and-play-context-module-for-cnn-based-semantic-segmentation)  
+   标签：评分：8.0/10、query:neural-arch
+   evidence：用于CNN分割的即插即用上下文模块，改进架构设计
+4. [Understanding Quantization-Aware Training: Gradients at Quantized Weights Bias to the Low-Loss Basin](/202606/09/2606.09012v1-understanding-quantization-aware-training-gradients-at-quantized-weights-bias-to-the-low-loss-basin)  
    标签：评分：8.0/10、query:compress
-   evidence：通过自引导令牌化实现图像压缩与生成的平衡
-2. [Beyond Linear and Overcomplete Regimes: A Mean-Field Analysis of Bottleneck Autoencoders](/202606/08/2606.07120v1-beyond-linear-and-overcomplete-regimes-a-mean-field-analysis-of-bottleneck-autoencoders)  
-   标签：评分：8.0/10、query:compress
-   evidence：瓶颈自编码器理论分析、平均场动力学、非线性自编码器
-3. [AdaTok: Self-Budgeting Image Tokenization with Quality-Preserving Dynamic Tokens](/202606/08/2606.07185v1-adatok-self-budgeting-image-tokenization-with-quality-preserving-dynamic-tokens)  
-   标签：评分：8.0/10、query:compress
-   evidence：用于图像压缩的自预算图像令牌化，动态分配令牌数
+   evidence：可应用于图像压缩管道的量化训练理论
 
 ### 速读区论文标签
-1. [Don't Read Everything: A Curvature-Conditioned Query for Linear Attention](/202606/08/2606.01294v1-dont-read-everything-a-curvature-conditioned-query-for-linear-attention)  
+1. [Do Value Vectors in Deep Layers Need Context from the Residual Stream?](/202606/09/2606.02780v2-do-value-vectors-in-deep-layers-need-context-from-the-residual-stream)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：基于曲率的线性注意力查询，深度学习模型优化策略
-2. [One Channel to Rule Them All: Rethinking Input Representation for Visual Place Recognition](/202606/08/2606.00936v1-one-channel-to-rule-them-all-rethinking-input-representation-for-visual-place-recognition)  
-   标签：评分：6.0/10、query:neural-arch
-   evidence：重新思考视觉位置识别的输入表示，灰度与RGB比较，架构设计
-3. [When Is 0.1% Enough? Analyzing the Combined Effects of Dimensionality Reduction and Quantization on Text Embedding Compression](/202606/08/2606.01074v1-when-is-01-enough-analyzing-the-combined-effects-of-dimensionality-reduction-and-quantization-on-text-embedding-compression)  
+   evidence：研究Transformer深层无上下文值向量，提出架构简化策略
+2. [Toward Multi-Domain and Long-Tailed Quantization via Feature Alignment and Scaling](/202606/09/2606.04920v2-toward-multi-domain-and-long-tailed-quantization-via-feature-alignment-and-scaling)  
+   标签：评分：7.0/10、query:compress
+   evidence：适用于图像压缩的量化策略
+3. [Mitigating the Curse of Dimensionality in Uniform Convergence of Deep Neural Networks via Smooth Activations](/202606/09/2606.05599v1-mitigating-the-curse-of-dimensionality-in-uniform-convergence-of-deep-neural-networks-via-smooth-activations)  
+   标签：评分：7.0/10、query:neural-arch
+   evidence：深度网络平滑激活的理论分析，属于模型优化策略
+4. [Adapting Diffusion Language Models for Lossless Pixel-Level Image Transmission](/202606/09/2606.06273v1-adapting-diffusion-language-models-for-lossless-pixel-level-image-transmission)  
+   标签：评分：7.0/10、query:compress
+   evidence：基于扩散语言模型的无损像素级图像传输，图像压缩/传输
+5. [Phase Marginalization for Patch-Grid Instability in Vision Transformers](/202606/09/2606.08132v1-phase-marginalization-for-patch-grid-instability-in-vision-transformers)  
+   标签：评分：7.0/10、query:neural-arch
+   evidence：针对视觉Transformer的补丁网格不稳定性提出相位边缘化，架构改进
+6. [RAPID: Layer-Wise Redundancy-Aware Pruning and Importance-Driven Token Merging for Efficient ViT](/202606/09/2606.08156v1-rapid-layer-wise-redundancy-aware-pruning-and-importance-driven-token-merging-for-efficient-vit)  
+   标签：评分：7.0/10、query:neural-arch
+   evidence：层感知冗余剪枝与重要性驱动token合并提升Vision Transformer效率
+7. [Minimizing the Hidden Cost of Scales: Graph-Guided Ultra-Low-Bit Quantization for Large Language Models](/202606/09/2606.05429v1-minimizing-the-hidden-cost-of-scales-graph-guided-ultra-low-bit-quantization-for-large-language-models)  
    标签：评分：6.0/10、query:compress
-   evidence：维度缩减与量化在文本嵌入压缩中的组合效果，与压缩管道中的量化策略相关
-4. [On the Limits of Token Reduction for Efficient Unified Vision Language Training](/202606/08/2606.01503v1-on-the-limits-of-token-reduction-for-efficient-unified-vision-language-training)  
+   evidence：面向LLM的低比特量化方法，可迁移至图像压缩量化
+8. [ErA: Error-Aware Deep Unrolling Network for Single Image Defocus Deblurring](/202606/09/2606.06540v1-era-error-aware-deep-unrolling-network-for-single-image-defocus-deblurring)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：令牌缩减实现高效统一视觉语言训练，与高效神经网络架构设计相关
-5. [Self-Improving Small Object Grounding in LVLMs](/202606/08/2606.01612v1-self-improving-small-object-grounding-in-lvlms)  
+   evidence：错误感知深度展开网络用于单图像散焦去模糊；计算机视觉架构改进
+9. [Breaking the Lock-in: Diversifying Text-to-Image Generation via Representation Modulation](/202606/09/2606.06813v1-breaking-the-lock-in-diversifying-text-to-image-generation-via-representation-modulation)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：利用注意力模式自我改进小物体定位无需微调，性能提升技术
-6. [Restoring Initial Noise Sensitivity in Text-to-Image Distillation via Geometric Alignment](/202606/08/2606.01651v1-restoring-initial-noise-sensitivity-in-text-to-image-distillation-via-geometric-alignment)  
-   标签：评分：6.0/10、query:neural-arch
-   evidence：一种用于深度学习模型优化的蒸馏方法
-7. [Low-Frequency Shortcuts in Texture-Driven Visual Learning](/202606/08/2606.03493v1-low-frequency-shortcuts-in-texture-driven-visual-learning)  
-   标签：评分：6.0/10、query:neural-arch
-   evidence：识别低频捷径并提出剪枝以提升性能
-8. [Video2LoRA: Parametric Video Internalization for Vision-Language Models](/202606/08/2606.04351v1-video2lora-parametric-video-internalization-for-vision-language-models)  
-   标签：评分：6.0/10、query:neural-arch
-   evidence：计算机视觉架构改进：通过LoRA实现高效视频内化
-9. [Selective Coupling of Decoupled Informative Regions: Masked Attention Alignment for Data-Free Quantization of Vision Transformers](/202606/08/2606.04373v2-selective-coupling-of-decoupled-informative-regions-masked-attention-alignment-for-data-free-quantization-of-vision-transformers)  
+   evidence：分析transformer特征同质性问题并提出表示调制以增加多样性
+10. [Neural Field Tokenizations with Hierarchy and Spatial Locality Priors](/202606/09/2606.08204v1-neural-field-tokenizations-with-hierarchy-and-spatial-locality-priors)  
    标签：评分：6.0/10、query:compress
-   evidence：用于视觉Transformer的无数据量化方法
-10. [Adapting Diffusion Language Models for Lossless Pixel-Level Image Transmission](/202606/08/2606.06273v1-adapting-diffusion-language-models-for-lossless-pixel-level-image-transmission)  
-   标签：评分：6.0/10、query:compress
-   evidence：基于离散扩散模型的无损图像传输框架，涉及源信道编码
-11. [WAV: Multi-Resolution Block Residual Routing for Deep Decoder-Only Transformers](/202606/08/2606.06564v1-wav-multi-resolution-block-residual-routing-for-deep-decoder-only-transformers)  
+   evidence：利用层次和空间先验的连续信号标记化表示
+11. [HACK++: Towards More Effective Head-Aware Key-Value Compression for Efficient Visual Autoregressive Modeling](/202606/09/2606.08302v1-hack-towards-more-effective-head-aware-key-value-compression-for-efficient-visual-autoregressive-modeling)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：多分辨率残差路由改进Transformer架构设计
-12. [CFRNet: Cycle-Consistent Fixed-Point Training for Real-Time Blind Face Restoration on Consumer Embedded NPUs](/202606/08/2606.06850v1-cfrnet-cycle-consistent-fixed-point-training-for-real-time-blind-face-restoration-on-consumer-embedded-npus)  
+   evidence：面向视觉自回归模型的头感知键值缓存压缩；性能改进技术
+12. [Learnable Token Sparsification for Efficient Gigapixel Whole Slide Image Reasoning](/202606/09/2606.08641v1-learnable-token-sparsification-for-efficient-gigapixel-whole-slide-image-reasoning)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：模型优化：通过定点训练实现边缘NPU上的高效人脸恢复
+   evidence：可学习token稀疏化用于视觉架构效率提升
 
 
 <div class="dpr-home-promo-card">
