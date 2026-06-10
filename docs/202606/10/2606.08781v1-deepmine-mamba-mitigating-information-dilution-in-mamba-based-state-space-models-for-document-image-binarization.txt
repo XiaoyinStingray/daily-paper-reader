@@ -1,0 +1,239 @@
+Title: DeepMine-Mamba: Mitigating Information Dilution in Mamba-Based State Space Models for Document Image Binarization
+
+URL Source: https://arxiv.org/pdf/2606.08781v1
+
+Published Time: Tue, 09 Jun 2026 02:19:37 GMT
+
+Number of Pages: 7
+
+Markdown Content:
+# DeepMine-Mamba: Mitigating Information Dilution in Mamba-Based State Space Models for Document Image Binarization 
+
+## Sheng-Wei Chan a, Yung-Che Wang a, Hsin-Jui Pan a, Chia-Min Lin a and Jen-Shiun Chiang a
+
+> a
+
+Department of Electrical and Computer Engineering, Tamkang University, No.151, Yingzhuan Rd., Tamsui Dist., New Taipei City, 251301, Taiwan 
+
+A R T I C L E I N F O 
+
+Keywords :Document image binarization Mamba State space model Information dilution Document image analysis 
+
+A B S T R A C T 
+
+Document image binarization aims to separate foreground text from degraded backgrounds while preserving thin, broken, and low-contrast strokes. Although deep learning methods have improved binarization performance, most existing approaches rely on convolutional, transformer-based, or generative architectures, while Mamba-based state space models remain largely unexplored for this task. In this work, we investigate Mamba-based feature propagation and observe that direct state-space propagation may dilute weak foreground cues during long-range modeling, especially faint ink traces, fragmented characters, and boundary-sensitive stroke details. To address this problem, we propose DeepMine-Mamba, a Mamba-based binarization framework equipped with a novel Anti-Dilution Gate that estimates propagation-induced feature changes and selectively restores stroke-sensitive local responses while suppressing unnecessary background enhancement. Experiments on DIBCO/H-DIBCO benchmarks under a strict leave-one-year-out protocol show that DeepMine-Mamba achieves competitive overall performance, with strong average FM and Fps across benchmark years. Ablation results further demonstrate that the Anti-Dilution Gate improves stroke preservation and reduces perceptually significant binarization errors. 
+
+## 1. Introduction 
+
+Document image binarization converts degraded docu-ment images into binary foreground-background maps for optical character recognition, historical manuscript restora-tion, and document image analysis. Despite its simple output form, the task remains challenging because degraded doc-uments often contain uneven illumination, bleed-through, stains, faded ink, textured backgrounds, and weak fore-ground strokes. Existing binarization methods include hand-crafted thresholding, machine-learning-based approaches, and deep-learning-based dense prediction models. Classi-cal methods such as Otsu [1] and Sauvola [2] estimate global or local thresholds from image statistics, while later methods incorporate document-specific priors such as back-ground estimation and stroke preservation [3]. Recent CNN-, transformer-, generative-, and diffusion-based methods have further improved binarization performance [4, 5, 6]. However, preserving thin, broken, and low-contrast strokes under severe degradation remains difficult. Recently, Mamba-based state space models have shown strong potential for efficient long-range feature modeling [7]. Their linear-time propagation is attractive for high-resolution document images, where both global degradation context and local stroke details are important. However, compared with CNN- and transformer-based binarization methods, Mamba-based document binarization remains largely under-explored. Moreover, directly applying Mamba propagation may dilute weak foreground cues, especially faint ink traces, fragmented characters, and boundary-sensitive stroke de-tails. To address this issue, we propose DeepMine-Mamba, a Mamba-based document binarization framework with a novel Anti-Dilution Gate. Instead of treating Mamba as a  
+
+> chiang@mail.tku.edu.tw
+
+(J. Chiang) 
+
+> ORCID
+
+(s): 0009-0002-3983-5163 (S. Chan) 
+
+simple plug-in module, we investigate stroke-level informa-tion dilution in Mamba-based feature propagation. The pro-posed gate estimates propagation-induced feature changes and selectively restores stroke-sensitive local responses after Mamba propagation, preserving long-range modeling ability while reducing the loss of fine foreground structures. We evaluate DeepMine-Mamba on DIBCO/H-DIBCO benchmarks under a strict leave-one-year-out protocol. The main contributions are summarized as follows: 
+
+• We investigate the applicability of Mamba-based state space models to document image binarization, an emerging yet under-explored research direction. 
+
+• We identify a previously overlooked stroke-level in-formation dilution issue arising from long-range state propagation in Mamba architectures. To address this problem, we propose an Anti-Dilution Gate that re-stores fine-grained foreground responses without sac-rificing global contextual modeling. 
+
+• Comprehensive experiments on DIBCO/H-DIBCO benchmarks demonstrate the effectiveness and gen-eralization capability of the proposed framework un-der a strict leave-one-year-out protocol. Extensive ablation studies validate the contribution of each component. 
+
+## 2. Related Work 
+
+2.1. Document image binarization 
+
+Document image binarization has been studied for decades as a fundamental task in document image analysis. Classi-cal methods mainly rely on thresholding strategies. Otsu’s method estimates a global threshold by maximizing the 
+
+S.W. Chan: Preprint submitted to Elsevier Page 1 of 7 
+
+> arXiv:2606.08781v1 [cs.CV] 7 Jun 2026
+
+DeepMine-Mamba for Document Image Binarization   
+
+> Degraded input
+> Binarized output
+> Input Image
+> ConvNeXt Encoder f1–f4
+> 96 / 192 / 384 / 768
+> Sobel Edge Prior
+> 32 ch
+> Decoder Skip-Fused
+> d4 →d3 →d2
+> DeepMine-Mamba Block
+> Local Recovery
+> 4-dir Mamba
+> Directional Fusion
+> ⋆Anti-Dilution Gate ⋆
+> Up ×4Detail Fuse + Sobel Edge Refine
+> Refinement
+> Fg Head Bg Head Th Head
+> Clean Prob Fusion
+> Output Image
+> Stage 1: Feature Extraction
+> Stage 2: Anti-Dilution State Modeling
+> Refinement
+> Stage 3: Prediction and Fusion
+
+Figure 1: Overall architecture of DeepMine-Mamba. The proposed framework combines ConvNeXt feature extraction, Sobel edge guidance, Mamba-based state modeling, and anti-dilution refinement for document image binarization. 
+
+between-class variance of foreground and background pix-els [1]. In contrast, adaptive thresholding methods compute local thresholds according to neighborhood statistics, mak-ing them more suitable for non-uniform illumination and degraded backgrounds [2]. Gatos et al. [3] further introduced a degraded-document-oriented binarization method by in-corporating background estimation and post-processing. Although these hand-crafted methods are efficient and in-terpretable, their performance can degrade when documents contain severe bleed-through, stains, faded ink, or highly tex-tured backgrounds. Deep learning methods formulate docu-ment binarization as a dense prediction problem. Encoder-decoder architectures such as U-Net [4] provide an effec-tive structure for combining semantic context with spatial localization, and have been widely adopted in image-to-image restoration and segmentation tasks. More recent doc-ument enhancement methods employ transformer-based ar-chitectures to model long-range dependencies. DocEnTr [5], for example, applies a vision transformer framework to end-to-end document image enhancement. Diffusion-based methods such as NAF-DPM [6] have also been explored for document enhancement and binarization. Despite their strong representation ability, these models may introduce considerable computational cost, and preserving thin de-graded strokes remains challenging. 
+
+2.2. State space models and Mamba 
+
+State space models have recently emerged as efficient al-ternatives to attention-based sequence modeling. Mamba in-troduces selective state space modeling with input-dependent parameters and linear-time sequence processing, enabling efficient long-range feature propagation [7]. Because doc-ument image binarization requires both global degrada-tion awareness and local stroke preservation, Mamba-style models provide an attractive direction for robust binariza-tion. However, directly applying state propagation to fine-structure-sensitive document images may weaken local fore-ground cues. In particular, thin strokes, broken characters, and weak ink traces can be diluted during long-range feature propagation. Different from existing document binarization methods that mainly focus on thresholding, encoder-decoder prediction, transformer-based enhancement, or diffusion-based restoration, this work investigates information dilu-tion in Mamba-based document binarization. We propose DeepMine-Mamba with an Anti-Dilution Gate to reinforce stroke-sensitive features during state space propagation, aiming to preserve degraded foreground structures more effectively. 
+
+## 3. Proposed Method 
+
+3.1. Overview 
+
+Figure 1 illustrates the overall framework of DeepMine-Mamba. The proposed architecture adopts a U-shaped encoder-decoder structure with a ConvNeXt-Tiny encoder [8] for multi-scale feature extraction. Given an input document im-age, the encoder produces hierarchical features {𝑓 1, 𝑓 2, 𝑓 3, 𝑓 4},which are progressively fused by a skip-connected decoder to obtain the decoded feature 𝑑 2. In parallel, a Sobel edge prior [9] is extracted from the input image and later used for detail-aware prediction. Before state-space propagation, 
+
+𝑑 2 is enhanced by local contrast recovery and weak-text rescue to emphasize local foreground-background differ-ences and faint stroke responses. The enhanced feature is then processed by the proposed DeepMine-Mamba block, which performs stroke-aware Mamba propagation and Anti-Dilution refinement. Finally, the refined feature is upsampled and fused with the Sobel edge prior, followed by lightweight prediction refinement and multi-head probability fusion to produce the final binarized output. 
+
+S.W. Chan: Preprint submitted to Elsevier Page 2 of 7 DeepMine-Mamba for Document Image Binarization 
+
+3.2. Mamba-Based Feature Propagation 
+
+Given the decoded feature map 𝑥 ∈ ℝ𝐵 ×𝐶 ×𝐻 ×𝑊 , the Mamba-based propagation module aims to capture long-range structural dependencies while maintaining stroke-sensitive foreground responses. Since document images contain large background regions, directly applying state-space propagation may cause weak foreground strokes to be overwhelmed by background-dominant responses. To reduce this effect, we first estimate a stroke prior map 𝑃 𝑠 ∈[0 , 1] 𝐵 ×1× 𝐻 ×𝑊 and use it to modulate the decoded feature: 
+
+𝑥 fg = 𝑥 ⊙ 𝑃 𝑠 + 𝜆 bg 𝑥 ⊙ (1 − 𝑃 𝑠 ), (1) where 𝜆 bg retains a small amount of contextual background information. The modulated feature 𝑥 fg is then processed by four-direction Mamba propagation, including left-to-right, right-to-left, top-to-bottom, and bottom-to-top scans. These di-rectional representations are adaptively fused using a pixel-directional attention module to obtain the propagated feature 
+
+𝑚 . Compared with a single scan direction, this design allows the model to aggregate structural context along both hori-zontal and vertical stroke orientations. The fused represen-tation 𝑚 is subsequently passed to the Anti-Dilution Gate for stroke-preserving refinement. 
+
+3.3. Anti-Dilution Gate 
+
+Although the four-direction Mamba propagation aggre-gates long-range contextual information, the fused represen-tation 𝑚 may still attenuate weak foreground cues during sequential state propagation. This effect is particularly harm-ful for document image binarization, where thin strokes, broken characters, and faint ink traces are often represented by low-amplitude local responses. To mitigate this problem, we introduce an Anti-Dilution Gate that adaptively restores the difference between the original local feature 𝑥 and the propagated Mamba feature 𝑚 .Specifically, we first estimate a dilution importance map 
+
+𝐼 ∈ [0 , 1] 𝐵 ×1× 𝐻 ×𝑊 from the original feature and the propagation-induced feature difference: 
+
+𝐼 = 𝜎 (𝜙 𝑑 ([ 𝑥, |𝑥 − 𝑚 |]) ) , (2) where 𝜙 𝑑 (⋅) denotes a lightweight convolutional detector, 
+
+[⋅, ⋅] represents channel-wise concatenation, and 𝜎 (⋅) is the sigmoid function. The term |𝑥 − 𝑚 | explicitly describes the local response change caused by state-space propagation, allowing the gate to identify spatial locations where stroke-sensitive information may be weakened. To avoid amplifying background noise, the dilution im-portance map is further modulated by the stroke prior 𝑃 𝑠 :̂𝐼 = 𝛼𝑃 𝑠 ⊙ 𝐼, (3) where 𝛼 is the maximum gate strength and ⊙ denotes element-wise multiplication. This design restricts anti-dilution compensation mainly to stroke-related regions while sup-pressing unnecessary enhancement in background areas. The final refined feature is obtained by interpolating between the propagated representation 𝑚 and the original local feature 𝑥 :
+
+𝑦 = 𝑚 +̂ 𝐼 ⊙ (𝑥 − 𝑚 ). (4) When ̂ 𝐼 approaches zero, the output remains close to the Mamba-propagated feature 𝑚 . When ̂ 𝐼 becomes large, the module selectively restores local stroke-sensitive responses from 𝑥 . In this way, the Anti-Dilution Gate preserves the long-range contextual modeling ability of Mamba while reducing the loss of weak foreground structures. The refined feature 𝑦 is then passed to the prediction stage for detail-aware binarization. 
+
+3.4. Prediction Head 
+
+After the Anti-Dilution Gate, the refined feature is up-sampled and fused with the Sobel edge prior for detail-aware prediction. The fused feature is processed by lightweight refinement modules, including structure refinement, local variance suppression, confidence gating, and weak-text re-finement. These modules are used as auxiliary prediction refinements rather than independent contributions. The final prediction stage contains three heads for estimating fore-ground probability 𝑃 𝑓 𝑔 , background probability 𝑃 𝑏𝑔 , and an adaptive threshold map 𝑇 . The clean foreground probability is computed as 
+
+𝑃 𝑐𝑙𝑒𝑎𝑛 = 𝑃 𝑓 𝑔 (1 − 𝑃 𝑏𝑔 ), (5) and the soft binarization output is obtained by ̂𝑌 = 𝜎 (𝛾 (𝑃 𝑐𝑙𝑒𝑎𝑛 − 𝑇 )) , (6) where 𝛾 controls the sharpness of the binarization function. 
+
+3.5. Loss Function 
+
+To optimize the proposed framework, we use a compos-ite objective that supervises the final binarization map, fore-ground and background probability heads, adaptive thresh-old map, and auxiliary skeleton branch. Let 𝑌 denote the ground-truth binary map and ̂ 𝑌 denote the final soft bina-rization output. The main binarization loss is defined as 
+
+𝑏𝑖𝑛 = 𝐵𝐶𝐸 (̂ 𝑌 , 𝑌 ) + 𝜆 𝑡 𝑇 + 𝜆 𝑓 𝐹 𝑀 + 𝜆 𝑝 𝑝𝐹 𝑀 . (7) Here, 𝑇 is the Tversky loss [10], 
+
+𝑇 = 1 − 𝑇 𝑃 + 1 
+
+𝑇 𝑃 + 𝛼𝐹 𝑃 + 𝛽𝐹 𝑁 + 1 , (8) where 𝑇 𝑃 , 𝐹 𝑃 , and 𝐹 𝑁 denote soft true positives, false positives, and false negatives. 𝐹 𝑀 aligns training with the F-measure, while 𝑝𝐹 𝑀 emphasizes skeleton-level stroke preservation using the skeletonized ground truth. In addition to the main binarization loss, foreground and background heads are supervised by binary cross-entropy: 
+
+𝑝𝑟𝑜𝑏 = 𝐵𝐶𝐸 (𝑃 𝑓 𝑔 , 𝑌 ) + 𝐵𝐶𝐸 (𝑃 𝑏𝑔 , 1 − 𝑌 ). (9) We further apply a boundary false-positive penalty 𝑏𝑑 , a threshold regularization term 𝑡ℎ , and an auxiliary skeleton supervision loss 𝑠𝑘𝑒𝑙 . The overall objective is 
+
+ = 𝑏𝑖𝑛 +𝜆 𝑝𝑟𝑜𝑏 𝑝𝑟𝑜𝑏 +𝜆 𝑏𝑑 𝑏𝑑 +𝜆 𝑡ℎ 𝑡ℎ +𝜆 𝑠𝑘𝑒𝑙 𝑠𝑘𝑒𝑙 . (10)   
+
+> S.W. Chan: Preprint submitted to Elsevier Page 3 of 7 DeepMine-Mamba for Document Image Binarization
+
+## 4. Experiments 
+
+4.1. Experimental Setup 
+
+All experiments are implemented in PyTorch and con-ducted on a single NVIDIA RTX 5080 GPU with 16GB memory. DeepMine-Mamba uses a ConvNeXt-Tiny back-bone [8] pretrained on ImageNet [11] as the encoder. The encoder extracts four hierarchical feature maps with channel dimensions of 96, 192, 384, and 768, which are progres-sively fused by a U-shaped decoder before entering the pro-posed DeepMine-Mamba block. During training, document images are randomly cropped into 512 × 512 patches. The batch size is set to 4, and gradient accumulation is applied for 4 steps. The model is optimized using AdamW [12] and trained for 200 epochs with a maximum learning rate of 
+
+2 × 10 −4 . Mixed-precision training [13] is used to reduce GPU memory consumption. During testing, full-resolution document images are processed by sliding-window infer-ence with a crop size of 512 and a stride of 256. To improve robustness against real document degradations, we apply DIBCO-style data augmentation during training. The aug-mentation pipeline includes simulated bleed-through, paper texture, ink blot, JPEG compression artifacts, and local blur. These transformations imitate common degradation patterns such as background interference, stained paper, weak ink, compression noise, and local defocus. 
+
+4.2. Datasets and Protocols 
+
+Experiments are conducted on the DIBCO and H-DIBCO benchmark series from 2009 to 2019 [14, 15, 16, 17, 18, 19, 20, 21, 22, 23]. These benchmarks contain degraded printed and handwritten document images with pixel-level binary ground truth. They cover diverse degradation patterns, in-cluding uneven illumination, bleed-through, stains, faded ink, low foreground-background contrast, paper texture, and complex backgrounds. We evaluate the proposed method using a leave-one-year-out protocol. For each target year, all images from that year are excluded from training and used only for testing, while images from the remaining DIBCO/H-DIBCO years are used for training. This produces ten evaluation settings over the available DIBCO/H-DIBCO benchmark years from 2009 to 2019 and allows us to assess cross-year generalization under unseen document degradation distributions. The leave-one-year-out setting is treated as the primary protocol because it provides a stricter evaluation of generalization than random training/testing splits. All input images are converted to RGB format and paired with their corresponding binary masks. Training is performed on randomly cropped patches, while testing is conducted on full-resolution images using sliding-window inference. 
+
+4.3. Evaluation Metrics 
+
+We evaluate document image binarization performance using the standard DIBCO evaluation metrics, including F-measure (FM), pseudo F-measure (Fps), peak signal-to-noise ratio (PSNR), and distance reciprocal distortion (DRD) [21, 24]. All metrics are computed using the official      
+
+> Table 1
+> Leave-one-year-out results of DeepMine-Mamba on each DIBCO/H-DIBCO benchmark year. All scores are computed using the official DIBCO evaluation metrics.
+
+Test Year FM ↑ Fps ↑ PSNR ↑ DRD ↓
+
+2009 95.74 96.50 21.59 1.3157 2010 94.47 96.84 21.83 1.3455 2011 95.35 97.56 21.40 1.3588 2012 96.26 97.32 23.30 1.1860 2013 96.15 97.93 23.13 1.2347 2014 97.45 98.84 23.58 0.6938 2016 90.28 94.90 19.26 3.2500 2017 93.31 95.19 19.39 2.3480 2018 90.69 94.62 20.00 2.8745 2019 75.90 76.40 15.31 7.8167 Average 92.56 94.61 20.88 2.3424 
+
+DIBCO-style evaluation procedure. FM measures the pixel-level balance between precision and recall, while Fps further emphasizes stroke preservation by computing recall on the skeletonized ground truth. PSNR measures the reconstruc-tion quality between the predicted binary image and the ground-truth binary mask. DRD evaluates the perceptual distortion caused by local binarization errors and is sensitive to visually significant false foreground or missing-stroke regions. Higher FM, Fps, and PSNR indicate better bina-rization performance, whereas lower DRD indicates fewer perceptually significant errors. 
+
+4.4. Comparison with Existing Methods 
+
+We compare DeepMine-Mamba with classical thresh-olding methods and representative learning-based document binarization approaches. DeepMine-Mamba is evaluated un-der the leave-one-year-out protocol using the official DIBCO evaluation metrics. For prior methods, we report published benchmark results when available. Since not all published methods explicitly adopt the same cross-year training proto-col, this comparison is used as a benchmark-level reference for positioning the proposed method. The main protocol-controlled evidence is provided by the leave-one-year-out evaluation in Table 1 and the component-wise ablation study in Table 4. As shown in Table 2, DeepMine-Mamba achieves the highest average FM and Fps in this benchmark-level com-parison, while maintaining competitive PSNR and DRD. The strong FM and Fps indicate effective foreground preser-vation and skeleton-level stroke recovery across DIBCO/H-DIBCO benchmark years. Although DeepMine-Mamba does not obtain the lowest DRD, the results suggest that the pro-posed anti-dilution design is effective for preserving weak and fragmented foreground strokes. This reflects a practical trade-off between aggressively recovering degraded stroke   
+
+> S.W. Chan: Preprint submitted to Elsevier Page 4 of 7
+
+DeepMine-Mamba for Document Image Binarization 
+
+Table 2 
+
+Benchmark-level comparison on DIBCO/H-DIBCO datasets. DeepMine-Mamba is evaluated under the leave-one-year-out protocol using the official DIBCO evaluation metrics. Results of prior methods are taken from their published reports when available. Each average score is computed as the sum of the reported scores divided by the number of included benchmark years. The column “Years” indicates the number of benchmark years included in the average. Therefore, the results should be interpreted as a broad reference rather than a fully protocol-matched comparison. Method FM ↑ Fps ↑ PSNR ↑ DRD ↓ Years Otsu [1] 77.27 79.14 15.22 17.24 10 Sauvola [2] 78.10 82.91 15.77 8.72 10 Gib [3] 87.33 89.85 17.98 5.40 10 RDD [25] 85.96 87.43 17.92 7.00 10 DeepOtsu [26] 88.59 90.84 19.33 3.76 10 DD-GAN [27] 88.98 91.17 19.87 3.57 10 cGANs [28] 90.24 91.97 19.66 3.81 10 DocEnTr [5] 90.51 92.17 20.31 1.15 9DocBinFormer [29] 92.22 94.09 21.30 0.15 10 D2BFormer [30] 91.75 93.05 20.85 2.71 10 TransDocUNet [31] 92.44 93.86 22.16 0.49 10 DeepMine-Mamba 92.56 94.61 20.88 2.34 10 
+
+Table 3 
+
+Comparison on the DIBCO 2019 benchmark. DeepMine-Mamba is evaluated under the leave-one-year-out setting using the official DIBCO evaluation metrics. Method FM ↑ Fps ↑ PSNR ↑ DRD ↓
+
+Otsu [1] 63.87 60.24 12.67 16.87 Sauvola [2] 63.82 60.18 12.66 16.91 DeepOtsu [26] 60.75 59.91 14.44 13.46 DD-GAN [27] 57.96 57.30 14.43 12.21 DocEnTr [5] 59.00 60.00 13.85 0.30 DocDiff [32] 73.38 75.12 15.14 –DocBinFormer [29] 60.31 64.00 14.49 0.21 TransDocUNet [31] 56.79 56.78 13.36 0.56 D2BFormer [30] 67.63 66.69 15.05 10.59 MFE-GAN [33] 70.41 70.96 13.79 15.49 NAF-DPM [6] 74.61 76.25 15.39 –DeepMine-Mamba 75.90 76.44 15.41 7.82 
+
+structures and suppressing all visually significant local errors. As shown in Table 3, DeepMine-Mamba obtains the best FM, Fps, and PSNR on the challenging DIBCO 2019 bench-mark. This result suggests that the proposed anti-dilution design is particularly effective for preserving foreground structures under severe degradation. However, its DRD is not the lowest, indicating that some local perceptual distortions or background residuals remain. This suggests that the model tends to favor foreground stroke recovery, which improves FM and Fps but may leave localized background residues that are penalized by DRD. Further reducing DRD while maintaining high Fps will be an important direction for future work. 
+
+4.5. Qualitative Visualization 
+
+Figure 2 presents qualitative visualization results of DeepMine-Mamba on four challenging DIBCO 2019 sam-ples. Each row shows the input image, ground truth, and prediction of DeepMine-Mamba. The selected examples cover damaged document regions, faint handwritten strokes, severely degraded printed text, and complex background interference. 
+
+Input Ground Truth DeepMine-Mamba 
+
+Figure 2: Qualitative visualization of DeepMine-Mamba on challenging DIBCO 2019 samples. Each row shows the input image, ground truth, and prediction of DeepMine-Mamba. The selected examples cover damaged document regions, faint handwritten strokes, and severely degraded printed text. 
+
+## 5. Ablation and Analysis 
+
+5.1. Ablation Study 
+
+To analyze the contribution of each component in DeepMine-Mamba, we conduct a component-wise ablation study under the leave-one-year-out protocol. As shown in Table 4, adding the ConvNeXt encoder improves FM from 74.84 to 86.17 and Fps from 75.55 to 87.96, showing the benefit of stronger feature extraction. Introducing the Sobel edge prior further reduces DRD from 7.24 to 6.51, indicating 
+
+S.W. Chan: Preprint submitted to Elsevier Page 5 of 7 DeepMine-Mamba for Document Image Binarization 
+
+Table 4 
+
+Ablation study of the Anti-Dilution Gate under the leave-one-year-out protocol. Model FM ↑ Fps ↑ PSNR ↑ DRD ↓                        
+
+> Baseline U-Net 74.84 75.55 16.74 8.13 + ConvNeXt Encoder 86.17 87.96 17.39 7.24 + Sobel Edge Prior 87.05 88.53 17.78 6.51 + DeepMine-Mamba Block 90.54 93.35 19.72 4.79 + Anti-Dilution Gate 92.43 94.27 20.16 2.59 + Refinement Heads 92.56 94.61 20.88 2.34
+
+that explicit edge information helps preserve stroke bound-aries. The DeepMine-Mamba block further improves FM to 90.54 and Fps to 93.35, demonstrating the effectiveness of long-range feature propagation. Adding the Anti-Dilution Gate increases FM from 90.54 to 92.43 and reduces DRD from 4.79 to 2.59, suggesting that it mitigates foreground information dilution and preserves fine stroke details. Fi-nally, the refinement heads achieve the best overall results, reaching 92.56 FM, 94.61 Fps, 20.88 PSNR, and 2.34 DRD. 
+
+5.2. Qualitative Analysis 
+
+Figure 3 and Figure 4 provide qualitative comparisons between the full model and the variant without the Anti-Dilution Gate. The selected cases include a bright low-contrast background and a complex degraded background. Each figure shows, from left to right, the original input image, the zoomed-in region, the ground truth, the predic-tion without the Anti-Dilution Gate, and the prediction with the Anti-Dilution Gate. Without the gate, weak foreground responses are suppressed after Mamba-based propagation. In contrast, the full model restores more complete stroke structures and produces results closer to the ground truth. 
+
+Figure 3: Bright and low-contrast background case. From left to right: original input image, zoomed-in region, ground truth, prediction without the Anti-Dilution Gate, and predic-tion with the Anti-Dilution Gate. The red box in the original input marks the region selected for visual inspection. 
+
+Figure 4: Complex degraded background case. From left to right: original input image, zoomed-in region, ground truth, prediction without the Anti-Dilution Gate, and prediction with the Anti-Dilution Gate. The red box in the original input marks the region selected for visual inspection. 
+
+5.3. Limitations and Future Work 
+
+Although DeepMine-Mamba shows strong foreground preservation on DIBCO/H-DIBCO benchmarks, several limitations remain. First, its DRD is not always the lowest among compared methods, indicating that localized back-ground residues may remain when recovering weak strokes. Future work will investigate DRD-aware optimization to reduce such local distortions while maintaining strong stroke preservation. Second, although this work focuses on docu-ment image binarization, the proposed Anti-Dilution Gate may also be useful for other dense prediction tasks that require long-range modeling and fine-detail preservation. We plan to evaluate its compatibility and generality on broader tasks such as semantic segmentation. 
+
+## 6. Conclusion 
+
+This paper presented DeepMine-Mamba, a Mamba-based state space framework for document image binariza-tion. By introducing the Anti-Dilution Gate, the proposed method mitigates stroke-level information dilution and im-proves the preservation of degraded foreground structures. Experiments on DIBCO/H-DIBCO benchmarks under a strict leave-one-year-out protocol show that DeepMine-Mamba achieves competitive overall performance, with strong average FM and Fps across benchmark years. On the challenging DIBCO 2019 benchmark, DeepMine-Mamba achieves the highest FM, Fps, and PSNR in the benchmark-level comparison, further demonstrating its effectiveness under severe document degradation. These results suggest that anti-dilution refinement is a promising direction for preserving weak and fragmented foreground structures in document image binarization. 
+
+## Acknowledgment 
+
+This research work is partially supported by the National Science and Technology Council, Taiwan, under grant num-ber 114-2221-E-032-011. 
+
+## References             
+
+> [1] N. Otsu, A threshold selection method from gray-level histograms, IEEE Transactions on Systems, Man, and Cybernetics 9 (1979) 62– 66. [2] J. Sauvola, M. Pietikäinen, Adaptive document image binarization, Pattern Recognition 33 (2000) 225–236. [3] B. Gatos, I. Pratikakis, S. J. Perantonis, Adaptive degraded document image binarization, Pattern Recognition 39 (2006) 317–327. [4] O. Ronneberger, P. Fischer, T. Brox, U-Net: Convolutional networks for biomedical image segmentation, in: Medical Image Computing and Computer-Assisted Intervention – MICCAI 2015, Springer, 2015, pp. 234–241. doi: 10.1007/978-3-319-24574-4_28 .[5] M. A. Souibgui, S. Biswas, S. K. Jemni, Y. Kessentini, A. Fornés, J. Lladós, U. Pal, DocEnTr: An end-to-end document image en-hancement transformer, in: Proceedings of the 26th International Conference on Pattern Recognition, 2022, pp. 1699–1705. doi: 10. 1109/ICPR56361.2022.9956101 .[6] G. Cicchetti, D. Comminiello, NAF-DPM: A nonlinear activation-free diffusion probabilistic model for document enhancement, arXiv preprint arXiv:2404.05669 (2024).
+
+S.W. Chan: Preprint submitted to Elsevier Page 6 of 7 DeepMine-Mamba for Document Image Binarization 
+
+[7] A. Gu, T. Dao, Mamba: Linear-time sequence modeling with selective state spaces, arXiv preprint arXiv:2312.00752 (2023). [8] Z. Liu, H. Mao, C.-Y. Wu, C. Feichtenhofer, T. Darrell, S. Xie, Aconvnet for the 2020s, in: Proceedings of the IEEE/CVF conference on computer vision and pattern recognition, 2022, pp. 11976–11986. [9] I. Sobel, G. Feldman, An isotropic 3x3 image gradient operator, 1968. Presented at the Stanford Artificial Intelligence Project. [10] S. S. M. Salehi, D. Erdogmus, A. Gholipour, Tversky loss function for image segmentation using 3d fully convolutional deep networks, in: International Workshop on Machine Learning in Medical Imaging, Springer, 2017, pp. 379–387. doi: 10.1007/978-3-319-67389-9_44 .[11] O. Russakovsky, J. Deng, H. Su, J. Krause, S. Satheesh, S. Ma, Z. Huang, A. Karpathy, A. Khosla, M. Bernstein, A. C. Berg, L. Fei-Fei, ImageNet large scale visual recognition challenge, International Journal of Computer Vision 115 (2015) 211–252. [12] I. Loshchilov, F. Hutter, Decoupled weight decay regularization, in: International Conference on Learning Representations, 2019. [13] P. Micikevicius, S. Narang, J. Alben, G. Diamos, E. Elsen, D. Gar-cia, B. Ginsburg, M. Houston, O. Kuchaiev, G. Venkatesh, H. Wu, Mixed precision training, in: International Conference on Learning Representations, 2018. [14] B. Gatos, K. Ntirogiannis, I. Pratikakis, ICDAR 2009 document image binarization contest (DIBCO 2009), in: Proceedings of the 10th International Conference on Document Analysis and Recognition, 2009, pp. 1375–1382. doi: 10.1109/ICDAR.2009.246 .[15] I. Pratikakis, B. Gatos, K. Ntirogiannis, H-DIBCO 2010: Handwritten document image binarization competition, in: Proceedings of the 12th International Conference on Frontiers in Handwriting Recognition, 2010, pp. 727–732. doi: 10.1109/ICFHR.2010.118 .[16] I. Pratikakis, B. Gatos, K. Ntirogiannis, Icdar 2011 document image binarization contest, in: Proceedings of the International Confer-ence on Document Analysis and Recognition, 2011, pp. 1506–1510. doi: 10.1109/ICDAR.2011.299 .[17] I. Pratikakis, B. Gatos, K. Ntirogiannis, Icfhr 2012 competition on handwritten document image binarization, in: Proceedings of the International Conference on Frontiers in Handwriting Recognition, 2012, pp. 817–822. doi: 10.1109/ICFHR.2012.216 .[18] I. Pratikakis, B. Gatos, K. Ntirogiannis, Icdar 2013 document image binarization contest, in: Proceedings of the International Confer-ence on Document Analysis and Recognition, 2013, pp. 1471–1476. doi: 10.1109/ICDAR.2013.219 .[19] K. Ntirogiannis, B. Gatos, I. Pratikakis, Icfhr 2014 competition on handwritten document image binarization, in: Proceedings of the International Conference on Frontiers in Handwriting Recognition, 2014, pp. 809–813. doi: 10.1109/ICFHR.2014.141 .[20] I. Pratikakis, K. Zagoris, G. Barlas, B. Gatos, Icfhr 2016 handwritten document image binarization contest, in: Proceedings of the Interna-tional Conference on Frontiers in Handwriting Recognition, 2016, pp. 619–623. doi: 10.1109/ICFHR.2016.0118 .[21] I. Pratikakis, K. Zagoris, G. Barlas, B. Gatos, Icdar 2017 competition on document image binarization, in: Proceedings of the International Conference on Document Analysis and Recognition Workshops, 2017, pp. 1395–1403. doi: 10.1109/ICDAR.2017.228 .[22] I. Pratikakis, K. Zagoris, P. Kaddas, B. Gatos, Icfhr 2018 competition on handwritten document image binarization, in: Proceedings of the International Conference on Frontiers in Handwriting Recognition, 2018, pp. 489–493. doi: 10.1109/ICFHR-2018.2018.00091 .[23] I. Pratikakis, K. Zagoris, X. Karagiannis, L. Tsochatzidis, T. Mondal, I. Marthot-Santaniello, Icdar 2019 competition on document image binarization, in: Proceedings of the International Conference on Document Analysis and Recognition, 2019, pp. 1547–1556. doi: 10. 1109/ICDAR.2019.00249 .[24] H. Lu, A. C. Kot, Y. Q. Shi, Distance-reciprocal distortion measure for binary document images, IEEE Signal Processing Letters 11 (2004) 228–231. [25] B. Su, S. Lu, C. L. Tan, Robust document image binarization technique for degraded document images, IEEE Transactions on Image Processing 22 (2013) 1408–1417. [26] S. He, L. Schomaker, Document enhancement and binarization using iterative deep learning, Pattern Recognition 91 (2019) 379–390. [27] R. De, A. Chakraborty, R. Sarkar, Document image binarization using dual discriminator generative adversarial networks, IEEE Signal Processing Letters 27 (2020) 1090–1094. [28] J. Zhao, C. Shi, F. Jia, Y. Wang, B. Xiao, Document image binariza-tion with cascaded generators of conditional generative adversarial networks, Pattern Recognition 96 (2019) 106968. [29] R. Biswas, S. K. Roy, N. Wang, U. Pal, G.-B. Huang, Docbinformer: A two-level transformer network for effective document image bina-rization, arXiv preprint arXiv:2312.03568 (2023). [30] M. Yang, et al., A novel degraded document binarization model through vision transformer, Information Fusion 93 (2023) 159–173. [31] R. Biswas, S. Sarkhel, S. K. Roy, U. Pal, TransDocUNet: A transformer-based UNet architecture for degraded document image binarization, in: Proceedings of the 14th Indian Conference on Computer Vision, Graphics and Image Processing, 2023. doi: 10.1145/ 3627631.3627639 .[32] Z. Yang, Z. Zhang, N. Wang, T. Chen, X. Liu, Docdiff: Docu-ment enhancement via residual diffusion models, arXiv preprint arXiv:2305.03892 (2023). [33] R.-Y. Ju, K. Wong, Y. Jin, J.-S. Chiang, Mfe-gan: Efficient gan-based framework for document image enhancement and binarization with multi-scale feature extraction, arXiv preprint arXiv:2512.14114 (2025). 
+
+S.W. Chan: Preprint submitted to Elsevier Page 7 of 7
