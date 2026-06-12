@@ -6,68 +6,63 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-06-11
-- 运行时间：2026-06-11 21:19:21 UTC
+- 最新运行日期：2026-06-12
+- 运行时间：2026-06-12 21:08:28 UTC
 - 运行状态：成功
-- 本次总论文数：16
-- 精读区：4
+- 本次总论文数：13
+- 精读区：1
 - 速读区：12
 
 ### 今日简报（AI）
-今日阅读16篇论文，精读聚焦生成式有损压缩与向量量化稳定性两大高分方向。值得关注Few-step生成模型与NSVQ编码本崩溃缓解方案。建议深入探索生成模型在数据压缩中的应用及量化训练稳定技术。
-- 详情：[/202606/11/README](/202606/11/README)
+今日共处理13篇论文，聚焦图像传输、LLM压缩与注意力机制新框架。
+
+最值得精读的是《Adapting Diffusion Language Models for Lossless Pixel-Level Image Transmission》（8.0/10），另外速读中《SigmaScale: LLM Compression with SVD-based Low-Rank Decomposition》和《Hasse Diagrams for Attention》也值得关注。
+
+建议优先从精读论文入手理解扩散模型新应用，再翻阅速读中压缩与掩码设计方向，拓展视野。
+- 详情：[/202606/12/README](/202606/12/README)
 
 ### 精读区论文标签
-1. [Few-step Generative Models as Lossy Compression](/202606/11/2606.10450v1-few-step-generative-models-as-lossy-compression)  
-   标签：评分：9.0/10、query:compress
-   evidence：少步生成模型用于有损压缩
-2. [NSVQ: Mitigating Codebook Collapse by Stabilizing Encoder Drift in Vector Quantization](/202606/11/2606.11363v1-nsvq-mitigating-codebook-collapse-by-stabilizing-encoder-drift-in-vector-quantization)  
-   标签：评分：9.0/10、query:compress
-   evidence：向量量化的训练策略，缓解码本坍缩，属于量化方法
-3. [Characterizing the Impact of NVFP4 Quantization for Low-Power Edge AI Deployment](/202606/11/2606.06527v2-characterizing-the-impact-of-nvfp4-quantization-for-low-power-edge-ai-deployment)  
-   标签：评分：8.0/10、query:neural-arch
-   evidence：针对边缘AI的低功耗NVFP4量化，属于模型优化策略
-4. [ViT-FREE: Efficient Face Recognition via Early Exiting and Synthetic Adaptation](/202606/11/2606.12023v1-vit-free-efficient-face-recognition-via-early-exiting-and-synthetic-adaptation)  
-   标签：评分：8.0/10、query:neural-arch
-   evidence：带早期退出的高效视觉Transformer架构
+1. [Adapting Diffusion Language Models for Lossless Pixel-Level Image Transmission](/202606/12/2606.06273v1-adapting-diffusion-language-models-for-lossless-pixel-level-image-transmission)  
+   标签：评分：8.0/10、query:compress
+   evidence：使用离散扩散语言模型作为源编解码器进行无损图像传输，直接相关于基于神经网络的压缩
 
 ### 速读区论文标签
-1. [Spatial-Temporal Decoupled Adapter for Micro-gesture Online Recognition](/202606/11/2606.07355v1-spatial-temporal-decoupled-adapter-for-micro-gesture-online-recognition)  
+1. [SigmaScale: LLM Compression with SVD-based Low-Rank Decomposition and Learned Scaling Matrices](/202606/12/2606.07098v1-sigmascale-llm-compression-with-svd-based-low-rank-decomposition-and-learned-scaling-matrices)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：用于微手势识别的高效时空解耦适配器
-2. [Joint Structural Pruning and Mixed-Precision Quantization for LLM Compression](/202606/11/2606.07819v1-joint-structural-pruning-and-mixed-precision-quantization-for-llm-compression)  
+   evidence：通过学习缩放矩阵压缩大语言模型
+2. [Hasse Diagrams for Attention: A Partial Order Framework for Designing Transformer Masks](/202606/12/2606.09951v1-hasse-diagrams-for-attention-a-partial-order-framework-for-designing-transformer-masks)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：联合结构剪枝与混合精度量化用于LLM压缩，模型优化策略
-3. [SMI: Efficient Self-Supervised Learning via Mutual-Information-Inspired Dependency Optimization](/202606/11/2606.08332v1-smi-efficient-self-supervised-learning-via-mutual-information-inspired-dependency-optimization)  
+   evidence：Transformer掩码设计的理论框架
+3. [Benchmarking Neural Speech Compression from a Rate-Distortion Perspective](/202606/12/2606.11631v1-benchmarking-neural-speech-compression-from-a-rate-distortion-perspective)  
+   标签：评分：7.0/10、query:compress
+   evidence：从率失真角度对神经语音压缩进行基准测试；与图像压缩率失真优化的方法学桥梁
+4. [Simplicity Suffices for Parameter Noise Injection in Stochastic Gradient Descent](/202606/12/2606.12054v1-simplicity-suffices-for-parameter-noise-injection-in-stochastic-gradient-descent)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：自监督学习优化策略
-4. [Forward-Only Convolutional Neural Networks with Learnable Channel-Class Assignment](/202606/11/2606.09928v1-forward-only-convolutional-neural-networks-with-learnable-channel-class-assignment)  
+   evidence：参数噪声注入作为深度学习模型优化策略
+5. [Reroute, Don't Remove: Recoverable Visual Token Routing for Vision-Language Models](/202606/12/2606.12412v1-reroute-dont-remove-recoverable-visual-token-routing-for-vision-language-models)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：可学习的通道-类别分配改进了视觉架构
-5. [RoVE: Rotary Value Embeddings Attention for Relative Position-dependent Value Pathways](/202606/11/2606.11275v1-rove-rotary-value-embeddings-attention-for-relative-position-dependent-value-pathways)  
-   标签：评分：7.0/10、query:neural-arch
-   evidence：旋转变换值嵌入注意力实现位置相关值通路
-6. [Parameter-Efficient Adapter Tuning for Tabular-Image Multimodal Learning](/202606/11/2606.11682v1-parameter-efficient-adapter-tuning-for-tabular-image-multimodal-learning)  
-   标签：评分：7.0/10、query:neural-arch
-   evidence：多模态学习的参数高效适配器微调
-7. [Learned Subspace Compression for Communication-Efficient Pipeline Parallelism](/202606/11/2606.05484v1-learned-subspace-compression-for-communication-efficient-pipeline-parallelism)  
+   evidence：可恢复视觉令牌路由提升视觉语言模型架构效率
+6. [Generalization in Nonlinear Least Squares via Learned Feature Geometry](/202606/12/2606.08799v2-generalization-in-nonlinear-least-squares-via-learned-feature-geometry)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：学习压缩方法用于通信高效训练，属于模型优化策略
-8. [DRIFT: A Residual Flow Adapter for Decoding Continuous Outputs in Vision-Language Models](/202606/11/2606.05758v1-drift-a-residual-flow-adapter-for-decoding-continuous-outputs-in-vision-language-models)  
+   evidence：非线性最小二乘的泛化界
+7. [Adversarial Attack and Disturbance Detection by Hadamard-Coded Output Representations for Object Detection and Semantic Segmentation](/202606/12/2606.09536v1-adversarial-attack-and-disturbance-detection-by-hadamard-coded-output-representations-for-object-detection-and-semantic-segmentation)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：视觉语言模型适应连续输出的框架
-9. [Characterizing the Impact of NVFP4 Quantization for Low-Power Edge AI Deployment](/202606/11/2606.06527v3-characterizing-the-impact-of-nvfp4-quantization-for-low-power-edge-ai-deployment)  
+   evidence：通过新颖的输出编码提升视觉任务的对抗鲁棒性
+8. [Learning Dynamics Reveal a Hierarchy of Weight-Induced Layerwise Gram Metrics](/202606/12/2606.09744v3-learning-dynamics-reveal-a-hierarchy-of-weight-induced-layerwise-gram-metrics)  
+   标签：评分：6.0/10、query:neural-arch
+   evidence：研究神经网络训练动力学，与优化策略相关
+9. [Designed-Source Reductions and a Dual-Purpose Feasibility Band for Semantic Rate-Distortion](/202606/12/2606.11280v1-designed-source-reductions-and-a-dual-purpose-feasibility-band-for-semantic-rate-distortion)  
    标签：评分：6.0/10、query:compress
-   evidence：面向高效神经网络的量化策略
-10. [MaskAlign: Token-Subset Representation Alignment for Efficient Diffusion Training](/202606/11/2606.08788v1-maskalign-token-subset-representation-alignment-for-efficient-diffusion-training)  
+   evidence：语义通信的率失真优化框架，与学习型图像压缩的率失真优化相关
+10. [PT-WNO: Point Transformer with Wavelet Neural Operator for 3D Point Cloud Semantic Segmentation](/202606/12/2606.11466v1-pt-wno-point-transformer-with-wavelet-neural-operator-for-3d-point-cloud-semantic-segmentation)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：token级表示对齐加速扩散Transformer训练
-11. [Hyperparameter Learning for Latent Factorization of Tensors for Representation Learning to Large-scale Dynamic Weighted Directed Network](/202606/11/2606.09880v1-hyperparameter-learning-for-latent-factorization-of-tensors-for-representation-learning-to-large-scale-dynamic-weighted-directed-network)  
+   evidence：点Transformer与小波神经算子用于全局上下文
+11. [Adapting Vision-Language Models from Iconic to Inclusive for Multi-Label Recognition Without Labels](/202606/12/2606.11626v1-adapting-vision-language-models-from-iconic-to-inclusive-for-multi-label-recognition-without-labels)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：机器学习模型自动超参数优化
-12. [Dissect and Prune: Enhancing Robustness in AI-Generated Image Detection](/202606/11/2606.10309v1-dissect-and-prune-enhancing-robustness-in-ai-generated-image-detection)  
+   evidence：无监督多标签识别与视觉语言模型
+12. [LASA: A Weak Supervision Method for Open-Vocabulary Scene Sketch Semantic Segmentation](/202606/12/2606.11837v1-lasa-a-weak-supervision-method-for-open-vocabulary-scene-sketch-semantic-segmentation)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：通过剪枝提升神经网络鲁棒性，属于性能改进技术
+   evidence：利用不同ViT层的注意力图进行分割
 
 
 <div class="dpr-home-promo-card">
