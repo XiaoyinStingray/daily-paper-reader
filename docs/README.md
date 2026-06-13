@@ -6,63 +6,67 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-06-12
-- 运行时间：2026-06-12 21:08:28 UTC
+- 最新运行日期：2026-06-13
+- 运行时间：2026-06-13 20:27:12 UTC
 - 运行状态：成功
-- 本次总论文数：13
-- 精读区：1
+- 本次总论文数：15
+- 精读区：3
 - 速读区：12
 
 ### 今日简报（AI）
-今日共处理13篇论文，聚焦图像传输、LLM压缩与注意力机制新框架。
-
-最值得精读的是《Adapting Diffusion Language Models for Lossless Pixel-Level Image Transmission》（8.0/10），另外速读中《SigmaScale: LLM Compression with SVD-based Low-Rank Decomposition》和《Hasse Diagrams for Attention》也值得关注。
-
-建议优先从精读论文入手理解扩散模型新应用，再翻阅速读中压缩与掩码设计方向，拓展视野。
-- 详情：[/202606/12/README](/202606/12/README)
+1) 今日精读2篇、速读12篇，聚焦模型量化、红外目标检测与泛化理论。  
+2) 最值得关注《Optimal Post-Training Quantization Scales》（量化最优尺度）与《FreqKD》（红外目标检测知识蒸馏），均获8.0高分。  
+3) 建议优先精读这两篇，其方法可复用于边缘设备部署或多模态融合场景。
+- 详情：[/202606/13/README](/202606/13/README)
 
 ### 精读区论文标签
-1. [Adapting Diffusion Language Models for Lossless Pixel-Level Image Transmission](/202606/12/2606.06273v1-adapting-diffusion-language-models-for-lossless-pixel-level-image-transmission)  
+1. [Optimal Post-Training Quantization Scales and Where to Find Them](/202606/13/2606.10890v1-optimal-post-training-quantization-scales-and-where-to-find-them)  
    标签：评分：8.0/10、query:compress
-   evidence：使用离散扩散语言模型作为源编解码器进行无损图像传输，直接相关于基于神经网络的压缩
+   evidence：针对大语言模型的最优后训练量化尺度，与图像压缩管道中的量化相关
+2. [FreqKD: Frequency-Decoupled Cross-Modal Knowledge Distillation for Infrared Object Detection](/202606/13/2606.11572v1-freqkd-frequency-decoupled-cross-modal-knowledge-distillation-for-infrared-object-detection)  
+   标签：评分：8.0/10、query:neural-arch
+   evidence：面向计算机视觉模型优化的知识蒸馏方法
+3. [Holding the FP8 Quality Ceiling at 8-Bit Weights and Activations: INT8 and GGUF Post-Training Quantization of Ideogram 4.0 for Consumer GPUs](/202606/13/2606.12280v1-holding-the-fp8-quality-ceiling-at-8-bit-weights-and-activations-int8-and-gguf-post-training-quantization-of-ideogram-40-for-consumer-gpus)  
+   标签：评分：8.0/10、query:compress
+   evidence：图像生成模型的训练后量化
 
 ### 速读区论文标签
-1. [SigmaScale: LLM Compression with SVD-based Low-Rank Decomposition and Learned Scaling Matrices](/202606/12/2606.07098v1-sigmascale-llm-compression-with-svd-based-low-rank-decomposition-and-learned-scaling-matrices)  
+1. [Optimal Rates for Generalization of Gradient Descent Methods with Deep Neural Networks](/202606/13/2606.06764v1-optimal-rates-for-generalization-of-gradient-descent-methods-with-deep-neural-networks)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：通过学习缩放矩阵压缩大语言模型
-2. [Hasse Diagrams for Attention: A Partial Order Framework for Designing Transformer Masks](/202606/12/2606.09951v1-hasse-diagrams-for-attention-a-partial-order-framework-for-designing-transformer-masks)  
+   evidence：深度网络梯度下降的泛化界
+2. [Modeling Nonlinear Feature Interactions with Product-Unit Residual Networks](/202606/13/2606.06861v1-modeling-nonlinear-feature-interactions-with-product-unit-residual-networks)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：Transformer掩码设计的理论框架
-3. [Benchmarking Neural Speech Compression from a Rate-Distortion Perspective](/202606/12/2606.11631v1-benchmarking-neural-speech-compression-from-a-rate-distortion-perspective)  
-   标签：评分：7.0/10、query:compress
-   evidence：从率失真角度对神经语音压缩进行基准测试；与图像压缩率失真优化的方法学桥梁
-4. [Simplicity Suffices for Parameter Noise Injection in Stochastic Gradient Descent](/202606/12/2606.12054v1-simplicity-suffices-for-parameter-noise-injection-in-stochastic-gradient-descent)  
+   evidence：乘积单元残差网络改进神经网络架构设计
+3. [DRIFT: From Robustness Gaps to Invariance Manifolds for AI-Generated Image Detection](/202606/13/2606.06918v1-drift-from-robustness-gaps-to-invariance-manifolds-for-ai-generated-image-detection)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：参数噪声注入作为深度学习模型优化策略
-5. [Reroute, Don't Remove: Recoverable Visual Token Routing for Vision-Language Models](/202606/12/2606.12412v1-reroute-dont-remove-recoverable-visual-token-routing-for-vision-language-models)  
+   evidence：通过轻量级投影头改进视觉基础模型，提升AI生成图像检测性能
+4. [Preserving Plasticity in Continual Learning via Dynamical Isometry](/202606/13/2606.09762v1-preserving-plasticity-in-continual-learning-via-dynamical-isometry)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：可恢复视觉令牌路由提升视觉语言模型架构效率
-6. [Generalization in Nonlinear Least Squares via Learned Feature Geometry](/202606/12/2606.08799v2-generalization-in-nonlinear-least-squares-via-learned-feature-geometry)  
+   evidence：识别动态等距为保持可塑性的关键，为神经架构设计提供原则。
+5. [AVIS: Adaptive Test-Time Scaling for Vision-Language Models](/202606/13/2606.11576v1-avis-adaptive-test-time-scaling-for-vision-language-models)  
+   标签：评分：7.0/10、query:neural-arch
+   evidence：视觉语言模型的自适应缩放策略，计算机视觉通用方法
+6. [DALE-CT: Depth-Aware Foundation Models for Computed Tomography](/202606/13/2606.07775v1-dale-ct-depth-aware-foundation-models-for-computed-tomography)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：非线性最小二乘的泛化界
-7. [Adversarial Attack and Disturbance Detection by Hadamard-Coded Output Representations for Object Detection and Semantic Segmentation](/202606/12/2606.09536v1-adversarial-attack-and-disturbance-detection-by-hadamard-coded-output-representations-for-object-detection-and-semantic-segmentation)  
+   evidence：探索自监督学习和基于2D切片的架构用于CT体分析，为通用视觉方法做出贡献。
+7. [STAR-KV: Low-Rank KV Cache Compression via Soft Thresholding for Adaptive Rank Control](/202606/13/2606.08382v1-star-kv-low-rank-kv-cache-compression-via-soft-thresholding-for-adaptive-rank-control)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：通过新颖的输出编码提升视觉任务的对抗鲁棒性
-8. [Learning Dynamics Reveal a Hierarchy of Weight-Induced Layerwise Gram Metrics](/202606/12/2606.09744v3-learning-dynamics-reveal-a-hierarchy-of-weight-induced-layerwise-gram-metrics)  
-   标签：评分：6.0/10、query:neural-arch
-   evidence：研究神经网络训练动力学，与优化策略相关
-9. [Designed-Source Reductions and a Dual-Purpose Feasibility Band for Semantic Rate-Distortion](/202606/12/2606.11280v1-designed-source-reductions-and-a-dual-purpose-feasibility-band-for-semantic-rate-distortion)  
+   evidence：自适应低秩KV缓存压缩与混合精度量化，与模型优化相关
+8. [EinSort: Sorting is All We Need for Tensorizing LLM](/202606/13/2606.08565v1-einsort-sorting-is-all-we-need-for-tensorizing-llm)  
    标签：评分：6.0/10、query:compress
-   evidence：语义通信的率失真优化框架，与学习型图像压缩的率失真优化相关
-10. [PT-WNO: Point Transformer with Wavelet Neural Operator for 3D Point Cloud Semantic Segmentation](/202606/12/2606.11466v1-pt-wno-point-transformer-with-wavelet-neural-operator-for-3d-point-cloud-semantic-segmentation)  
+   evidence：自适应张量化神经网络压缩，与图像压缩模型压缩方法相关
+9. [Heterophily-Aware Adaptive Knowledge Distillation for Hypergraph Neural Networks](/202606/13/2606.08978v1-heterophily-aware-adaptive-knowledge-distillation-for-hypergraph-neural-networks)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：点Transformer与小波神经算子用于全局上下文
-11. [Adapting Vision-Language Models from Iconic to Inclusive for Multi-Label Recognition Without Labels](/202606/12/2606.11626v1-adapting-vision-language-models-from-iconic-to-inclusive-for-multi-label-recognition-without-labels)  
+   evidence：将知识蒸馏自适应于超图神经网络中的异质性节点，是一种模型优化技术。
+10. [Frequency Decoupled Framework for Screen Content Image Super-Resolution](/202606/13/2606.09029v1-frequency-decoupled-framework-for-screen-content-image-super-resolution)  
+   标签：评分：6.0/10、query:compress
+   evidence：基于幅度-相位分解的频率解耦图像超分辨率框架
+11. [Learning Dynamics Reveal a Hierarchy of Weight-Induced Layerwise Gram Metrics](/202606/13/2606.09744v1-learning-dynamics-reveal-a-hierarchy-of-weight-induced-layerwise-gram-metrics)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：无监督多标签识别与视觉语言模型
-12. [LASA: A Weak Supervision Method for Open-Vocabulary Scene Sketch Semantic Segmentation](/202606/12/2606.11837v1-lasa-a-weak-supervision-method-for-open-vocabulary-scene-sketch-semantic-segmentation)  
+   evidence：学习动力学的分层Gram度量
+12. [FoA-SR: Faithful or Aesthetic? Profile-Aware Preference Optimization for Real-World Image Super-Resolution](/202606/13/2606.10275v1-foa-sr-faithful-or-aesthetic-profile-aware-preference-optimization-for-real-world-image-super-resolution)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：利用不同ViT层的注意力图进行分割
+   evidence：面向超分辨率的轮廓感知偏好优化，视觉架构改进
 
 
 <div class="dpr-home-promo-card">
