@@ -1,0 +1,148 @@
+Title: An Extensible and Lightweight Unified Architecture for Demosaicing Pixel-bin Image Sensors
+
+URL Source: https://arxiv.org/pdf/2606.13136v1
+
+Published Time: Fri, 12 Jun 2026 01:01:41 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# AN EXTENSIBLE AND LIGHTWEIGHT UNIFIED ARCHITECTURE FOR DEMOSAICING PIXEL -BIN IMAGE SENSORS 
+
+A P REPRINT 
+
+Saurabh Kumar 
+
+AI Computational Imaging Samsung Research Institute Bangalore 
+
+saurabh.k1@samsung.com 
+
+Nutan S. Yenneti 
+
+AI Computational Imaging Samsung Research Institute Bangalore 
+
+ns.yenneti@samsung.com 
+
+June 12, 2026 
+
+## ABSTRACT 
+
+Pixel-bin image sensors are becoming the default choice for smartphone cameras due to their resolution vs light-gathering trade-off. However, their larger inter-color separation compared to the Bayer color filter array (CFA) makes them challenging to demosaic. Furthermore, existing deep learning-based demosaicing methods are CFA-specific, requiring multiple individual models that take up precious onboard resources and demand larger development and maintenance efforts. In this work, we propose a modular unified architecture for demosaicing various pixel-bin sensors that provides higher image quality while being extensible and lightweight. Additionally, to enable plug-and-play operation, we introduce a learning-free CFA-identification module to detect the CFA type of raw data accurately. 
+
+Keywords Computational Imaging · Camera ISP · Pixel-Bin Sensor · Color Filter Array · Demosaicing 
+
+## 1 Introduction 
+
+Digital image sensors, being monochromatic discrete intensity measurement devices, employ a color filter array (CFA) to capture color photographs. The CFA filters the incoming light onto the sensor into the three additive color primaries by sparsely sampling them spatially. The process of interpolating the missing colors to estimate the full color at each pixel from these monochrome captures is called Demosaicing Li et al. [2008]. With the rapid rise in mobile photography, there is an increasing demand for higher image resolution and quality. However, mobile cameras are heavily constrained by their onboard real estate and cost. This has driven the already small mobile image sensors to accommodate higher pixel counts and, in turn, led to the shrinking of individual pixels themselves. However, small pixels capture less light, leading to a lower image quality, especially in low-light scenarios. The emergence of pixel-bin sensors addresses this challenge by offering a resolution vs light-gathering ability trade-off. Pixel-Bin CFAs started with using a grid of 2 × 2 homogeneous color cells in place of a single Bayer CFA color cell and are referred to as the Quad or Tetra CFA Barna et al. [2013], Chu et al. [2006]. The technology moved forward towards Nona ( 3 × 3) and quickly to Hexadeca ( 4 × 4) CFA, also referred to as Tetra 2 or QxQ CFAs, which can be found in the latest Smartphones. A visualization of color filter arrangements in various CFA types is shown in Figure 1. Based on the scene illumination, pixels corresponding to each homogeneous color cell grid can be binned. For instance, even the small pixels can acquire sufficient light in a brightly lit scene, allowing for a high-resolution capture. In low-light scenarios, homogeneous color cells are binned to gather more light and reduce noise while trading off the resolution. Due to the increased inter-color gap, traditional methods Li et al. [2008] fail in demosaicing pixel-bin CFAs. Lately, deep neural networks have been employed for demosaicing and offer improved image quality with faster reconstruction Santos et al. [2025]. Individual models have been proposed for Tetra A Sharif et al. [2021], Yang et al. [2022], Wu et al. [2023], Zheng et al. [2024], Nona Kim et al. [2021], Sharif et al. [2021] and Hexadeca CFAs Cho et al. [2023]. However, these approaches are CFA-specific by design. In a real-world scenario, a pixel-bin sensor can output different CFA types, and a separate model is required to demosaic each of them. Having multiple models 
+
+> arXiv:2606.13136v1 [cs.CV] 11 Jun 2026
+
+An Extensible & Lightweight Unified Architecture for Demosaicing Pixel-bin Image Sensors A P REPRINT 
+
+Figure 1: Overview of the proposed architecture and a visual of various pixel-bin CFAs. A given raw input is encoded using the Encoder selected by the CFA-ID module into a common latent space. These encodings are processed by the Central Core and finally decoded into an RGB image by the Decoder. onboard is challenging on resource-constrained devices like smartphones, as it requires storing and loading each of them independently, apart from the increased development and maintenance efforts. Furthermore, a unified model allows for a common post-processing routine, enabling a consistent visual quality across CFA types. Only two prior unified methods exist; KLAP by Lee et al. Lee et al. [2023] employs discriminative filters Park et al. [2023] and Tedla et al. Tedla et al. [2025] use pixel shuffle with a residual network. Both explicitly require the input CFA type, limiting their plug-and-play operation and propose large models not well-suited for onboard deployment. Tedla et al. do not handle QxQ CFA and their extensibility is challenging. We show a comparison with KLAP as only their implementation is available that handles all four CFA types. In this paper, we address the above challenges, by proposing a CFA-ID module and a unified network architecture built to be lightweight and extensible while achieving a higher image quality. Our key contributions in this work are: 1) We propose an efficient and extensible unified neural architecture to demosaic various CFA patterns with its training methodology. 2) A lightweight learning-free CFA Identification module is proposed to enable plug-and-play operation. 3) We evaluate the proposed method on multiple synthetic datasets and present a new real sensor raw dataset and an evaluation on it as well. We also perform performance benchmarking of unified demosaicing models on state-of-the-art consumer hardware. 
+
+## 2 Proposed Method 
+
+We propose a novel unified neural network architecture inspired by multi-view learning and digital system design that can demosaic various CFA patterns. An overview of the proposed architecture is provided in Figure 1 that consists of four modules, namely a CFA Identification module, DeMux Encoder Pool, a Core, and a Decoder, which altogether take a CFA raw sensor image and output a demosaiced RGB image. 
+
+2.1 Architecture Details 
+
+1) CFA Identification Module: We propose a novel CFA-ID module to identify the CFA type of the incoming sensor raw images in an efficient and learning-free way that enables the proposed unified model to work in a plug-and-play manner. It consists of 3 parts; Fourier Transform, Signature Extractor, and Signature Matcher (Fig. 2(a)). Given a raw image 
+
+Iraw ∈ RM ×M , we first compute its 2D Fourier transform F. The next module computes the mean of the middle row 2An Extensible & Lightweight Unified Architecture for Demosaicing Pixel-bin Image Sensors A P REPRINT 
+
+(a) 
+
+(b) (c) 
+
+Figure 2: Proposed CFA-Identification module : (a) Constituent blocks, (b) Representative CFA signatures, (c) Confusion matrix of the module’s CFA identification performance. Table 1: Quantitative comparison of individual and unified demosaicing methods with proposed approach on synthetic datasets. DIV2k BSD100 URBAN100 KODAK CFA Method PSNR ↑ SSIM ↑ LPIPS ↓ PSNR ↑ SSIM ↑ LPIPS ↓ PSNR ↑ SSIM ↑ LPIPS ↓ PSNR ↑ SSIM ↑ LPIPS ↓                                                                                                                                                
+
+> Bayer PIPNet A Sharif et al. [2021] 40.44 0.9903 0.0099 42.29 0.9949 0.0081 38.62 0.9901 0.0079 40.62 0.9913 0.0079 KLAP Lee et al. [2023] 41.26 0.9749 0.0556 39.75 0.9745 0.0396 38.04 0.9761 0.0275 38.98 0.9718 0.0528 Proposed 45.33 0.9950 0.0060 42.63 0.9937 0.0048 39.84 0.9936 0.0040 40.87 0.9939 0.0059
+> Tetra PIPNet A Sharif et al. [2021] 37.36 0.9837 0.0214 39.18 0.9894 0.0169 35.86 0.9845 0.0163 37.35 0.9857 0.0172 KLAP Lee et al. [2023] 40.71 0.9736 0.0572 39.23 0.9731 0.0418 37.64 0.9752 0.0284 38.56 0.9706 0.0539 Proposed 43.88 0.9923 0.0465 42.63 0.9937 0.0048 39.13 0.9912 0.0049 40.03 0.9879 0.0068
+> Nona SAGAN Sharif et al. [2021] 40.07 0.9712 0.0611 38.72 0.9717 0.0587 37.04 0.9746 0.0323 38.21 0.9703 0.649 KLAP Lee et al. [2023] 40.38 0.9734 0.0565 38.86 0.9728 0.0424 37.21 0.9751 0.0285 38.34 0.9709 0.0550 Proposed 42.74 0.9902 0.0214 40.20 0.9873 0.0150 38.34 0.9890 0.0119 39.19 0.9848 0.0194
+> Q×QPyNetQ ×Q Cho et al. [2023] 31.67 0.9483 0.0541 30.06 0.9335 0.0646 30.24 0.9408 0.0624 30.24 0.9408 0.0624 KLAP Lee et al. [2023] 40.34 0.9728 0.0582 38.99 0.9728 0.0427 37.35 0.9747 0.0287 38.37 0.9702 0.0548 Proposed 43.32 0.9920 0.0104 41.00 0.9885 0.0095 38.74 0.9904 0.0072 39.68 0.9855 0.0127
+
+and column of |F| to obtain the CFA Signature S as follows 
+
+S = ( |F| [M/ 2,:] + |F| [: ,M/ 2] )/2 (1) Finally, the Signature Matcher computes the correlation coefficients ρi of the extracted CFA Signature of the input with each entry in the pre-computed CFA Signature Bank Σ. The largest ρi indicates the predicted CFA type c∗ that is passed to the subsequent stages via select lines and computed as follows 
+
+c∗ = arg max  
+
+> i
+
+(corr (S, Σi)) ∀ i ∈ [B, T, N, H ] (2) where Σi denotes the CFA Signature Bank entries that are the representative signatures of each of the CFA types in consideration, which in our case are Bayer, Tetra, Nona, and Hexadeca, denoted by B, T, N, and H, respectively. These representative CFA signatures are obtained by processing the synthetic raw training dataset using the Fourier Transform and Signature Extraction sub-modules and averaging the results for respective CFAs. Figure 2(b) shows the computed representative CFA signatures for each CFA type. This module can be easily extended to incorporate new CFAs by pre-computing their CFA Signature and including them in the CFA Signature Bank for matching. 
+
+2) DeMux Encoder Pool: The second stage is the DeMux Encoder Pool, which comprises a De-multiplexer and an Encoder for each CFA pattern in consideration, which in this work are: Bayer, Tetra, Nona, and Hexadeca. Each Encoders comprise eight convolutional layers of kernel size 3 × 3 followed by Rectified Linear Units (ReLU) activations. The encoders take a single channel input of the corresponding CFA types and encode them to a common latent space L
+
+of 64-channel features. Depending on the inputs to the select lines from the CFA-ID module, an appropriate encoder encodes the input to its corresponding latent features. This module is also extendable to new CFAs by adding their corresponding encoders and adapting the de-multiplexer. 
+
+3) Central Core: The third stage is the Central Core, which performs unified processing of the encoded features of various CFA inputs in a common latent space L. It is of a U-Net architecture and comprises its Encoder, Decoder 3An Extensible & Lightweight Unified Architecture for Demosaicing Pixel-bin Image Sensors A P REPRINT 
+
+Bayer Tetra Nona Q×QRaw 
+
+GT 
+
+IM 
+
+KLAP 
+
+Proposed 
+
+Figure 3: Qualitative comparison of proposed approach with individual models (IM) and unified model (KLAP) on synthetic raw data. Each of the zoomed insets are annotated with the respective PSNR, SSIM and LPIPS metrics from top to bottom. sub-modules, and skip connections. The encoder sub-modules of the Central Core consist of four convolution layers of kernel size 3 × 3 followed by ReLU activations. The decoder sub-modules comprise five transposed-convolution layers of kernel size 3 × 3, also followed by ReLU activations. The final output of the Central Core is a 64-channel latent representation similar to its input via a ReLU non-linearity. The proposed architecture allows the Central Core to learn from inputs of various CFA types during training and can be seamlessly extended to more CFA types as needed. 
+
+4) Decoder: The final stage of our architecture is the Decoder module that takes in the processed latent features from the Central Core to reconstruct an RGB image. The Decoder is composed of four convolution layers of 3 × 3 kernel size, first three are followed by ReLU activations and the fourth is by a Sigmoid non-linearity. It takes a 64-channel latent representation in common latent space L as input, and the final convolution layer outputs a three channel representation that is our final demosaiced output RGB image. 
+
+2.2 Training Methodology 
+
+We perform a four-stage training of our unified model since four CFA patterns are considered for this paper. In each stage, an input is passed through the CFA-ID module, and the corresponding Encoder is trained jointly with the Central Core and Decoder in an end-to-end supervised manner using the input and its respective ground truth RGB image. An Encoder is selected randomly in each stage of training, while other Encoders remain frozen. We train the proposed model using Adam optimizer Kingma and Ba [2014] with a learning rate of 10 −4. We minimize a convex combination of L1 loss and Multi-scale structural similarity loss Zhao et al. [2016] as our training objective and employ Xavier weight initialization Kumar [2017]. The proposed architecture and training methodology facilitate seamless incorporation of new CFA types, making them extensible. 4An Extensible & Lightweight Unified Architecture for Demosaicing Pixel-bin Image Sensors A P REPRINT 
+
+KLAP Proposed Bayer 
+
+Tetra 
+
+Nona 
+
+QxQ 
+
+Figure 4: Visual results of our method and KLAP on real data, with inset annotated with NIQE, ARNIQA & CNNIQA metrics. 5An Extensible & Lightweight Unified Architecture for Demosaicing Pixel-bin Image Sensors A P REPRINT 
+
+Table 2: On-device performance on Snapdragon 8750 SoC Metric KLAP Ours Parameter Count 17.8 M */ 85.05 M † 14.78 Million NPU Runtime DLC Conversion Fails 40.87 ms 
+
+## 3 Results 
+
+To demonstrate the effectiveness of our proposed method, we present qualitative and quantitative comparisons with existing individual and unified demosaicing approaches on both synthetic and real raw data. For a fair comparison with prior work Lee et al. [2023], Brooks et al. [2019], we employ their synthetic data generation approach of simulating an inverse ISP pipeline to process RGB images and obtain synthetic raw samples. We use the DF2K dataset for training, with 800 samples from the DIV2K training set and 2650 samples from the Flickr2K dataset. The prior works Lee et al. [2023], Tedla et al. [2025] use private datasets for evaluation, limiting their reproducibility. In this paper, we address this gap by using 4 public datasets for our synthetic data evaluations, namely, the DIV2K val set Agustsson and Timofte [2017], BSD100 Martin et al. [2001], Urban100 Huang et al. [2015], and Kodak. Similarly, for real data evaluation, we capture Bayer, Tetra, Nona, and QxQ samples from Samsung cameras, which shall be made available for reproducibility. No such dataset is currently available in the literature. 
+
+3.1 Testing on Synthetic Raw Data 
+
+We present a quantitative comparison of the proposed approach with previous state of the art methods in Table 1 and a qualitative comparison in Figure 3. The quantitative results demonstrate that the proposed method outperforms both the SoTA unified method Lee et al. [2023] and the corresponding individual models A Sharif et al. [2021], Cho et al. [2023] for all CFAs by a significant margin across datasets. The qualitative results also demonstrate that the proposed method provides a higher fidelity reconstruction than prior works. In particular, we can see in the Bayer CFA results where the individual model (PIPNet A Sharif et al. [2021]) leads to artifacts and the unified model (KLAP Lee et al. [2023]) leads to detail loss as compared to the proposed method. A similar trend is visible in the results for Tetra and Nona CFAs, and it becomes more evident in the case of QxQ demosaicing, where the stop sign is significantly distorted in IM (PyNetQxQ Cho et al. [2023]), and KLAP leads to loss of details as compared to the proposed method. 
+
+3.2 Testing on Real Raw Data 
+
+To demonstrate our proposed approach’s effectiveness and robustness, we test it on real raw captures from various CFA sensors to evaluate real-world performance shown in Figure 4. The same model weights as synthetic data evaluation are used here without retraining or fine-tuning. Due to a lack of ground truth RGBs, we present no-reference image quality metrics, namely, NIQE Mittal et al. [2012], ARNIQA Agnolucci et al. [2024], and CNNIQA Kang et al. [2014], . Again, from both the qualitative and quantitative comparison, we can see that the proposed method translates well to the real data and provides an improved quality and detail preservation than KLAP Lee et al. [2023]. Our method also avoids color aberrations as seen in the results of Nona CFA in Fig. 4. 
+
+3.3 Efficacy of CFA Identification Module 
+
+We also study the identification performance of the proposed CFA-ID module by predicting the CFA type of our synthetic raw dataset. A confusion matrix of the module’s performance is presented in Figure 2(c), where we can observe that the proposed module can identify the CFA type of the input with very high accuracy of over 99%. We want to highlight that, despite its good performance, this module has limitations when the scene is monochrome or a flat region with no texture, like a picture of a clear sky. On visual examination, we observed that the incorrectly identified samples in the confusion matrix consist only of these samples. 
+
+3.4 On-Device Performance 
+
+Along with PC simulations, we perform on-device benchmarking of the proposed model on the latest consumer hardware for real-world evaluation. Unified demosaicing models have not been tested in the literature for their onboard deployment feasibility and performance. To address this gap, we deploy our model on Qualcomm Snapdragon 8750 
+
+> †Reported in KLAP paper Lee et al. [2023]
+> †Calculated from open-source implementation of KLAP at : https://github.com/ignoww/KLAP
+
+6An Extensible & Lightweight Unified Architecture for Demosaicing Pixel-bin Image Sensors A P REPRINT 
+
+chipset, the results for which can be found in Table 2 for an input of size 648 × 648 . The proposed model comprises 
+
+∼ 6× fewer parameters than the SoTA unified model while readily converting for on-device execution. 
+
+## 4 Conclusions 
+
+In this paper, we proposed a unified architecture for demosaicing various pixel-bin CFAs that works in a plug-and-play manner and achieves a higher reconstruction quality than both unified and individual models while being significantly light-weight. Furthermore, our model uses only fundamental blocks like convolutional layers and ReLU, allowing for simpler training and a hardware-friendly design than prior works. Finally, the proposed architecture is designed from the ground up to be seamlessly extendable to new CFA patterns. 
+
+## References 
+
+Xin Li, Bahadir Gunturk, and Lei Zhang. Image demosaicing: A systematic survey. In Visual Comm. and Image Processing 2008 , volume 6822, pages 489–503. SPIE, 2008. Sandor L Barna, Scott P Campbell, and Gennady Agranov. Method and apparatus for improving low-light performance for small pixel image sensors, June 11 2013. US Patent 8,462,220. Failop Chu, Robert M Guidash, J Compton, S Coppola, and W Hintz. Improving low-light cmos performance with four-transistor four-shared pixel architecture and charge-domain binning. In Digital Photography II , volume 6069, pages 25–33. SPIE, 2006. Claudio Filipi Goncalves dos Santos et al. Isp meets deep learning: A survey on deep learning methods for image signal processing. ACM Computing Surveys , 57(5):1–44, 2025. SM A Sharif, Rizwan Ali Naqvi, and Mithun Biswas. Beyond joint demosaicking and denoising: An image processing pipeline for a pixel-bin image sensor. In Proceedings of the IEEE/CVF CVPR , pages 233–242, 2021. Qingyu Yang, , et al. Mipi 2022 challenge on quad-bayer re-mosaic: Dataset and report. In European Conference on Computer Vision , pages 21–35. Springer, 2022. Xun Wu, Yaqi Wu, Jiawei Zhang, Feng Zhang, and Jimmy Ren. Joint demosaicing and denoising with gradient guidance in quad bayer cfa. In 2023 IEEE International Conference on Image Processing (ICIP) , pages 256–260. IEEE, 2023. Bolun Zheng, Haoran Li, et al. Quad bayer joint demosaicing and denoising based on dual encoder network with joint residual learning. In Proceedings of the AAAI Conference , volume 38, pages 7552–7561, 2024. Irina Kim, Dongpan Lim, Youngil Seo, Jeongguk Lee, Yunseok Choi, and Seongwook Song. On recent results in demosaicing of samsung 108mp cmos sensor using deep learning. In 2021 ieee region 10 symposium (tensymp) ,pages 1–4. IEEE, 2021. S. M. A. Sharif, Rizwan Ali Naqvi, and Mithun Biswas. Sagan: Adversarial spatial-asymmetric attention for noisy nona-bayer reconstruction. In British Machine Vision Conference , 2021. Minhyeok Cho, Haechang Lee, Hyunwoo Je, Kijeong Kim, Dongil Ryu, and Albert No. Pynet-q × q: An efficient pynet variant for q × q bayer pattern demosaicing in cmos image sensors. IEEE Access , 11:44895–44910, 2023. Haechang Lee, Dongwon Park, Wongi Jeong, Kijeong Kim, Hyunwoo Je, Dongil Ryu, and Se Young Chun. Efficient unified demosaicing for bayer and non-bayer patterned image sensors. In Proceedings of the IEEE/CVF ICCV , pages 12750–12759, 2023. Dongwon Park, Byung Hyun Lee, and Se Young Chun. All-in-one image restoration for unknown degradations using adaptive discriminative filters for specific degradations. In Proceedings of IEEE/CVF CVPR , pages 5815–5824, 2023. SaiKiran Tedla, Abhijith Punnappurath, Luxi Zhao, and Michael S Brown. Examining joint demosaicing and denoising for single-, quad-, and nona-bayer patterns. In 2025 IEEE International Conference on Computational Photography (ICCP) , pages 1–10. IEEE, 2025. Diederik P Kingma and Jimmy Ba. Adam: A method for stochastic optimization. arXiv preprint arXiv:1412.6980 ,2014. Hang Zhao, Orazio Gallo, Iuri Frosio, and Jan Kautz. Loss functions for image restoration with neural networks. IEEE Transactions on computational imaging , 3(1):47–57, 2016. Siddharth Krishna Kumar. On weight initialization in deep neural networks. arXiv preprint arXiv:1704.08863 , 2017. Tim Brooks, Ben Mildenhall, Tianfan Xue, Jiawen Chen, Dillon Sharlet, and Jonathan T Barron. Unprocessing images for learned raw denoising. In Proceedings of the IEEE/CVF conference on CVPR , pages 11036–11045, 2019. 7An Extensible & Lightweight Unified Architecture for Demosaicing Pixel-bin Image Sensors A P REPRINT 
+
+Eirikur Agustsson and Radu Timofte. Ntire 2017 challenge on single image super-resolution: Dataset and study. In The IEEE Conference on Computer Vision and Pattern Recognition (CVPR) Workshops , July 2017. D. Martin, C. Fowlkes, D. Tal, and J. Malik. A database of human segmented natural images and its application to evaluating segmentation algorithms and measuring ecological statistics. In Proc. 8th Int’l Conf. Computer Vision ,volume 2, pages 416–423, July 2001. Jia-Bin Huang, Abhishek Singh, and Narendra Ahuja. Single image super-resolution from transformed self-exemplars. In Proceedings of the IEEE CVPR , pages 5197–5206, 2015. Anish Mittal, Rajiv Soundararajan, and Alan C Bovik. Making a “completely blind” image quality analyzer. IEEE Signal processing lett. , 20(3):209–212, 2012. Lorenzo Agnolucci, Leonardo Galteri, Marco Bertini, and Alberto Del Bimbo. Arniqa: Learning distortion manifold for image quality assessment. In Proceedings of the IEEE/CVF Winter Conference on Applications of Computer Vision , pages 189–198, 2024. Le Kang, Peng Ye, Yi Li, and David Doermann. Convolutional neural networks for no-reference image quality assessment. In Proceedings of the IEEE conference on computer vision and pattern recognition , pages 1733–1740, 2014. 8

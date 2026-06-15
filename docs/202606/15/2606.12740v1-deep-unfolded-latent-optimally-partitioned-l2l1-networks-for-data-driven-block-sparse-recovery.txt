@@ -1,0 +1,567 @@
+Title: Deep Unfolded Latent Optimally Partitioned-l2/l1 Networks for Data-driven Block-Sparse Recovery
+
+URL Source: https://arxiv.org/pdf/2606.12740v1
+
+Published Time: Fri, 12 Jun 2026 00:17:44 GMT
+
+Number of Pages: 11
+
+Markdown Content:
+# Deep Unfolded Latent Optimally Partitioned-ℓ2/ℓ 1
+
+# Networks for Data-driven Block-Sparse Recovery 
+
+Takanobu Furuhashi 1,2 , Hidekata Hontani 1, Qibin Zhao 2, and Tatsuya Yokota 1,2 1Nagoya Institute of Technology 
+
+> 2
+
+RIKEN Center for Advanced Intelligence Project 
+
+## Abstract 
+
+The convex Latent Optimal Partition (LOP)-ℓ2/ℓ 1 approach enables block-sparse signal recovery with unknown partitions but relies on manual hyperparameter tuning. Additionally, numeri-cal instability in differentiating its proximal operator prevents its automatic parameter tuning via Deep Unfolding (DU). To address these limitations, we propose two architectures: a sta-ble framework utilizing implicit differentiation and a flexible variant leveraging Deep Weight Factorization (DWF). The DWF-based approach also supports nonconvex smooth data fidelity terms. Numerical experiments demonstrate that DU-LOP-ℓ2/ℓ 1 yields competitive performance and high resilience against impulsive noise. 
+
+## 1 Introduction 
+
+Block-sparse signal recovery is fundamental to applications such as image data mining and radar imaging [13,23,25,26,29,35,43]. This paradigm typically addresses ground truth whose nonzero entries cluster in contiguous blocks. We address signal recovery from the linear observation model y = Ax + ϵ, where x ∈ RN
+
+is the block-sparse signal, y ∈ RM represents the measurements, and A ∈ RM ×N denotes the sensing matrix. ϵ ∈ RM is additive noise, which often contains outliers in practical scenarios [6, 26, 33, 34, 37]. A critical challenge is that underlying block partitions are seldom known a priori . While conventional mixed ℓ2/ℓ 1-norm (Group Lasso) [38] penalties are effective for fixed partitions [8, 27, 32, 42], they suffer severe performance degradation when the assumed partitions do not match the actual ones [24, 42]. To resolve this issue, Kuroda and Kitahara [24] introduced the Latent Optimally Partitioned (LOP)-ℓ2/ℓ 1 penalty. This method discovers the optimal partition and calculates the value of the mixed ℓ2/ℓ 1-norm via iterative convex optimization, which is computationally more efficient than existing greedy and Bayesian approaches [2, 9, 30, 42]. A practical limitation of LOP-ℓ2/ℓ 1 lies in the manual hyperparameter tuning. Specifically, it requires appropriately setting both the regularization strength for sparsity ( λ) and the to-tal variation bound controlling the number of block partitions ( α) as partly discussed in [24]. Exploring their combinations via grid search is often impractical due to the vast search space. Deep Unfolding (DU) [1,16,28,31] resolves this by unrolling the iterative optimization steps into 1 
+
+> arXiv:2606.12740v1 [cs.LG] 10 Jun 2026 LOP-ℓ2/ℓ 1with
+> Proximal Splitting (Alg. 1)
+> Deep Unrolling (DU)
+> Data-driven Learning
+> PS-DU-LOP-ℓ2/ℓ 1
+> Implicit Differentiation
+> for prox γλϕ (x, σ ) in Alg. 1
+> P-GD-DU-LOP-ℓ2/ℓ 1
+> Differentiable LOP-ℓ2/ℓ 1
+> with DWF + P-GD (Alg. 2)
+> Block-Sparse Signal Recovery
+> Hyperparameter Tuning
+> ↓Solves Backprop Instability ↓
+> Broadens Fidelity Applicability ↓
+
+Fig. 1: Relationship between the convex LOP-
+
+ℓ2/ℓ 1 approach and our deep unfolded net-works. 
+
+x
+
+x1x2. . . 
+
+B1 B2 B3 B4 B5 B6
+
+σ
+
+σn = τ2 σn = τ4 σn = τ6
+
+σ1σ2 . . . σN
+
+Dσ 
+
+Fig. 2: Conceptual illustration of block-sparse signal x and its partitioning scheme with a piecewise constant vector σ.layers of a neural network. By treating the hyperparameters as learnable weights, DU leverages backpropagation on a training dataset to automatically optimize them, replacing manual search with data-driven estimation. However, most existing DU methods for sparse recovery [5, 10, 12, 18, 36, 40], including the learned iterative shrinkage thresholding algorithm (LISTA) [15], cannot exploit block-sparse priors or require predefined block boundaries, which prevents them from handling unknown partitions. Furthermore, proximal splitting solvers [22, 24] for the LOP-ℓ2/ℓ 1 method rely on Cardano’s formula to solve cubic equations [3], which leads to numerical instabilities during backpropagation, hindering direct deep unfolding. They also restrict the data fidelity to convex and prox-friendly functions, limiting the use of robust nonconvex losses against outliers. Our main contributions are: (i) Stable Unfolded Networks establishing both a proximal splitting-based network with implicit differentiation and a flexible gradient-based alternative us-ing the reparameterization method called Deep Weight Factorization (DWF); (ii) Automatic Parameter Tuning via a DU network that eliminates manual heuristic selection; (iii) Robust Block-Sparse Recovery against outliers by making the LOP-ℓ2/ℓ 1 penalty differentiable, fa-cilitating the integration of robust and nonconvex penalties. 
+
+Notation : We denote scalars by lowercase letters ( x), vectors by bold lowercase ( x), and matrices by bold uppercase ( A). The i-th entry of x is xi, and R is the set of real numbers. 
+
+|B| denotes the cardinality of a set B. ∥x∥p is the ℓp-norm, and the mixed ℓ2/ℓ 1-norm is 
+
+∥x∥(Bk )jk=1  
+
+> 2,1
+
+= Pjk=1 
+
+p|B k|∥ xBk ∥2 for block partitions ( Bk)jk=1 . ⊙ denotes the element-wise (Hadamard) product, ∇x is the gradient with respect to x, and D ∈ R(N −1) ×N is the first-order finite difference matrix defining ( Dx )i = xi+1 − xi. The proximal operator of a convex function 
+
+f : RN → R ∪ {∞} is prox f (v) = arg min x∈RN {f (x) + 12 ∥x − v∥22}.
+
+## 2 Latent Optimally Partitioned ℓ2/ℓ 1
+
+LOP-ℓ2/ℓ 1 [24] minimizes the mixed ℓ2/ℓ 1 penalty over all possible contiguous partitions, per-forming joint automatic block partitioning and block-sparse signal recovery. For a vector 
+
+x ∈ RN , the penalty is formulated as follows: 
+
+ψK (x) := min  
+
+> j∈{ 1,...,K }
+
+min  
+
+> {B k}jk=1 ∈P j
+> j
+
+X
+
+> k=1
+
+p|B k|∥ xBk ∥2, (1) 2Table 1: Comparison between conventional LOP-ℓ2/ℓ 1 and DU-LOP-ℓ2/ℓ 1 methods. Feature LOP-ℓ2/ℓ 1 [24] PS-DU-LOP-ℓ2/ℓ 1 P-GD-DU-LOP-ℓ2/ℓ 1
+
+Optimization Proximal Splitting Proximal Splitting Preconditioned GD Parameter Tuning Manual Automatic Automatic 
+
+Available Loss Prox-friendly Prox-friendly Differentiable 
+
+Backprop Stability Unstable Stable Stable 
+
+where ( Bk)jk=1 are nonoverlapping partitions of {1, . . . , N } into j contiguous blocks Bk as shown in the top of Fig. 2 1. The factor p|B k| balances the penalty across blocks of different sizes, ensuring valid partition estimation in (1). To avoid the combinatorial search over the family of partitions Pj , a convex relaxation was proposed in [24] using a latent continuous variable σ ∈ RN :Ψα(x) := min 
+
+> σ∈RN
+> N
+
+X
+
+> n=1
+
+ϕ(xn, σ n) s.t. ∥Dσ ∥1 ≤ α, 
+
+where the variational function ϕ(x, σ ), mainly derived from the identity |x| = min σ≥0(x2/(2 σ) + 
+
+σ/ 2), is defined as: 
+
+ϕ(x, σ ) := 
+
+ 
+
+> x2
+> 2σ
+
++ σ 
+
+> 2
+
+if σ > 0,
+
+0 if x = 0 and σ = 0 ,
+
+∞ otherwise, and α ≥ 0 is a Total Variation (TV) bound that controls the number of block boundaries. By promoting piecewise-constant structures in σ, the TV constraint ∥Dσ ∥1 ≤ α identifies block boundaries as shown in Fig. 2.   
+
+> (x, σ )(p, q )s
+> prox γλϕ (x, σ )
+
+(4) Fig. 3: Computation flow of prox ϕ.The existing LOP-ℓ2/ℓ 1 method aims to minimize: minimize  
+
+> x∈RN
+
+f (Ax ) + λΨα(x), (2) via a proximal splitting algorithm (Alg. 1), which re-quires f to be a prox-friendly function whose proximal operator can be computed with low complexity. For 
+
+f (u) = ∥y − u∥22/2, we have prox γf (u) = ( γy + u)/(γ + 1). Here, λ ≥ 0 is the regularization strength. A primary practical challenge is that hyperparameters such as λ and α require careful, data-dependent tuning to ensure sufficient signal recovery as discussed in [24, Remark 3]. This algorithm requires the proximal operator of ϕ to be computed explicitly as follows: prox γλϕ (x, σ ) = 
+
+
+
+(0 , 0) if 2 γλσ + |x|2 ≤ γ2λ2,
+
+(0 , σ − γλ  
+
+> 2
+
+) if x = 0 and 2 σ > γλ, 
+
+(x − γλs x 
+
+> |x|
+
+, σ + γλ s2−12 ) otherwise ,
+
+(3) where s is the unique positive root of the cubic equation: 
+
+s3 + ps + q = 0 . (4)   
+
+> 1See [24, Eq. (3)] for the formal definition of Pj.
+
+3Direct 
+
+Implicit 
+
+10−7 
+
+10−6 
+
+10−5 
+
+10−4 
+
+10−3 
+
+10−2 
+
+𝑝  − (−3)
+
+−1113
+
+−1112
+
+−1111
+
+× 10−4
+
+> Gradient  𝜕 𝑠
+> 𝜕 𝑞
+
+Fig. 4: Numerical stability comparison of gradients ∂s/∂q near the multiple root boundary (D ↗ 0, q = −2). 
+
+Algorithm 1 Proximal Splitting for LOP-ℓ2/ℓ 1 [24, Alg.1] 
+
+Input: γ > 0, μ 1, μ 2 ≥ 0, x(0) , σ(0) , u(0) , η(0) , r(0) 1 , r(0) 2
+
+for i = 0 , . . . , L − 1 do 
+
+˜x(i+1) = x(i) + μ1A⊤(r(i)1 − μ1(Ax (i) − u(i))) ˜σ(i+1) = σ(i) + μ2D⊤(r(i)2 − μ2(Dσ (i) − η(i))) ˜u(i+1) = u(i) − μ1(r(i)1 − μ1(Ax (i) − u(i))) ˜η(i+1) = η(i) − μ2(r(i)2 − μ2(Dσ (i) − η(i))) (x(i+1) , σ(i+1) ) = (prox γλϕ (xn, σ n)) Nn=1 ▷ see (3) 
+
+u(i+1) = prox γf ( ˜ u(i+1) )
+
+η(i+1) = prox γβ ∥·∥ 1 ( ˜ η(i+1) ) ▷ when using the TV penalty β∥Dσ ∥1 instead of the TV constraint 
+
+∥Dσ ∥1 ≤ α
+
+r(i+1) 1 = r(i)1 − μ1(Ax (i+1) − u(i+1) )
+
+r(i+1) 2 = r(i)2 − μ2(Dσ (i+1) − η(i+1) )
+
+Output: x(L), σ(L)
+
+The root s is obtained via Cardano’s formula [3, 7]: 
+
+s =
+
+
+
+> 3
+
+q
+
+− q 
+
+> 2
+
++ √−D + 3
+
+q
+
+− q 
+
+> 2
+
+− √−D if D < 0,
+
+2 3
+
+q
+
+− q 
+
+> 2
+
+if D = 0 ,
+
+2 6
+
+q q2 
+
+> 4
+
++ D cos 
+
+ arctan( −2√D/q )3
+
+
+
+if D > 0,
+
+(5) where p = 2 
+
+> γλ
+
+σ + 1, q = − 2 
+
+> γλ
+
+|x| and D = −(q/ 2) 2 − (p/ 3) 3.However, relying on this explicit solution in a deep unfolding framework introduces a back-propagation instability. Direct backpropagation for the computation flow (see Fig. 3) requires evaluating the derivatives of Cardano’s formula (5). Near the multiple root boundary where 
+
+D ↗ 0, intermediate terms such as q/ √D in the chain rule diverge to infinity. This causes significant ∞ − ∞ cancellation [14], particularly in float32 arithmetic as visualized in Fig. 4. 
+
+## 3 Proposed Method 
+
+We propose two DU-LOP-ℓ2/ℓ 1 architectures (Tab. 1): Proximal Splitting-based Deep Un-folded LOP-ℓ2/ℓ 1 (PS-DU-LOP-ℓ2/ℓ 1), and Preconditioned Gradient Descent-based Deep Un-folded LOP-ℓ2/ℓ 1 (P-GD-DU-LOP-ℓ2/ℓ 1) networks to resolve the gradient instability issue. 4Algorithm 2 P-GD-DU-LOP-ℓ2/ℓ 1 with WEEP-TV 
+
+Input: y, λ, β ≥ 0, a > 0, b ≥ 0, η > 0, u(0) , σ(0) 
+
+for k = 0 , . . . , L − 1 do 
+
+∆u = ∇uf (u(k) ⊙ σ(k)) + λu(k)
+
+∆σ = ∇σ f (u(k) ⊙ σ(k)) + λσ(k) + βD⊤Ω′(Dσ (k))
+
+u(k+1) = u(k) − η∇ϕ∗(∆ u) ▷ Preconditioned GD 
+
+σ(k+1) = σ(k) − η∇ϕ∗(∆ σ ) ▷ Preconditioned GD 
+
+Output: x(L) = u(L) ⊙ σ(L)
+
+3.1 Method I: PS-DU-LOP-ℓ2/ℓ 1
+
+To avoid the numerical instabilities discussed in Section 2, we apply implicit differentiation to the equilibrium condition f (s, p, q ) = s3 + ps + q = 0, directly yielding: 
+
+∂s ∂p = − s
+
+3s2 + p , ∂s ∂q = − 13s2 + p . (6) 
+
+Numerical Stability : Unlike direct differentiation of (5), which suffers from ∞ − ∞ can-cellation near D = 0, these gradients address the unstable backpropagation. Although the denominator 3 s2 + p can vanish, the resulting singularity does not involve catastrophic cancel-lation, yielding more stable gradients in practice (see Fig. 4). In the unfolded architecture, we treat the per-layer parameters ( γ(k), λ (k), μ (k)1 , μ (k)2 , β (k)) as learnable. Note that we replace the TV constraint ∥Dσ ∥1 ≤ α with the TV penalty β∥Dσ ∥1
+
+with β ≥ 0 for simplicity of backpropagation. 
+
+3.2 Method II: P-GD-DU-LOP-ℓ2/ℓ 1
+
+We propose a fully differentiable LOP-ℓ2/ℓ 1 alternative via Deep Weight Factorization (DWF) [21], reparameterizing x = u ⊙ σ. This replaces non-differentiable penalties with smooth ℓ2 terms to enable purely gradient-based optimization, thereby avoiding the Cardano’s formula (5). 
+
+Theorem 1 (DWF-based LOP-ℓ2/ℓ 1 Penalty) . The minimization problem min x g(x) + λψ K (x)
+
+with a differentiable function g and (1) is equivalent to the following formulation via the DWF reparameterization x = u ⊙ σ ∈ RN :
+
+min  
+
+> u,σ
+
+g(u ⊙ σ) + λ
+
+2 (∥u∥22 + ∥σ∥22) s.t. ∥Dσ ∥0 ≤ K − 1. (7) 
+
+Proof. The ℓ1 problem min f (x) + λ∥x∥1 is equivalent to its factorized form min u,σ g(u ⊙ σ) +  
+
+> λ
+> 2
+
+(∥u∥22 + ∥σ∥22) [20, 21]. This factorization extends to the mixed ℓ2/ℓ 1-norm via the following identity for a fixed block Bk [19, 20]: min  
+
+> x∈RN
+
+g(x) + λ
+
+> j
+
+X
+
+> k=1
+
+p|B k|∥ xBk ∥2
+
+!
+
+= min  
+
+> u,τ
+
+g(u ⊙ τ †) + λ
+
+2
+
+> j
+
+X
+
+> k=1
+
+(∥uBk ∥22 + |B k|τ 2 
+
+> k
+
+)
+
+!
+
+,
+
+which yields a differentiable form of the mixed ℓ2/ℓ 1-norm. This equivalence holds for any contiguous partition {B k}jk=1 ∈ P j and j ∈ { 1, ..., K − 1}. By minimizing over all partitions, we 5Table 2: Model complexity comparison when using ℓ2 loss.            
+
+> Model Params/Layer Learnable Variables LT-ISTA & DWF ( β= 0) 2η, λ
+> P-GD (L1-TV) 3η, λ, β
+> P-GD (WEEP-TV) 5η, λ, β, a, b
+> PS (L1-TV) 5γ, λ, β, μ 1, μ 2
+
+obtain the DWF-based LOP-ℓ2/ℓ 1 penalty: min  
+
+> x∈RN
+
+min  
+
+> j, {B k}jk=1
+
+g(x) + λ
+
+> j
+
+X
+
+> k=1
+
+p|B k|∥ xBk ∥2
+
+!
+
+= min  
+
+> j, {B k}jk=1
+
+min  
+
+> u,τ
+
+g(u ⊙ τ †) + λ
+
+2
+
+> j
+
+X
+
+> k=1
+
+(∥uBk ∥22 + |B k|τ 2 
+
+> k
+
+)
+
+!
+
+= min  
+
+> u,σ
+
+g(u ⊙ σ) + λ
+
+2 (∥u∥22 + ∥σ∥22) s.t. ∥Dσ ∥0 ≤ K − 1,
+
+where τ ∈ Rj contains blockwise factors and σ = τ † ∈ RN is its piecewise-constant expansion, i.e., σn = τk for n ∈ B k [20]. The constraint ∥Dσ ∥0 ≤ K − 1 encodes that σ has at most K
+
+constant pieces, where each block boundary corresponds to a non-zero jump in the difference 
+
+Dσ .We can relax the discrete ℓ0 constraint with the WEEP penalty Ω [11] (see Section 4). The overall objective is: minimize  
+
+> u,σ∈RN
+
+g(u ⊙ σ) + λ
+
+2 (∥u∥22 + ∥σ∥22) + β · Ω( Dσ ).
+
+Numerical Stability : This gradient-based approach eliminates the need for proximal oper-ators and the associated cubic equation solving required in the LOP-ℓ2/ℓ 1 framework (Section 2), avoiding its potential singularities. 
+
+Flexibility : The approach facilitates the use of nonconvex smooth losses for g, such as 
+
+g(x) = P 
+
+> i
+
+h(( y −Ax )i; a, b ) where WEEP’s influence saturates for large residuals more strongly than the convex loss like the ℓ2 loss and Huber loss [17]. This property more effectively ignores impulsive outliers and ensures more robust recovery. While the DWF loss landscape is non-Lipschitz smooth and can lead to instability under vanilla gradient descent, we achieve more stable empirical convergence by using Preconditioned Gradient Descent (P-GD, Alg. 2) [4], where ∇ϕ∗ is the gradient of the convex conjugate ϕ∗(z) = sup x⟨x, z⟩ − ϕ(x) of a reference function ϕ (e.g., cosh( ∥z∥) − 1). That provides implicit gradient clipping, which also tends to accelerate training in nonconvex optimization [39, 41]. 
+
+## 4 Numerical Experiments 
+
+We evaluate DU-LOP-ℓ2/ℓ 1 through synthetic block-sparse signal recovery tasks, benchmarking against Learned Threshold ISTA (LT-ISTA) and a DWF baseline without TV penalty ( β = 0), both of which do not explicitly consider underlying block structures. LT-ISTA is a variant of Learned ISTA (LISTA) [15] that only learns the layer-specific thresholds and step sizes (η(k), λ (k)). 60.2  0.4  0.6  0.8                 
+
+> 𝑀 /𝑁
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 𝑘 /𝑁
+> Learned Threshold ISTA (LT-ISTA)
+> 0.2 0.4 0.6 0.8
+> 𝑀 /𝑁
+> DWF ( 𝐷 =2) with P-GD
+> 0.2 0.4 0.6 0.8
+> 𝑀 /𝑁
+> PGD-DU-LOP-l2/l1 (L1-TV)
+> 0.2 0.4 0.6 0.8
+> 𝑀 /𝑁
+> PGD-DU-LOP-l2/l1 (WEEP-TV)
+> 0.2 0.4 0.6 0.8
+> 𝑀 /𝑁
+> PS-DU-LOP-l2/l1 (L1-TV)
+> 0.0
+> 0.1
+> 0.3
+> 0.5
+> 0.7
+> 0.9
+> 1.0
+> Success rate
+
+(a) Phase transition comparison. White and magenta contour lines denote 50% and 90% success rates, respectively. 0.2  0.4  0.6  0.8            
+
+> 𝑀 /𝑁
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 𝑘 /𝑁
+> DWF ( 𝐷 =2) with P-GD
+> 0.2 0.4 0.6 0.8
+> 𝑀 /𝑁
+> PGD-DU-LOP-l2/l1 (L1-TV)
+> 0.2 0.4 0.6 0.8
+> 𝑀 /𝑁
+> PGD-DU-LOP-l2/l1 (WEEP-TV)
+> 0.2 0.4 0.6 0.8
+> 𝑀 /𝑁
+> PS-DU-LOP-l2/l1 (L1-TV)
+> −1.0
+> −0.5
+> 0.0
+> 0.5
+> 1.0
+> Success rate
+
+(b) Differences between phase transition diagrams. Red regions indicate higher success than LT-ISTA. 
+
+Fig. 5: Phase transition analysis across the measurement rate M/N and sparsity rate k/N grid. 0.2                   
+
+> 0.4
+> 0.6
+> 0.8
+> 𝑘 /𝑁
+> Learned Threshold ISTA ( ℓ2loss) P-GD-DU-LOP-l2l1 (L1-TV, ℓ2loss) P-GD-DU-LOP-l2l1 (WEEP-TV, ℓ2loss)
+> 0.2 0.4 0.6 0.8
+> 𝑀 /𝑁
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 𝑘 /𝑁
+> P-GD-DU-LOP-l2l1 (WEEP-TV, Huber)
+> 0.2 0.4 0.6 0.8
+> 𝑀 /𝑁
+> P-GD-DU-LOP-l2l1 (L1-TV, WEEP)
+> 0.2 0.4 0.6 0.8
+> 𝑀 /𝑁
+> P-GD-DU-LOP-l2l1 (WEEP-TV, WEEP)
+> 0.0
+> 0.1
+> 0.3
+> 0.5
+> 0.7
+> 0.9
+> 1.0
+> Success rate
+
+Fig. 6: Phase transition under impulsive noise. The P-GD with the WEEP fidelity shows superior resilience to outliers. 
+
+WEEP Penalty : We adopt the WEEP function [11] as a differentiable nonconvex surrogate for the ℓ0 penalty. We utilize it both as a TV penalty (WEEP-TV) for the vector σ ∈ RN and as a robust data fidelity loss f due to its influence saturation against outliers. WEEP-TV saturates for large gradients, enabling sharper block boundary discovery and more accurate partitioning than ℓ1-based penalties. 
+
+Complexity : Tab. 2 shows parameter efficiency. Our WEEP-TV variant requires 75 pa-rameters for 15 layers, a negligible overhead justified by substantial recovery gains. 
+
+Experimental Setup : We generated block-sparse signals x ∈ RN (N = 64) by dividing the vector into B = 16 blocks of size Bsize = 4. For a given sparsity k, we randomly activated 
+
+K = k/B size blocks with coefficients drawn from the uniform distribution U([0 .5, 1.0]) and random signs. Inactive blocks were set to zero. Measurements y = Ax were obtained using a Gaussian random matrix A ∈ RM ×N normalized such that Ai,j ∼ N (0 , M −1). We evaluate signal recovery using three types of data fidelities f in (2): (i) the ℓ2 loss, (ii) Huber loss, and (iii) WEEP loss. For (ii) and (iii), the parameters are learned for each layer. For each grid point, unfolded models (depth L = 15) were independently trained end-to-end on 50 signal pairs using the Adam optimizer (learning rate 10 −3) to minimize the mean squared error (MSE) ∥ ˆx − x∥22, and evaluated on 50 test signals. Recovery success is defined by the 7signal-to-noise ratio (SNR): 10 log 10 (∥x∥22/∥ ˆx − x∥22) [dB]. Trials with SNR exceeding 20 dB were classified as successful. 
+
+Results : We swept measurement M/N and sparsity K/N ratios across 50 trials per grid point. Fig. 5 shows that the proposed PS-DU-LOP-ℓ2/ℓ 1 yields the highest success rates over all. While P-GD-DU-LOP-ℓ2/ℓ 1 (WEEP-TV) exhibit slightly lower recovery rates than the PS alternative, it still outperforms the ℓ1 baselines. Method labels in Figs. 5 and 6 follow the format ”Method (Regularizer, Fidelity)”; if the fidelity is omitted, the ℓ2 loss is applied. For outlier robustness under additive Bernoulli impulsive noise (contamination probability 0.05, magnitude 5 .0), methods using ℓ2 fidelity fail while our WEEP variants achieve the highest success (see Fig. 6). It emphasizes the robustness of the WEEP penalty against outliers, which is an advantage of our proposed gradient-based method. 
+
+## 5 Conclusion 
+
+We proposed DU-LOP-ℓ2/ℓ 1, a deep unfolding framework for block-sparse recovery under un-known partitions that automates hyperparameter tuning. Two methods were presented: aproximal splitting-based method and a gradient-based variant using smooth reparameteriza-tion (DWF). The latter enables nonconvex data fidelity for robust recovery against outliers. Experiments confirmed competitive recovery performance and high outlier resilience. 
+
+## References 
+
+[1] Alexios Balatsoukas-Stimming and Christoph Studer. Deep Unfolding for Communications Systems: A Survey and Some New Directions. In IEEE International Workshop on Signal Processing Systems (SiPS) , pages 266–271, 2019. [2] Richard G. Baraniuk, Volkan Cevher, Marco F. Duarte, and Chinmay Hegde. Model-Based Compressive Sensing. IEEE Transactions on Information Theory , 56(4):1982–2001, 2010. [3] Heinz H. Bauschke, Manish Krishan Lal, and Xianfu Wang. Real roots of real cubics and optimization. arXiv:2302.10731, 2023. [4] Alexander Bodard and Panagiotis Patrinos. Escaping saddle points without Lipschitz smoothness: The power of nonlinear preconditioning. In Annual Conference on Neural Information Processing Systems (NeurIPS) , 2025. [5] Mark Borgerding, Philip Schniter, and Sundeep Rangan. AMP-Inspired Deep Networks for Sparse Linear Inverse Problems. IEEE Transactions on Signal Processing , 65(16):4293– 4308, 2017. [6] Rafael E. Carrillo, Kenneth E. Barner, and Tuncer C. Aysal. Robust Sampling and Recon-struction Methods for Sparse Signals in the Presence of Impulsive Noise. IEEE Journal of Selected Topics in Signal Processing , 4(2):392–408, 2010. [7] Patrick L. Combettes and Christian L. M¨ uller. Perspective functions: Proximal calcu-lus and applications in high-dimensional statistics. Journal of Mathematical Analysis and Applications , 457(2):1283–1306, 2018. [8] Yonina C. Eldar, Patrick Kuppinger, and Helmut Bolcskei. Block-sparse signals: Uncer-tainty relations and efficient recovery. IEEE Transactions on Signal Processing , 58(6):3042– 3054, 2010. 8[9] Jun Fang, Yanning Shen, Hongbin Li, and Pu Wang. Pattern-coupled sparse bayesian learning for recovery of block-sparse signals. IEEE Transactions on Signal Processing ,63(2):360–372, 2015. [10] Rong Fu, Vincent Monardo, Tianyao Huang, and Yimin Liu. Deep Unfolding Network for Block-Sparse Signal Recovery. In IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP) , pages 2880–2884, 2021. [11] Takanobu Furuhashi, Hidekata Hontani, Qibin Zhao, and Tatsuya Yokota. WEEP: A Differ-entiable Nonconvex Sparse Regularizer via Weakly-Convex Envelope. In IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP) , 2026. [12] Jiabao Gao, Caijun Zhong, Geoffrey Ye Li, Joseph B. Soriaga, and Arash Behboodi. Deep Learning-Based Channel Estimation for Wideband Hybrid MmWave Massive MIMO. IEEE Transactions on Communications , 71(6):3679–3693, 2023. [13] Zhi Gao, Loong-Fah Cheong, and Yu-Xiang Wang. Block-Sparse RPCA for Salient Motion Detection. IEEE Transactions on Pattern Analysis and Machine Intelligence , 36(10):1975– 1987, 2014. [14] David Goldberg. What every computer scientist should know about floating-point arith-metic. ACM Comput. Surv. , 23(1):5–48, 1991. [15] Karol Gregor and Yann LeCun. Learning fast approximations of sparse coding. In Inter-national Conference on Machine Learning (ICML) , pages 399–406, 2010. [16] John R. Hershey, Jonathan Le Roux, and Felix Weninger. Deep Unfolding: Model-Based Inspiration of Novel Deep Architectures. arXiv:1409.2574, 2014. [17] Peter J. Huber. Robust Estimation of a Location Parameter. The Annals of Mathematical Statistics , 35(1):73–101, 1964. [18] Daisuke Ito, Satoshi Takabe, and Tadashi Wadayama. Trainable ISTA for Sparse Signal Recovery. IEEE Transactions on Signal Processing , 67(12):3113–3125, 2019. [19] Chris Kolb, Laetitia Frost, Bernd Bischl, and David R¨ ugamer. Differentiable Sparsity via D-Gating: Simple and Versatile Structured Penalization. In Annual Conference on Neural Information Processing Systems (NeurIPS) , 2025. [20] Chris Kolb, Christian L. M¨ uller, Bernd Bischl, and David R¨ ugamer. Smoothing the Edges: Smooth Optimization for Sparse Regularization Using Hadamard Overparametrization. Ma-chine Learning , 115(4):87, 2026. [21] Chris Kolb, Tobias Weber, Bernd Bischl, and David R¨ ugamer. Deep Weight Factorization: Sparse Learning Through the Lens of Artificial Symmetries. In International Conference on Learning Representations (ICLR) , 2024. [22] Hiroki Kuroda. A convex-nonconvex framework for enhancing minimization induced penal-ties. Journal of the Franklin Institute , 362(15):107969, 2025. [23] Hiroki Kuroda, Renato Luis Garrido Cavalcante, and Masahiro Yukawa. Theoretical Val-idation of the Latent Optimally Partitioned-L2/L1 Penalty with Application to Angular Power Spectrum Estimation, 2025. [24] Hiroki Kuroda and Daichi Kitahara. Block-sparse recovery with optimal block partition. 
+
+IEEE Transactions on Signal Processing , 70:1506–1520, 2022. 9[25] Zhenni Li, Yujie Li, Benying Tan, Shuxue Ding, and Shengli Xie. Structured Sparse Cod-ing With the Group Log-regularizer for Key Frame Extraction. IEEE/CAA Journal of Automatica Sinica , 9(10):1818–1830, 2022. [26] Xin Liu, Guoying Zhao, Jiawen Yao, and Chun Qi. Background Subtraction Based on Low-Rank and Structured Sparse Decomposition. IEEE Transactions on Image Processing ,24(8):2502–2514, 2015. [27] Xiaolei Lv, Guoan Bi, and Chunru Wan. The Group Lasso for Stable Recovery of Block-Sparse Signal Representations. IEEE Transactions on Signal Processing , 59(4):1371–1382, 2011. [28] Vishal Monga, Yuelong Li, and Yonina C. Eldar. Algorithm Unrolling: Interpretable, Efficient Deep Learning for Signal and Image Processing. IEEE Signal Processing Magazine ,38(2):18–44, 2021. [29] Yuntao Qian and Minchao Ye. Hyperspectral Imagery Restoration Using Nonlocal Spectral-Spatial Structured Sparse Representation With Noise Estimation. IEEE Journal of Selected Topics in Applied Earth Observations and Remote Sensing , 6(2):499–515, 2013. [30] Aditya Sant, Markus Leinonen, and Bhaskar D. Rao. Block-Sparse Signal Recovery via General Total Variation Regularized Sparse Bayesian Learning. IEEE Transactions on Signal Processing , 70:1056–1071, 2022. [31] Nir Shlezinger, Santiago Segarra, Yi Zhang, Dvir Avrahami, Zohar Davidov, Tirza Rout-tenberg, and Yonina C. Eldar. Deep Unfolding: Recent Developments, Theory, and Design Guidelines. arXiv:2512.03768, 2025. [32] Mihailo Stojnic, Farzad Parvaresh, and Babak Hassibi. On the Reconstruction of Block-Sparse Signals With an Optimal Number of Measurements. IEEE Transactions on Signal Processing , 57(8):3075–3085, 2009. [33] Christoph Studer, Patrick Kuppinger, Graeme Pope, and Helmut Bolcskei. Recovery of sparsely corrupted signals. IEEE Transactions on Information Theory , 58(5):3115–3130, 2012. [34] Qian Wan, Huiping Duan, Jun Fang, Hongbin Li, and Zhengli Xing. Robust Bayesian compressed sensing with outliers. Signal Processing , 140:104–109, 2017. [35] Lu Wang, Lifan Zhao, Guoan Bi, Chunru Wan, and Lei Yang. Enhanced ISAR Imaging by Exploiting the Continuity of the Target Scene. IEEE Transactions on Geoscience and Remote Sensing , 52(9):5736–5750, 2014. [36] Fengyi Wu, Tianfang Zhang, Lei Li, Yian Huang, and Zhenming Peng. RPCANet: Deep Unfolding RPCA Based Infrared Small Target Detection. In IEEE/CVF Winter Conference on Applications of Computer Vision (WACV) , pages 4797–4806, 2024. [37] Ganzhao Yuan and Bernard Ghanem. ℓ0TV: A new method for image restoration in the presence of impulse noise. In IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , pages 5369–5377, 2015. [38] Ming Yuan and Yi Lin. Model selection and estimation in regression with grouped variables. 
+
+Journal of the Royal Statistical Society: Series B (Statistical Methodology) , 68(1):49–67, 2006. 10 [39] Bohang Zhang, Jikai Jin, Cong Fang, and Liwei Wang. Improved analysis of clipping algorithms for non-convex optimization. In Annual Conference on Neural Information Processing Systems (NeurIPS) , pages 15511–15521, 2020. [40] Jian Zhang and Bernard Ghanem. ISTA-Net: Interpretable Optimization-Inspired Deep Network for Image Compressive Sensing. In IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , pages 1828–1837, 2018. [41] Jingzhao Zhang, Tianxing He, Suvrit Sra, and Ali Jadbabaie. Why gradient clipping accel-erates training: A theoretical justification for adaptivity. arXiv:1905.13655, 2020. [42] Zhilin Zhang and Bhaskar D. Rao. Extension of SBL Algorithms for the Recovery of Block Sparse Signals With Intra-Block Correlation. IEEE Transactions on Signal Processing ,61(8):2009–2015, 2013. [43] Yin-Ping Zhao, Hongyan Li, Yongyong Chen, Zhen Wang, and Xuelong Li. Hyperspectral Anomaly Detection via Structured Sparsity Plus Enhanced Low-Rankness. IEEE Transac-tions on Geoscience and Remote Sensing , 61:1–15, 2023. 11

@@ -6,48 +6,68 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-06-14
-- 运行时间：2026-06-14 21:14:35 UTC
+- 最新运行日期：2026-06-15
+- 运行时间：2026-06-15 21:46:11 UTC
 - 运行状态：成功
-- 本次总论文数：8
-- 精读区：2
-- 速读区：6
+- 本次总论文数：16
+- 精读区：4
+- 速读区：12
 
 ### 今日简报（AI）
-今日精读2篇、速读6篇，重点关注扩散图像压缩与混合精度量化视频编码方向。
-
-精读9.0分的《Dual-Constrained Diffusion Image Compression》在率失真-感知联合优化上表现突出，8.0分的《JOMP》提出视频编码框架与缓冲策略的混合精度量化联合优化，值得细读。
-
-普通读者可深入扩散模型在图像压缩中的应用，或了解混合精度量化如何提升视频编码效率。
-- 详情：[/202606/14/README](/202606/14/README)
+今日推荐16篇论文，精读2篇、速读3篇，聚焦图像压缩与神经网络优化。最值得看的方向：扩散模型的双重约束图像压缩与CNN滤波器连接改进。建议优先精读这两篇高分论文，并关注INT8量化等落地技术。
+- 详情：[/202606/15/README](/202606/15/README)
 
 ### 精读区论文标签
-1. [Dual-Constrained Diffusion Image Compression for Operational Rate-Distortion-Perception Optimization](/202606/14/2606.13366v1-dual-constrained-diffusion-image-compression-for-operational-rate-distortion-perception-optimization)  
+1. [Dual-Constrained Diffusion Image Compression for Operational Rate-Distortion-Perception Optimization](/202606/15/2606.13366v1-dual-constrained-diffusion-image-compression-for-operational-rate-distortion-perception-optimization)  
    标签：评分：9.0/10、query:compress
-   evidence：端到端学习图像压缩，结合率失真感知优化与扩散解码器
-2. [JOMP: Jointly-Optimized Mixed-Precision Quantization Across Neural Video Coding Frameworks and Buffering Strategies](/202606/14/2606.13110v1-jomp-jointly-optimized-mixed-precision-quantization-across-neural-video-coding-frameworks-and-buffering-strategies)  
+   evidence：直接研究学习图像压缩中的率失真感知优化，使用扩散模型
+2. [Connections Between Pairs of Filters Improve the Accuracy of Convolutional Neural Networks](/202606/15/2606.13736v1-connections-between-pairs-of-filters-improve-the-accuracy-of-convolutional-neural-networks)  
+   标签：评分：8.0/10、query:neural-arch
+   evidence：通过滤波器对连接提高CNN准确性，属于计算机视觉架构改进技术
+3. [High-Fidelity Video Compression based on Invertible Neural Transform and Implicit Conditioning](/202606/15/2606.13957v1-high-fidelity-video-compression-based-on-invertible-neural-transform-and-implicit-conditioning)  
    标签：评分：8.0/10、query:compress
-   evidence：神经视频编码中的量化策略
+   evidence：可逆神经变换用于视频压缩，类似于DCT/小波保持变换路径的可逆性
+4. [Squeeze-Release: Iterative Pruning with Exact Structural Minimization](/202606/15/2606.14346v1-squeeze-release-iterative-pruning-with-exact-structural-minimization)  
+   标签：评分：8.0/10、query:neural-arch
+   evidence：提出Squeeze-Release迭代剪枝方法，通过精确结构最小化压缩模型，保持前向函数一致。
 
 ### 速读区论文标签
-1. [Learning Task-Aware Sampling with Shared Saliency through Density-Equalizing Mappings](/202606/14/2606.12869v1-learning-task-aware-sampling-with-shared-saliency-through-density-equalizing-mappings)  
+1. [Holding the FP8 Quality Ceiling at 8-Bit Weights and Activations: INT8 and GGUF Post-Training Quantization of Ideogram 4.0 for Consumer GPUs](/202606/15/2606.12280v2-holding-the-fp8-quality-ceiling-at-8-bit-weights-and-activations-int8-and-gguf-post-training-quantization-of-ideogram-40-for-consumer-gpus)  
+   标签：评分：7.0/10、query:compress
+   evidence：对大型扩散Transformer进行后训练量化至8位权重和激活，并评估质量
+2. [An Extensible and Lightweight Unified Architecture for Demosaicing Pixel-bin Image Sensors](/202606/15/2606.13136v1-an-extensible-and-lightweight-unified-architecture-for-demosaicing-pixel-bin-image-sensors)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：视觉任务中卷积特征的任务自适应采样
-2. [HYDRA-X: Native Unified Multimodal Models with Holistic Visual Tokenizers](/202606/14/2606.13289v1-hydra-x-native-unified-multimodal-models-with-holistic-visual-tokenizers)  
+   evidence：用于去马赛克的统一架构，提升计算机视觉任务性能与效率
+3. [HiLo-Token: Input-Adaptive High-Low Frequency Token Compression for Efficient Image Editing](/202606/15/2606.13898v1-hilo-token-input-adaptive-high-low-frequency-token-compression-for-efficient-image-editing)  
+   标签：评分：7.0/10、query:compress
+   evidence：受变换编码启发的输入自适应高低频令牌压缩用于高效图像编辑
+4. [Context-Guided Semantic Alignment for Feature Fusion Networks](/202606/15/2606.14005v1-context-guided-semantic-alignment-for-feature-fusion-networks)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：在单个ViT中统一图像和视频标记化
-3. [Trainable Smooth-Rotation Transforms with Learned Channel Scales for LLM Quantization](/202606/14/2606.09927v1-trainable-smooth-rotation-transforms-with-learned-channel-scales-for-llm-quantization)  
+   evidence：用于目标检测特征融合的语义对齐模块
+5. [ViT-Up: Faithful Feature Upsampling for Vision Transformers](/202606/15/2606.14024v1-vit-up-faithful-feature-upsampling-for-vision-transformers)  
+   标签：评分：7.0/10、query:neural-arch
+   evidence：为视觉Transformer设计的忠实特征上采样框架，提升密集预测任务
+6. [One Layer's Trash is Another Layer's Treasure: Adaptive Layer-wise Visual Token Selection in LVLMs](/202606/15/2606.14277v1-one-layers-trash-is-another-layers-treasure-adaptive-layer-wise-visual-token-selection-in-lvlms)  
+   标签：评分：7.0/10、query:neural-arch
+   evidence：自适应逐层视觉令牌剪枝用于大视觉语言模型
+7. [EinSort: Sorting is All We Need for Tensorizing LLM](/202606/15/2606.08565v1-einsort-sorting-is-all-we-need-for-tensorizing-llm)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：可训练平滑变换用于大语言模型量化
-4. [ERN-Net : Evolving Reason Node-Net for Document Binarization](/202606/14/2606.11710v1-ern-net--evolving-reason-node-net-for-document-binarization)  
+   evidence：张量网络压缩大型神经网络，属于模型优化策略
+8. [Distortion-Aware PETR for BEV Object Detection with Mixed Pinhole-Fisheye Cameras](/202606/15/2606.08680v1-distortion-aware-petr-for-bev-object-detection-with-mixed-pinhole-fisheye-cameras)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：使用进化推理节点的文档二值化
-5. [JSCGC: Joint Source-Channel-Generation Coding for Wireless Generative Communications](/202606/14/2606.12858v1-jscgc-joint-source-channel-generation-coding-for-wireless-generative-communications)  
-   标签：评分：6.0/10、query:compress
-   evidence：生成式通信中的率失真优化
-6. [PP-OCRv6: From 1.5M to 34.5M Parameters, Surpassing Billion-Scale VLMs on OCR Tasks](/202606/14/2606.13108v1-pp-ocrv6-from-15m-to-345m-parameters-surpassing-billion-scale-vlms-on-ocr-tasks)  
+   evidence：适用于鱼眼相机的畸变感知BEV检测
+9. [Beyond Convolution: Advancing Hypergraph Neural Networks with Hypergraph U-Nets](/202606/15/2606.09051v1-beyond-convolution-advancing-hypergraph-neural-networks-with-hypergraph-u-nets)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：使用MetaFormer模块的轻量OCR系统
+   evidence：U-Net架构扩展到超图
+10. [Multi-channel Optical Vision Model](/202606/15/2606.10253v1-multi-channel-optical-vision-model)  
+   标签：评分：6.0/10、query:neural-arch
+   evidence：用于视觉任务的光学神经网络设计，新颖的架构改进
+11. [Deep Unfolded Latent Optimally Partitioned-l2/l1 Networks for Data-driven Block-Sparse Recovery](/202606/15/2606.12740v1-deep-unfolded-latent-optimally-partitioned-l2l1-networks-for-data-driven-block-sparse-recovery)  
+   标签：评分：6.0/10、query:neural-arch
+   evidence：深度展开用于块稀疏恢复，提供可训练的优化方法
+12. [Compressing Image Style Training into a Single Model Forward](/202606/15/2606.13809v1-compressing-image-style-training-into-a-single-model-forward)  
+   标签：评分：6.0/10、query:neural-arch
+   evidence：将风格训练压缩为单次前向，提升神经网络风格迁移的效率
 
 
 <div class="dpr-home-promo-card">
