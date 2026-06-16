@@ -6,68 +6,77 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-06-15
-- 运行时间：2026-06-15 21:46:11 UTC
+- 最新运行日期：2026-06-16
+- 运行时间：2026-06-16 23:23:45 UTC
 - 运行状态：成功
-- 本次总论文数：16
-- 精读区：4
+- 本次总论文数：19
+- 精读区：7
 - 速读区：12
 
 ### 今日简报（AI）
-今日推荐16篇论文，精读2篇、速读3篇，聚焦图像压缩与神经网络优化。最值得看的方向：扩散模型的双重约束图像压缩与CNN滤波器连接改进。建议优先精读这两篇高分论文，并关注INT8量化等落地技术。
-- 详情：[/202606/15/README](/202606/15/README)
+今日收录19篇论文，精读7篇，聚焦图像压缩与空间先验两大前沿方向。最值得关注的是满分论文《Learned Image Compression for Vision-Language-Action Models》和9分论文《Spatial Priors via Space Filling Curves for Small and Limited Data Vision Transformers》。建议优先精读这两篇，深入理解视觉-语言-动作模型中的压缩策略及小样本ViT的空间先验方法。
+- 详情：[/202606/16/README](/202606/16/README)
 
 ### 精读区论文标签
-1. [Dual-Constrained Diffusion Image Compression for Operational Rate-Distortion-Perception Optimization](/202606/15/2606.13366v1-dual-constrained-diffusion-image-compression-for-operational-rate-distortion-perception-optimization)  
+1. [Learned Image Compression for Vision-Language-Action Models](/202606/16/2606.16253v1-learned-image-compression-for-vision-language-action-models)  
+   标签：评分：10.0/10、query:compress
+   evidence：面向视觉-语言-动作模型的自适应空间率控制学习图像压缩
+2. [Spatial Priors via Space Filling Curves for Small and Limited Data Vision Transformers](/202606/16/2606.14757v1-spatial-priors-via-space-filling-curves-for-small-and-limited-data-vision-transformers)  
+   标签：评分：9.0/10、query:neural-arch
+   evidence：使用空间填充曲线的轻量级掩码注意力机制用于Vision Transformer
+3. [Variable-Rate Deep Image Compression based on Low-Rank Adaptation by Progressive Learning](/202606/16/2606.16107v1-variable-rate-deep-image-compression-based-on-low-rank-adaptation-by-progressive-learning)  
    标签：评分：9.0/10、query:compress
-   evidence：直接研究学习图像压缩中的率失真感知优化，使用扩散模型
-2. [Connections Between Pairs of Filters Improve the Accuracy of Convolutional Neural Networks](/202606/15/2606.13736v1-connections-between-pairs-of-filters-improve-the-accuracy-of-convolutional-neural-networks)  
+   evidence：基于低秩适应的可变速率深度图像压缩
+4. [Learned JPEG Compression for DNN Vision](/202606/16/2606.16185v1-learned-jpeg-compression-for-dnn-vision)  
+   标签：评分：9.0/10、query:compress
+   evidence：端到端学习的JPEG压缩，针对DNN推理进行率失真优化
+5. [Improved Knowledge Distillation for Land-Use Image Classification](/202606/16/2606.14886v1-improved-knowledge-distillation-for-land-use-image-classification)  
    标签：评分：8.0/10、query:neural-arch
-   evidence：通过滤波器对连接提高CNN准确性，属于计算机视觉架构改进技术
-3. [High-Fidelity Video Compression based on Invertible Neural Transform and Implicit Conditioning](/202606/15/2606.13957v1-high-fidelity-video-compression-based-on-invertible-neural-transform-and-implicit-conditioning)  
+   evidence：知识蒸馏压缩CNN并在土地利用分类中提升精度
+6. [Variational Network with Wavelet-based UNET in Accelerated MRI Reconstruction from Under Sampled K-space Data](/202606/16/2606.15167v1-variational-network-with-wavelet-based-unet-in-accelerated-mri-reconstruction-from-under-sampled-k-space-data)  
    标签：评分：8.0/10、query:compress
-   evidence：可逆神经变换用于视频压缩，类似于DCT/小波保持变换路径的可逆性
-4. [Squeeze-Release: Iterative Pruning with Exact Structural Minimization](/202606/15/2606.14346v1-squeeze-release-iterative-pruning-with-exact-structural-minimization)  
+   evidence：基于小波的UNET用于MRI重建，与图像压缩中的变换编码方法类似
+7. [Schattor: Schatten-family methods for deep learning optimization](/202606/16/2606.15702v1-schattor-schatten-family-methods-for-deep-learning-optimization)  
    标签：评分：8.0/10、query:neural-arch
-   evidence：提出Squeeze-Release迭代剪枝方法，通过精确结构最小化压缩模型，保持前向函数一致。
+   evidence：提出Schattor，一种基于Schatten范数的自适应一阶优化方法族
 
 ### 速读区论文标签
-1. [Holding the FP8 Quality Ceiling at 8-Bit Weights and Activations: INT8 and GGUF Post-Training Quantization of Ideogram 4.0 for Consumer GPUs](/202606/15/2606.12280v2-holding-the-fp8-quality-ceiling-at-8-bit-weights-and-activations-int8-and-gguf-post-training-quantization-of-ideogram-40-for-consumer-gpus)  
+1. [Scaling Adaptive Depth with Norm-Agnostic Residual Networks](/202606/16/2606.16112v1-scaling-adaptive-depth-with-norm-agnostic-residual-networks)  
+   标签：评分：8.0/10、query:neural-arch
+   evidence：提出范数无关的残差架构改进深度扩展，属于架构设计最佳实践
+2. [An affordable hardware-aware neural architecture search for deploying convolutional neural networks on ultra-low-power computing platforms](/202606/16/2606.16290v1-an-affordable-hardware-aware-neural-architecture-search-for-deploying-convolutional-neural-networks-on-ultra-low-power-computing-platforms)  
+   标签：评分：8.0/10、query:neural-arch
+   evidence：面向微小CNN的硬件感知神经架构搜索
+3. [A Robust Point Cloud Analysis Framework Inspired By Primary Visual Cortex](/202606/16/2606.14292v1-a-robust-point-cloud-analysis-framework-inspired-by-primary-visual-cortex)  
+   标签：评分：7.0/10、query:neural-arch
+   evidence：受脑启发的点云分析神经网络架构
+4. [HiRo: A Compact Four-Directional Hierarchical Reservoir Token-Mixer for Efficient Image Classification](/202606/16/2606.15151v1-hiro-a-compact-four-directional-hierarchical-reservoir-token-mixer-for-efficient-image-classification)  
+   标签：评分：7.0/10、query:neural-arch
+   evidence：提出一种使用储备池计算和令牌混合的参数高效图像分类模型
+5. [Sustainable Face Recognition on Low-Power Devices with VQ-VAE Embeddings](/202606/16/2606.15355v1-sustainable-face-recognition-on-low-power-devices-with-vq-vae-embeddings)  
    标签：评分：7.0/10、query:compress
-   evidence：对大型扩散Transformer进行后训练量化至8位权重和激活，并评估质量
-2. [An Extensible and Lightweight Unified Architecture for Demosaicing Pixel-bin Image Sensors](/202606/15/2606.13136v1-an-extensible-and-lightweight-unified-architecture-for-demosaicing-pixel-bin-image-sensors)  
+   evidence：使用VQ-VAE量化嵌入进行人脸识别
+6. [Bayesian 3D Steerable CNNs: Enabling Equivariance and Uncertainty Quantification Simultaneously](/202606/16/2606.15479v1-bayesian-3d-steerable-cnns-enabling-equivariance-and-uncertainty-quantification-simultaneously)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：用于去马赛克的统一架构，提升计算机视觉任务性能与效率
-3. [HiLo-Token: Input-Adaptive High-Low Frequency Token Compression for Efficient Image Editing](/202606/15/2606.13898v1-hilo-token-input-adaptive-high-low-frequency-token-compression-for-efficient-image-editing)  
+   evidence：贝叶斯可转向CNN实现不确定量化
+7. [Task-Instructed Causal Routing of Vision Foundation Models for Multi-Task Learning](/202606/16/2606.15765v1-task-instructed-causal-routing-of-vision-foundation-models-for-multi-task-learning)  
+   标签：评分：7.0/10、query:neural-arch
+   evidence：任务指令引导的视觉基础模型路由，用于多任务密集预测
+8. [Optimizing Multiple Feature Types for Image Inpainting in the Linear and Nonlinear Setting](/202606/16/2606.16581v1-optimizing-multiple-feature-types-for-image-inpainting-in-the-linear-and-nonlinear-setting)  
    标签：评分：7.0/10、query:compress
-   evidence：受变换编码启发的输入自适应高低频令牌压缩用于高效图像编辑
-4. [Context-Guided Semantic Alignment for Feature Fusion Networks](/202606/15/2606.14005v1-context-guided-semantic-alignment-for-feature-fusion-networks)  
-   标签：评分：7.0/10、query:neural-arch
-   evidence：用于目标检测特征融合的语义对齐模块
-5. [ViT-Up: Faithful Feature Upsampling for Vision Transformers](/202606/15/2606.14024v1-vit-up-faithful-feature-upsampling-for-vision-transformers)  
-   标签：评分：7.0/10、query:neural-arch
-   evidence：为视觉Transformer设计的忠实特征上采样框架，提升密集预测任务
-6. [One Layer's Trash is Another Layer's Treasure: Adaptive Layer-wise Visual Token Selection in LVLMs](/202606/15/2606.14277v1-one-layers-trash-is-another-layers-treasure-adaptive-layer-wise-visual-token-selection-in-lvlms)  
-   标签：评分：7.0/10、query:neural-arch
-   evidence：自适应逐层视觉令牌剪枝用于大视觉语言模型
-7. [EinSort: Sorting is All We Need for Tensorizing LLM](/202606/15/2606.08565v1-einsort-sorting-is-all-we-need-for-tensorizing-llm)  
+   evidence：优化修复压缩中的特征位置与类型
+9. [Non-Parametric Dual-Manifold Mapping via 8-Bit Bounded Transformation Matrices: Challenging FP-centric Hardware Paradigms in Low-Energy AI](/202606/16/2606.13328v1-non-parametric-dual-manifold-mapping-via-8-bit-bounded-transformation-matrices-challenging-fp-centric-hardware-paradigms-in-low-energy-ai)  
+   标签：评分：6.0/10、query:compress
+   evidence：8位整数量化用于双流形映射，与量化策略相关
+10. [FlexPooling with Simple Auxiliary Classifiers in Deep Networks](/202606/16/2606.14926v1-flexpooling-with-simple-auxiliary-classifiers-in-deep-networks)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：张量网络压缩大型神经网络，属于模型优化策略
-8. [Distortion-Aware PETR for BEV Object Detection with Mixed Pinhole-Fisheye Cameras](/202606/15/2606.08680v1-distortion-aware-petr-for-bev-object-detection-with-mixed-pinhole-fisheye-cameras)  
+   evidence：提出灵活池化和辅助分类器提升深度网络性能
+11. [Beyond Scalar Distances: Semantic Attribute Gradients from Frozen MLLMs for Visual Embeddings](/202606/16/2606.15134v1-beyond-scalar-distances-semantic-attribute-gradients-from-frozen-mllms-for-visual-embeddings)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：适用于鱼眼相机的畸变感知BEV检测
-9. [Beyond Convolution: Advancing Hypergraph Neural Networks with Hypergraph U-Nets](/202606/15/2606.09051v1-beyond-convolution-advancing-hypergraph-neural-networks-with-hypergraph-u-nets)  
-   标签：评分：6.0/10、query:neural-arch
-   evidence：U-Net架构扩展到超图
-10. [Multi-channel Optical Vision Model](/202606/15/2606.10253v1-multi-channel-optical-vision-model)  
-   标签：评分：6.0/10、query:neural-arch
-   evidence：用于视觉任务的光学神经网络设计，新颖的架构改进
-11. [Deep Unfolded Latent Optimally Partitioned-l2/l1 Networks for Data-driven Block-Sparse Recovery](/202606/15/2606.12740v1-deep-unfolded-latent-optimally-partitioned-l2l1-networks-for-data-driven-block-sparse-recovery)  
-   标签：评分：6.0/10、query:neural-arch
-   evidence：深度展开用于块稀疏恢复，提供可训练的优化方法
-12. [Compressing Image Style Training into a Single Model Forward](/202606/15/2606.13809v1-compressing-image-style-training-into-a-single-model-forward)  
-   标签：评分：6.0/10、query:neural-arch
-   evidence：将风格训练压缩为单次前向，提升神经网络风格迁移的效率
+   evidence：利用多模态大模型梯度作为训练信号优化视觉编码器，属于模型优化策略
+12. [SPARK: Spatial Policy-driven Adaptive Reinforcement learning for Knowledge distillation](/202606/16/2606.15243v1-spark-spatial-policy-driven-adaptive-reinforcement-learning-for-knowledge-distillation)  
+   标签：评分：6.0/10、query:compress
+   evidence：提出针对低比特量化网络的自适应知识蒸馏，与量化策略相关
 
 
 <div class="dpr-home-promo-card">
