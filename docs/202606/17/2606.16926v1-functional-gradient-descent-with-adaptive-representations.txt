@@ -1,0 +1,3964 @@
+Title: Functional Gradient Descent with Adaptive Representations
+
+URL Source: https://arxiv.org/pdf/2606.16926v1
+
+Published Time: Tue, 16 Jun 2026 02:42:09 GMT
+
+Number of Pages: 27
+
+Markdown Content:
+# Functional Gradient Descent with Adaptive Representations 
+
+Daniel Csillag 1∗ Rodrigo Schuller 2 Pedro Dall’Antonia 1
+
+Leonidas Guibas 3 Luiz Velho 2 Tiago Novello 2,31FGV EMAp 2IMPA 3Stanford University 
+
+## Abstract 
+
+Functional optimization problems are typically solved by optimizing the parameters of a fixed representation, such as a neural network, resulting in highly nonconvex losses that complicate both training and theoretical analysis. An interesting alter-native is functional gradient descent (FGD), that is, gradient descent directly in function space, which benefits from strong convergence results and admits a clean theory. However, FGD is difficult to implement in practice because functional gradients are infinite-dimensional, and thus cannot be fully computed nor stored in memory. Existing implementations therefore rely on fixed approximations, which introduce approximation error. We propose a new, theoretically-grounded FGD algorithm that adapts the representation of the functional gradients over the course of optimization. By explicitly incorporating this approximation into the analysis, we establish convergence to a stationary point (for smooth losses) and to a global minimizer (under smoothness + a Polyak-Łojasiewicz-type condition) regardless of our approximations. To the best of our knowledge, this is the first implementable FGD method with such guarantees in a general setting. We demonstrate the effec-tiveness of our method on regression, numerical solution of PDEs, and modern computer vision. Across settings, our method consistently outperforms both FGD with fixed approximations and neural network baselines in efficiency and accuracy. 
+
+## 1 Introduction 
+
+Functional optimization problems are core to many areas, including machine learning, statistics, signal processing, scientific computing, and more. In these settings, the objective is to optimize a 
+
+function over a function space to minimize some loss (e.g., mean squared error or cross-entropy). To solve such problems, it is common to represent the target function as a neural network and optimize the loss over the network’s weights through gradient descent. While flexible, this introduces some challenges: (i) the resulting optimization problem is highly nonconvex, making training costly; (ii) the representation is typically fixed a priori , limiting its ability to adapt during optimization; and (iii) the nonconvex nature of the parametrized loss significantly complicates theoretical analyses of convergence and training dynamics. We instead consider gradient descent directly in function space — functional gradient descent (FGD) — whose dynamics are generally simpler than their parameterized counterparts and admit strong convergence guarantees. Formally, consider the optimization problem 
+
+arg min  
+
+> f∈H
+
+L(f ), (1) 
+
+> ∗
+
+Corresponding author: Daniel Csillag ( daniel.csillag@fgv.br )Preprint. 
+
+> arXiv:2606.16926v1 [math.OC] 15 Jun 2026
+
+Approx. FGD (with fixed representation) 
+
+Neural network 
+
+# Teaser    
+
+> Step #10 Step #25 Step #50 Step #100
+
+FGD with adaptive representations (ours) 
+
+Training loss  
+
+> Loss = 9e-4 ( 1.9s )
+> Approx. FGD, 256² grid
+> Adaptive FGD ( Ours )
+> Approx. FGD, 512² grid
+> Loss = 5e-3 ( 262ms )
+> Loss = 1e-5 ( 417ms )
+> Approx. FGD, 128² grid
+> Approx. FGD, 64² grid
+> Approx. FGD, 32² grid
+> Approx. FGD, 16² grid
+> Neural network
+> Global minimum
+> (sped up 4x)
+> Optim. steps 0100
+> 1e-2
+> 1e-3
+> 1e-4
+> 1e-5
+
+Figure 1: Our method on a toy MSE minimization task. We compare adaptive FGD (ours) with (i) approximate FGD using fixed representations, which converge quickly but plateau at a resolution-dependent error, and (ii) a neural network baseline trained with Adam, which converges more slowly. In contrast, our method starts from a coarse representation and automatically refines it, achieving faster convergence and reaching the global minimum. where H is a Hilbert space of functions (e.g., L2, Sobolev spaces, or an RKHS 2). Under suitable differentiability conditions, the (non-parametric) loss admits a well-defined functional gradient 
+
+∇L(h) ∈ H , allowing us to write the FGD updates 
+
+ft+1 = ft − η∇L(ft). (Ideal FGD) From a theoretical point of view, FGD is well known to benefit from good convergence guarantees (cf. e.g. [Bauschke and Combettes, 2017, Nocedal and Wright, 2004]). However, it is nontrivial to implement in practice. Since the functional gradients reside in the infinite-dimensional space H, they generally cannot be computed exactly nor stored in memory. As a result, to actually implement FGD we must approximate the gradients ∇L(ft) via some finite-dimensional representation. Yet using a fixed representation introduces approximation error, preventing convergence to a global minimizer. In this paper, we propose a new theoretically-grounded functional gradient descent algorithm that adapts the representation of the functional gradients over the course of optimization. We show that by adaptively refining the gradient approximations so as to ensure a certain bound on a relative error condition, we guarantee sufficient descent and thus proper convergence. To the best of our knowledge, 
+
+ours is the first implementable FGD method that guarantees convergence to a global minimizer. 
+
+The resulting procedure strictly outperforms functional gradient descent with any fixed representation, and simultaneously outperforms neural networks in both training speed and quality; see Figure 1. Our main contributions are: • We establish sufficient conditions for the proper convergence of approximate FGD. Notably, our analysis covers the general setting where true gradients lie in a Hilbert space but are approximated within a broader Banach space, enabling important functional optimization tasks. We prove that maintaining a specific relative error bound guarantees convergence to a stationary point for smooth losses, and to a global minimizer under an additional Polyak-Łojasiewicz-type condition. • We develop novel gradient approximation strategies that provably satisfy our derived relative error condition, using only computable quantities. This yields the first fully implementable FGD algorithms that retain strict, end-to-end convergence guarantees. 
+
+> 2
+
+Reproducing Kernel Hilbert Space 
+
+2• We evaluate our method on three representative tasks across regression in an RKHS, nu-merical PDE solvers, and modern computer vision. On all settings, our adaptive approach consistently surpasses FGD using any fixed representation, while substantially outperform-ing neural network baselines in both training efficiency and solution quality. 
+
+Related work FGD is well-established as a theoretical procedure; see, e.g. [Nocedal and Wright, 2004] for an overview of the convergence theory for exact FGD. In specific cases, exact FGD is actually feasible to implement; for example, in the specific case of standard regression losses over an RKHS, the gradients are finite-dimensional and can therefore be exactly represented. This is akin to the classic representer theorems for kernel regression [Kimeldorf and Wahba, 1971, Scholkopf et al., 2001]. However, such approaches rely on specific finite-sample structures, do not generalize beyond simple regression settings, and typically scale poorly with sample size. Alternatively, several works approximate functional gradients [Fonseca and Saporito, 2022, Peixoto et al., 2024, 2025, Petrulionyte et al., 2024, Kim et al., 2025], but introduce irreducible approximation error and often do not incorporate this approximation into their theoretical analysis. Our work addresses this by (i) providing a general theory for approximate FGD, and (ii) identifying sufficient conditions that ensure convergence to proper minimizers sans approximation error. Our work is also related to first-order optimization with inexact gradients [Devolder et al., 2013, d’Aspremont, 2005, Schmidt et al., 2011], but differs in that we operate in the infinite-dimensional setting, where many previous methods break down. In particular, most approximation schemes (e.g. [Berahas et al., 2019, Nocedal and Wright, 2004, Nesterov and Spokoiny, 2015]) do not extend to infinite dimensions. Additionally, we consider a more general setting in which gradients lie in a Hilbert space but are approximated in a broader Banach space, beyond the scope of existing theory. 
+
+## 2 Background: function spaces and functional gradients 
+
+We briefly recall function spaces and differentiability in infinite dimensions. A Hilbert space H is a complete inner product space, endowed with ⟨· , ·⟩ H and induced norm ∥h∥H = p⟨h, h ⟩H. Similarly, a Banach space B is a complete normed space with norm ∥·∥ B, but generally does not admit an inner product. Every Banach space B admits a dual space B∗, consisting of continuous linear functionals on B, which is itself a Banach space under the dual norm ∥u∥B∗ = sup ∥b∥B ≤1|u(b)|.Let L : H → R be a functional. The directional derivative of L at f in the direction ⃗ f is defined as 
+
+DL(f ;⃗ f ) := lim 
+
+> δ↘0
+
+L(f + δ⃗f ) − L(f )
+
+δ .
+
+If DL exists for all f,⃗ f and is linear over ⃗ f , L is Gâteaux differentiable; additionally, if DL is continuous in f , then L is Fréchet differentiable. 3
+
+When L is Fréchet differentiable over a Hilbert space H, for every f ∈ H the map DL(f ; ·) (i.e., the functional ⃗ f 7 → DL(f ;⃗ f )) is a continuous linear functional. Therefore, by the Riesz representation theorem, there exists a unique element ∇L(f ) ∈ H such that 
+
+DL(f ;⃗ f ) = ⟨∇ L(f ),⃗ f ⟩H for all ⃗ f ∈ H . (2) This element ∇L(f ) is the functional gradient , defining the gradient operator ∇L : H → H . When 
+
+H = Rd with the standard inner product, this recovers the usual notion of gradients. Finally, while Hilbert spaces provide a convenient structure for defining gradients, they can impose significant constraints on their elements. For instance, the empirical MSE functional 
+
+LMSE (f ) = 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+ f (xi) − yi
+
+2
+
+is not well-defined on L2(R) (space of square-integrable functions), since functions in L2(R) cannot be evaluated on a set of measure zero. In contrast, it is well-defined in RKHSs, which enforce additional regularity but are more restrictive than L2(R).
+
+> 3This is equivalent to the usual definition of Fréchet derivatives as bounded linear operators, [Pathak, 2018].
+
+3Algorithm 1 Functional gradient descent with adaptive representations 
+
+Require: loss L : H → R, learning rate η, initial condition f0, tolerance ϵ
+
+Choose an initial representation 
+
+for t = 0 , 1, . . . , T − 1 do // Approximate the functional gradient 
+
+while true do 
+
+gt ← approximate ∇L(ft) using the current representation 
+
+Ut ← tight upper bound on ∥gt − ∇ L(ft)∥B
+
+if (1 + ϵ)Ut < ϵ ∥gt∥B then break 
+
+Refine the current representation 
+
+// Do the gradient descent step 
+
+ft+1 ← ft − ηg t
+
+return fT
+
+Nevertheless, these issues arise due to the requirement of a proper inner product. Once we move from Hilbert to Banach spaces, we can use flexible function spaces such as L∞ or the space of continuous functions, without caveats. 
+
+## 3 Method 
+
+Let H be a Hilbert space contained in a Banach space B, and recall the optimization problem (1) 
+
+arg min  
+
+> f∈H
+
+L(f ),
+
+where L : H → R is taken to be a Fréchet differentiable functional on H. Since H is a Hilbert space, the derivative of L admits a gradient operator ∇L : H → H (cf. Section 2). An ideal functional gradient descent (FGD) scheme would, therefore, perform the steps 
+
+f ideal  
+
+> t+1
+
+= f ideal  
+
+> t
+
+− η∇L(f ideal  
+
+> t
+
+),
+
+which remain strictly within H and whose convergence follows by the standard proofs of convergence of FGD. However, since this is intractable to implement, we instead replace the gradient by an 
+
+approximate gradient gt, yielding updates 
+
+ft+1 = ft − ηg t, (3) where gt ∈ B (and thus the iterates ft also reside in B). We will show that as long as gt approximates 
+
+∇L(ft) reasonably well (in a sense we will make precise), we still guarantee descent and proper convergence. Subsequently, we shall study strategies to guarantee that the required approximation conditions hold in practice by adaptively refining the gradient representations. 
+
+3.1 Convergence 
+
+In order to analyze the convergence of the updates in Equation 3, we must introduce some assumptions. First, note that loss and gradient operator are defined over the Hilbert space H, but our updates will reside in the larger Banach space B; therefore, in order to keep things well-defined, our first assumption is that both the loss L and the gradient operator ∇L have extensions from H onto B:
+
+Assumption 3.1 (Extension) . There exists a Fréchet differentiable functional L : B → R and an operator ∇L : B → B such that, for any f ∈ H ,
+
+L(f ) = L(f ) and ∇L(f ) = ∇L(f ).
+
+For convenience, from here on we will slightly abuse notation and “shadow” L and ∇L by their extended counterparts; i.e., for some f ∈ B we shall write L(f ) instead of L(f ), and similarly we shall write ∇L(f ) instead of ∇L(f ).We will additionally rely on the standard assumptions used for the analysis of gradient descent, albeit over the larger Banach space B rather than the usual Hilbert H. In particular, we will assume that the loss is K-smooth: 4Assumption 3.2 (K-smoothness) . For any f, f ′ ∈ B , it holds that 
+
+L(f ) ≤ L(f ′) + D L(f ′; f − f ′) + K
+
+2 ∥f − f ′∥2
+
+> B
+
+.
+
+Note that we write the K-smoothness bound in terms of the directional derivative DL rather than an inner product with the gradient, as the Banach space does not generally have an inner product. We will also require two additional assumptions, which serve to connect the gradients between the Banach space B and the Hilbert space H:
+
+Assumption 3.3 (H descends in B). There exists some constant α > 0 such that, for all f ∈ B ,
+
+DL(f ; ∇L(f )) ≥ α∥∇ L(f )∥2
+
+> B
+
+.
+
+Assumption 3.4 (Gradient compatibility) . There exists a constant β > 0 such that, for every f ∈ B ,
+
+∥DL(f ; ·)∥B∗ ≤ β∥∇ L(f )∥B.
+
+When B = H both of these assumptions are immediately satisfied with α = β = 1 : DL(f ; ∇L(f )) = 
+
+⟨∇ L(f ), ∇L(f )⟩H = ∥∇ L(f )∥2
+
+> H
+
+, and ∥DL(f ; ·)∥B∗ = ∥∇ L(f )∥B. But these assumptions are more general, and satisfied in some important cases where H̸ = B (cf. Section 4.1). Intuitively, Assumption 3.3 asserts that the direction given by the extended gradient ∇L(f ) is guaranteed to be a direction of sufficient descent per the geometry of B. Assumption 3.4, on the other hand, establishes a sort of local equivalence of norms over the gradients (but not over the whole space). With these in hand, we can analyze a single step of our method (Equation 3) to establish a sufficient descent lemma. The following result follows from the K-smoothness inequality (Assumption 3.2), along with our Assumptions 3.3 and 3.4 and the use of triangular inequalities: 
+
+Lemma 3.5 (Sufficient descent lemma) . Let ft, f t+1 be as in (3) . Suppose L and ∇L admit extensions satisfying K-smoothness, gradient compatibility and that H descends in B (Assumptions 3.1-3.4). Then, for any learning rate η > 0 and step t with RelErr( gt, ∇L(ft)) ≤ 1/2,
+
+L(ft+1 ) ≤ L(ft) − η
+
+
+
+α − Kη 
+
+2 −
+
+
+
+β + 32 Kη 
+
+ RelErr( gt, ∇L(ft)) 1 − RelErr( gt, ∇L(ft)) 
+
+
+
+∥∇ L(ft)∥2
+
+> B
+
+,
+
+where 
+
+RelErr( g, ∇L(f )) := ∥g − ∇ L(f )∥B
+
+∥g∥B
+
+. (4) Note that this bound is tight, in the sense that when H = B, gt = ∇L(ft), and η = 1 /K , we recover the usual descent lemma L(ft − ηg t) ≤ L(ft) − η 
+
+> 2
+
+∥∇ L(ft)∥2 
+
+> B
+
+(cf. e.g. [Wright and Recht, 2022]). As long as the term within the brackets is strictly positive, we guarantee that a step of approximate functional gradient descent decreases the loss in a manner proportional to the current gradient value. By telescoping and rearranging we obtain: 
+
+Proposition 3.6 (Convergence to a stationary point) . Under the setting of Lemma 3.5, furthermore assume that the loss is lower bounded by L⋆, and that the relative error is uniformly bounded by a constant ϵ < min {1/2, α/ (α + β)} throughout iterations: 
+
+RelErr( gt, ∇L(ft)) ≤ ϵ for all iterations t = 0 , . . . , T − 1.
+
+Then, for any learning rate η ≤ 2( α − (α + β)ϵ)/K (2 ϵ + 1) ,
+
+min  
+
+> t=0 ,...,T −1
+
+∥∇ L(ft)∥2 
+
+> B
+
+≤ L(f0) − L⋆
+
+T ηr ,
+
+where r > 0 is a constant defined in the proof. 
+
+Under additional structural assumptions we are able to furthermore establish convergence to the proper global minimizer. For our purposes, we will work under a Polyak-Łojasiewicz-type assumption, which serves as a generalization of strong convexity: 
+
+Assumption 3.7 (Polyak-Łojasiewicz condition on H over B). The extended Fréchet-differentiable functional L : B → R is μ-Polyak-Łojasiewicz if, for any f ∈ B ,
+
+L(f ) − L⋆ ≤ 12μ ∥DL(f ; ·)∥2 
+
+> B∗
+
+, where L⋆ = inf   
+
+> f′∈H
+
+L(f ′).
+
+5It then holds: 
+
+Proposition 3.8 (Global convergence) . Under the conditions of Proposition 3.6, further assume that L
+
+is μ-Polyak-Łojasiewicz (Assumption 3.7). Then, for any learning rate η < 2( α−(α+β)ϵ)/K (2 ϵ+1) ,performing T iterations of approximate functional gradient descent guarantees that 
+
+L(fT ) − L⋆ ≤ [1 − 2ηβ −2μr ]T  L(f0) − L⋆.
+
+3.2 Adaptive representations of functional gradients 
+
+In the previous section we have established that as long as we can ensure an upper bound on the relative error, we guarantee proper convergence. In this section, we now consider how exactly we can approximate the functional gradient so as to guarantee this will be the case. Recall that our ultimate objective is to find some gradient approximation g that ensures that the relative error is bounded by some fixed ϵ:
+
+RelErr( g, ∇L(f )) = ∥g − ∇ L(f )∥B
+
+∥g∥B
+
+≤ ϵ. 
+
+Note that while the denominator can generally be computed exactly (as it is the norm of our own ap-proximation), the approximation error in the numerator can still be tricky. However, it is often possible to compute a (reasonably tight) upper bound U (g, ∇L(f )) on ∥g − ∇ L(f )∥B, in the sense that 
+
+∥g − ∇ L(f )∥B ≤ U (g, ∇L(f )) for all g, f ∈ B . (5) With such an upper bound in hand, we can guarantee: 
+
+Lemma 3.9. Given some f ∈ B and desired tolerance ϵ > 0, let U (·, ·) be an upper bound on the approximation error (as in (5) ), and let (g1, g 2, . . . ) be a sequence of gradient approximations in B
+
+such that U (gn, ∇L(f )) → 0. Then there exists some n such that 
+
+RelErr( gn, ∇L(f )) 1 − RelErr( gn, ∇L(f )) ≤ ϵ. (6) The result in Lemma 3.9 is quite general. Importantly, it suggests a concrete algorithm: at each FGD step we design a sequence of representations, and loop over this sequence; at each iterate, approximate the gradient using the current representation and compute the upper bound on the approximation error. As soon as Equation 6 is satisfied (which must happen at some point, as per Lemma 3.9), we use the current approximation. Algorithm 1 gives the overall procedure. Connecting with our previous convergence theory, we obtain: 
+
+Theorem 3.10. Let ft be the iterates produced throughout Algorithm 1, with ϵ ∈ (0 , 1) . Then: (i) Relative error bound: For all iterations t = 1 , . . . , T ,
+
+RelErr( gt, ∇L(ft)) ≤ ϵ
+
+1 + ϵ < 1/2; 
+
+(ii) Convergence to a stationary point: Under the conditions of Proposition 3.6, 
+
+min  
+
+> t=0 ,...,T −1
+
+∥∇ L(ft)∥2 
+
+> B
+
+≤ L(f0) − L⋆
+
+T ηr ,
+
+where r > 0 is a constant defined in the proof; and (iii) Convergence to a global minimizer: Under the conditions of Proposition 3.8, 
+
+L(fT ) − L⋆ ≤ [1 − 2ηβ −2μr ]T  L(f0) − L⋆.
+
+## 4 Experiments 
+
+In this section we empirically assess our method on three representative functional optimization tasks: regression in an RKHS, solution of partial differential equations and inverse rendering. Throughout, 6MSE Cross-Entropy Method Test Loss Train Time Test Loss Train Time Neural network 12.84 1.02s 0.3325 1.05s Approx. FGD (depth 2) 0.1310 257ms 0.7167 209ms Approx. FGD (depth 4) 0.0900 232ms 0.5134 234ms Approx. FGD (depth 8) 0.0588 274ms 0.4024 194ms Approx. FGD (depth 12) 0.0444 762ms 0.2916 806ms Adaptive FGD (ours) 0.0378 843ms 0.2434 815ms RKHS 
+
+> Optim. steps 40 20
+> Test loss (cross-entropy)
+
+Figure 2: Our method for regression in an RKHS. We compare our method against FGD with a fixed tree representation and a neural network for regression. Our method quickly converges towards the global minimizer with a good test loss, whereas fixed-representation FGD stagnates at a higher loss, and the neural network is slow to converge. we focus on comparing our method against (i) neural networks (with appropriate engineering), and (ii) FGD with fixed representations. All experiments were run on a desktop with an Intel Core i9-14900KF CPU and NVIDIA GeForce RTX 4090 GPU, with 128GB of RAM and 24GB of VRAM, respectively. That said, the experiments are relatively cheap and should run on weaker hardware. Code to reproduce our results can be found at https://github.com/dccsillag/experiments-adaptive-fgd . In all experiments the learning rates were tuned to obtain the best possible performance of each method. 
+
+4.1 Regression in an RKHS 
+
+In this section we consider the optimization problem 
+
+arg min  
+
+> f∈H K
+
+LREG (f ), with LREG (f ) := 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+ℓ f (Xi), Y i
+
+, (7) where HK is an RKHS with kernel K. Here, ℓ denotes a pointwise loss such as the mean squared error ( ℓ(ˆ y, y ) = 12 (ˆ y − y)2) or binary cross-entropy ( ℓ(ˆ y, y ) = −y log ˆ y − (1 − y) log(1 − ˆy)). Such regression problems are commonplace in statistical inference procedures, including conditional independence testing [Zhang et al., 2011], asymptotic statistics [van der Vaart, 1998], and more. The loss LREG admits simple functional gradients, is K-smooth and Polyak-Łojasiewicz: 
+
+Proposition 4.1. The functional LREG : HK → R has gradients given by 
+
+∇LREG (f )(x) = 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+ℓ′(f (Xi), Y i)K(Xi, x ),
+
+where ℓ′ denotes the derivative of ℓ with respect to its first argument. Moreover, if ℓ is strongly-convex in its first argument, then LREG is Polyak-Łojasiewicz, and if ℓ is K-smooth then so is LREG .
+
+As mentioned in Section 2, the space HK is generally quite constrained. For this reason, in this experiment we opt to approximate the gradients in the larger Banach space L∞ of bounded functions, which can be checked to satisfy our gradient bridging assumptions (Assumptions 3.3 and 3.4), cf. Proposition A.2. For our adaptive representations we then choose a decision tree-based approximation scheme inspired by the classic CART algorithm (which reside in L∞, but generally not in HK ). By using sufficiently deep trees we are able to approximate functions arbitrarily well, allowing us to use Lemma 3.9 and thus ensure convergence as per Theorem 3.10. For this experiment we use the binary classification dataset of [Fan and Lin, 2011] for the detection of non-coding RNA sequences. We consider two losses ℓ: mean squared error and binary cross entropy. Figure 2 shows the results of our experiment. We find that our method consistently outperforms a stan-dard MLP neural network as well as FGD with any fixed representation, adapting as necessary to the target function and guaranteeing convergence to the global optimum while achieving a better test loss. 7Figure 3: Our method solves PDEs. Comparison of learned wave dynamics over time. Our adaptive FGD solution (middle) closely matches the reference solution (bottom), while achieving higher quality than the neural network baseline (top) with a much lower training time. 
+
+4.2 Solving the wave equation 
+
+This section shows how our method can be applied to physics-informed machine learning tasks [Raissi et al., 2019, Bizzi et al., 2025]. As an example, consider the wave equation for f : R × R2 → R,
+
+∂2f∂t 2 = c2∆f, with 
+
+f (0 , x) = h(x), 
+
+> ∂f ∂t
+
+(0 , x) = 0; (8) which models wave propagation phenomena such as sound, mechanical vibrations, and electro-magnetic waves [Evans, 2010, Jackson, 1999, Jensen et al., 2011, Marques et al., 2025]. Although solutions exist under broad conditions on the initial data h, explicit closed-form solutions are generally unavailable in realistic settings, requiring numerical approximation methods. We can formulate solving Equation 8 as minimizing the following loss functional 
+
+LPDE (f ) := 
+
+Z 12
+
+ ∂2f∂t 2 − c2∆f
+
+2
+
+dxdt +
+
+Z 12 [f (0 , x) − h(x)] 2 dx +
+
+Z 12
+
+ ∂f ∂t (0 , x)
+
+2
+
+dx, (9) which vanishes if and only if f solves Equation 8. The functional is defined over the Sobolev space 
+
+H = H2(R3) so that the second-order derivatives are well-defined. Computing functional gradients in Sobolev spaces is generally challenging [Peixoto et al., 2025]. However, the Fourier transform of the gradient admits a closed-form expression: 
+
+Proposition 4.2. Let ω := τ 2 − c2(ξ2 + ζ2). The Fourier transform of the gradient of LPDE is                             
+
+> [\∇LPDE (f)]( τ, ξ, ζ ) =
+> ω2bf(τ, ξ, ζ ) + 12π
+> R bf(τ′, ξ, ζ )d τ′−1√2π
+> bh(ξ, ζ ) + τ
+> 2π
+> Rτ′bf(τ′, ξ, ζ )d τ′
+> 
+> 1 + ( τ2+ξ2+ζ2) + ( τ2+ξ2+ζ2)2.
+
+We therefore approximate gradients using adaptive uniform grids in frequency space. Each grid defines a piecewise-constant approximation of the Fourier transform bf , while the corresponding function f is recovered through the inverse Fourier transform. Moreover, the Fourier representation of the H2(R3) norm yields a straightforward upper bound on the gradient approximation error. Figure 3 shows the results. Our adaptive method consistently outperforms FGD with fixed repre-sentations, which quickly plateaus due to approximation error. It also surpasses the neural network baseline while reducing wall-clock training time by nearly two orders of magnitude. 
+
+4.3 Learning radiance fields 
+
+We next consider the inverse rendering task of reconstructing a 3D scene from posed images [Milden-hall et al., 2021]. This can be framed as a functional optimization problem: given images with known 8Approx. FGD (with fixed representation) 
+
+Neural network 
+
+# Functional radiance figure    
+
+> Step #8 Step #16 Step #32 Step #64
+
+FGD with adaptive representations (ours) 
+
+Test loss   
+
+> Loss = 5.3e-3 ( 7m 21s )
+> Adaptive FGD ( Ours )
+> Loss = 5.0e-3 ( 52s )
+> Loss = 3.4e-3 ( 4m 36s )
+> Approx. FGD, 45³ grid
+> Approx. FGD, 32³ grid
+> Approx. FGD, 22³ grid
+> Neural network
+> Global minimum
+> Optim. steps
+> 0100
+> 1e-2
+> 1e-3
+> 1e-4
+> 1e-5
+> Approx. FGD, 64³ grid
+> Approx. FGD, 90³ grid 4e-3
+> 5e-3
+> 6e-3
+> 7e-3
+> 8e-3
+
+Figure 4: Our method solves inverse rendering. We compare novel-view renderings, from view-points not used during training, for an Adam-trained neural network (top), fixed-grid FGD (middle), and adaptive FGD (bottom). Adaptive FGD progressively refines its representation, achieving a lower loss and sharper reconstructions. camera parameters, the goal is to learn the scene as a density field and a view-dependent color field, 
+
+σ : R3 → R and c : R3 × S2 → R3.
+
+Given a camera ray γ : [ tnear , t far ] → R3 with viewing direction γω , where tnear and tfar denote integration bounds, we can render the scene via the volumetric rendering equation [Max, 1995] with distributional antialiasing [Cook et al., 1984], yielding the antialiased rendering operator eRσ,c (γ),which is differentiable w.r.t. σ and c. Then, given a set of pixels (Yi,j )n,P i=1 ,j =1 and corresponding rays 
+
+(γi,j )n,P i=1 ,j =1 originating from the respective cameras i = 1 , . . . , n , our goal is to optimize the loss 
+
+LCV (σ, c ) := 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+1
+
+P
+
+> P
+
+X
+
+> j=1
+
+12 ∥ eRσ,c (γi,j ) − Yi,j ∥2, (10) which is well-defined for σ ∈ L2(Ω) and c ∈ L2(Ω → H S), where Ω is a compact subset of R3 and 
+
+HS is an RKHS with domain over the unit sphere S2. This loss directly measures image reconstruction error and is the standard supervision signal for radiance-field optimization (cf. e.g. [Mildenhall et al., 2021, Kerbl et al., 2023]). It is highly nonconvex; nonetheless, it has functional gradients known in closed form, cf. Appendix A.1.4, which we efficiently approximate by the means of uniform 3D grids with spherical harmonics for the color view-dependence. We evaluate on the Ficus scene from the NeRF-Synthetic dataset [Mildenhall et al., 2021], using the same camera poses and train/test split for all methods. All methods optimize the photometric loss in (10) ; we compare adaptive FGD with an Adam-trained neural network baseline and fixed-grid FGD variants. As shown in Figure 4, adaptive FGD achieves the lowest test loss and sharpest reconstructions by starting coarse and refining only when needed, whereas fixed-grid FGD plateaus at a resolution-dependent error floor and the neural baseline converges much more slowly. 
+
+## Acknowledgments and Disclosure of Funding 
+
+We’d like to thank Google for partially funding this work. We also acknowledge partial funding from CNPq and FAPERJ. 9References 
+
+Heinz H. Bauschke and Patrick Louis Combettes. Convex analysis and monotone operator the-ory in Hilbert spaces . Springer, 2017. URL https://hal.sorbonne-universite.fr/ hal-01517477 . 2 Jorge Nocedal and Stephen J. Wright. Numerical optimization. The Mathematical Gazette , 88:412 – 413, 2004. URL https://api.semanticscholar.org/CorpusID:189864167 . 2, 3 George Kimeldorf and Grace Wahba. Some results on tchebycheffian spline functions. Jour-nal of Mathematical Analysis and Applications , 33:82–95, 1971. URL https://api. semanticscholar.org/CorpusID:121062339 . 3 Bernhard Scholkopf, Ralf Herbrich, and Alex Smola. A generalized representer theorem. In 
+
+COLT/EuroCOLT , 2001. URL https://api.semanticscholar.org/CorpusID:9256459 . 3 Yuri Fonseca and Yuri F. Saporito. Statistical learning and inverse problems: An stochastic gradient ap-proach. ArXiv , abs/2209.14967, 2022. URL https://api.semanticscholar.org/CorpusID: 252595623 . 3 C. Peixoto, Yuri Saporito, and Yuri Fonseca. Nonparametric instrumental variable regression through stochastic approximate gradients. ArXiv , abs/2402.05639, 2024. URL https://api. semanticscholar.org/CorpusID:267547764 . 3 C. Peixoto, Daniel Csillag, Bernardo Freitas Paulo da Costa, and Yuri F. Saporito. Random gradient-free optimization in infinite dimensional spaces. 2025. URL https://api.semanticscholar. org/CorpusID:284133189 . 3, 8 Ieva Petrulionyte, Julien Mairal, and Michael Arbel. Functional bilevel optimization for machine learn-ing. ArXiv , abs/2403.20233, 2024. URL https://api.semanticscholar.org/CorpusID: 268793583 . 3 Kaheon Kim, Bohan Zhou, Changbo Zhu, and Xiaohui Chen. Sobolev gradient ascent for optimal transport: Barycenter optimization and convergence analysis. ArXiv , abs/2505.13660, 2025. URL 
+
+https://api.semanticscholar.org/CorpusID:278769678 . 3 Olivier Devolder, François Glineur, and Yurii Nesterov. First-order methods of smooth convex optimization with inexact oracle. Mathematical Programming , 146:37 – 75, 2013. URL https: //api.semanticscholar.org/CorpusID:1624627 . 3 Alexandre d’Aspremont. Smooth optimization with approximate gradient. SIAM J. Optim. , 19: 1171–1183, 2005. URL https://api.semanticscholar.org/CorpusID:208328 . 3 Mark W. Schmidt, Nicolas Le Roux, and Francis R. Bach. Convergence rates of inexact proximal-gradient methods for convex optimization. ArXiv , abs/1109.2415, 2011. URL https://api. semanticscholar.org/CorpusID:11262278 . 3 Albert S. Berahas, Liyuan Cao, Krzysztof Choromanski, and Katya Scheinberg. A theoretical and empirical comparison of gradient approximations in derivative-free optimization. Foundations of Computational Mathematics , 22:507 – 560, 2019. URL https://api.semanticscholar.org/ CorpusID:146120814 . 3 Yurii Nesterov and Vladimir G. Spokoiny. Random gradient-free minimization of convex func-tions. Foundations of Computational Mathematics , 17:527 – 566, 2015. URL https://api. semanticscholar.org/CorpusID:2147817 . 3 Hemant Kumar Pathak. An introduction to nonlinear analysis and fixed point theory. 2018. URL 
+
+https://api.semanticscholar.org/CorpusID:126068909 . 3 Stephen J. Wright and Benjamin Recht. Optimization for data analysis. 2022. URL https: //api.semanticscholar.org/CorpusID:247919424 . 5 Kun Zhang, J. Peters, Dominik Janzing, and Bernhard Scholkopf. Kernel-based conditional independence test and application in causal discovery. ArXiv , abs/1202.3775, 2011. URL 
+
+https://api.semanticscholar.org/CorpusID:18509113 . 7 10 A. W. van der Vaart. Asymptotic Statistics . Cambridge Series in Statistical and Probabilistic Mathematics. Cambridge University Press, 1998. 7 Rong-En Fan and Chih-Jen Lin. LIBSVM data: Classification, regression, and multi-label. https: //www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/ , 2011. Accessed: 2026-05-07. 7Maziar Raissi, Paris Perdikaris, and George E Karniadakis. Physics-informed neural networks: A deep learning framework for solving forward and inverse problems involving nonlinear partial differential equations. Journal of Computational physics , 378:686–707, 2019. 8 Arthur Bizzi, Leonardo Moreira, Márcio Marques, Leonardo Mendonça, Christian de Oliveira, Vitor Balestro, Lucas dos Santos Fernandez, Daniel Yukimura, Pavel Petrov, João Pereira, Tiago Novello, and Lucas Nissenbaum. Neuro-spectral architectures for causal physics-informed networks. In 
+
+Advances in Neural Information Processing Systems , 2025. 8 Lawrence C. Evans. Partial Differential Equations . American Mathematical Society, 2 edition, 2010. 8John David Jackson. Classical Electrodynamics . Wiley, 3 edition, 1999. 8 Finn B Jensen, William A Kuperman, Michael B Porter, Henrik Schmidt, and Alexandra Tolstoy. 
+
+Computational ocean acoustics , volume 2011. Springer, 2011. 8 Márcio Marques, Leonardo Mendonça, Arthur Bizzi, Leonardo Moreira, Christian Oliveira, Deborah Oliveira, Lucas Fernandez, Vitor Balestro, João Pereira, Daniel Yukimura, Tiago Novello, Pavel Petrov, and Lucas Nissenbaum. Stable adaptive training for physics-informed neural networks in acoustic wave propagation. JASA Express Letters , 5(11):112401, 2025. 8 Ben Mildenhall, Pratul P Srinivasan, Matthew Tancik, Jonathan T Barron, Ravi Ramamoorthi, and Ren Ng. Nerf: Representing scenes as neural radiance fields for view synthesis. Communications of the ACM , 65(1):99–106, 2021. 8, 9 Nelson Max. Optical models for direct volume rendering. IEEE Transactions on Visualization and Computer Graphics , 1(2):99–108, 1995. 9 Robert L Cook, Thomas Porter, and Loren Carpenter. Distributed ray tracing. In Proceedings of the 11th annual conference on Computer graphics and interactive techniques , pages 137–145, 1984. 9 Bernhard Kerbl, Georgios Kopanas, Thomas Leimkühler, George Drettakis, et al. 3d gaussian splatting for real-time radiance field rendering. ACM Trans. Graph. , 42(4):139–1, 2023. 9 Lawrence C Evans. Partial differential equations , volume 19. American mathematical society, 2022. 18 Matthew Tancik, Pratul P. Srinivasan, Ben Mildenhall, Sara Fridovich-Keil, Nithin Raghavan, Utkarsh Singhal, Ravi Ramamoorthi, Jonathan T. Barron, and Ren Ng. Fourier features let networks learn high frequency functions in low dimensional domains. ArXiv , abs/2006.10739, 2020. URL 
+
+https://api.semanticscholar.org/CorpusID:219791950 . 27 11 A Proofs 
+
+Proof of Lemma 3.5. Let us derive the bound in the lemma. By K-smoothness, we have that 
+
+L(ft − ηg t) − L(ft) ≤ DL(ft; −ηg t) + K
+
+2 ∥− ηg t∥2 
+
+> B
+
+= −ηDL(ft; gt) + Kη 2
+
+2 ∥gt∥2
+
+> B
+
+;
+
+Writing gt = ∇L(ft) − (∇L(ft) − gt) =: ∇L(ft) − et, it follows: 4
+
+−ηDL(ft; gt) + Kη 2
+
+2 ∥gt∥2
+
+> B
+
+= −ηDL(ft; ∇L(ft)) + ηDL(ft; et) + Kη 2
+
+2 ∥∇ L(ft) − et∥2
+
+> B
+
+≤ − ηα ∥∇ L(ft)∥2 
+
+> B
+
++ ηDL(ft; et) + Kη 2
+
+2 ∥∇ L(ft) − et∥2 
+
+> B
+
+(Assumption 3.3) 
+
+≤ − ηα ∥∇ L(ft)∥2 
+
+> B
+
++ η∥DL(ft; ·)∥B∗ ∥et∥B + Kη 2
+
+2 ∥∇ L(ft) − et∥2 
+
+> B
+
+(Hölder) 
+
+≤ − ηα ∥∇ L(ft)∥2 
+
+> B
+
++ ηβ ∥∇ L(ft)∥B∥et∥B + Kη 2
+
+2 ∥∇ L(ft) − et∥2 
+
+> B
+
+(Assumption 3.4) 
+
+≤ − ηα ∥∇ L(ft)∥2 
+
+> B
+
++ ηβ ∥∇ L(ft)∥B∥et∥B + Kη 2
+
+2
+
+
+
+∥∇ L(ft)∥B + ∥et∥B
+
+2
+
+(Triangle ineq.) 
+
+= −ηα ∥∇ L(ft)∥2 
+
+> B
+
++ ( ηβ + Kη 2)∥∇ L(ft)∥B∥et∥B + Kη 2
+
+2 ∥∇ L(ft)∥2 
+
+> B
+
++ Kη 2
+
+2 ∥et∥2
+
+> B
+
+= −η
+
+
+
+α − Kη 
+
+2 − (β + Kη ) ∥et∥B
+
+∥∇ L(ft)∥B
+
+− Kη 
+
+2
+
+∥et∥2
+
+> B
+
+∥∇ L(ft)∥2
+
+> B
+
+
+
+∥∇ L(ft)∥2
+
+> B
+
+;
+
+to simplify the expression, let us assume that ∥∇ L(ft) − gt∥B/∥∇ L(ft)∥B = ∥et∥B/∥∇ L(ft)∥B ≤
+
+1. This allows us to use the fact that x2 ≤ x for |x| ≤ 1 to write 
+
+−η
+
+
+
+α − Kη 
+
+2 − (β + Kη ) ∥∇ L(ft) − gt∥B
+
+∥∇ L(ft)∥B
+
+− Kη 
+
+2
+
+∥∇ L(ft) − gt∥2
+
+> B
+
+∥∇ L(ft)∥2
+
+> B
+
+
+
+∥∇ L(ft)∥2
+
+> B
+
+;
+
+≤ − η
+
+
+
+α − Kη 
+
+2 − (β + Kη ) ∥∇ L(ft) − gt∥B
+
+∥∇ L(ft)∥B
+
+− Kη 
+
+2
+
+∥∇ L(ft) − gt∥B
+
+∥∇ L(ft)∥B
+
+
+
+∥∇ L(ft)∥2
+
+> B
+
+;= −η
+
+
+
+α − Kη 
+
+2 −
+
+
+
+β + 32 Kη 
+
+ ∥∇ L(ft) − gt∥B
+
+∥∇ L(ft)∥B
+
+
+
+∥∇ L(ft)∥2
+
+> B
+
+.
+
+As long as the expression within the parentheses is positive, we ensure descent. However, the relative error ∥∇ L(ft) − gt∥B/∥∇ L(ft)∥B is a bit tricky to manage in practice since the denominator involves the ∥∇ L(ft)∥B, which can be hard to tightly lower bound. Fortunately, we can replace it with ∥gt∥B, which can be generally be computed exactly; indeed, by the reverse triangle inequality, 5
+
+∥gt∥B − ∥∇ L(ft)∥B ≤ ∥ gt − ∇ L(ft)∥B = ∥gt − ∇ L(ft)∥B
+
+∥gt∥B
+
+∥gt∥B;
+
+rearranging, we obtain that 
+
+∥∇ L(ft)∥B ≥
+
+
+
+1 − ∥gt − ∇ L(ft)∥B
+
+∥gt∥B
+
+
+
+∥gt∥B,
+
+and thus 
+
+∥gt − ∇ L(ft)∥B
+
+∥∇ L(ft)∥B
+
+≤ ∥gt − ∇ L(ft)∥B
+
+
+
+1 − ∥gt−∇ L(ft)∥B
+
+> ∥gt∥B
+
+
+
+∥gt∥B
+
+= RelErr( gt, ∇L(ft)) 1 − RelErr( gt, ∇L(ft)) ,
+
+where 
+
+RelErr( gt, ∇L(ft)) := ∥gt − ∇ L(ft)∥B
+
+∥gt∥B
+
+;
+
+> 4
+
+Throughout, we follow the convention that 0/0 = 0 and a/ 0 = + ∞ for all a > 0. 
+
+> 5
+
+∥u∥ − ∥ v∥ ≤ ∥ u − v∥; as an immediate consequence, ∥u∥ − ∥ v∥ ≤ ∥ u − v∥.
+
+12 finally, to guarantee that ∥gt − ∇ L(ft)∥B/∥∇ L(ft)∥B ≤ 1 as required, it suffices to require 
+
+RelErr( gt, ∇L(ft)) ≤ 1/2, as 12 /(1 − 12 ) = 1 . Putting it all together, we obtain the desired bound. 
+
+Proof of Proposition 3.6. It follows: 
+
+L(fT ) − L(f0) =  
+
+> T−1
+
+X
+
+> t=0
+
+(L(ft+1 ) − L(ft)) 
+
+≤ − η 
+
+> T−1
+
+X
+
+> t=0
+
+
+
+α − Kη 
+
+2 −
+
+
+
+β + 32 Kη 
+
+ RelErr( gt, ∇L(ft)) 1 − RelErr( gt, ∇L(ft)) 
+
+
+
+∥∇ L(ft)∥2
+
+> B
+
+≤ − η
+
+
+
+α − Kη 
+
+2 −
+
+
+
+β + 32 Kη 
+
+ ϵ
+
+1 − ϵ
+
+ T −1X
+
+> t=0
+
+∥∇ L(ft)∥2
+
+> B
+
+,
+
+where the first inequality holds by Lemma 3.5, and the second by the assumption that 
+
+RelErr( gt, ∇L(ft)) ≤ ϵ for all t = 1 , . . . , T .Rearranging and scaling by 1/T on both sides, we get 
+
+η
+
+
+
+α − Kη 
+
+2 −
+
+
+
+β + 32 Kη 
+
+ ϵ
+
+1 − ϵ
+
+ 1
+
+T 
+
+> T−1
+
+X
+
+> t=0
+
+∥∇ L(ft)∥2 
+
+> B
+
+≤ L(f0) − L(fT )
+
+T ≤ L(f0) − L⋆
+
+T ;
+
+dividing by r =
+
+h
+
+α − Kη  
+
+> 2
+
+−  β + 32 Kη  ϵ
+
+> 1−ϵ
+
+i
+
+on both sides yields the desired bound; to show that 
+
+r > 0, simply note that 
+
+α − Kη 
+
+2 −
+
+
+
+β + 32 Kη 
+
+ ϵ
+
+1 − ϵ
+
+= α − K
+
+2 η − β ϵ
+
+1 − ϵ − 32 ηK ϵ
+
+1 − ϵ
+
+= −
+
+ 32 K ϵ
+
+1 − ϵ + K
+
+2
+
+
+
+η +
+
+
+
+α − β ϵ
+
+1 − ϵ
+
+
+
+> 0
+
+⇐⇒ 
+
+
+
+α − β ϵ
+
+1 − ϵ
+
+
+
+>
+
+ 32 K ϵ
+
+1 − ϵ + K
+
+2
+
+
+
+η
+
+⇐⇒ η < α − β ϵ 
+
+> 1−ϵ
+> 32
+
+K ϵ 
+
+> 1−ϵ
+
++ K
+
+> 2
+
+= α(1 − ϵ) − βϵ  
+
+> 32
+
+Kϵ + K 
+
+> 2
+
+(1 − ϵ) = α − (α + β)ϵ 
+
+> K
+> 2
+
+(2 ϵ + 1) = 2( α − (α + β)ϵ)
+
+K (2 ϵ + 1) ,
+
+which is positive thanks to the upper bound on ϵ.
+
+Proof of Proposition 3.8. We have that 
+
+L(ft+1 ) − L(ft) ≤ − η
+
+
+
+α − Kη 
+
+2 −
+
+
+
+β + 32 Kη 
+
+ RelErr( gt, ∇L(ft)) 1 − RelErr( gt, ∇L(ft)) 
+
+
+
+∥∇ L(ft)∥2
+
+> B
+
+≤ − η
+
+
+
+α − Kη 
+
+2 −
+
+
+
+β + 32 Kη 
+
+ ϵ
+
+1 − ϵ
+
+
+
+∥∇ L(ft)∥2
+
+> B
+
+= −ηr ∥∇ L(ft)∥2
+
+> B
+
+≤ − ηβ −2r ∥DL(ft; ·)∥2
+
+> B∗
+
+≤ − 2ηβ −2μr  L(ft) − L⋆,
+
+where the first inequality holds by Lemma 3.5, the second by the assumption that 
+
+RelErr( gt, ∇L(ft)) ≤ ϵ for all t = 1 , . . . , T , and the third by the Polyak-Łojasiewicz assump-tion. Rearranging: 
+
+L(ft+1 ) − L(ft) ≤ − 2ηβ −2μr  L(ft) − L⋆
+
+⇐⇒  L(ft+1 ) − L(ft) +  L(ft) − L⋆ ≤ − 2ηβ −2μr  L(ft) − L⋆ +  L(ft) − L⋆
+
+13 ⇐⇒ L(ft+1 ) − L⋆ ≤ (1 − 2ηβ −2μr )  L(ft) − L⋆;
+
+chaining these over t = 0 , . . . , T − 1 yields 
+
+L(fT ) − L⋆ ≤ [1 − 2ηβ −2μr ]T  L(f0) − L⋆.
+
+Proof of Lemma 3.9. First, note that by the sandwich theorem, 
+
+lim  
+
+> n→∞
+
+U (gn, ∇L(f )) = 0 = ⇒ gn → ∇ L(f ); 
+
+Then, by continuity, 
+
+lim  
+
+> n→∞
+
+RelErr( gn, ∇L(f )) = lim 
+
+> n→∞
+
+∥∇ L(f ) − gn∥B
+
+∥gn∥B
+
+= lim n→∞ ∥∇ L(f ) − gn∥B
+
+lim n→∞ ∥gn∥B
+
+= ∥∇ L(f ) − lim n→∞ gn∥B
+
+∥lim n→∞ gn∥B
+
+= ∥∇ L(f ) − ∇ L(f )∥B
+
+∥∇ L(f )∥B
+
+= 0 ,
+
+and so 
+
+lim 
+
+> n→∞
+
+RelErr( gn, ∇L(f )) 1 − RelErr( gn, ∇L(f )) = lim n→∞ RelErr( gn, ∇L(f )) 1 − lim n→∞ RelErr( gn, ∇L(f )) = 01 − 0 = 0 .
+
+The result then follows by the definition of the limit of a sequence: for any ϵ > 0, there exists some n
+
+such that the bound is satisfied for all n′ ≥ n – which, in particular, must hold for n itself. 
+
+Proof of Theorem 3.10. Let us start by establishing claim (i). For Algorithm 1 to perform a gradient descent step, we must have that 
+
+(1 + ϵ)Ut < ϵ ∥gt∥B,
+
+i.e., that Ut
+
+∥gt∥B
+
+≤ ϵ
+
+1 + ϵ ;
+
+and since ∥gt − ∇ L(ft)∥B ≤ Ut, we have that 
+
+RelErr( gt, ∇L(ft)) = ∥gt − ∇ L(ft)∥B
+
+∥gt∥B
+
+≤ ϵ
+
+1 + ϵ < 12 ,
+
+where the last inequality follows by the fact that ϵ ∈ (0 , 1) . Additionally, by Lemma 3.9, the while loop is guaranteed to terminate, allowing the algorithm to proceed. Claims (ii) and (iii) then follow immediately by applying Propositions 3.6 and 3.8. 
+
+A.1 Computation of Functional Derivatives for the Experiments A.1.1 Function fitting (Figure 1) 
+
+We consider here the loss LFIT : L2([0 , 1] 2) → R given by 
+
+LFIT (f ) := 12 ∥f − f ⋆∥2 
+
+> L2
+
+=
+
+Z Z 12
+
+f (x, y ) − f ⋆(x, y )2dxdy. 
+
+It holds: 
+
+Proposition A.1. The functional LFIT : L2([0 , 1] 2) → R has gradients given by 
+
+∇LFIT (f )( x, y ) = f (x, y ) − f ⋆(x, y ),
+
+and is 1-Polyak-Łojasiewicz. Proof. The directional derivative is 
+
+DLFIT (f ;⃗ f ) = 
+
+ ddδ LFIT (f + δ⃗f )
+
+
+
+> δ=0
+
+14 =
+
+ ddδ
+
+Z Z 12
+
+f (x, y ) + δ⃗f (x, y ) − f ⋆(x, y )2dxdy
+
+
+
+> δ=0
+
+=
+
+Z Z ddδ
+
+12
+
+f (x, y ) + δ⃗f (x, y ) − f ⋆(x, y )2dxdy
+
+
+
+> δ=0
+
+=
+
+Z Z f (x, y ) − f ⋆(x, y )⃗f (x, y )d xdy
+
+=
+
+D
+
+f − f ⋆,⃗ f 
+
+E
+
+> L2
+
+,
+
+and so 
+
+∇LFIT (f )( x, y ) = f (x, y ) − f ⋆(x, y ).
+
+To show that the loss is 1-Polyak-Łojasiewicz, note: 
+
+LFIT (f ) − inf   
+
+> f′∈L2([0 ,1] 2)
+
+LFIT (f ′) = LFIT (f ) − 0 = 12 ∥f − f ⋆∥2 
+
+> L2
+
+= 12 ∥∇ LFIT (f )∥2 
+
+> L2
+
+.
+
+A.1.2 Regression in an RKHS (Section 4.1) 
+
+Proof of Proposition 4.1. The directional derivative is 
+
+DLREG (f ;⃗ f ) = 
+
+ ddδ LREG (f + δ⃗f )
+
+
+
+> δ=0
+
+=
+
+"
+
+ddδ
+
+1
+
+n
+
+> n
+
+X
+
+> i=1
+
+ℓ(f (Xi) + δ⃗f (Xi), Y i)
+
+#
+
+> δ=0
+
+=
+
+"
+
+ddδ
+
+1
+
+n
+
+> n
+
+X
+
+> i=1
+
+ℓ(⟨f + δ⃗f , K Xi ⟩HK , Y i)
+
+#
+
+> δ=0
+
+=
+
+"
+
+1
+
+n
+
+> n
+
+X
+
+> i=1
+
+ddδ ℓ(⟨f + δ⃗f , K Xi ⟩HK , Y i)
+
+#
+
+> δ=0
+
+=
+
+"
+
+1
+
+n
+
+> n
+
+X
+
+> i=1
+
+ℓ′(⟨f + δ⃗f , K Xi ⟩HK , Y i)⟨⃗ f , K Xi ⟩HK
+
+#
+
+> δ=0
+
+= 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+ℓ′(⟨f, K Xi ⟩HK , Y i)⟨⃗ f , K Xi ⟩HK
+
+= 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+ℓ′(f (Xi), Y i)⟨⃗ f , K Xi ⟩HK
+
+=
+
+*⃗f , 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+ℓ′(f (Xi), Y i)KXi
+
++
+
+> HK
+
+,
+
+and thus 
+
+∇LREG (f )( x) = 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+ℓ′(f (Xi), Y i)K(Xi, x ).
+
+To establish that the loss is Polyak-Łojasiewicz, note that the loss depends on f only through its evaluations at the data points. Let v ∈ Rn with vi = f (Xi), and let g(v) = 1
+
+> n
+
+Pni=1 ℓ(vi, Y i).Because ℓ is μ-strongly convex in its first argument, g is strongly convex with respect to the Euclidean norm with parameter μ/n .Letting ci = ℓ′(f (Xi), Y i), the gradient is ∇g(v) = 1 
+
+> n
+
+c. By standard strong convexity, the subopti-mality is bounded by the gradient norm: 
+
+LREG (f ) − inf  
+
+> f′∈H K
+
+LREG (f ′) ≤ 12( μ/n ) ∥∇ g(v)∥22 = n
+
+2μ
+
+> n
+
+X
+
+> i=1
+
+ 1
+
+n ci
+
+2
+
+= 12μn ∥c∥22.
+
+15 We must now bound ∥c∥22 using the L∞ norm of the extended RKHS gradient. Recall that the continuous extension of the gradient to B = L∞ is the function: 
+
+∇LREG (f )( ·) = 1
+
+n
+
+> n
+
+X
+
+> j=1
+
+cj K(Xj , ·).
+
+Let K ∈ Rn×n be the empirical kernel matrix, and let gX ∈ Rn be the evaluation of this gradient at the training points, so g(i) 
+
+> X
+
+= ∇LREG (f )( Xi). In matrix form, we have gX = 1 
+
+> n
+
+Kc .Assuming the kernel matrix K is strictly positive definite, we can invert this relationship to get 
+
+c = nK −1gX . Bounding the Euclidean norm of c via the smallest eigenvalue λmin (K) > 0 yields: 
+
+∥c∥2 ≤ n∥K−1∥2∥gX ∥2 = nλmin (K) ∥gX ∥2.
+
+Next, we bound the discrete Euclidean norm ∥gX ∥2 by the supremum norm over the entire space. Since |g(i) 
+
+> X
+
+| ≤ sup x|∇ LREG (f )( x)| = ∥∇ LREG (f )∥L∞ for all i, we have: 
+
+∥gX ∥22 =
+
+> n
+
+X
+
+> i=1
+
+ g(i)
+
+> X
+
+2 ≤ n∥∇ LREG (f )∥2 
+
+> L∞
+
+=⇒ ∥ gX ∥2 ≤ √n∥∇ LREG (f )∥L∞ .
+
+Substituting this back into the bound for ∥c∥2, we get: 
+
+∥c∥2 ≤ n3/2
+
+λmin (K) ∥∇ LREG (f )∥L∞ =⇒ ∥ c∥22 ≤ n3
+
+λ2min (K) ∥∇ LREG (f )∥2 
+
+> L∞
+
+.
+
+Finally, plugging this into our suboptimality bound yields: 
+
+LREG (f ) − L⋆ ≤ 12μn 
+
+ n3
+
+λ2min (K) ∥∇ LREG (f )∥2
+
+> L∞
+
+
+
+= n2
+
+2μλ 2min (K) ∥∇ LREG (f )∥2 
+
+> L∞
+
+.
+
+Finally, to show that LREG is K-smooth: let f, f ′ ∈ L∞. Using the definition of LREG and applying the K-smoothness of ℓ to each data point Xi, we have: 
+
+LREG (f ) = 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+ℓ(f (Xi), Y i)
+
+≤ 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+
+
+ℓ(f ′(Xi), Y i) + ℓ′(f ′(Xi), Y i) f (Xi) − f ′(Xi) + K
+
+2
+
+ f (Xi) − f ′(Xi)2
+
+
+
+= 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+ℓ(f ′(Xi), Y i)
+
+!
+
++ 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+ℓ′(f ′(Xi), Y i) f (Xi) − f ′(Xi)!
+
++ K
+
+2n
+
+> n
+
+X
+
+> i=1
+
+ f (Xi) − f ′(Xi)2
+
+= LREG (f ′) + D LREG (f ′; f − f ′) + K
+
+2n
+
+> n
+
+X
+
+> i=1
+
+ f (Xi) − f ′(Xi)2.
+
+Next, we bound the quadratic term using the definition of the L∞ norm. Since |f (Xi) − f ′(Xi)| ≤ 
+
+sup x|f (x) − f ′(x)| = ∥f − f ′∥L∞ for all i, it follows that: 
+
+K
+
+2n
+
+> n
+
+X
+
+> i=1
+
+ f (Xi) − f ′(Xi)2 ≤ K
+
+2n
+
+> n
+
+X
+
+> i=1
+
+∥f − f ′∥2 
+
+> L∞
+
+= K
+
+2 ∥f − f ′∥2 
+
+> L∞
+
+.
+
+Substituting this back into our inequality yields: 
+
+LREG (f ) ≤ LREG (f ′) + D LREG (f ′; f − f ′) + K
+
+2 ∥f − f ′∥2 
+
+> L∞
+
+.
+
+Proposition A.2. Let LREG be the regression functional over HK , and assume the empirical kernel matrix K ∈ Rn×n over the training data is strictly positive definite with minimum eigenvalue 
+
+λmin (K) > 0. Furthermore, assume the kernel is bounded, such that sup x,x ′ |K(x, x ′)| ≤ κ. Then, evaluating the gradients over the Banach space B = L∞, the loss LREG satisfies: 
+
+16 (i) Gradient compatibility (Assumption 3.4): with constant β = nλ −1min (K).(ii) H descends in B (Assumption 3.3): with constant α = λmin (K) 
+
+> nκ 2
+
+.Proof. As established previously, let ci = ℓ′(f (Xi), Y i) for i = 1 , . . . , n , such that the continuous extension of the gradient to B = L∞ is ∇LREG (f )( x) = 1
+
+> n
+
+Pni=1 ciK(Xi, x ). The directional derivative for any ⃗ f ∈ L∞ is DLREG (f ;⃗ f ) = 1
+
+> n
+
+Pni=1 ci⃗ f (Xi).For gradient compatibility, we must show that ∥DLREG (f ; ·)∥(L∞)∗ ≤ β∥∇ LREG (f )∥L∞ . Recall that the dual norm of the directional derivative over L∞ is exactly the scaled L1 norm of the coefficients: 
+
+∥DLREG (f ; ·)∥(L∞)∗ = 1
+
+n ∥c∥1.
+
+Let gX ∈ Rn be the vector of gradient evaluations at the training points, so g(i) 
+
+> X
+
+= ∇LREG (f )( Xi).In matrix form, gX = 1 
+
+> n
+
+Kc , which gives c = nK −1gX . By the definition of the supremum norm, the maximum absolute evaluation of the gradient over the entire domain bounds the maximum absolute evaluation at the training points: ∥gX ∥∞ ≤ ∥∇ LREG (f )∥L∞ .It then follows: 
+
+∥c∥1 ≤ √n∥c∥2 = √n∥nK −1gX ∥2
+
+≤ n3/2∥K−1∥2∥gX ∥2
+
+≤ n3/2λ−1min (K)  √n∥gX ∥∞
+
+
+
+= n2λ−1min (K)∥gX ∥∞.
+
+Substituting this into the dual norm equation and applying ∥gX ∥∞ ≤ ∥∇ LREG (f )∥L∞ yields: 
+
+∥DLREG (f ; ·)∥(L∞)∗ ≤ 1
+
+n
+
+ n2λ−1min (K)∥∇ LREG (f )∥L∞
+
+ = nλ −1min (K)∥∇ LREG (f )∥L∞ .
+
+Thus, gradient compatibility holds with β = nλ −1min (K).To establish that H descends in B, we must show DLREG (f ; ∇LREG (f )) ≥ α∥∇ LREG (f )∥2 
+
+> L∞
+
+.Evaluating the directional derivative in the direction of the gradient yields: 
+
+DLREG (f ; ∇LREG (f )) = 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+ci∇LREG (f )( Xi) = 1
+
+n c⊤
+
+ 1
+
+n Kc 
+
+
+
+= 1
+
+n2 c⊤Kc. 
+
+We now require an upper bound for ∥∇ LREG (f )∥2 
+
+> L∞
+
+in terms of c⊤Kc . Using the triangle inequality and the kernel bound κ:
+
+∥∇ LREG (f )∥L∞ = sup 
+
+> x
+
+1
+
+n
+
+> n
+
+X
+
+> i=1
+
+ciK(Xi, x ) ≤ 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+|ci| sup 
+
+> x
+
+|K(Xi, x )| ≤ κn ∥c∥1.
+
+Squaring both sides and applying the norm inequality ∥c∥21 ≤ n∥c∥22, we have: 
+
+∥∇ LREG (f )∥2 
+
+> L∞
+
+≤ κ2
+
+n2 ∥c∥21 ≤ κ2
+
+n ∥c∥22.
+
+By the Rayleigh quotient for positive definite matrices, c⊤Kc ≥ λmin (K)∥c∥22, meaning ∥c∥22 ≤
+
+λ−1min (K)c⊤Kc . Substituting this gives: 
+
+∥∇ LREG (f )∥2 
+
+> L∞
+
+≤ κ2
+
+nλ min (K) c⊤Kc. 
+
+Rearranging to isolate the quadratic form c⊤Kc :
+
+1
+
+n2 c⊤Kc ≥ λmin (K)
+
+nκ 2 ∥∇ LREG (f )∥2 
+
+> L∞
+
+.
+
+Since the left side is exactly DLREG (f ; ∇LREG (f )) , the condition is satisfied with α = λmin (K) 
+
+> nκ 2
+
+.17 A.1.3 Solving Partial Differential Equations (Section 4.2) 
+
+Proof of Proposition 4.2. The directional derivative is 
+
+DLPDE (f ;⃗ f ) = 
+
+ ddδ LPDE (f + δ⃗f )
+
+
+
+> δ=0
+
+=
+
+"
+
+ddδ
+
+Z Z Z 12
+
+"
+
+∂2f∂t 2 + δ ∂2⃗ f∂t 2 − c2
+
+ ∂2f∂x 2 + ∂2f∂y 2
+
+
+
+− δc 2 ∂2⃗ f∂x 2 + ∂2⃗ f∂y 2
+
+!# 2
+
+dxdydt
+
++ ddδ
+
+Z Z 12
+
+h
+
+f (0 , x, y ) + δ⃗f (0 , x, y ) − h(x, y )
+
+i2
+
+dxdy
+
++ ddδ
+
+Z Z 12
+
+"
+
+∂f ∂t (0 , x, y ) + δ ∂⃗f ∂t (0 , x, y )
+
+#2
+
+dxdy
+
+#
+
+> δ=0
+
+=
+
+Z Z Z  ∂2f∂t 2 − c2
+
+ ∂2f∂x 2 + ∂2f∂y 2
+
+ "
+
+∂2⃗ f∂t 2 − c2 ∂2⃗ f∂x 2 + ∂2⃗ f∂y 2
+
+!# 
+
+dxdydt
+
++
+
+Z Z 
+
+[f (0 , x, y ) − h(x, y )] ⃗ f (0 , x, y )d xdy
+
++
+
+Z Z ∂f ∂t (0 , x, y ) ∂⃗f ∂t (0 , x, y )d xdy. 
+
+Now, we have to rewrite this as an inner product on H2(R3). Recall how the Sobolev inner product can be given in terms of the Fourier transform [Evans, 2022]: 
+
+⟨f, g ⟩H2(R3) =
+
+Z  1 + ∥ξ∥2 + ∥ξ∥4 bf (ξ) bg(ξ)d ξ. 
+
+Therefore, let us rewrite the directional derivative to be of this form. To start, we will make it so that all references to f are through its Fourier transform, each term at a time: 
+
+Z Z Z  ∂2f∂t 2 − c2
+
+ ∂2f∂x 2 + ∂2f∂y 2
+
+ "
+
+∂2⃗ f∂t 2 − c2 ∂2⃗ f∂x 2 + ∂2⃗ f∂y 2
+
+!# 
+
+dxdydt
+
+=
+
+Z Z Z h
+
+i2τ 2 bf (τ, ξ, ζ ) − c2i2  ξ2 + ζ2 bf (τ, ξ, ζ )
+
+i 
+
+i2τ 2 b⃗f (τ, ξ, ζ ) − c2i2 (ξ2 + ζ2) b⃗f (τ, ξ, ζ )
+
+
+
+dτ dξdζ
+
+=
+
+Z Z Z h
+
+i2  τ 2 − c2  ξ2 + ζ2 bf (τ, ξ, ζ )
+
+i 
+
+i2 (τ 2 − c2 (ξ2 + ζ2)) b⃗f (τ, ξ, ζ )
+
+
+
+dτ dξdζ
+
+=
+
+Z Z Z i2  τ 2 − c2  ξ2 + ζ2 [i2 (τ 2 − c2 (ξ2 + ζ2))] bf (τ, ξ, ζ )b⃗f (τ, ξ, ζ )d τ dξdζ
+
+=
+
+Z Z Z  τ 2 − c2  ξ2 + ζ2 (τ 2 − c2 (ξ2 + ζ2)) bf (τ, ξ, ζ )b⃗f (τ, ξ, ζ )d τ dξdζ;=
+
+Z Z Z τ 2 − c2  ξ2 + ζ2 2 bf (τ, ξ, ζ )b⃗f (τ, ξ, ζ )d τ dξdζ;
+
+For the initial condition terms, we will use the fact that 
+
+bu(ξ, ζ ) = 1
+
+√2π
+
+Zbu(τ, ξ, ζ )d τ ;
+
+It then follows: Z Z 
+
+[f (0 , x, y ) − h(x, y )] ⃗ f (0 , x, y )d xdy
+
+=
+
+Z Z  1
+
+√2π
+
+Zbf (τ, ξ, ζ )d τ − bh(ξ, ζ )
+
+ 1
+
+√2π
+
+Z b⃗f (τ, ξ, ζ )d τ dξdζ
+
+=
+
+Z Z Z  12π
+
+Zbf (τ ′, ξ, ζ )d τ ′ − 1
+
+√2π
+
+bh(ξ, ζ )
+
+ b⃗f (τ, ξ, ζ )d τ dξdζ, 
+
+and Z Z ∂f ∂t (0 , x, y ) ∂⃗f ∂t (0 , x, y )d xdy
+
+18 =
+
+Z Z  1
+
+√2π
+
+Z
+
+iτ bf (τ, ξ, ζ )d τ
+
+  1
+
+√2π
+
+Z
+
+iτ b⃗f (τ, ξ, ζ )d τ
+
+
+
+dξdζ
+
+=
+
+Z Z Z τ
+
+2π
+
+Z 
+
+τ ′ bf (τ ′, ξ, ζ )d τ ′
+
+ b⃗f (τ, ξ, ζ )d τ dξdζ. 
+
+Putting it all together, we obtain: 
+
+⟨∇ LPDE (f ),⃗ f ⟩H2(R3)
+
+= D LPDE (f ;⃗ f )=
+
+Z Z Z τ 2 − c2  ξ2 + ζ2 2 bf (τ, ξ, ζ )b⃗f (τ, ξ, ζ )d τ dξdζ
+
++
+
+Z Z Z  12π
+
+Zbf (τ ′, ξ, ζ )d τ ′ − 1
+
+√2π
+
+bh(ξ, ζ )
+
+ b⃗f (τ, ξ, ζ )d τ dξdζ, 
+
++
+
+Z Z Z τ
+
+2π
+
+Z 
+
+τ ′ bf (τ ′, ξ, ζ )d τ ′
+
+ b⃗f (τ, ξ, ζ )d τ dξdζ. 
+
+=
+
+Z Z Z τ 2 − c2  ξ2 + ζ2 2 bf (τ, ξ, ζ )+
+
+ 12π
+
+Zbf (τ ′, ξ, ζ )d τ ′ − 1
+
+√2π
+
+bh(ξ, ζ )
+
+
+
++ τ
+
+2π
+
+Z 
+
+τ ′ bf (τ ′, ξ, ζ )d τ ′
+
+ b⃗f (τ, ξ, ζ )d τ dξdζ;=
+
+Z Z Z τ 2 − c2  ξ2 + ζ2 2 bf (τ, ξ, ζ )+ 12π
+
+Zbf (τ ′, ξ, ζ )d τ ′ − 1
+
+√2π
+
+bh(ξ, ζ )+ τ
+
+2π
+
+Z 
+
+τ ′ bf (τ ′, ξ, ζ )d τ ′
+
+ b⃗f (τ, ξ, ζ )d τ dξdζ;
+
+therefore, we have 
+
+[ \∇LPDE (f )]( τ, ξ, ζ )=
+
+τ 2 − c2  ξ2 + ζ2 2 bf (τ, ξ, ζ ) + 12π
+
+R bf (τ ′, ξ, ζ )d τ ′ − 1√2π
+
+bh(ξ, ζ ) + τ
+
+> 2π
+
+R τ ′ bf (τ ′, ξ, ζ )d τ ′
+
+
+
+1 + ( τ 2 + ξ2 + ζ2) + ( τ 2 + ξ2 + ζ2)2 .
+
+A.1.4 Learning radiance fields 
+
+Our scene is represented as a pair of functions 
+
+σ : R3 → R and c : R3 × S2 → R3,
+
+corresponding to the density and color components, respectively; note that the color (returned in RGB) is taken to be view-dependent, while the density is view-independent. With this functional representation of the scene, an infinitesimal ray γ : [ tnear , t far ] → R3 with direction γω := γ(tfar )−γ(tnear ) 
+
+> ∥γ(tfar )−γ(tnear )∥
+
+can be rendered through 
+
+Rσ,c (γ) = 
+
+Z tfar 
+
+> tnear
+
+Tσ (t; γ)σ γ(t)c γ(t), γ ω
+
+dt + Tσ (tfar ; γ)b, 
+
+where b ∈ R3 is a fixed background color and Tσ (·) is the transmittance, defined as 
+
+Tσ (t; γ) := exp 
+
+
+
+−
+
+Z ttnear 
+
+σ γ(s)ds
+
+
+
+.
+
+19 To render a full image from a scene, it will furthermore be useful to refer to an antialiased rendering operation. Given a position in the image plane p := ( u, v ) ∈ R2, with corresponding infinitesimal rays given by γp = γu,v , we render by convolution with an antialiasing kernel ek : R2 → R as 
+
+eRσ,c (p) = eRσ,c (u, v ) = 
+
+Z Z 
+
+Rσ,c (γu′,v ′ )ek(u′ − u, v ′ − v)d u′dv′;
+
+Ideally ek would be taken to be a sinc kernel so as to compensate for the sampling of the signal, though in practice it would be a more computable choice such as a bicubic filter. Note that this can also be seen as a continuous version of supersampling antialiasing. With these in hand, our goal is to solve a functional optimization problem 
+
+arg min 
+
+> σ(·), c (·,·)
+
+L(σ, c ) with L(σ, c ) := 1
+
+N
+
+> n
+
+X
+
+> i=1
+
+1
+
+P
+
+> P
+
+X
+
+> j=1
+
+12 eRσ,c (pi,j ) − Yi,j 
+
+> 2
+
+, (11) over N training cameras&images, each with P pixels; here pi,j corresponds to the position in the pixel plane, and Yi,j ∈ R3 corresponds to the color of the j-th pixel of the i-th image. A position in pixel plane p = ( u, v ) is mapped to the ray 
+
+γ(t) = o + tA (u/f, −v/f, −1) ,
+
+where A ∈ R3×3 is the camera transformation matrix, f is the focal length and o ∈ R3 is the camera position. To treat this as an optimization problem in function space, we must first consider the domain of the loss functional L(·, ·), so as to ensure that functional gradients are well-defined. To this end, let us first assume that the 3D domain of the density and color functions is contained to a Ω ⊂ R3 that is compact (i.e., bounded and closed), endowed with the Lebesgue measure over Ω. We then take the density function to reside in standard L2 space over Ω, denoted L2(Ω → R); the color function, on the other hand, has to be taken to be on a “mixture” of being L2 in the position x ∈ Ω ⊂ R3 but following a more tame RKHS structure in the direction ω ∈ S2; this can be done by writing the color in curried form 
+
+c : Ω → [HS]3,
+
+where HS is a reproducing kernel Hilbert space (RKHS) of functions from the unit sphere S2 to R.This is necessary so as to make the loss functional L well-defined over a Hilbert space of functions. The RKHS HS comes endowed with a reproducing kernel KHS : HS × H S → R, defined by the reproducing property that ⟨h, K HS (ω, ·)⟩ = ⟨h, K HS (·, ω )⟩ = h(ω) for any h ∈ H S and ω ∈ S2.
+
+Proposition A.3. Suppose the antialiasing kernel ek(·, ·) has a non-empty support, and define the antialiased color differences 
+
+eDσ,c (x; i, j ) := 
+
+> P
+
+X
+
+> j=1
+
+( eRσ,c (pi,j ) − Yi,j ) ek(p(x; i) − pi,j ).
+
+Then the loss functional L : L2(Ω → R) × L2(Ω → [HS]3) → R is Fréchet differentiable, with gradients given by 
+
+∇σ L(σ, c )( x) = 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+ai
+
+> 3
+
+X
+
+> k=1
+
+[ eDσ,c (x; i, j )] k
+
+
+
+Tσ (x; i)[ c(x, ω (x; i))] k −  Rσ,c (x; i) − R[tnear ,t ] 
+
+> σ,c
+
+(x; i)
+
+,
+
+∇ck L(σ, c )( x, ω ) = 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+ai[ eDσ,c (x; i, j )] k Tσ (x; i)σ(x)KHS (ω(x; i), ω ),
+
+for constants ai := f 2 
+
+> i
+
+1[t(x; i) ∈ F ]/P t (x; i)2|det Ai|.
+
+Note that when the antialiasing kernel ek has compact support, eDσ,c (x; i, j ) can be efficiently com-puted by considering just a neighborhood around the j-th pixel. 
+
+Proof of Proposition A.3. Let us start by deriving the directional (Gâteaux) derivative. It is handy to rewrite it as a scalar derivative evaluated at zero: 
+
+DL(σ, c ;⃗σ,⃗ c) = lim 
+
+> δ↘0
+
+L(σ + δ⃗ σ, c + δ⃗ c) − L(σ, c )
+
+δ =
+
+ ddδ L(σ + δ⃗ σ, c + δ⃗ c)
+
+
+
+> δ=0
+
+;
+
+20 It then follows by straightforward computation: 
+
+ ddδ L(σ + δ⃗ σ, c + δ⃗ c)
+
+
+
+δ=0 
+
+=
+
+ ddδ
+
+1
+
+N
+
+NX
+
+i=1 
+
+1
+
+P
+
+PX
+
+j=1 
+
+12 eRσ+δ⃗ σ,c +δ⃗ c (pi,j ) − Yi,j 
+
+2
+
+
+
+δ=0 
+
+= 1
+
+N
+
+NX
+
+i=1 
+
+1
+
+P
+
+PX
+
+j=1 
+
+ ddδ
+
+12 eRσ+δ⃗ σ,c +δ⃗ c (pi,j ) − Yi,j 
+
+2
+
+δ=0 
+
+= 1
+
+N
+
+NX
+
+i=1 
+
+1
+
+P
+
+PX
+
+j=1 3X
+
+k=1 
+
+( eRσ,c (pi,j ) − Yi,j )k
+
+ ddδ [ eRσ+δ⃗ σ,c +δ⃗ c (pi,j )] k
+
+
+
+δ=0 
+
+= 1
+
+N
+
+NX
+
+i=1 
+
+1
+
+P
+
+PX
+
+j=1 3X
+
+k=1 
+
+( eRσ,c (pi,j ) − Yi,j )k
+
+Z Z  ddδ [Rσ+δ⃗ σ,c +δ⃗ c (γu′,v ′ )] k
+
+
+
+δ=0 
+
+ek(u′ − u, v ′ − v)d u′dv′.
+
+Now, the remaining derivative is as follows. For convenience, we let γ ≡ γu′,v ′ .
+
+ ddδ [Rσ+δ⃗ σ,c +δ⃗ c (γ)] k
+
+
+
+> δ=0
+
+=
+
+ ddδ
+
+Z tfar 
+
+> tnear
+
+Tσ+δ⃗ σ (t; γ) σ(γ(t)) + δ⃗ σ(γ(t))  ⟨[c(γ(t))] k + δ[⃗c(γ(t))] k , K HS (γω , ·)⟩ dt
+
++ ddδ bk Tσ+δ⃗ σ (tfar ; γ)
+
+
+
+> δ=0
+
+=
+
+ ddδ
+
+Z tfar 
+
+> tnear
+
+Tσ (t; γ)T⃗σ (t; γ)δ  σ(γ(t)) + δ⃗ σ(γ(t))  ⟨[c(γ(t))] k + δ[⃗c(γ(t))] k , K HS (γω , ·)⟩ dt
+
++ ddδ bk Tσ (tfar ; γ)T⃗σ (tfar ; γ)δ
+
+
+
+> δ=0
+
+=
+
+Z tfar 
+
+> tnear
+
+Tσ (t; γ)
+
+ ddδ T⃗σ (t; γ)δ (σ(γ(t)) + δ⃗ σ(γ(t))) ⟨[c(γ(t))] k + δ[⃗c(γ(t))] k , K HS (γω , ·)⟩
+
+
+
+> δ=0
+
+dt
+
++ bk Tσ (tfar ; γ)
+
+ ddδ T⃗σ (tfar ; γ)δ
+
+
+
+> δ=0
+
+=
+
+Z tfar 
+
+> tnear
+
+Tσ (t; γ)
+
+ σ(γ(t)) + δ⃗ σ(γ(t))  ⟨[c(γ(t))] k + δ[⃗c(γ(t))] k , K HS (γω , ·)⟩ log T⃗σ (t; γ)+ ddδ
+
+ σ(γ(t)) + δ⃗ σ(γ(t))  ⟨[c(γ(t))] k + δ[⃗c(γ(t))] k , K HS (γω , ·)⟩
+
+
+
+> δ=0
+
+dt
+
++ bk Tσ (tfar ; γ) log T⃗σ (tfar ; γ)=
+
+Z tfar 
+
+> tnear
+
+Tσ (t; γ)
+
+
+
+σ(γ(t)) ⟨[c(γ(t))] k , K HS (γω , ·)⟩ log Tσ (t; γ)+ ddδ (σ(γ(t)) + δ⃗ σ(γ(t))) ⟨[c(γ(t))] k + δ[⃗c(γ(t))] k , K HS (γω , ·)⟩
+
+
+
+> δ=0
+
+dt
+
++ bk Tσ (tfar ; γ) log T⃗σ (tfar ; γ)=
+
+Z tfar 
+
+> tnear
+
+Tσ (t; γ)
+
+
+
+σ(γ(t)) ⟨[c(γ(t))] k , K HS (γω , ·)⟩ log T⃗σ (t; γ)+  σ(γ(t)) + δ⃗ σ(γ(t)) ⟨[⃗c(γ(t))] k , K HS (γω , ·)⟩
+
++ ⟨[c(γ(t))] k + δ[⃗c(γ(t))] k , K HS (γω , ·)⟩⃗σ(γ(t)) 
+
+
+
+> δ=0
+
+dt
+
++ bk Tσ (tfar ; γ) log T⃗σ (tfar ; γ)=
+
+Z tfar 
+
+> tnear
+
+Tσ (t; γ)
+
+
+
+σ(γ(t)) ⟨[c(γ(t))] k , K HS (γω , ·)⟩ log T⃗σ (t; γ)+ σ(γ(t)) ⟨[⃗c(γ(t))] k , K HS (γω , ·)⟩
+
+21 + ⟨[c(γ(t))] k , K HS (γω , ·)⟩⃗σ(γ(t)) 
+
+
+
+dt + bk Tσ (tfar ; γ) log T⃗σ (tfar ; γ)=
+
+Z tfar 
+
+> tnear
+
+Tσ (t; γ)
+
+
+
+−σ(γ(t)) ⟨[c(γ(t))] k , K HS (γω , ·)⟩
+
+Z ttnear ⃗σ(γ(s))d s
+
++ σ(γ(t)) ⟨[⃗c(γ(t))] k , K HS (γω , ·)⟩
+
++ ⟨[c(γ(t))] k , K HS (γω , ·)⟩⃗σ(γ(t)) 
+
+
+
+dt − bk Tσ (tfar ; γ)
+
+Z tfar 
+
+> tnear
+
+⃗σ(γ(s))d s. 
+
+=
+
+Z tfar 
+
+> tnear
+
+Tσ (t; γ)⟨[c(γ(t))] k , K HS (γω , ·)⟩⃗σ(γ(t))d t
+
+−
+
+Z tfar 
+
+> tnear
+
+Tσ (t; γ)σ(γ(t)) ⟨[c(γ(t))] k , K HS (γω , ·)⟩
+
+Z ttnear ⃗σ(γ(s))d sdt
+
+− bk Tσ (tfar ; γ)
+
+Z tfar 
+
+> tnear
+
+⃗σ(γ(s))d s +
+
+Z tfar 
+
+> tnear
+
+Tσ (t; γ)σ(γ(t)) ⟨[⃗c(γ(t))] k , K HS (γω , ·)⟩dt
+
+Now, a slightly tricky step: in the second term, let’s swap the integrals. 
+
+Z tfar 
+
+> tnear
+
+Tσ (t; γ)⟨[c(γ(t))] k , K HS (γω , ·)⟩⃗σ(γ(t))d t
+
+−
+
+Z tfar 
+
+> tnear
+
+Tσ (t; γ)σ(γ(t)) ⟨[c(γ(t))] k , K HS (γω , ·)⟩
+
+Z ttnear ⃗σ(γ(s))d sdt
+
+− bk Tσ (tfar ; γ)
+
+Z tfar 
+
+> tnear
+
+⃗σ(γ(s))d s +
+
+Z tfar 
+
+> tnear
+
+Tσ (t; γ)σ(γ(t)) ⟨[⃗c(γ(t))] k , K HS (γω , ·)⟩dt
+
+=
+
+Z tfar 
+
+> tnear
+
+Tσ (t; γ)⟨[c(γ(t))] k , K HS (γω , ·)⟩⃗σ(γ(t))d t
+
+−
+
+Z tfar 
+
+> tnear
+
+Z ttnear 
+
+Tσ (t; γ)σ(γ(t)) ⟨[c(γ(t))] k , K HS (γω , ·)⟩⃗σ(γ(s))d sdt
+
+− bk Tσ (tfar ; γ)
+
+Z tfar 
+
+> tnear
+
+⃗σ(γ(s))d s +
+
+Z tfar 
+
+> tnear
+
+Tσ (t; γ)σ(γ(t)) ⟨[⃗c(γ(t))] k , K HS (γω , ·)⟩dt
+
+=
+
+Z tfar 
+
+> tnear
+
+Tσ (t; γ)⟨[c(γ(t))] k , K HS (γω , ·)⟩⃗σ(γ(t))d t
+
+−
+
+Z tfar 
+
+> tnear
+
+Z tfar 
+
+> s
+
+Tσ (t; γ)σ(γ(t)) ⟨[c(γ(t))] k , K HS (γω , ·)⟩⃗σ(γ(s))d tds
+
+− bk Tσ (tfar ; γ)
+
+Z tfar 
+
+> tnear
+
+⃗σ(γ(s))d s +
+
+Z tfar 
+
+> tnear
+
+Tσ (t; γ)σ(γ(t)) ⟨[⃗c(γ(t))] k , K HS (γω , ·)⟩dt
+
+=
+
+Z tfar 
+
+> tnear
+
+Tσ (t; γ)⟨[c(γ(t))] k , K HS (γω , ·)⟩⃗σ(γ(t))d t
+
+−
+
+Z tfar 
+
+> tnear
+
+Z tfar 
+
+> t
+
+Tσ (s; γ)σ(γ(s)) ⟨[c(γ(s))] k , K HS (γω , ·)⟩⃗σ(γ(t))d sdt
+
+− bk Tσ (tfar ; γ)
+
+Z tfar 
+
+> tnear
+
+⃗σ(γ(s))d s +
+
+Z tfar 
+
+> tnear
+
+Tσ (t; γ)σ(γ(t)) ⟨[⃗c(γ(t))] k , K HS (γω , ·)⟩dt. 
+
+And now, we can turn this all into an L2 inner product. 
+
+Z tfar 
+
+> tnear
+
+Tσ (t; γ)⟨[c(γ(t))] k , K HS (γω , ·)⟩⃗σ(γ(t))d t
+
+−
+
+Z tfar 
+
+> tnear
+
+Z tfar 
+
+> t
+
+Tσ (s; γ)σ(γ(s)) ⟨[c(γ(s))] k , K HS (γω , ·)⟩⃗σ(γ(t))d sdt
+
+− bk Tσ (tfar ; γ)
+
+Z tfar 
+
+> tnear
+
+⃗σ(γ(s))d s +
+
+Z tfar 
+
+> tnear
+
+Tσ (t; γ)σ(γ(t)) ⟨[⃗c(γ(t))] k , K HS (γω , ·)⟩dt. 
+
+=
+
+Z tfar 
+
+> tnear
+
+Tσ (t; γ)⟨[c(γ(t))] k , K HS (γω , ·)⟩⃗σ(γ(t)) 
+
+−
+
+Z tfar 
+
+> t
+
+Tσ (s; γ)σ(γ(s)) ⟨[c(γ(s))] k , K HS (γω , ·)⟩⃗σ(γ(t))d s
+
+22 − bk Tσ (tfar ; γ)⃗σ(γ(t)) 
+
+!
+
+dt
+
++
+
+Z tfar 
+
+> tnear
+
+Tσ (t; γ)σ(γ(t)) ⟨[⃗c(γ(t))] k , K HS (γω , ·)⟩dt
+
+=
+
+Z tfar 
+
+> tnear
+
+Tσ (t; γ)⟨[c(γ(t))] k , K HS (γω , ·)⟩−
+
+Z tfar 
+
+> t
+
+Tσ (s; γ)σ(γ(s)) ⟨[c(γ(s))] k , K HS (γω , ·)⟩ds − bk Tσ (tfar ; γ)
+
+!⃗σ(γ(t))d t
+
++
+
+Z tfar 
+
+> tnear
+
+Tσ (t; γ)σ(γ(t)) ⟨[⃗c(γ(t))] k , K HS (γω , ·)⟩dt
+
+=
+
+Z tfar 
+
+> tnear
+
+Tσ (t; γ)⟨[c(γ(t))] k , K HS (γω , ·)⟩−
+
+Z tfar 
+
+> t
+
+Tσ (s; γ)σ(γ(s)) ⟨[c(γ(s))] k , K HS (γω , ·)⟩ds − bk Tσ (tfar ; γ)
+
+!⃗σ(γ(t))d t
+
++
+
+Z tfar 
+
+> tnear
+
+⟨[⃗c(γ(t))] k , T σ (t; γ)σ(γ(t)) KHS (γω , ·)⟩dt
+
+Plugging this back into the full directional derivative: 
+
+DL(σ, c ;⃗σ,⃗ c)= 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+1
+
+P
+
+> P
+
+X
+
+> j=1 3
+
+X
+
+> k=1
+
+( eRσ,c (pi,j ) − Yi,j )k
+
+Z Z  ddδ [Rσ+δ⃗ σ,c +δ⃗ c (γu′,v ′ )] k
+
+
+
+> δ=0
+
+ek(u′ − u, v ′ − v)d u′dv′
+
+= 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+1
+
+P
+
+> P
+
+X
+
+> j=1 3
+
+X
+
+> k=1
+
+( eRσ,c (pi,j ) − Yi,j )k
+
+Z Z Z tfar 
+
+> tnear
+
+⟨[⃗c(γ u′,v ′ (t))] k , T σ (t; γu′,v ′ )σ(γu′,v ′ (t)) KHS (( γu′,v ′ )ω , ·)⟩dt
+
++
+
+Z tfar 
+
+> tnear
+
+
+
+Tσ (t; γu′,v ′ )⟨[c(γu′,v ′ (t))] k , K HS (( γu′,v ′ )ω , ·)⟩−
+
+Z tfar 
+
+> t
+
+Tσ (s; γu′,v ′ )σ(γu′,v ′ (s)) ⟨[c(γu′,v ′ (s))] k , K HS (( γu′,v ′ )ω , ·)⟩ds
+
+− bk Tσ (tfar ; γu′,v ′ )
+
+⃗σ(γ u′,v ′ (t))d t
+
+!ek(u′ − u, v ′ − v)d u′dv′
+
+= 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+1
+
+P
+
+> P
+
+X
+
+> j=1 3
+
+X
+
+> k=1
+
+( eRσ,c (pi,j ) − Yi,j )k
+
+Z Z  Z tfar 
+
+> tnear
+
+⟨[⃗c(γ u′,v ′ (t))] k , T σ (t; γu′,v ′ )σ(γu′,v ′ (t)) KHS (( γu′,v ′ )ω , ·)⟩dt
+
+ek(u′ − u, v ′ − v)d u′dv′
+
++ 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+1
+
+P
+
+> P
+
+X
+
+> j=1 3
+
+X
+
+> k=1
+
+( eRσ,c (pi,j ) − Yi,j )k
+
+·
+
+Z Z Z tfar 
+
+> tnear
+
+Tσ (t; γu′,v ′ )⟨[c(γu′,v ′ (t))] k , K HS (( γu′,v ′ )ω , ·)⟩−
+
+Z tfar 
+
+> t
+
+Tσ (s; γu′,v ′ )σ(γu′,v ′ (s)) ⟨[c(γu′,v ′ (s))] k , K HS (( γu′,v ′ )ω , ·)⟩ds
+
+− bk Tσ (tfar ; γu′,v ′ )
+
+!⃗σ(γ u′,v ′ (t))d t
+
+ek(u′ − u, v ′ − v)d u′dv′.
+
+= 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+1
+
+P
+
+> P
+
+X
+
+> j=1 3
+
+X
+
+> k=1
+
+h
+
+( eRσ,c (pi,j ) − Yi,j )k
+
+23 ·
+
+Z Z Z tfar 
+
+> tnear
+
+⟨[⃗c(γ u′,v ′ (t))] k , T σ (t; γu′,v ′ )σ(γu′,v ′ (t)) KHS (( γu′,v ′ )ω , ·)⟩dt
+
+ek(u′ − u, v ′ − v)d u′dv′
+
+
+
++ 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+1
+
+P
+
+> P
+
+X
+
+> j=1 3
+
+X
+
+> k=1
+
+( eRσ,c (pi,j ) − Yi,j )k
+
+Z Z Z tfar 
+
+> tnear
+
+Tσ (t; γu′,v ′ )⃗σ(γ u′,v ′ (t)) ⟨[c(γu′,v ′ (t))] k , K HS (( γu′,v ′ )ω , ·)⟩dt
+
+ek(u′ − u, v ′ − v)d u′dv′
+
+−
+
+Z Z Z tfar 
+
+> tnear
+
+Z tfar 
+
+> t
+
+Tσ (s; γu′,v ′ )σ(γu′,v ′ (s)) ⟨[c(γu′,v ′ (s))] k , K HS (( γu′,v ′ )ω , ·)⟩ds
+
++ bk Tσ (tfar ; γu′,v ′ )
+
+⃗σ(γ u′,v ′ (t))d t
+
+ek(u′ − u, v ′ − v)d u′dv′
+
+!
+
+.
+
+= 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+1
+
+P
+
+> P
+
+X
+
+> j=1 3
+
+X
+
+> k=1
+
+( eRσ,c (pi,j ) − Yi,j )k
+
+Z Z Z tfar 
+
+> tnear
+
+⟨[⃗c(γ u′,v ′ (t))] k , T σ (t; γu′,v ′ )σ(γu′,v ′ (t)) KHS (( γu′,v ′ )ω , ·)⟩dt
+
+ek(u′ − u, v ′ − v)d u′dv′
+
++ 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+1
+
+P
+
+> P
+
+X
+
+> j=1 3
+
+X
+
+> k=1
+
+( eRσ,c (pi,j ) − Yi,j )k
+
+Z Z Z tfar 
+
+> tnear
+
+Tσ (t; γu′,v ′ )⃗σ(γ u′,v ′ (t)) ⟨[c(γ(t))] k , K HS (( γu′,v ′ )ω , ·)⟩dt
+
+ek(u′ − u, v ′ − v)d u′dv′
+
+−
+
+Z Z Z tfar 
+
+> tnear
+
+ Rσ,c (γu′,v ′ ) − Rσ,c (γ[tnear ,t ] 
+
+> u′,v ′
+
+)⃗σ(γ u′,v ′ (t))d t
+
+ek(u′ − u, v ′ − v)d u′dv′
+
+!
+
+.
+
+Now, to help transform this into an L2 inner product, let us introduce a lemma. 
+
+Lemma A.4. For the i-th camera and any g : R3 → R,
+
+Z Z Z tfar 
+
+> tnear
+
+g(γu′,v ′ (t))d t ek(u′ − u, v ′ − v)d u′dv′ = f 2
+
+> i
+
+|det Ai|
+
+Z
+
+> R3
+
+1[t(x; i) ∈ F ]
+
+t(x; i)2 g(x)ek(p(x; i) − pi,j )d x, 
+
+where F = [ tnear , t far ], and Ai, f i are camera parameters. Proof (of the lemma). First write γu′,v ′ (t) = oi + tA iqu′,v ′ , for qu′,v ′ = ( u′/f i, −v′/f i, −1) ; so we have the triple integral 
+
+Z Z Z tfar 
+
+tnear 
+
+g(oi + tA iqu′,v ′ )ek(u′ − u, v ′ − v)d tdu′dv′
+
+=
+
+Z Z Z tfar 
+
+tnear 
+
+g(oi + tA iqu′,v ′ )ek(p(oi + tA iqu′,v ′ ; i) − pi,j )d tdu′dv′,
+
+=
+
+Z Z Z tfar 
+
+tnear 
+
+g(Φ( u′, v ′, t )) ek(p(Φ( u′, v ′, t ); i) − pi,j )d tdu′dv′,
+
+where p(·; i) is such that p(o + tAq u′,v ′ ; i) = ( u′, v ′), and 
+
+Φ u, v, t  = o + tAq u,v = o + tA (u/f, −v/f, −1) .
+
+We will do a change-of-variables with Φ. Note that it is invertible and differentiable, with Jacobian matrix as follows: 
+
+JΦ u, v, t  = A
+
+"t/f 0 u/f 
+
+0 −t/f −v/f 
+
+0 0 −1
+
+#
+
+, det  JΦ u, v, t  = det( A) · t2
+
+f 2 .
+
+Now, let D = R2 × [tnear , t far ]. By integration by substitution, 
+
+Z Z Z tfar 
+
+tnear 
+
+g(Φ( u′, v ′, t )) ek(p(Φ( u′, v ′, t ); i) − pi,j )d tdu′dv′
+
+24 =
+
+Z Z Z 
+
+D
+
+g(Φ( u′, v ′, t )) ek(p(Φ( u′, v ′, t ); i) − pi,j )d tdu′dv′
+
+=
+
+Z Z Z 
+
+Φ−1(Φ( D)) 
+
+g(Φ( u′, v ′, t )) ek(p(Φ( u′, v ′, t ); i) − pi,j )d tdu′dv′
+
+=
+
+Z Z Z 
+
+Φ( D)
+
+g(Φ(Φ −1(x))) ek(p(Φ(Φ −1(x)); i) − pi,j ) · | det JΦ−1(x)|dx
+
+=
+
+Z Z Z 
+
+Φ( D)
+
+g(x)ek(p(x; i) − pi,j ) · | det JΦ−1(x)|dx
+
+and by the inverse function theorem, 
+
+Z Z Z 
+
+Φ( D)
+
+g(x)ek(p(x; i) − pi,j ) · | det JΦ−1(x)|dx
+
+=
+
+Z Z Z 
+
+Φ( D)
+
+g(x)ek(p(x; i) − pi,j ) · | det JΦ(Φ −1(x)) |−1dx
+
+=
+
+Z Z Z 
+
+Φ( D)
+
+g(x)ek(p(x; i) − pi,j ) · | det A|−1 f 2
+
+Φ−1
+
+t (x)2 dx
+
+= f 2
+
+|det A|
+
+Z Z Z 
+
+Φ( D)
+
+1Φ−1
+
+t (x)2 g(x)ek(p(x; i) − pi,j )d x
+
+= f 2
+
+|det A|
+
+Z Z Z 
+
+Φ( D)
+
+1
+
+t(x; i)2 g(x)ek(p(x; i) − pi,j )d x
+
+= f 2
+
+|det A|
+
+Z
+
+R3
+
+1[t(x; i) ∈ F ]
+
+t(x; i)2 g(x)ek(p(x; i) − pi,j )d x. 
+
+So, applying the lemma, we have that 
+
+1
+
+N
+
+> N
+
+X
+
+> i=1
+
+1
+
+P
+
+> P
+
+X
+
+> j=1 3
+
+X
+
+> k=1
+
+h
+
+( eRσ,c (pi,j ) − Yi,j )k
+
+Z Z Z tfar 
+
+> tnear
+
+⟨[⃗c(γ u′,v ′ (t))] k , T σ (t; γu′,v ′ )σ(γu′,v ′ (t)) KHS (( γu′,v ′ )ω , ·)⟩dt
+
+ek(u′ − u, v ′ − v)d u′dv′
+
+
+
++ 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+1
+
+P
+
+> P
+
+X
+
+> j=1 3
+
+X
+
+> k=1
+
+( eRσ,c (pi,j ) − Yi,j )k
+
+Z Z Z tfar 
+
+> tnear
+
+Tσ (t; γu′,v ′ )⃗σ(γ u′,v ′ (t)) ⟨[c(γ(t))] k , K HS (( γu′,v ′ )ω , ·)⟩dt
+
+ek(u′ − u, v ′ − v)d u′dv′
+
+−
+
+Z Z Z tfar 
+
+> tnear
+
+ Rσ,c (γu′,v ′ ) − Rσ,c (γ[tnear ,t ] 
+
+> u′,v ′
+
+)⃗σ(γ u′,v ′ (t))d t
+
+ek(u′ − u, v ′ − v)d u′dv′
+
+!
+
+= 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+1
+
+P
+
+> P
+
+X
+
+> j=1 3
+
+X
+
+> k=1
+
+
+
+( eRσ,c (pi,j ) − Yi,j )k
+
+f 2
+
+> i
+
+|det Ai|
+
+Z
+
+> R3
+
+1[t(x; i) ∈ F ]
+
+t(x; i)2 ⟨[⃗c(x)] k , T σ (x; i)σ(x)KHS (( γu′,v ′ )ω , ·)⟩ek(p(x; i) − pi,j )d x
+
+
+
++ 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+1
+
+P
+
+> P
+
+X
+
+> j=1 3
+
+X
+
+> k=1
+
+( eRσ,c (pi,j ) − Yi,j )k
+
+f 2
+
+> i
+
+|det Ai|
+
+Z
+
+> R3
+
+1[t(x; i) ∈ F ]
+
+t(x; i)2 Tσ (x; i)⃗σ(x)⟨[c(x)] k , K HS (( γu′,v ′ )ω , ·)⟩ek(p(x; i) − pi,j )d x
+
+− f 2
+
+> i
+
+|det Ai|
+
+Z
+
+> R3
+
+1[t(x; i) ∈ F ]
+
+t(x; i)2
+
+ Rσ,c (γp(x;i)) − Rσ,c (γ[tnear ,t ] 
+
+> p(x;i)
+
+)⃗σ(x) ek(p(x; i) − pi,j )d x
+
+!
+
+=
+
+Z
+
+> R3
+
+1
+
+N
+
+> N
+
+X
+
+> i=1
+
+1
+
+P
+
+> P
+
+X
+
+> j=1 3
+
+X
+
+> k=1
+
+h
+
+( eRσ,c (pi,j ) − Yi,j )k
+
+25 f 2
+
+> i
+
+|det Ai|
+
+1[t(x; i) ∈ F ]
+
+t(x; i)2 ⟨[⃗c(x)] k , T σ (x; i)σ(x)KHS (( γu′,v ′ )ω , ·)⟩ek(p(x; i) − pi,j )d x
+
+
+
++
+
+Z
+
+> R3
+
+1
+
+N
+
+> N
+
+X
+
+> i=1
+
+1
+
+P
+
+> P
+
+X
+
+> j=1 3
+
+X
+
+> k=1
+
+( eRσ,c (pi,j ) − Yi,j )k
+
+f 2
+
+> i
+
+|det Ai|
+
+1[t(x; i) ∈ F ]
+
+t(x; i)2 Tσ (x; i)⃗σ(x)⟨[c(x)] k , K HS (( γu′,v ′ )ω , ·)⟩ek(p(x; i) − pi,j )
+
+− f 2
+
+> i
+
+|det Ai|
+
+1[t(x; i) ∈ F ]
+
+t(x; i)2
+
+ Rσ,c (γp(x;i)) − Rσ,c (γ[tnear ,t ] 
+
+> p(x;i)
+
+)⃗σ(x) ek(p(x; i) − pi,j )
+
+!
+
+dx
+
+=
+
+Z
+
+> R3
+> 3
+
+X
+
+> k=1
+
+1
+
+N
+
+> N
+
+X
+
+> i=1
+
+f 2 
+
+> i
+
+1[t(x; i) ∈ F ]
+
+P t (x; i)2|det Ai| [⟨[⃗c(x)] k , T σ (x; i)σ(x)KHS (( γu′,v ′ )ω , ·)⟩
+
+> P
+
+X
+
+> j=1
+
+( eRσ,c (pi,j ) − Yi,j )k ek(p(x; i) − pi,j )d x
+
+#
+
++
+
+Z
+
+> R3
+> 3
+
+X
+
+> k=1
+
+1
+
+N
+
+> N
+
+X
+
+> i=1
+
+f 2 
+
+> i
+
+1[t(x; i) ∈ F ]
+
+P t (x; i)2|det Ai| Tσ (x; i)⃗σ(x)⟨[c(x)] k , K HS (( γu′,v ′ )ω , ·)⟩−  Rσ,c (γp(x;i)) − Rσ,c (γ[tnear ,t ] 
+
+> p(x;i)
+
+)⃗σ(x)
+
+! PX
+
+> j=1
+
+( eRσ,c (pi,j ) − Yi,j )kek(p(x; i) − pi,j )d x
+
+=
+
+Z
+
+> R3
+> 3
+
+X
+
+> k=1
+
+*
+
+[⃗c(x)] k , 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+ f 2 
+
+> i
+
+1[t(x; i) ∈ F ]
+
+P t (x; i)2|det Ai| Tσ (x; i)σ(x)KHS (( γu′,v ′ )ω , ·)
+
+> P
+
+X
+
+> j=1
+
+( eRσ,c (pi,j ) − Yi,j )k ek(p(x; i) − pi,j )
+
+#+ 
+
+dx
+
++
+
+Z
+
+> R3
+
+⃗σ(x)
+
+> 3
+
+X
+
+> k=1
+
+1
+
+N
+
+> N
+
+X
+
+> i=1
+
+f 2 
+
+> i
+
+1[t(x; i) ∈ F ]
+
+P t (x; i)2|det Ai| Tσ (x; i)[ c(x, (γu′,v ′ )ω )] k
+
+−  Rσ,c (γp(x;i)) − Rσ,c (γ[tnear ,t ] 
+
+> p(x;i)
+
+)! PX
+
+> j=1
+
+( eRσ,c (pi,j ) − Yi,j )kek(p(x; i) − pi,j )d x. 
+
+And thus, the functional gradients are given by: 
+
+∇σ L(σ, c )( x) = 
+
+> 3
+
+X
+
+> k=1
+
+1
+
+N
+
+> N
+
+X
+
+> i=1
+
+f 2 
+
+> i
+
+1[t(x; i) ∈ F ]
+
+P t (x; i)2|det Ai|
+
+
+
+Tσ (x; i)[ c(x, ω (x; i))] k
+
+−  Rσ,c (x; i) − R[tnear ,t ] 
+
+> σ,c
+
+(x; i) PX
+
+> j=1
+
+( eRσ,c (pi,j ) − Yi,j )k ek(p(x; i) − pi,j ),
+
+∇ck L(σ, c )( x, ω ) = 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+ f 2 
+
+> i
+
+1[t(x; i) ∈ F ]
+
+P t (x; i)2|det Ai| Tσ (x; i)σ(x)KHS (ω(x; i), ω )
+
+> P
+
+X
+
+> j=1
+
+( eRσ,c (pi,j ) − Yi,j )k ek(p(x; i) − pi,j )
+
+#
+
+,
+
+and using eDσ,c (x; i, j ) = PPj=1 ( eRσ,c (pi,j ) − Yi,j ) ek(p(x; i) − pi,j ) and ai = ( f 2
+
+i 1[t(x; i) ∈
+
+F ]) /(P t (x; i)2|det Ai|) we obtain 
+
+∇σ L(σ, c )( x) = 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+ai
+
+> 3
+
+X
+
+> k=1
+
+[ eDσ,c (x; i, j )] k
+
+
+
+Tσ (x; i)[ c(x, ω (x; i))] k −  Rσ,c (x; i) − R[tnear ,t ] 
+
+> σ,c
+
+(x; i)
+
+,
+
+∇ck L(σ, c )( x, ω ) = 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+ai[ eDσ,c (x; i, j )] k Tσ (x; i)σ(x)KHS (ω(x; i), ω ).
+
+This establishes that L is (linearly) Gâteaux differentiable. It is also immediately seen to be Fréchet differentiable, as the gradients are continuous with relation to σ and c.26 B Experiment details 
+
+B.1 Regression in an RKHS 
+
+For the experiments we use an RBF kernel K(x, y ) = exp( −100 ∥x − y∥2). We use a simple tree-based approximation scheme which naively partitions splits at the midpoints. This is mainly for ease of (efficient) implementation in JAX, and in no way fundamental to our approach. To upper bound the approximation error, we use the fact that our trees are piecewise constant over rectangular partitions of the space, and bound the sup-norm of each leaf via a Lipschitz bound on the gradient (using the fact that the RBF kernel is Lipschitz). The neural network is a standard MLP with two hidden layers of size 256; we note that modifying this doesn’t change the conclusions in any significant manner. 
+
+B.2 Solving the wave equation 
+
+The neural network baseline has a Fourier feature embedding layer [Tancik et al., 2020], which is essential for the neural network to even be capable of optimizing this loss; without this embedding, no matter how large (or small) the network or optimizer hyperparameters, it stays stuck and does not fit the solution at all. As the loss has an integral in its definition, the neural network optimizes it on batches of 4096 points uniformly sampled over the domain; lowering this batch size leads to worse results. For our method, the inverse Fourier transform can be directly computed as a sum of sincs, using the fact that a box function in frequency space corresponds to a sinc in the primary space. Finally, we bound the approximation error via a combination of a Lipschitz argument (for the interior of the frequency-space grid) and a bound on the Sobolev symbol for the content outside of the grid. For the reference solution in the figure, we solve the equation using a finite differences method with an extremely fine grid. 
+
+B.3 Learning radiance fields 
+
+We train our method on 24 160 × 160 RGB images, and evaluate on 25 160 × 160 RGB images of novel views on the test subset. Both Approx. FGD (all resolutions) and Adaptive FGD used identical optimization hyperparameters. They employed a learning rate of 8 for the color function c and 20 for the density function σ, approximated the gradient by taking 8 samples per voxel and averaging them for the density, and fitting spherical harmonics coefficients through one step of Newton’s method. On the other hand, the NN used Adam optimizer with learning rate of 1e − 4 and β = (0 .9, 0.999) . Since the NN cannot perform full-batch gradient descent due to VRAM limitations, we used mini-batches of 80 × 80 rays and counted 4 × 24 mini-batches as an optimization step (to match the full-batch updates of our method). Note that, since the NN traces one ray per pixel, 4 × 24 mini-batches correspond exactly to the number of rays in the full training data. 27

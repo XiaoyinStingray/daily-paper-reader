@@ -1,0 +1,243 @@
+Title: Towards Delta Aware Training: Efficient DNN Weight Storage for Resource-Constrained FPGAs
+
+URL Source: https://arxiv.org/pdf/2606.16516v1
+
+Published Time: Tue, 16 Jun 2026 02:03:16 GMT
+
+Number of Pages: 12
+
+Markdown Content:
+# Towards Delta Aware Training: Efficient DNN Weight Storage for Resource-Constrained FPGAs 
+
+David Peter Federl 1[0009-0000-8542-7457] ,Lukas Einhaus 1[0000-0002-6102-7077] ,Andreas Erbslöh 1[0000-0001-6702-892X] , and Gregor Schiele 1[0000-0003-4266-4828] 
+
+Intelligent Embedded Systems Lab, University Duisburg-Essen, Duisburg, Germany 
+
+{david-peter.federl,lukas.einhaus,andreas.erbsloeh,gregor.schiele}@uni-due.de 
+
+https://uni-due.de/es/en/en_home.php 
+
+Abstract. The deployment of embedded deep neural networks on resource-constrained field programmable gate arrays (FPGAs) is challenging due to limited memory and computational capacities. We introduce a new compression technique to reduce the memory footprint by saving weights in deltas with lower bitwidth and training the network to cope with com-pressed deltas. Two delta schemes are investigated: consecutive deltas and deltas with a fixed-reference value. We evaluate both on the Fash-ionMNIST data set with a multi-layer-perceptron. The results indicate that fixed-reference delta compression outperforms the consecutive vari-ant, achieving a validation accuracy of approximately 78 .6 % , with 4 bit 
+
+weight deltas, representing an accuracy loss of roughly 8.3 % compared to a fixed-point network with 8 bit . Our specialized hardware acceler-ator with a delta-compressed multiply-and-accumulate operator com-presses weights by nearly 50 % and achieves a maximum throughput of 
+
+7.992 M MACs/s on an AMD Spartan-7 S15 FPGA. 
+
+Keywords: embedded deep neural networks, resource-constrained, field programmable gate array, hardware accelerator, fixpoint-arithmetic, quan-tization aware training, weight compression 
+
+## 1 Introduction 
+
+Deploying deep neural networks (DNNs) on embedded hardware with restricted resources is becoming more and more common, e.g., due to privacy concerns or hard realtime requirements. Model compression techniques in combination with special hardware can help to run them fast and efficiently. An example for such special hardware are low-power field programmable gate arrays (FPGAs). The benefit of FPGAs is that they can be programmed as application specific hard-ware accelerators for neural network computations instead of being restricted to general purpose computation acceleration as provided by standard hardware 
+
+> arXiv:2606.16516v1 [cs.AR] 15 Jun 2026
+
+such as graphics processing units (GPUs). However, the full accelerator is re-quired to fit the FPGA itself to provide reasonable inference speeds in embedded systems. In order to extend the capacity limitations of such systems we propose a delta based compression technique that allows us to decrease the needed memory by storing the weights of the neural network with reduced bits. During inference, the deltas are reconstructed in the desired resolution. We evaluate our perfor-mance on the FashionMNIST data set with a multi-layer perceptron (MLP). Our concrete contributions are as follows: 
+
+– We implement a delta-aware training (DAT) approach for fixed-point DNNs. 
+
+– We evaluate the performance and implementation of two delta schemes (con-secutive and fixed-reference) on FashionMNIST. 
+
+– We contribute a PyTorch-suitable implementation for delta compressed Lin-ear Layers with batch-normalized input. 
+
+– We evaluate the proposed hardware accelerator with regards to FPGA uti-lization, inference latency, and loss of accuracy of the neural network com-pared to full-precision and pure fixed-point quantized implementations. The paper is structured as follows: We discuss related work in Section 2, before presenting our approach for DAT in Section 3. We evaluate our approach in Section 4 and discuss the limitations. Section 5 shows the FPGA implementa-tion and hardware costs for the delta-based MAC operator. Section 6 concludes the paper and proposes future work. 
+
+## 2 Related Work 
+
+Related work can be grouped into two categories. The first group contains work related to the general application of delta-based compression techniques mainly focusing on file based storage systems such as backups, version control systems, or image compression. The second group focuses on delta-based compression techniques as a tool to reduce the storage size of training snapshots deep neural networks (DNNs). 
+
+2.1 Delta Compression Algorithms 
+
+Delta compression techniques [8] typically operate at the level of strings or bytes, encoding differences between them. The most well-known application for delta-based compression is the JPEG image format. To further improve the perfor-mance of such compression algorithms they are often supplemented with ad-ditional means of compression like dictionary based data encoding, as demon-strated by Lempel-Ziv-Markov chains. Another well known application for delta based compression at the file level are State-of-the-Art (SOTA) compression tools in operating systems and version control systems [5]. Incremental backup systems also deploy delta based archives, so that only updates to the first complete backup are stored. 2.2 Deep Neural Network Compression 
+
+Due to the fact that the size of DNNs is continuously increasing in recent years, there are also many attempts to decrease the amount of storage consumed for these neural networks, especially during training. Some of these approaches utilize quantization to reduce the amount of stor-age required for each weight. Quantization, however, always causes an inevitable information loss for the neural network, since the discrete steps between different values are much larger than the resolution of 32-bit floating-point values. There-fore, quantization is often combined with quantization-aware training (QAT), which emulates the quantization of the target data-type in the forward step dur-ing the training process, whereas the backward step uses standard floating-point values, so that gradients can be calculated effortlessly. The benefit of quantiza-tion is the fact that the network can be trained with weights targeting a specific hardware platform, which can yield a big performance boost on platforms, like embedded systems without native floating-point support. During neural network training, it is often necessary to store snapshots of each weight to later dissect the evolution during the training process to under-stand the updates during training. To minimize the amount of storage required for these snapshots, multiple compression techniques were evaluated. “Delta-DNN” [4] calculates the deltas between different versions of a DNN and com-presses the delta with a lossy error bound compression that is limited by the lowest acceptable loss during inference. “QD-Compressor” [11] enhances this by taking local differences in floating-point ranges inside a layer into account and applying the quantization before the delta computation [6]. The neural network weight base-delta-immediate (NNW-BDI) compression scheme [1] optimizes the BDI compression proposed by [7] for DNNs by adapting it for usage with highly dynamic floating-point numbers. BDI itself uses data similarity between values that are close to each other in memory. NNW-BDI can achieve a compression of 85 % without significant accuracy loss. This paper presents a delta-based compression of neural network weights to decrease memory for resource-constrained embedded hardware. The related work, however, focuses on compressing snapshots of floating-point models, whereas we are focusing on compressing deployment weights of fixed-point models. Ini-tially, we investigate methods for a quantization-aware and delta-aware training using multi-layer perceptron (MLP) on FashionMNIST. 
+
+## 3 Weight Delta Compression for DNNs 
+
+Our approach for delta compression of weights is a two-step process that involves a series of operations aimed at reducing the memory footprint of the weights while preserving their information. Note that the order in which these two steps are performed does matter for the result. We choose to keep the order as follows for the remainder of this work: 1. First, the delta calculation 2. Then, the data compression 
+
+Each of these steps can then be performed in a multitude of different variations. The following sections explain the different options used. 
+
+3.1 Delta Calculation 
+
+We use two different types of delta calculation: a) consecutive and b) fixed-reference delta calculation. Both types are computed per-layer. To facilitate the calculation of deltas, it is essential to establish a fixed order for the weights. We flattened the tensor with the weights shown in Listing 1.1 and Listing 1.2 to establish this fixed order. Given that the shape of the tensor is crucial for its subsequent use as weights within the neural network, it must be preserved. The solution we used for our implementations is to restore the original tensor shape after the deltas are computed. Original Data Vector 
+
+> Delta Encoded Data Vector
+
+Fig. 1: Consecutive Delta 
+
+def d e l t a ( s e l f , input : Tensor ) −> Tensor : o r i g i n a l _ s h a p e = input . shape 
+
+input = input . f l a t t e n ( ) 
+
+f o r i n d e x in reversed ( range ( 1 , len ( input ) ) ) : 
+
+input [ i n d e x ] = input [ i n d e x ] − input [ i n d e x − 1 ] 
+
+input = input . r e s h a p e ( o r i g i n a l _ s h a p e ) 
+
+return input 
+
+Listing 1.1: Consecutive Delta Calculation 
+
+Consecutive. Consecutive deltas are computed by determining the delta be-tween two adjacent elements within the weight tensor of the selected layer. Given that the calculation of a delta requires at least two values, the first value of the tensor remains unchanged by the delta computation, it will be called the ref-erence value in the following sections. Figure 1 shows a visualization of this schema. Original Data Vector 
+
+> Delta Encoded Data Vector
+
+Fig. 2: Fixed Reference Delta                     
+
+> def d e l t a ( s e l f , input :Tensor ) −>Tensor : o r i g i n a l _ s h a p e =input . shape
+> input =input . f l a t t e n ( )
+> input [ 1 : ] −=input [ 0 ]
+> input =input . r e s h a p e ( o r i g i n a l _ s h a p e )
+> return input
+
+Listing 1.2: Fixed Delta Calculation 
+
+Fixed. Fixed reference deltas are computed by determining all deltas within a layer, using a fixed-reference value. The benefit of this approach is the fact that the errors are not propagated through the weight tensor, since all delta calcula-tions are independent of each other. The fixed reference remains unchanged by the delta computation. We refer to it as reference value in the remainder of this paper. This approach is visualized in Figure 2. 
+
+3.2 Data Compression 
+
+After computing n-bit delta values, we compress all deltas to a given (smaller) bitwidth m, for example, encoding our delta in m = 4 bit instead of n = 8 bit. To allow positive and negative deltas, we always include the sign bit. For the remaining m − 1 bits, we distinguish between two cases. In the first case, the full delta value can be encoded in the m−1 least significant bits of the uncompressed delta. In this case, we directly include these bits in our compressed delta. Thus, for 4-bit compressed values from 8-bit deltas, we would choose bits 0, 1, 2, and 7 (see Figure 3). In the second case, the uncompressed delta is too large to fit into m − 1 bit. In this case, we use saturation semantics, for example, the maximum/minimum m − 1 bit value. In our example, we would choose 0111 for positive deltas and 1001 for negative deltas (two’s complement). When applying deltas, they are first expanded to signed n bit numbers and then added to the reference value. Integer Bits Fraction Bits        
+
+> Decimal Point Sign Bit
+> 76543210
+
+Fig. 3: Fixed-Point Representation We experimented with other variants, but found that they did not perform as well. First, we directly took the selected bits without saturation semantics. The resulting networks often did not train at all. Second, we added a selectable offset, allowing one to shift the selected bits away from bit 0. As an example, with an offset of 2, we would select bits 2, 3, 4. However, we did not find offsets that performed better. Therefore, we also abandoned this idea. 
+
+## 4 Experimental Evaluation 
+
+This section describes the experimental setup, the used dataset, the used MLP model and measurements for different settings. 
+
+4.1 Network Architecture and Training Methodology 
+
+We use the FashionMNIST dataset [10]. It consists of 70 000 grayscale images with 28 by 28 pixels. Each image contains values in the range of zero to 255 and shows a variety of different clothing pieces that are grouped into ten different categories. It is split into 60 000 training images and 10 000 test images, which are sampled to represent the actual distribution of samples of the data sets. The images are preprocessed by min-max scaling to have all data in the range of [−1.0, +1 .0] and flattened to be used with the network shown in Figure 4. The neural network as shown in Figure 4 consists of six layers with 185 320 
+
+weights in total. Each linear layer is followed by a batch norm and a hard hyper-bolic tangent (hard TanH) activation. We choose hard TanH instead of hyper-bolic tangent (TanH) as its lower complexity leads to simpler and faster hardware implementations. 784 
+
+> Linear Layer Batch Norm
+> TanH
+> 150
+> 150
+> Linear Layer Batch Norm
+> TanH
+> 16
+> 16
+> Linear Layer Batch Norm
+> TanH
+> 400
+> 400
+> Linear Layer Batch Norm
+> TanH
+> 120
+> 120
+> Linear Layer Batch Norm
+> TanH
+> 84
+> 84
+> Linear Layer Batch Norm
+> TanH
+> 10
+
+Fig. 4: Structure of the proposed Neural Network The realization and training of the neural networks is based on the open source elasticAI ecosystem [3]. The training uses PyTorch-based models in com-bination with fixed-point layers provided by the elasticAI.creator 1, our tool for the training and generation of hardware-accelerated DNNs. We further extend the elasticAI.creator with a delta-aware training (DAT) implementation and a specialized hardware template for delta-based MAC operators to generate HW accelerators. We train all networks on a MacBook Pro with an M4 Max Chip and 128 GB 
+
+unified RAM, using only its standard cores. Throughout our experiments, we use Adam as optimizer and choose CrossEntropyLoss as loss function. We train for 100 epochs with a batch size of 512 and a learning rate of 0.001 . We repeat the training process for each configuration 100 times and report the mean metrics across all runs. 
+
+4.2 Baseline Performance 
+
+As a general baseline we first train a full-resolution ( 32 bit floating-point preci-sion) model. Its mean validation accuracy is approximately 87 % . We then train a number of fixed-point networks. To denote the fixed-point type we use the notation Q n.m, where n represents the number of integer bits and m is the number of fraction bits. Since we add one additional bit for the sign, the total bits required for each fixed-point number can be calculated by n + m + 1 . We train each possible 8 bit fixed-point quantization configuration (Q0.7, Q1.6, Q2.5, Q3.4, Q4.3, Q5.2 and Q6.1). The results are shown in Table 1. After training for 100 epochs the accuracy of the three best configurations (Q0.7, Q1.6, Q2.5) is saturated, while we can detect that other networks (Q3.4, Q4.3, Q5.2, Q6.1) do not learn, since the loss and accuracy stay the same for many epochs. This is likely due to the insufficient number of fractional bits. The accuracy of two of the configurations (Q1.6, Q2.5) is comparable to the floating-point network. To provide a better comparison with the 4-bit delta network, we also trained neural networks with 4-bit fixed-point numbers, but they did not converge. We therefore dropped this approach and limit ourselves to comparing our delta com-pression to eight-bit fixed-point networks.  
+
+> 1
+
+https://github.com/es-ude/elastic-ai.creator Table 1: Average accuracy over 100 training runs with 100 epochs                                                    
+
+> Parameter Type Validation Training Accuracy Loss Accuracy Loss
+> Floating-Point 32 bit 87 % 0.7716 98 .9 % 0.0293
+> Fixed-Point 8 bit (Q0.7) 86 % 1.0074 89 % 0.9208
+> Fixed-Point 8 bit (Q1.6) 86 % 0.5930 98 % 0.2084
+> Fixed-Point 8 bit (Q2.5) 87 % 0.5902 99 % 0.489
+> Fixed-Point 8 bit (Q3.4) 10 % 5.2691 10 % 2.3028
+> Fixed-Point 8 bit (Q4.3) 10 % 2.3026 10 % 2.3027
+> Fixed-Point 8 bit (Q5.2) 10 % 2.3026 10 % 2.3026
+> Fixed-Point 8 bit (Q6.1) 10 % 2.3026 10 % 2.3026
+
+4.3 Post-Training Delta 
+
+Initially, we applied our delta compression algorithms to pre-trained fixed-point networks, i.e., using a post training approach. However, this yielded unsatisfac-tory results, resulting in the degradation of the networks to a point where all trained information was lost. The accuracy of the model decreased to approx-imately 10 % and the loss increased to 2.3, which is equivalent to the loss of a random guess. To overcome this, we introduced delta-aware training. 
+
+4.4 Delta-Aware Training 
+
+Our delta-aware training was implemented with the elasticAI.creator frame-work. The fixed-point arithmetic of the framework is used to incorporate delta compression, as elaborated in Section 3. The following sections present measure-ment results for our two different delta compression schemas: i) consecutive and ii) fixed-reference delta compression. Table 2: Comparison of validation accuracy and storage requirements for differ-ent network types              
+
+> 32-bit Q2.5, 8-bit Q2.5, 4-bit Q2.5, 4-bit
+> w/o delta-compr. fixed-reference consecutive Accuracy 87 % 87 % 78 .66 % 75 .99 %
+> Weight Size 741.2 KB 185.3 KB 94.9 KB 94.9 KB
+
+Consecutive Delta Compression. The consecutive delta compression enables the network to use weights that are further away from the reference value than a single delta calculation would allow. However, this is only important if the deltas 0 20 40 60 80 100                
+
+> 1
+> 2
+> Epoch
+> Loss
+> Training
+> Validation
+> (a) Loss (Consecutive Delta)
+> 020 40 60 80 100
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> Epoch Accuracy Training Validation (b) Accuracy (Consecutive Delta)
+> 020 40 60 80 100
+> 1
+> 2
+> Epoch Loss Training Validation (c) Loss (Fixed Reference Delta)
+> 020 40 60 80 100
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> Epoch Accuracy Training Validation (d) Accuracy (Fixed Reference Delta)
+
+Fig. 5: Average Neural Network Metrics for our delta-aware training (DAT) on the FashionMNIST dataset for Q2.5 slowly move outside of the compression range, which we did not observe for the network used for our evaluation. In this particular case, the network has been demonstrated to converge to a valid solution, as illustrated in Figure 5a and Figure 5b. Nevertheless, the network is incapable of attaining an equivalent performance to that of fixed reference delta compression. In addition to slightly lower accuracy compared to the implementation of a fixed-reference, the execution speed during training is 
+
+27 times higher, with 81 s per epoch. 
+
+Fixed Reference Delta Compression. Fixed delta compression enables the network to utilize weights that approximate the reference value. This behavior is advantageous for the network, as the weights are close to the reference value. The network converges to a valid solution, as illustrated in Figure 5c and Figure 5d. However, it is important to acknowledge that the network cannot achieve the same level of accuracy as the eight-bit fixed-point network. This results in a decrease in accuracy of approximately 8.3 % to 78 .6 % . The execution speed during training is nearly as fast as the fixed-point network or floating-point network, with 3 s per epoch. 5 Hardware Utilization 
+
+We analyze the hardware utilization of the MAC operator implementation used in the MLP accelerator. We report the timing characteristics and resource utiliza-tion as estimated by AMD Vivado 2024.2. We deploy the resulting accelerators on the elasticAI.hardware (ENV5) [9], which features a microcontroller and the AMD Spartan-7 S15 (xc7s15ftgb196-2) field programmable gate array (FPGA). The Verilog implementation is generated using the mac plugin of the elasti-cAI.creator . All designs include a SPI interface and a middleware to interact with the accelerators from the microcontroller. Table 3: Overview of the hardware costs and performance from different MAC implementations with different number of parallel-used multipliers at common number of weights of 84, 4-bit for delta compression and 8-bit for data processing.                                                                         
+
+> MAC type #LUTs #FFs #FFs #DSPs #Cycles fmax MACs/s
+> (buffer) (params) [MHz] normal 489 39 1352 186 186.57 2.169M consecutive 412 47 1024 186 177.30 2.062M fixed-reference 401 36 1024 186 182.48 2.122M normal 924 47 1352 244 185.18 4.209M consecutive 726 43 1024 244 181.16 4.117M fixed-reference 702 41 1024 244 182.48 4.147M normal 986 35 1352 423 185.18 8.051M consecutive 834 39 1024 423 179.86 7.819M fixed-reference 799 39 1024 423 183.82 7.992M
+
+Table 3 shows the hardware costs for (i) uncompressed / normal, (ii) delta-based using consecutive reconstructed and (iii) delta-based using fixed-referenced MAC accelerators with different numbers of multipliers. Optionally, the DSP slices can be replaced with custom Verilog multipliers. All MAC designs are buffering the data to the DSP slices to enable high-throughput with parametrized number of parallel-used multipliers. The reconstruction of the weights takes place during the pipelining process. Here, each delta value has to be expanded via two’s complement, starting with LSB. compression rate (CR) = 1 −
+
+> initial
+
+z }| {
+
+bitwidth +
+
+> compressed weights
+
+z }| {
+
+deltawidth ∗ #params bitwidth ∗ #params 
+
+| {z }
+
+> original weights
+
+(1) Compared to the normal MAC implementation, the delta-based consecutive and fixed-reference implementation use less resources. With int8 processing and a delta width of 4-bit, the weights are compressed by 48 .81 % using (1). Each implementation needs ceil (# params/ #mult ) + 2 cycles . The maximum clock frequency is extracted using the worst negative slack which is typical for the used AMD FPGA. The resource utilization of the MAC implementations scales linear with the number of weights and the number of FFs for weight storing scales with the compression rate in (1). In general, the delta-compressed MAC operator using the fixed-reference method is showing a lower utilization due to the easier reconstruction calculation. Applying the delta-based MAC operator in neural networks allows to increase the throughput using a single-port block random access memory (BRAM) for weight storing. If a delta bitwidth of 4-bit is applied on 8-bit data processing or 8-bit delta on 12-bit input, the throughput is doubled due to getting two values or one value in each 8-bit cell read-out. It is important to note that LUT resource consumption increases significantly when more than one multiplier is used for parallel computation. This is due to the unrolling of the data slicing and the parallel buffers and adders. 
+
+## 6 Conclusion and Future Work 
+
+In this paper, we study the effectiveness of using delta compression to reduce the memory required to store the weights of a neural network on an FPGA. This allows to deploy bigger DNNs. Of the two studied variants, fixed reference delta compression outperforms consecutive delta compression with less accuracy loss and a more resource-efficient hardware implementation. Clearly, since we only use a single data set with a single neural network, our results just provide an indication that the concept is applicable. The proposed algorithm provides just the first step into delta-based com-pression of neural networks for low-resource FPGAs. In future work we plan to evaluate further bit selection schema, such as bucket based compression, and stochastic rounding based value computation which should provide better solu-tions for low bit widths, as indicated by [2]. In order to improve the performance of the fixed-reference delta compression and lead the training to a faster convergence, an optimizer employing a weight decay can be used to move the weights altogether closer to zero. In addition to these improvements on the practical site, more neural network models with different datasets should be evaluated in order to gain a greater understanding of the possible limitations for delta compression.   
+
+> Acknowledgments. This publication was produced as part of the “Zentrum für ange-wandte Künstliche Intelligenz in Duisburg (ZaKI.D)” project. ZaKI.D is funded under the 5-Standorte Program by the Federal Ministry for Economic Affairs and Energy (BMWi) and the Ministry of Economic Affairs, Industry, Climate Protection, and En-ergy of the State of North Rhine-Westphalia (MWIKE NRW) (grant number 11-09862).
+> Disclosure of Interests. The authors have no competing interests to declare that are relevant to the content of this article.
+
+## References 
+
+1. Bersatti, A., Shoghi Ghalehshahi, N., Kim, H.: Neural Network Weight Compres-sion with NNW-BDI. In: Proceedings of the International Symposium on Memory Systems. MEMSYS ’20, pp. 335–340. Association for Computing Machinery, New York, NY, USA (2021). https://doi.org/10.1145/3422575.3422805. (Visited on 04/28/2025) 2. Buron, L., Erbslöh, A., Schiele, G.: Reducing Memory and Computational Cost for Deep Neural Network Training with Quantized Parameter Updates. JUCS -Journal of Universal Computer Science 31 (9), 963–979 (2025). https://doi.org/10. 3897/jucs.164737. (Visited on 04/24/2026) 3. Einhaus, L., Qian, C., Ringhofer, C., Schiele, G.: In-Situ Artificial Intelligence for Self-* Devices: The Elastic AI Ecosystem (Tutorial). In: 2021 IEEE International Conference on Autonomic Computing and Self-Organizing Systems Companion (ACSOS-C), pp. 320–321 (2021). https://doi.org/10.1109/ACSOS-C52956.2021. 00085. (Visited on 06/04/2026) 4. Hu, Z., Zou, X., Xia, W., Jin, S., Tao, D., Liu, Y., Zhang, W., Zhang, Z.: Delta-DNN: Efficiently Compressing Deep Neural Networks via Exploiting Floats Simi-larity. In: Proceedings of the 49th International Conference on Parallel Processing. ICPP ’20, pp. 1–12. Association for Computing Machinery, New York, NY, USA (2020). https://doi.org/10.1145/3404397.3404408. (Visited on 04/28/2025) 5. Hunt, J.J., Vo, K.-P., Tichy, W.: Delta Algorithms. ACM Transactions on Software Engineering and Methodology (TOSEM) 7, 192–214 (1998). https://doi.org/10. 1145/279310.279321 6. Jin, H., Wu, D., Zhang, S., Zou, X., Jin, S., Tao, D., Liao, Q., Xia, W.: Design of a Quantization-Based DNN Delta Compression Framework for Model Snapshots and Federated Learning. IEEE Transactions on Parallel and Distributed Systems 
+
+34 (3), 923–937 (2023). https://doi.org/10.1109/TPDS.2022.3230840. (Visited on 04/28/2025) 7. Pekhimenko, G.: Practical Data Compression for Modern Memory Hierarchies, (2016). https://doi.org/10.48550/arXiv.1609.02067. arXiv: 1609.02067 [cs.AR] .(Visited on 05/16/2026). 8. Sayood, K.: Lossless Compression Handbook. Academic Press, Amsterdam ; (2003) 9. Schiele, G., Burger, A., Cichiwskyj, C.: The Elastic Node: An Experimentation Platform for Hardware Accelerator Research in the Internet of Things. In: 2019 IEEE International Conference on Autonomic Computing (ICAC), pp. 84–94 (2019). https://doi.org/10.1109/ICAC.2019.00020 10. Xiao, H., Rasul, K., Vollgraf, R.: Fashion-MNIST: A Novel Image Dataset for Benchmarking Machine Learning Algorithms, (2017). https://doi.org/10.48550/ arXiv.1708.07747. arXiv: 1708.07747 [cs] . (Visited on 05/06/2026). 11. Zhang, S., Wu, D., Jin, H., Zou, X., Xia, W., Huang, X.: QD-Compressor: A Quantization-based Delta Compression Framework for Deep Neural Networks. In: 2021 IEEE 39th International Conference on Computer Design (ICCD), pp. 542– 550 (2021). https : / / doi . org / 10 . 1109 / ICCD53106 . 2021 . 00088. (Visited on 04/28/2025)
