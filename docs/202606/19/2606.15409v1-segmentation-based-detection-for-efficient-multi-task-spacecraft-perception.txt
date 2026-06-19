@@ -1,0 +1,276 @@
+Title: Segmentation-based Detection for Efficient Multi-Task Spacecraft Perception
+
+URL Source: https://arxiv.org/pdf/2606.15409v1
+
+Published Time: Tue, 16 Jun 2026 00:47:31 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# Segmentation-based Detection for Efficient Multi-Task Spacecraft Perception 
+
+# Sivaperuman Muniyasamy † Surendar Devasundaram †
+
+# University of Arizona, Tucson, AZ, USA 
+
+# sivaastro@arizona.edu, surdev@arizona.edu  
+
+> †Equal contribution
+
+# Abstract 
+
+Vision-based perception is fundamental to Space Situa-tional Awareness (SSA) and autonomous on-orbit opera-tions such as rendezvous, docking, servicing, and navi-gation. However, progress in this area is limited by the scarcity of annotated space imagery and by the challeng-ing characteristics of the visual domain, including severe illumination changes, low signal-to-noise ratio, and high contrast. We address Stream 1 of the SPARK 2026 Chal-lenge, which requires a single model for spacecraft classifi-cation, detection, and fine-grained component segmentation across multiple target types. To this end, we propose a com-pact hybrid architecture that integrates a MobileNet-V3 en-coder with a U-Net-style decoder head, combining compu-tational efficiency with accurate dense prediction. The re-sulting model is well suited to the challenge objective of de-veloping high-performing perception systems for resource-constrained space platforms. Our method achieved an over-all leaderboard score of 0.9482 , where the challenge metric is defined as 0.20Scls + 0.40Sdet + 0.40Sseg , with task-specific scores of 1.0000 in classification, 0.9788 in de-tection, and 0.8917 in segmentation. The proposed ap-proach ranked second overall in the SPARK 2026 Chal-lenge, demonstrating that lightweight encoder-decoder ar-chitectures can deliver strong multi-task performance for practical onboard space vision systems. Code is available at https://github.com/sivaastro/segdet-spark .
+
+# 1. Introduction 
+
+Space Situational Awareness (SSA) is a foundational capa-bility for safe and autonomous on-orbit operations, includ-ing inspection, rendezvous, docking, servicing, and main-tenance [7, 13, 19]. As orbital activity continues to in-crease, spacecraft must increasingly rely on onboard per-ception systems that can operate accurately and efficiently under strict compute, memory, and power constraints [3]. Vision-based spacecraft perception remains particularly challenging because of the unique characteristics of the space domain, including extreme illumination changes, high-contrast backgrounds, specular reflections, partial visi-bility, and large scale variation [8, 11, 23]. These difficulties are further compounded by the scarcity of annotated real-world space imagery, which limits the direct transfer of per-ception models developed for terrestrial applications [21]. Consequently, practical perception systems for space appli-cations must strike a careful balance among robustness, ac-curacy, and computational efficiency. In this work, we address Stream 1 of the SPARK 2026 Challenge, which requires a single model to perform space-craft classification, detection, and fine-grained component segmentation under strict efficiency constraints [1]. Con-ventional multi-task perception pipelines often rely either on separate task-specific models or on detection-centric ar-chitectures with explicit bounding-box regression heads, such as Mask R-CNN- or YOLO-style designs [4, 5, 15, 16]. While effective, such approaches increase architec-tural complexity and inference overhead, which can be un-desirable in resource-constrained deployment settings. In the SPARK setting, however, each image contains a single spacecraft, making it possible to derive object localization directly from the predicted component masks rather than learning a separate bounding-box regression branch. Motivated by this observation, we propose a lightweight multi-task architecture that combines a MobileNet-based encoder with a U-Net-style decoder [6, 17]. The model predicts spacecraft component masks and class labels in a single forward pass, while bounding boxes are obtained through deterministic post-processing of the union of pre-dicted masks. By treating segmentation as the primary dense prediction task and deriving detection from the re-sulting masks, the proposed design eliminates the need for a dedicated detection head and thereby reduces model com-plexity without sacrificing multi-task capability. Our ap-proach achieved an overall leaderboard score of 0.9482 on the SPARK 2026 benchmark, where the official metric is defined as 
+
+Sacc = 0 .20 Scls + 0 .40 Sdet + 0 .40 Sseg ,
+
+1
+
+> arXiv:2606.15409v1 [cs.CV] 13 Jun 2026
+
+with task-specific scores of 1.0000 for classification, 0.9788 
+
+for detection, and 0.8917 for segmentation. This perfor-mance ranked second overall on the leaderboard, demon-strating that lightweight encoder–decoder architectures can provide a strong trade-off between accuracy and efficiency for practical multi-task spacecraft perception. The main contributions of this work are summarized as follows: • We develop a lightweight MobileNet-based U-Net archi-tecture for joint spacecraft classification, detection, and component segmentation under strict parameter and effi-ciency constraints. • We show that reliable spacecraft detection can be achieved by deriving bounding boxes directly from pre-dicted component masks, eliminating the need for a ded-icated regression head in the single-object setting. • We demonstrate the effectiveness of the proposed de-sign on the SPARK 2026 benchmark, where it achieves a leaderboard score of 0.9482 and ranks second overall. 
+
+# 2. Related Work 
+
+2.1. Spacecraft perception datasets 
+
+Progress in vision-based spacecraft perception has been strongly influenced by the availability of synthetic and hardware-in-the-loop datasets, as collecting large-scale an-notated imagery in orbit remains difficult. Early benchmark datasets such as the Spacecraft PosE Estimation Dataset (SPEED) and Next Generation Spacecraft Pose Estimation Dataset (SPEED+) were introduced primarily for monoc-ular spacecraft pose estimation and domain-gap evalua-tion, providing synthetic training imagery together with ex-perimentally acquired validation data [12, 18]. The Un-real Rendered Spacecraft On-Orbit (URSO) further demon-strated the use of Unreal Engine-based rendering for pho-torealistic on-orbit image generation and has been used for spacecraft vision and pose-related benchmarking [14, 22]. More recently, the Spacecraft Recognition Leverag-ing Knowledge (SPARK) dataset expanded the scope be-yond pose estimation by providing synthetic spacecraft im-agery for recognition-oriented tasks under realistic space sensing conditions [10]. Large-scale multitask datasets have also emerged, such as the Automatically Annotated Mul-titask Spacecraft Dataset (AAMSD), which contains mil-lions of automatically annotated synthetic images spanning hundreds of spacecraft and supports multiple vision tasks, including detection, semantic segmentation, and pose es-timation [21]. In addition to frame-based RGB imagery, the Event-based Observation of Spacecraft (EVOS) dataset explores event-based sensing for autonomous on-orbit in-spection and related space applications [2]. Within this landscape, the SPARK 2026 Challenge focuses on effi-cient multi-task spacecraft perception, requiring a single model to jointly perform spacecraft classification, detection, and fine-grained component segmentation under resource-constrained deployment assumptions [1]. 
+
+2.2. Models for spacecraft perception 
+
+Existing spacecraft perception models can be broadly grouped into pose-estimation architectures, detection and instance-segmentation models, and semantic-segmentation encoder–decoder networks. In the pose-estimation set-ting, Spacecraft Pose Network (SPN) introduced a learning-based pipeline for monocular pose estimation on the SPEED benchmark, while SPNv2 extended this line of work through a multi-task and multi-scale formulation de-signed to improve robustness across domain gap [11, 18]. Although highly effective for relative pose estimation, these approaches are not designed specifically for joint part-level segmentation, object detection, and target classification. For object detection and instance-level segmentation, detector-first architectures such as Faster R-CNN and Mask R-CNN remain standard reference points because they jointly predict class labels, bounding boxes, and segmenta-tion masks [5, 16]. However, these models typically rely on dedicated detection and regression heads, which increases architectural complexity and inference cost. Such trade-offs are important in spacecraft applications, where onboard per-ception systems often operate under tight memory, power, and latency constraints. For part-level semantic understanding, encoder–decoder segmentation models are often better suited because they preserve spatial detail while producing dense predic-tions. U-Net introduced the now-standard skip-connected encoder–decoder design for precise localization [17]. DeepLabv3+ improved dense prediction by combining multi-scale contextual aggregation with a decoder that sharpens object boundaries [9]. More recently, SegFormer showed that hierarchical Transformer encoders paired with lightweight MLP decoders can achieve strong segmentation performance with competitive efficiency [20]. In the con-text of spacecraft parts body: solar panel, and antenna seg-mentation and detection, several models are explored, such as Yolo, OCRNet, ResnetSt101, ResnetSt200, and ASPOC-NET [4]. These model families are particularly relevant for spacecraft component segmentation, where thin structures such as solar panels can be lost at coarse feature resolutions. 
+
+2.3. Efficiency-oriented multi-task perception 
+
+The literature suggests a tension between multi-task ex-pressiveness and deployment efficiency. Detector-centric pipelines provide explicit localization but often intro-duce additional heads and post-processing stages, whereas segmentation-centric encoder–decoder models provide stronger spatial reasoning with simpler dense prediction pipelines. In challenge settings such as SPARK 2026, 2Figure 1. Overview of the proposed lightweight multi-task spacecraft perception architecture. A MobileNetV3-Large encoder extracts hierarchical features at multiple spatial scales, which are fused by a lightweight U-Net-style decoder through skip connections to predict two component masks corresponding to the spacecraft body and solar panels. In parallel, a compact classification head operates on deep encoder features to predict the spacecraft class. The final detection output is obtained analytically by thresholding the predicted masks, taking their union, and deriving a bounding box from the resulting foreground region. 
+
+where a single spacecraft is present in each image and fine-grained part segmentation is required, lightweight encoder– decoder architectures offer an attractive design point for jointly addressing segmentation and classification while en-abling localization to be recovered from predicted masks [1, 6, 17]. Motivated by this trade-off, our work adopts a compact MobileNet–U-Net design that emphasizes seg-mentation quality and derives detection through lightweight post-processing rather than through a dedicated bounding-box regression branch as shown in Figure 1. 
+
+# 3. Approach 
+
+3.1. Problem Setup 
+
+We address the SPARK multi-task spacecraft perception problem in the single-object setting. Given an input RGB image 
+
+I ∈ R3×H×W , (1) the model jointly predicts: (i) fine-grained segmentation of spacecraft components, (ii) spacecraft class identity, and 
+
+(iii) object detection in the form of a bounding box. The segmentation task focuses on two foreground components, namely the spacecraft body and solar panels. Accordingly, the network outputs a two-channel segmentation logit ten-sor 
+
+S ∈ R2×H×W , (2) where the first channel corresponds to the body and the sec-ond channel corresponds to the solar panels. In parallel, the model predicts classification logits c ∈ RK , where K de-notes the number of spacecraft classes. Rather than introducing a dedicated detection head, we derive the bounding box analytically from the predicted seg-mentation masks. This formulation is well aligned with the SPARK setting, in which each image contains a single spacecraft. As a result, localization can be recovered di-rectly from the segmented foreground, avoiding redundant regression of spatial information that is already encoded in the dense prediction output. 
+
+3.2. Architecture Overview 
+
+Our model, as shown in Figure 1, follows a segmentation-centric encoder–decoder design with an auxiliary classifi-cation branch. The encoder extracts hierarchical features from the input image, while the decoder progressively re-constructs high-resolution spatial detail through skip con-nections. The segmentation branch operates on the decoder 3output to predict body and panel masks, whereas the classi-fication branch operates on compact encoder features near the bottleneck. The final detection output is then obtained by deterministic post-processing of the predicted masks. This design is motivated by two requirements of the tar-get setting. First, spacecraft component segmentation re-quires precise recovery of thin structures such as solar pan-els and appendages, which benefits from multi-scale skip connections and dense prediction. Second, onboard de-ployment imposes strict efficiency constraints, which fa-vor lightweight backbones and inexpensive decoding oper-ations. Our architecture therefore combines a mobile-scale encoder with a compact U-Net-style decoder and avoids task-specific heads that would substantially increase param-eter count and inference cost. 
+
+3.3. MobileNetV3 Encoder 
+
+To achieve favorable accuracy–efficiency trade-offs, we adopt MobileNetV3-Large as the encoder backbone. Mo-bileNetV3 is built from inverted residual bottleneck blocks with depthwise separable convolutions, lightweight chan-nel attention through squeeze-and-excitation modules, and efficient nonlinearities such as hard-swish. These design choices make it well suited for high-resolution dense pre-diction under constrained compute budgets. The encoder progressively reduces spatial resolution while increasing semantic abstraction. For an input image of size H × W , skip features are extracted at four spatial scales,  H
+
+2 , H
+
+4 , H
+
+8 , H
+
+16 , (3) while the deepest bottleneck representation is computed at 
+
+H
+
+32 . (4) For an input resolution of 1024 × 1024 , the bottleneck fea-ture map has spatial size 32 × 32 and 960 channels in the MobileNetV3-Large configuration. These hierarchical fea-tures provide complementary information: shallow layers preserve fine boundary and texture cues, whereas deeper layers encode higher-level semantic context. The decoder exploits both through skip connections to improve the lo-calization of thin and elongated spacecraft components. 
+
+3.4. Lite Decoder 
+
+Starting from the encoder bottleneck, the decoder progres-sively upsamples the feature maps back to the input resolu-tion. A straightforward decoder with uniformly wide chan-nels and transposed convolutions at all scales becomes ex-pensive at high spatial resolutions, especially for 1024 ×
+
+1024 inputs. To reduce this cost, we employ a lightweight decoder with tapered channel widths and inexpensive up-sampling operations in the final stages.        
+
+> Standard Up-Block
+> ConvTranspose2d Conv2d (3×3)
+> LiteUp Block
+> F.interpolate (Bilinear) Depthwise Separable Conv
+> Up-Blocks 4 & 5
+> Figure 2. Replacement of the final high-resolution upsampling blocks with the proposed LiteUp design.
+
+Specifically, the decoder channel widths follow the schedule 
+
+128 → 96 → 48 → 24 → 16 . (5) The early upsampling stages operate on relatively small spa-tial maps and use standard learned upsampling blocks. In contrast, the final high-resolution stages replace transposed convolutions with a lighter design consisting of bilinear in-terpolation followed by depthwise separable convolution, as shown in Figure 2. This choice reduces the computational burden where the spatial resolution is largest while still al-lowing local refinement after upsampling. The resulting decoder preserves the strengths of a U-Net-style architecture—namely, multi-scale fusion and accu-rate boundary recovery—while keeping the parameter count and FLOP budget suitable for resource-constrained deploy-ment. In particular, the combination of skip connections and lightweight refinement blocks helps recover fine structures that are easily degraded by aggressive downsampling in the encoder. It achieves strict competition efficiency constraints without compromising the fine-grained localization needed for solar panel segmentation, reducing the overall footprint from approximately 58 .13 GFLOPs in the standard decoder formulation to just 22 .575 GFLOPs. 
+
+3.5. Multi-Task Heads and Mask-Derived Detection 
+
+Segmentation head. The decoder produces a two-channel segmentation logit map S, corresponding to the body and solar panel regions. A sigmoid activation is applied independently to each channel, yielding per-pixel foreground probabilities for each component class. This formulation allows the model to focus on part-level delin-eation rather than only coarse object extent, which is im-portant for spacecraft imagery containing thin appendages and sharp structural boundaries. 
+
+Classification head. Spacecraft identity is predicted from the compact encoder representation at the bottleneck. We apply global pooling to the deepest feature map concate-nated with skip 4 and feed the resulting feature vector to a lightweight linear classification layer, producing class logits 4c ∈ RK . This branch introduces minimal overhead while leveraging semantically rich encoder features for global recognition. 
+
+Mask-derived detection. Instead of learning a separate bounding-box regression head, we derive the detection out-put from the predicted segmentation masks. Let Sb and 
+
+Sp denote the body and panel logits, respectively. After sigmoid activation and thresholding, the binary component masks are 
+
+Mb =
+
+(
+
+1, σ(Sb) > τ b,
+
+0, otherwise , Mp =
+
+(
+
+1, σ(Sp) > τ p,
+
+0, otherwise .
+
+(6) where τb and τp are foreground thresholds and σ(·) denotes the sigmoid function. We then define the overall spacecraft foreground mask as the union 
+
+M = Mb ∪ Mp. (7) The final detection box is the tight axis-aligned bounding rectangle enclosing the active pixels in M , optionally en-larged by a small fractional padding factor δ to account for boundary uncertainty. This yields a deterministic localiza-tion rule that is simple, parameter-free, and naturally cou-pled to the segmentation output. The key advantage of this formulation is that it re-moves the need for a dedicated detection head in the single-object setting. Consequently, the model can allo-cate its capacity to the two dense tasks that matter most for this benchmark—component segmentation and class prediction—while still producing accurate bounding boxes through post-processing. 
+
+3.6. Training Objective 
+
+We jointly optimize the segmentation and classification tasks. The segmentation objective combines complemen-tary region- and boundary-aware losses: 
+
+Lseg = λbce LBCE + λdice LDice + λlovasz LLovasz . (8) In our implementation, the loss weights are set to 
+
+λbce = 0 .3, λdice = 0 .3, λlovasz = 0 .4. (9) Binary cross-entropy provides stable pixel-wise supervi-sion, Dice loss improves overlap quality for imbalanced foreground regions, and Lov´ asz loss encourages better op-timization of mask quality near object boundaries. We ap-ply Dice loss independently to each foreground channel so that the comparatively thin solar-panel regions are not dom-inated by the larger body mask. The classification branch is supervised with standard cross-entropy: 
+
+Lcls = LCE (c, y ), (10) 
+
+Table 1. Overall performance and efficiency on SPARK 2026 Stream-1 for our MobileNetV3-Large + U-Net-style decoder and the SegFormer-B0 baseline. 
+
+Model Sacc Sf inal GFLOPs Params Ours 0.9482 0.9276 22.575 3.849M SegFormer-B0 0.9351 0.8917 30.413 3.454M 
+
+Table 2. Task-wise performance on SPARK 2026 Stream-1 for our MobileNetV3-Large + U-Net-style decoder and the SegFormer-B0 baseline.. 
+
+Model Scls Sdet Sseg 
+
+Ours 1.0000 0.9788 0.8917 SegFormer-B0 1.0000 0.9439 0.8939 
+
+Table 3. Impact of foreground threshold on validation perfor-mance.                                                         
+
+> τScls Sdet Body Panel Sseg Sacc Sfinal
+> 0.30 0.9998 0.9601 0.9148 0.8559 0.9050 0.9460 0.9091 0.35 0.9998 0.9597 0.9225 0.8664 0.9128 0.9490 0.9112 0.40 0.9998 0.9589 0.9266 0.8727 0.9173 0.9505 0.9122 0.45 0.9998 0.9578 0.9286 0.8765 0.9197 0.9510 0.9126
+> 0.50 0.9998 0.9565 0.9295 0.8785 0.9209 0.9509 0.9125 0.55 0.9998 0.9510 0.9288 0.8778 0.9203 0.9485 0.9108 0.60 0.9998 0.9480 0.9266 0.8753 0.9181 0.9464 0.9094
+
+where y denotes the ground-truth spacecraft class label. The overall training objective is 
+
+L = Lseg + λcls Lcls , (11) with λcls = 0 .1 in our experiments. This weighting empha-sizes accurate component segmentation while still encour-aging discriminative global features for spacecraft classifi-cation. 
+
+# 4. Experiments 
+
+4.1. Experimental Setup 
+
+We evaluate our method on the SPARK 2026 Stream-1 
+
+benchmark, which jointly scores spacecraft classification ,
+
+detection , and fine-grained segmentation under efficiency-aware deployment constraints. Following the official chal-lenge protocol, the task accuracy score is defined as 
+
+Sacc = 0 .20 Scls + 0 .40 Sdet + 0 .40 Sseg , (12) where Scls , Sdet , and Sseg denote the classification, detec-tion, and segmentation scores, respectively. The final competition score additionally incorporates computational efficiency: 
+
+Sfinal = 0 .70 Sacc + 0 .15 Sflops + 0 .15 Sparams , (13) 5where 
+
+Sflops = max 
+
+
+
+0, 1 − GFLOPs 100 
+
+
+
+, (14) and 
+
+Sparams = max 
+
+
+
+0, 1 − MParams 30 
+
+
+
+. (15) This protocol rewards both predictive performance and deployability, making it particularly relevant for onboard spacecraft perception under resource-constrained settings. 
+
+4.2. Implementation Details 
+
+All models operate on RGB images at a spatial resolution of 
+
+1024 × 1024 . Our primary model uses the MobileNetV3-Large encoder and lightweight U-Net-style decoder de-scribed in Sec. 3. The network is trained jointly for seg-mentation and classification using the composite objective defined in Sec. 3. To adapt pretrained encoder features while preserving efficient learning of task-specific layers, we use differen-tial learning rates: 10 −4 for the encoder and 10 −3 for the decoder and task heads. Training is performed with Dis-tributed Data Parallel (DDP) across multiple GPUs. We fur-ther employ automatic mixed precision to accelerate high-resolution training, using BF16 on A100/H100 hardware and FP16 otherwise. Gradient accumulation is used to maintain a stable effective batch size during optimization. At inference time, detection boxes are derived analyti-cally from the union of the predicted body and panel masks. Unless otherwise stated, the derived box is expanded by a relative padding factor of 2.5% , which improves localiza-tion robustness while introducing no additional parameters or learnable computation. 
+
+# 5. Results 
+
+5.1. Main Quantitative Results 
+
+Our MobileNetV3-Large + U-Net-style decoder achieves a task accuracy score of Sacc = 0 .9482 , ranking second on the SPARK 2026 Stream-1 leaderboard . The model requires only 22.575 GFLOPs and 3.849M parameters 
+
+(computed using fvcore library), yielding Sflops = 0 .8871 
+
+and Sparams = 0 .8717 , with a final competition score of 
+
+Sfinal = 0 .9276 . Task-wise, the model performs strongly across all outputs, with perfect classification, high detection quality, and competitive fine-grained segmentation. These results show that a lightweight segmentation-centered archi-tecture can remain highly competitive under an efficiency-aware benchmark. 
+
+5.2. Comparison with SegFormer-B0 
+
+We compare our lightweight CNN-based design with the transformer-based SegFormer-B0 . SegFormer-B0 attains                                                          
+
+> Table 4. Impact of box padding on validation performance for mask-derived detection.
+> pScls Sdet Body Panel Sseg Sacc Sfinal
+> 00.9998 0.8425 0.9295 0.8785 0.9209 0.9053 0.8806 1.0% 0.9998 0.8985 0.9295 0.8785 0.9209 0.9277 0.8963 1.5% 0.9998 0.9270 0.9295 0.8785 0.9209 0.9391 0.9043 2.0% 0.9998 0.9462 0.9295 0.8785 0.9209 0.9468 0.9097 2.5% 0.9998 0.9565 0.9295 0.8785 0.9209 0.9509 0.9125 3.0% 0.9998 0.9589 0.9295 0.8785 0.9209 0.9519 0.9132
+> 4.0% 0.9998 0.9275 0.9295 0.8785 0.9209 0.9393 0.9044
+
+slightly better segmentation performance ( Sseg = 0 .8939 
+
+vs. 0.8917 ), but at substantially higher computational cost: 
+
+30.413 GFLOPs versus 22.575 GFLOPs , with compara-ble parameter counts ( 3.454M vs. 3.849M ). Tables 1 and 2 summarize the comparison. Under the official metric, this higher compute cost reduces the efficiency terms to Sflops = 0.6959 and 
+
+Sparams = 0.8849 , leading to a final competition score of Sfinal = 0.8917 . Although SegFormer-B0 produces slightly stronger masks, our MobileNetV3-Large model de-livers substantially better detection ( 0.9788 vs. 0.9439 ) and a better overall efficiency-accuracy trade-off, resulting in a higher final score. This highlights that in efficiency-aware spacecraft perception benchmarks, small segmenta-tion gains may not translate into better overall performance when accompanied by a large FLOP penalty. 
+
+5.3. Ablation Study 
+
+Foreground Threshold sensitivity Table 3 shows that the model is fairly robust to the foreground threshold over a broad range. While lower thresholds slightly improve de-tection, higher thresholds improve mask quality by sup-pressing false positives. The best overall validation score is obtained at τ = 0 .5, which provides the most favorable balance between detection and segmentation and is used in the final configuration. 
+
+Padding sensitivity Our method derives the detection box from the union of the predicted body and panel masks instead of learning a separate box-regression head. This is well suited to the benchmark, since each image con-tains a single spacecraft and segmentation is already re-quired. However, incomplete masks, especially around thin structures such as solar panels, can slightly underes-timate the derived box. To address this, we enlarge the box with a fixed relative padding factor of 3.0% , selected from a validation sweep. Table 4 shows that this simple post-processing step leaves classification and segmentation unchanged, while substantially improving detection from 
+
+0.8425 to 0.9589 . As a result, the overall score increases from 0.8806 to 0.9132 . This demonstrates that lightweight geometric post-processing can significantly improve local-6Table 5. Decoder ablation on the MobileNetV3 backbone. Replacing LiteUp with a wider standard decoder degrades performance while increasing model size and computation. LiteUp is therefore used in the final model. 
+
+Decoder Scls Sdet Body Panel Sseg Sacc Params (M) GFLOPs Sfinal 
+
+LiteUp (ours) 0.9998 0.9565 0.9295 0.8785 0.9209 0.9509 3.849 22.575 0.9125 
+
+Standard decoder 0.8352 0.7532 0.7465 0.6515 0.7368 0.7630 5.011 58.130 0.7219 
+
+> Table 6. Top-5 Optuna trials for loss-weight sensitivity.
+
+Trial Val. Score λcls λbce λdice λlovasz 
+
+62 0.9509 0.1 0.3 0.3 0.4 
+
+39 0.7118 0.0328 0.7182 0.1146 0.1672 38 0.6849 0.0343 0.7184 0.1156 0.1659 42 0.6799 0.0405 0.5412 0.2144 0.2443 19 0.6754 0.0533 0.7006 0.1126 0.1869 
+
+ization robustness without adding parameters or FLOPs. 
+
+Lite Decoder vs Standard Decoder Table 5 shows that the proposed LiteUp decoder achieves the best overall trade-off between accuracy and efficiency. Compared with the standard decoder variant, LiteUp yields substantially stronger classification, detection, and segmentation perfor-mance while also requiring fewer parameters and much lower computation. These results support the use of LiteUp in the final model. 
+
+Loss weight sensitivity We analyzed the sensitivity of the multi-task objective using Optuna. The top-performing trials consistently favored a small classification loss weight 
+
+and a dominant segmentation objective. The best trial achieved a validation score of 0.9509 with λcls = 0.1,
+
+λbce = 0 .3, λdice = 0 .3, and λlovasz = 0 .4. More broadly, the top-5 trials are shown in the Table 6, where performance was strongest when the segmentation loss emphasized sta-ble pixel-wise supervision, while the classification branch remained lightly weighted as an auxiliary task. 
+
+5.4. Discussion 
+
+The results suggest that a segmentation-centered multi-task architecture is an effective design choice for efficiency-aware spacecraft perception. By combining a lightweight mobile encoder, a compact decoder, and ana-lytic mask-derived detection, our model achieves a strong balance between segmentation fidelity, localization quality, and computational efficiency. More broadly, these findings indicate that the best model for deployment-oriented spacecraft perception is not nec-essarily the one with the highest raw segmentation score, but rather the one that achieves the most favorable trade-off among dense prediction quality, localization consistency, and resource usage. This observation is particularly relevant for autonomous spacecraft systems, where perception must operate reliably within tight onboard hardware budgets. 
+
+# 6. Conclusion 
+
+In this work, we presented a lightweight multi-task percep-tion model for SPARK 2026 Stream-1, targeting spacecraft classification, detection, and fine-grained component seg-mentation within a single architecture. Our approach com-bines a MobileNetV3 encoder with a compact U-Net-style decoder, using segmentation as the primary dense predic-tion task and deriving detection analytically from the union of predicted component masks. This design removes the need for a dedicated bounding-box regression head, reduces architectural complexity, and remains well aligned with the single-spacecraft setting of the benchmark. The proposed model achieved a task accuracy score of 0.9482 and ranked second on the SPARK 2026 Stream-1 leaderboard, while requiring only 22.575 GFLOPs and 3.849M parameters. The results show that strong multi-task performance can be achieved without resorting to heavier detection-centric or transformer-based designs. In partic-ular, our experiments demonstrate that efficient encoder– decoder architectures, combined with lightweight geomet-ric post-processing, provide a favorable balance among seg-mentation quality, localization accuracy, and deployment efficiency. More broadly, this work highlights the value of segmentation-centered formulations for resource-aware spacecraft perception. Rather than treating detection, clas-sification, and segmentation as entirely separate objectives with independent task heads, our results suggest that dense part-level prediction can serve as a compact and informative representation from which other outputs can be recovered. This is especially relevant for autonomous onboard systems, where perception models must operate under strict memory, compute, and power constraints. As future work, the proposed framework could be extended beyond the single-object setting to more gen-eral multi-spacecraft scenes, where learned instance sep-aration or more structured localization mechanisms may be required. Further investigation into robustness under real imagery, sim-to-real transfer, and temporally consis-tent perception for navigation and proximity operations would also strengthen the applicability of lightweight multi-task spacecraft vision systems in practical space mis-sions. 7References 
+
+[1] AI4Space @ CVPR. Spark 2026 challenge: Stream 1 multi-task spacecraft perception. https://cvi2.uni.lu/spark2026/, 2026. 1, 2, 3 [2] Alexander Crain and Steve Ulrich. Event-based observation of spacecraft (evos): A neuromorphic dataset for spacecraft proximity operations. https://doi.org/10.20383/103.01538, 2025. 2 [3] Miguel Ortiz Del Castillo, Jonathan Morgan, Jack McRob-bie, Clint Therakam, Zaher Joukhadar, Robert Mearns, Si-mon Barraclough, Richard Sinnott, Andrew Woods, Chris Bayliss, et al. Mitigating challenges of the space environ-ment for onboard artificial intelligence: Design overview of the imaging payload on spirit. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pages 6789–6798, 2024. 1 [4] Hoang Anh Dung, Bo Chen, and Tat-Jun Chin. A spacecraft dataset for detection, segmentation and parts recognition. In 
+
+Proceedings of the IEEE/CVF Conference on Computer Vi-sion and Pattern Recognition , pages 2012–2019, 2021. 1, 2[5] Kaiming He, Georgia Gkioxari, Piotr Doll´ ar, and Ross Gir-shick. Mask r-cnn. In Proceedings of the IEEE international conference on computer vision , pages 2961–2969, 2017. 1, 2[6] Andrew Howard, Mark Sandler, Grace Chu, Liang-Chieh Chen, Bo Chen, Mingxing Tan, Weijun Wang, Yukun Zhu, Ruoming Pang, Vijay Vasudevan, et al. Searching for mo-bilenetv3. In Proceedings of the IEEE/CVF international conference on computer vision , pages 1314–1324, 2019. 1, 3[7] Delun Li, Lou Zhong, Wei Zhu, Zhipeng Xu, Qirong Tang, and Wenhao Zhan. A survey of space robotic technologies for on-orbit assembly. Space: Science & Technology , 2022. 1[8] Kun Liu and Yongjun Yu. Revisiting the domain gap issue in non-cooperative spacecraft pose tracking. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pages 6864–6873, 2024. 1 [9] Yanyan Liu, Xiaotian Bai, Jiafei Wang, Guoning Li, Jin Li, and Zengming Lv. Image semantic segmentation approach based on deeplabv3 plus network with an attention mech-anism. Engineering Applications of Artificial Intelligence ,127:107260, 2024. 2 [10] Mohamed Adel Musallam, Vincent Gaudilliere, Enjie Ghor-bel, Kassem Al Ismaeil, Marcos Damian Perez, Michel Poucet, and Djamila Aouada. Spacecraft recognition lever-aging knowledge of space environment: Simulator, dataset, competition design and analysis. In 2021 IEEE International Conference on Image Processing Challenges (ICIPC) , pages 11–15. IEEE, 2021. 2 [11] Tae Ha Park and Simone D’Amico. Robust multi-task learn-ing and online refinement for spacecraft pose estimation across domain gap. Advances in Space Research , 73(11): 5726–5740, 2024. 1, 2 [12] Tae Ha Park, Marcus M¨ artens, Gurvan Lecuyer, Dario Izzo, and Simone D’Amico. Speed+: Next-generation dataset for spacecraft pose estimation across domain gap. In 2022 IEEE aerospace conference (AERO) , pages 1–15. IEEE, 2022. 2 [13] Leo Pauly, Wassim Rharbaoui, Carl Shneider, Arunkumar Rathinam, Vincent Gaudilliere, and Djamila Aouada. A sur-vey on deep learning-based monocular spacecraft pose esti-mation: Current state, limitations and prospects. Acta Astro-nautica , 212:339–360, 2023. 1 [14] Pedro F Proenc ¸a and Yang Gao. Deep learning for space-craft pose estimation from photorealistic rendering. In 2020 IEEE International Conference on Robotics and Automation (ICRA) , pages 6007–6013. IEEE, 2020. 2 [15] Joseph Redmon, Santosh Divvala, Ross Girshick, and Ali Farhadi. You only look once: Unified, real-time object de-tection. In Proceedings of the IEEE conference on computer vision and pattern recognition , pages 779–788, 2016. 1 [16] Shaoqing Ren, Kaiming He, Ross Girshick, and Jian Sun. Faster r-cnn: Towards real-time object detection with region proposal networks. IEEE transactions on pattern analysis and machine intelligence , 39(6):1137–1149, 2016. 1, 2 [17] Olaf Ronneberger, Philipp Fischer, and Thomas Brox. U-net: Convolutional networks for biomedical image segmen-tation. In International Conference on Medical image com-puting and computer-assisted intervention , pages 234–241. Springer, 2015. 1, 2, 3 [18] Sumant Sharma and Simone D’Amico. Pose estimation for non-cooperative rendezvous using neural networks. arXiv preprint arXiv:1906.09868 , 2019. 2 [19] Beichao Wang, Shuang Li, Jinzhen Mu, Xiaolong Hao, Wen-shan Zhu, and Jiaqian Hu. Research advancements in key technologies for space-based situational awareness. Space: Science & Technology , 2022. 1 [20] Enze Xie, Wenhai Wang, Zhiding Yu, Anima Anandkumar, Jose M Alvarez, and Ping Luo. Segformer: Simple and efficient design for semantic segmentation with transform-ers. Advances in neural information processing systems , 34: 12077–12090, 2021. 2 [21] Shengyun Zhao, Linyan Cui, and Rui Zhong. Automated an-notation and optimization of multitask dataset for spacecraft. 
+
+Advances in Space Research , 2025. 1, 2 [22] Yunpeng Zhao, Rui Zhong, and Linyan Cui. Intelligent recognition of spacecraft components from photorealistic images based on unreal engine 4. Advances in Space Re-search , 71(9):3761–3774, 2023. 2 [23] Jianhong Zuo, Shengyang Zhang, Qianyu Zhang, Yutao Zhao, Baichuan Liu, Aodi Wu, Xue Wan, Leizheng Shu, and Guohua Kang. Crospace6d: leveraging geometric and motion cues for high-precision cross-domain 6dof pose es-timation for non-cooperative spacecrafts. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pages 6857–6863, 2024. 1 
+
+8
