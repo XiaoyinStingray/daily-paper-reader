@@ -1,0 +1,527 @@
+Title: AQ4SViT: An Automated Quantization Framework with Search Gating Policy for Compressing Spiking Vision Transformers
+
+URL Source: https://arxiv.org/pdf/2606.15523v1
+
+Published Time: Tue, 16 Jun 2026 00:55:29 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+> 1
+
+# AQ4SViT: An Automated Quantization Framework with Search Gating Policy for Compressing Spiking Vision Transformers 
+
+Rachmad Vidya Wicaksana Putra ∗, Member, IEEE, Saad Iftikhar ∗, and Muhammad Shafique, Senior Member, IEEE 
+
+Abstract —Spiking Vision Transformers (SViTs) have emerged as alternative low-power ViT models, but their large sizes hinder their deployments on resource-constrained embedded AI systems. To address this, state-of-the-art works proposed quantization techniques to compress SViT models, but their manual, human-guided approach needs a huge design time and power/energy consumption to find the appropriate quantization setting for each given network, making this approach not scalable for quantizing multiple networks. Toward this, we propose AQ4SViT, a novel automated quantization framework for SViTs that can provide quick quantization settings with good trade-offs between accuracy and memory. To achieve this, AQ4SViT employs the following key ideas: (1) quantization search strategy that evaluates the quantization setting candidates while considering the accu-racy constraint; and (2) search gating policy that quickly evaluates and selects promising quantization candidates by leveraging membrane potential drift as a performance proxy. In the search gating policy, AQSViT employs two search algorithm variants to provide trade-off options: Greedy search , which performs fast but may lead to local optima; and Beam search , which performs slower but has better performance in finding global optima selection due to a wider search space. Experimental results show that AQ4SViT-Greedy quickly finds the appropriate quantization settings, achieving up to 6.6 × faster search time and up to 82.5% memory saving compared to the state-of-the-art; while AQ4SViT-Beam further reduces the memory footprint by up to 90% compared to the state-of-the-art, but with 4.5 × longer search time; all these results are obtained while maintaining high accuracy within 1.5% from the original/non-quantized models on the ImageNet dataset. These results highlight that our AQ4SViT framework offers substantial advancements toward efficient SViT deployments on resource-constrained embedded AI systems. 
+
+Index Terms —Neuromorphic Computing, Spiking Neural Net-works (SNNs), Spiking Vision Transformers (SViTs), Automated Quantization, SViT Model Compression, Search Gating Policy, Embedded AI Systems. 
+
+I. I NTRODUCTION 
+
+Transformer-based networks [4] have demonstrated state-of-the-art performance in addressing diverse machine learning (ML) tasks. Recently, vision-based tasks (such as image clas-sification, object detection, and targeted segmentation) have become prominent applications that significantly benefit from 
+
+Rachmad Vidya Wicaksana Putra and Saad Iftikhar are with eBRAIN Lab, Division of Engineering, New York University (NYU) Abu Dhabi, United Arab Emirates (UAE); (e-mail: rachmad.putra@nyu.edu, si2356@nyu.edu). Muhammad Shafique is the Director of eBRAIN Lab, Division of Engineer-ing, New York University (NYU) Abu Dhabi, United Arab Emirates (UAE); (e-mail: muhammad.shafique@nyu.edu).  
+
+> ∗
+
+Equal contributions. 65       
+
+> 70
+> 75
+> 80
+> 85
+> 90
+> 050 100 150 200 250 300
+> Top -1 Accuracy [%]
+
+Number of Parameters [M] 
+
+> Conventional DNNs
+> ViT -based Networks
+
+(a)  (b)        
+
+> ViT -based networks offer
+> higher accuracy than
+> conventional DNNs but
+> incur larger memory sizes ▪High Accuracy
+> ▪Low Memory
+> ▪Low Latency
+> ▪Low Power /
+> Low Energy
+> NN model
+
+Embedded AI System 
+
+Fig. 1. (a) ViT models surpass the accuracy of conventional DNNs for a classification task on the ImageNet dataset [1], but incur larger memory sizes; based on studies in [2]. (b) Embedded AI typically demands for high accuracy as well as low memory, latency, and power/energy consumption [3]. 
+
+Transformers; also known as Vision Transformers (ViTs) [2] [5] [6]. This trend is showcased in Fig. 1(a) as ViT models have surpassed the accuracy of state-of-the-art deep neural networks (DNNs). Therefore, deploying ViTs in resource-constrained embedded AI systems is in high demand and actively being pursued, as this may enable diverse applica-tion use-cases that can increase human productivity [2] [5] [6]. Despite their potentials, implementing ViTs in resource-constrained systems remains a non-trivial challenge due to their huge network sizes and computational complexity, which lead to significantly large memory cost and high power/energy consumption. In the last decade, advancements in spiking neural networks (SNNs) have provided energy-efficient computation model to execute neural network (NN) algorithms, due to their sparse spike-driven operations [7]–[13]. Therefore, researchers recently proposed Spiking Vision Transformers (SViTs) as low-power alternatives to ViT models, such as Spikformer with 66.3M parameters [14], Spike-Driven Transformer (SDT) with 66.3M parameters [15], Spike-Driven Transformer v2 (SDTv2) with 55.4M parameters [16], and Spike-Driven Transformer v3 (SDTv3) with 173M parameters [17]. Here, M denotes million (10 6) of counts. However, their large sizes hinder their deployability for resource-constrained embedded AI. To reduce the size of SNN-based models, existing works have proposed different techniques in the literature, such as weight pruning [18], quantization [18]–[21], and neuron elimination [9]. Here, quantization is one of the prominent techniques as it effectively reduces model size at the cost of acceptable accuracy degradation due to information loss. Ex-isting DNN quantization frameworks cannot be used directly in SNN domain due to substantial differences in the neuronal and synaptic operations. Besides, SNN quantization requires a   
+
+> arXiv:2606.15523v1 [cs.NE] 14 Jun 2026 2layer-wise quantization
+> combined precision
+> final setting
+> 76.5%
+> 21.9%
+> 1.6% Search time for finding the final quantization setting
+> 257 minutes
+> Model size reduction achieved by the quantized model 22.8%
+> Power saving of the inference using the quantized model 21.3%
+
+(a)  (b)  Breakdown of the search time Experimental results on ImageNet     
+
+> Fig. 2. (a) Experimental results from quantizing SDTv2 model using the QSViT methodology on the Nvidia GeForce RTX 4090 GPU. (b) Breakdown of the search time.
+
+careful design to avoid significant accuracy drop [21]. More-over, manually devising an appropriate quantization setting for any given SViT model is not a scalable approach, since it requires huge design time and incurs large power/energy consumption accordingly for each investigated network model. Therefore, the targeted research problem in this work is how can we quickly quantize any given SViT models to reduce their memory requirements, while maintaining high accuracy? 
+
+A solution to this problem may enable an efficient design automation for efficient SViT deployments on embedded AI systems; see Fig. 1(b). 
+
+A. State-of-the-Art and Their Limitations 
+
+Currently, most of existing works still target for developing SViT models that achieve high accuracy [14]–[16]. Therefore, only a few state-of-the-art works target SViT model com-pression. For instance, work of [22] proposes search with layer-wise quantization in training strategy, thus requiring huge design time and power/energy consumption during its search-and-train process. Moreover, it still considers rela-tively small datasets (e.g., N-Caltech101, DVS-Gesture, and CIFAR10-DVS). Another work, the quantized spike-driven transformer (QSDT) [23] leverages PTQ and then distillation using information from the artificial neural network (ANN) counterpart for addressing the accuracy degradation from its PTQ stage. Hence, this approach is only suitable for SViT models that have established ANN counterparts, and the additional distillation step itself incurs significant training-time overhead (multiple retraining epochs with the ANN teacher), making it inapplicable to task-specific or novel SNN designs where no pre-trained ANN equivalent exists. Meanwhile, the quantized spiking vision transformer (QSViT) [24] employs layer-wise PTQ based on the analysis of layer-wise quanti-zation. In general, despite their benefits, these state-of-the-art methods are not scalable for quantizing different SViT models due to their manual design approaches, i.e., they require human-guided iterative analysis between quantization steps (examining results, hypothesizing new settings, and re-running experiments), leading to long design time and huge power/energy consumption during the optimization process. 
+
+Therefore, an alternative quantization approach is required to quickly quantize any given SViTs in a fully automated, end-to-end manner, while preserving high accuracy .
+
+B. Case Study and Related Research Challenges 
+
+To demonstrate the limitations of state-of-the-art, we per-form a case study. Specifically, we follow PTQ approach from QSViT [24], and evaluate its design/search time to find the quantization setting for compressing the pre-trained SDTv2 model [16] considering the ImageNet dataset through following key steps.  
+
+> •
+
+First, we apply layer-wise quantization to generate different quantization settings 1, then run the inference for each setting considering all 50,000 (50K) validation images.  
+
+> •
+
+Second, we identify new quantization settings, that poten-tially lead to acceptable accuracy based on analysis in the first step. Then, we run the inference for each setting.  
+
+> •
+
+Third, we define the final quantization setting that maintains high accuracy with the most memory saving based on analysis in the second step. Then, we run the inference considering all 50K validation images. To support this, we employ the experimental setup that will be further discussed in Section IV. The experimental results are provided in Fig. 2, from which we make the following key observations.  
+
+> •
+
+Searching time of the manual quantization approach is relatively long, and mostly dominated by the process for investigating the impact of layer-wise quantization.  
+
+> •
+
+Complexity of network architecture (e.g., number of layers) contributes to the number of search iterations during exper-imental analysis (e.g., through layer-wise quantization and combined precision settings).  
+
+> •
+
+Evaluation strategy (e.g., utilizing all 50K validation im-ages) contributes to the evaluation time for each quantization setting, which accumulates over search iterations. These points expose the following research challenges.  
+
+> •
+
+Quantization process should be automated to reduce the bur-den of design/search time, hence enabling scalable approach for quantizing different possible models.  
+
+> •
+
+Quantization process should efficiently handle different pos-sible network complexity (e.g., number of layers).  
+
+> •
+
+Quantization process should quickly yet effectively evaluate each quantization setting candidate. 
+
+C. Our Novel Contributions 
+
+To solve the targeted problem and associated research chal-lenges, we propose AQ4SViT , a novel automated quantization framework that can quickly provide quantization settings for compressing SViTs with good trade-offs between accuracy and memory . This effort is also the first PTQ search framework for SViTs considering large-scale datasets (e.g., ImageNet). It employs the following key ideas; see the overview in Fig. 3.  
+
+> •
+
+Quantization Search Strategy: It aims to evaluate quanti-zation setting candidates under different quantization phases (i.e., global, stage-wise, and block-wise), while considering the accuracy constraint.  
+
+> •
+
+Search Gating Policy: It aims to evaluate each quantization setting candidate by leveraging membrane potential drift 
+
+as a proxy for accuracy, so that only promising candidates proceed to costly full-dataset evaluation. To achieve this, we       
+
+> 1Each quantization setting refers to a set of all precision levels across different layers of the network. 3AQ4SViT Framework (Section III) Pre-trained SViT model Quantization
+> Search
+> Strategy
+> (Section III-A)
+> Global Quantization Stage-wise Tuning Block-wise Tuning
+> Accuracy Constraint
+> Quantization
+> •PTQ scheme
+> •Precision levels
+> Search Gating Policy
+> (Section III-B)
+> Membrane Potential Drift
+> run
+> Quantized
+> SViT model
+> Searching Algorithms
+> Variant-1: Greedy Search
+> Variant-2: Beam Search
+> Dataset
+> (e.g., ImageNet)
+> Fig. 3. The AQ4SViT framework with its novel optimization steps highlighted in green.
+
+propose two search algorithm variants that provide trade-offs between search time and compression rate. 
+
+– Greedy search : It typically performs fast due to aggressive selection, but may settle at local-optima. 
+
+– Beam search : It typically performs slower than the greedy search due to a wider search space, but it can lead to better performance in finding models that have smaller memory footprints. 
+
+Key Results: We evaluate the AQ4SViT framework using a PyTorch-based implementation and run it on an Nvidia GeForce RTX 4090 24GB GPU machine. Experimental results show that, our AQ4SViT can provide the appropriate quanti-zation settings to maintain high accuracy within 1.5% from the original/non-quantized models on the ImageNet dataset. Specifically, AQ4SViT-Greedy achieves this with up to 6.6 ×
+
+faster search time and up to 82.5% memory saving compared to the state-of-the-art QSViT [24]. Meanwhile, AQ4SViT-Beam achieves this at the cost of 4.5 × longer search time, but enables up to 90% memory saving compared to the state-of-the-art [24]. These results highlight that AQ4SViT framework represents a significant advancement toward efficient SViT deployments on resource-constrained embedded AI systems. II. B ACKGROUND 
+
+A. Spiking Vision Transformer (SViT) 
+
+SNNs have demonstrated their immense potential as energy-efficient alternatives to NN algorithms [11] [12] [25]. Hence, they are actively studied for vision transformers, known as Spiking Vision Transformers (SViTs). Currently, in the liter-ature, state-of-the-art SViT models include Spikformer [14], Spikingformer [26], Spike-Driven Transformer (SDT) [15], Spike-Driven Transformer v2 (SDTv2) [16], and Spike-Driven Transformer v3 (SDTv3) [17]. These models have similar main architectural components, such as spiking convolutional (CONV) layers , spiking linear layers , and spiking attention layers . Since these models have deep structure and multiple layers may contribute to a specific functionality, their layers are often grouped into a block , and multiple blocks are grouped into a stage . Furthermore, these models usually also employ a downsampling block. For instance, SDTv2 model has 4 stages and a classification head. In stage-1, there are 2 sets of downsampling and CONV blocks. In stage-2, there is a downsampling block, which is followed by 2 CONV blocks. In stage-3, there is a downsampling block, which is followed by 6 attention blocks. In stage-4, there is a downsampling block, which is followed by 2 attention blocks. 
+
+B. Quantization Methods 
+
+There are two possible schemes for quantizing SNN models, namely Quantization-aware Training (QAT) and Post-Training Quantization (PTQ) [21] [27]. QAT applies quantization on an SNN model during the training phase, hence resulting in a quantized SNN model that is ready for inference phase. Mean-while, PTQ applies quantization on a pre-trained SNN model, hence resulting in a quantized SNN model for inference. In this work, we use PTQ since it does not need costly training, hence providing a low-cost quantization approach, which is suitable for enabling efficient search algorithms. In this work, we convert the floating-point 32bit (FP32) values into the targeted bit precision ( b) by identifying the conversion scale ( μ) based on the range of weight values ( wrange = wmax − wmin ) from the floating-point format and the range of quantized values (Qrange = Qmax −Qmin ); see Eq. 1. Here, Qmax = 2 (b−1) −1
+
+and Qmin = −2(b−1) . Once the scale factor μ is defined, each weight ( w) can be quantized into its integer format ( wq ). We realize this conversion through simulated quantization to en-able fast exploration, while providing representative accuracy and memory information [28]. 
+
+μ = wrange 
+
+Qrange 
+
+and wq = round 
+
+ wμ
+
+
+
+(1) III. T HE AQ4SV IT F RAMEWORK 
+
+This framework considers the following key steps: quanti-zation search strategy and search gating policy as described below (see an overview in Fig. 3). 
+
+A. Quantization Search Strategy 
+
+We define the automated searching pipeline that facilitates different precision levels across network layers, as effective quantization settings may have heterogeneous precision levels due to variability of layers’ sensitivity [24]. Here, we consider two search algorithm variants to provide trade-off options.  
+
+> •
+
+Greedy Search (AQ4SViT-Greedy) : It aims to provide a fast solution by leveraging its aggressive search and selection, but it may settle for local-optima.  
+
+> •
+
+Beam Search (AQ4SViT-Beam) : It aims to provide better search results than the greedy search by exploring a wider heuristic search space for a stronger memory-saving solu-tion, but it may perform slower than the greedy search. 4
+
+Algorithm 1 AQ4SViT-Greedy Search Pipeline                                                                                                                                                                                         
+
+> INPUT: Pre-trained FP32 model ( M); Quantized model ( Mq); Pre-defined bit precision levels G={16 ,12 ,8,4}; Training set ( C); Validation set (V); Timesteps ( T); Sample size for gating ( Nmet = 128 ); Accuracy tolerance ( ∆acc , in top-1 %-age); Drift threshold ( τv); Accuracy ( A); Memory ( M); Minimum bits ( bmin = 3 );
+> OUTPUT: Selected bit precision setting ( B∗);
+> Initialization:
+> 1: Afp , M fp = evaluate( M,V); 2: B[: ,:] = 32; R= [];
+> Process:
+> // Step-1: Global Quantization 3: for b∈Gdo
+> 4: Mq= quantize (M, b );5: δv= gating (M,Mq,C, N met , T ); // Alg. 3 6: if δv≤τvthen
+> 7: A, M = evaluate (Mq,V);8: if A≥Afp −∆acc then
+> 9: R= append( R, record (: ,:, b, A, M, valid) ); B[: ,:] =b;// Step-2: Stage-wise Tuning 10: for each stage sdo
+> 11: hi =B[s, :] ;lo =4;12: while (hi -lo >1)do
+> 13: c=⌊(hi + lo) /2⌋;B[s, :] =c;14: Mq= quantize (M,B);15: δv= gating (M,Mq,C, N met , T ); // Alg. 3 16: if δv≤τvthen
+> 17: A, M = evaluate (Mq,V);18: if A≥Afp −∆acc then
+> 19: R= append( R, record (s, :, c, A, M, valid) ;hi =c;20: else
+> 21: revert B;lo =c;22: else
+> 23: revert B;lo =c;// Step-3: Block-wise Tuning 24: for each block kwith B[: , k ]>4do
+> 25: bk=max( ⌈B [: , k ]/2⌉, b min );B[: , k ]=bk;26: Mq= quantize (M,B);27: δv= gating (M,Mq,C, N met , T ); // Alg. 3 28: if δv≤τvthen
+> 29: A, M = evaluate (Mq,V);30: if A≥Afp −∆acc then
+> 31: R= append( R, record (: , k, b k, A, M, valid) ;32: else
+> 33: revert B;34: B∗←valid trial in Rwith minimum memory M;35: return B∗;
+
+1) AQ4SViT-Greedy : The following are its key steps (see the pseudo-codes in Alg. 1).  
+
+> •
+
+Step-1. Global Quantization: In this step, we quantize all weight parameters across all layers with the same precision level to quickly identify the minimum uniform precision level that meets the given accuracy constraint. It includes the following points. 
+
+– The precision levels are pre-defined and stored in list 
+
+G, which are explored one-by-one for quantization; see Alg. 1: lines 3-9. 
+
+– Once the model is quantized, we perform search gating 2
+
+to quickly evaluate if the investigated quantization setting forms a network that meets the criteria; see Alg. 1: lines 5-6. 
+
+– If the accuracy is acceptable, the investigated quantization setting is stored in B; see Alg. 1: lines 7-9. 
+
+– Once the loop is finished, we move to Step-2.    
+
+> 2Details of the search gating function and its criteria will be discussed in Section III-B.
+> •
+
+Step-2. Stage-wise Tuning: In this step, we partition the network into stages and perform search for finding the appropriate precision level for each stage; see Alg. 1: lines 10-23. It includes the following points. 
+
+– We employ binary search based on the precision from step-1 (global quantization) and the lowest pre-defined precision (e.g., 4 bit); see Alg. 1: lines 11-13. Crucially, the binary search explores intermediate bit-width values (e.g., 6-bit or 7-bit) between the global precision and the minimum, enabling finer-grained mixed-precision assign-ments beyond the discrete set G.
+
+– Once the model is quantized, we perform search gating 
+
+to quickly evaluate if the investigated quantization setting forms a network that meets the criteria; see Alg. 1: lines 15-16. 
+
+– If the observed accuracy is acceptable, then the investi-gated quantization setting in B is kept, otherwise B is reverted back; see Alg. 1: lines 17-23. 
+
+– Once the loop is finished, we move to Step-3.  
+
+> •
+
+Step-3. Block-wise Tuning: In this step, we partition each stage into blocks, and perform search for finding the appro-priate precision level for each block; see Alg. 1: lines 24-33. It includes the following points. 
+
+– We gradually reduce the precision level by half at a time if the current bit-width is larger than 4 bits; see Alg. 1: lines 24-25. The global and stage-wise searches use 4 bits as the minimum precision, while the block-wise step may go to 3 bits for selected blocks only. 
+
+– Once the model is quantized, we perform search gating 
+
+to quickly evaluate if the investigated quantization setting meets with the criteria; see Alg. 1: lines 28-29. 
+
+– If accuracy is acceptable, then the investigated quantiza-tion setting in B is kept, otherwise B is reverted back; see Alg. 1: lines 30-33. 
+
+– Once the loop is finished, we will obtain the appropriate quantization setting that meets the accuracy constraint, which is recorded in B; see Alg. 1: line 34. 
+
+2) AQ4SViT-Beam : Its key idea is to expand every parent configuration into a set of children at each step, evaluate all children, and retain only the top-K valid candidates for the next step. A dedicated Repair-pass further refines each beam member by attempting local precision adjustments at the block level. The terminal selection criterion is minimum parameter memory subject to the accuracy constraint. Its pseudo-code is shown in Alg. 2 and its key steps are described below.  
+
+> •
+
+Step-1. Global Quantization: Each uniform precision level 
+
+b ∈ G is applied across all layers and evaluated through the gating function; see Alg. 2: lines 2-9 for global quantization and Alg. 3 for the gating function. Candidates that pass the gate and meet the accuracy constraint are added to the initial beam, which is then pruned to the top-K by proxy score.  
+
+> •
+
+Step-2. Stage-wise Tuning: For each stage s, every beam member (parent) spawns children by retaining the current precision or attempting adjacent lower precision levels for that stage; see Alg. 2: lines 10-22. Each new child is evaluated through the gating function. Children that pass the gate and meet the accuracy constraint are added to the 5
+
+Algorithm 2 AQ4SViT-Beam Search Pipeline 
+
+INPUT: Pre-trained FP32 model ( M); Pre-defined bit precisions G =
+
+{16 , 12 , 8, 4}; Training set ( C); Validation set ( V); Timesteps ( T ); Sample size ( Nmet = 128 ); Accuracy tolerance ( ∆acc , in top-1 %-age); Drift threshold τv ; Beam size ( K = 4 ); Minimum bits ( bmin = 3 ); 
+
+OUTPUT: elected bit precision setting ( B∗); 
+
+Initialization: 
+
+1: Afp , M fp = evaluate( M, V); Beam = ∅;
+
+Process: 
+
+// Step-1: Global Quantization 2: for b ∈ G (descending) do 
+
+3: Mq = quantize( M, b); 4: δv = gating( M, Mq , C, Nmet , T ); // Alg. 3 5: if δv ≤ τv then 
+
+6: A, Msz = evaluate( Mq , V); 7: if A ≥ Afp − ∆acc then 
+
+8: Beam = Beam ∪ { record( b, A, Msz , valid) };9: Beam = TOP K (Beam, K); // Step-2: Stage-wise Tuning 10: for each stage s do 
+
+11: Children = ∅;12: for each parent ∈ Beam do 
+
+13: Children = Children ∪ { parent.clone() }; // keep current 14: for each b′ ∈ adj lower(parent .bits[ s], G, b min ) do 
+
+15: child = parent.clone(); child.bits [s] = b′;16: Mq = quantize( M, child.bits); 17: δv = gating( M, Mq , C, Nmet , T ); // Alg. 3 18: if δv ≤ τv then 
+
+19: A, Msz = evaluate( Mq , V); 20: if A ≥ Afp − ∆acc then 
+
+21: Children = Children ∪ { child };22: Beam = TOP K (Children, K); // Step-3: Block-wise Tuning 23: for each block k do 
+
+24: Children = ∅;25: for each parent ∈ Beam do 
+
+26: Children = Children ∪ { parent.clone() };27: b′ = max( ⌈parent .bits[ k]/2⌉, b min );28: child = parent.clone(); child.bits [k] = b′;29: Mq = quantize( M, child.bits); 30: δv = gating( M, Mq , C, Nmet , T ); // Alg. 3 31: if δv ≤ τv then 
+
+32: A, Msz = evaluate( Mq , V); 33: if A ≥ Afp − ∆acc then 
+
+34: Children = Children ∪ { child };35: Beam = TOP K (Children, K); // Step-4: Repair Pass 36: for each c ∈ Beam do 
+
+37: for each block k (descending by c.bits [k]) do 
+
+38: child = c.clone(); child.bits [k] = adj lower( c.bits [k], G, bmin )[0]; 39: Mq = quantize( M, child.bits); 40: δv = gating( M, Mq , C, Nmet , T ); // Alg. 3 41: if δv ≤ τv and valid(child) and child. Msz < c.M sz then 
+
+42: c ← child; 43: for each block k (ascending by c.bits [k]) do 
+
+44: child = c.clone(); child.bits [k] = adj higher( c.bits [k], G); 45: Mq = quantize( M, child.bits); 46: δv = gating( M, Mq , C, Nmet , T ); // Alg. 3 47: if δv ≤ τv and valid(child) and improves acc valid(child, c)
+
+then 
+
+48: c ← child; // Step-5: Terminal Selection 49: B∗ ← arg min c∈Beam , c. valid c.M sz ;50: return B∗;
+
+candidate pool. Then, the beam is updated with the top-K
+
+candidates.  
+
+> •
+
+Step-3. Block-wise Tuning: We reduce the precision of individual blocks by halving the value; see Alg. 2: lines 23-35. Similar to AQ4SViT-Greedy, the global and stage-wise searches operate down to 4 bits, while the block-wise step may reduce selected blocks one level further down to 3 bits. 
+
+Algorithm 3 Search Gating Function 
+
+INPUT: Pre-trained FP32 model ( M); Quantized model ( Mq ); Training set (C); Sample size ( Nmet ); Timesteps ( T ); 
+
+OUTPUT: Membrane potential drift ( δv ); 
+
+Process: 
+
+// Data Collection 1: vfp , ω ← run (M, C, N met ); // membrane potentials, spike weights 2: vq ← run (Mq , C, N met );// Membrane Potential Drift 3: Sdri ← 0; Sω ← 0;4: for each spiking layer l do 
+
+5: T ′ ← min( T (l)fp , T (l)q ); // align temporal lengths 6: δ(l) 
+
+> v
+
+← 1
+
+N (l) T ′
+
+X
+
+> n,t
+
+v(l)fp (n, t ) − v(l)q (n, t ) ;7: Sdri += ω(l) · δ(l) 
+
+> v
+
+; Sω += ω(l);8: δv ← Sdri / max( Sω , ε ); // mass-weighted network-level drift 9: return δv ;
+
+Again, only children that pass the gate and meet accuracy constraints can enter the candidates in the beam.  
+
+> •
+
+Step-4. Repair Pass: For each candidate c in the beam, we attempt to push individual blocks to a lower precision or higher precision and check if it recovers accuracy while keeping the candidate valid); see Alg. 2: lines 36-48. Each attempted change is first evaluated through the drift gate before full accuracy evaluation.  
+
+> •
+
+Step-5. Terminal Selection: The final configuration B∗ is the valid candidate in the beam with the minimum parameter memory; see Alg. 2 
+
+B. Search Gating Policy 
+
+We have identified that evaluating quantization candidates is the main design-time bottleneck from the state-of-the-art; see Fig. 2. Toward this, we propose a novel search gating policy to quickly yet effectively evaluate if the given quantization setting is likely to achieve high accuracy . It applies a lightweight filtering criterion and a small batch of samples ( Nmet ) to the quantized model for predicting if the model is likely to achieve high accuracy. 
+
+Membrane Potential Drift (δv ): It aims to identify if neurons in the quantized model behave similarly to those in the original non-quantized model. It is useful because even when a quantized model produces the same spike counts, its neurons’ membrane potentials may drift from the original non-quantized model, leading to different spike timings and hence causing accuracy degradation. We define the layer-wise membrane potential drift ( δ(l) 
+
+> v
+
+) as the mean absolute error between the membrane potential sequences of the FP32 and quantized models at layer l, and aggregate across layers using a spike-count mass-weighting scheme ; see Eq. 2. Here, 
+
+v(l)fp (n, t ) and v(l)q (n, t ) are the membrane potential of neuron n
+
+at timestep t for the FP32 and quantized models, respectively, 
+
+T ′ = min( T (l)fp , T (l)q ) aligns the temporal sequences, and ω(l)
+
+is the spike-count activity weight at layer l.
+
+δ(l) 
+
+> v
+
+= 1
+
+N (l) T ′ 
+
+> N(l)
+
+X 
+
+> n=1
+> T′
+
+X
+
+> t=1
+
+v(l)fp (n, t ) − v(l)q (n, t ) ,δv =
+
+P 
+
+> l
+
+ω(l) δ(l)
+
+> v
+
+P 
+
+> l
+
+ω(l)
+
+(2) 6Top -1 Accuracy [%]      
+
+> Membrane Potential Drift
+> 0
+> 20
+> 40
+> 60
+> 80
+> 00.02 0.04 0.06 0.08
+> Accuracy decreases as membrane potential drift increases, indicating that a larger drift strongly correlates with
+> the quantized model
+> that likely achieves a lower accuracy with a full test set of ImageNet
+> Fig. 4. Accuracy of different models with different quantization settings and membrane potential drift scores.
+
+A candidate passes the drift gate if δv ≤ τv , where τv denotes the drift threshold. 
+
+Correlation with Accuracy: To validate that δv is an ef-fective surrogate for accuracy, we evaluate multiple quantized SDTv2 models with different quantization settings on the full ImageNet validation set; results are shown in Fig. 4. Accuracy decreases monotonically as δv increases, with a Spearman rank correlation of ρ = −0.959 (p = 2 × 10 −5), confirming that smaller drift strongly predicts that the quantized model will likely achieve higher accuracy on a full test evaluation. 
+
+Sensitivity Analysis of τv : The drift threshold τv controls the selectivity of the gating policy. To validate that our chosen value is robust and not over-fit to a specific model, we conduct a systematic sweep of τv on SDTv2; results are summarized in Table I. The results show that τv = 0 .0136 
+
+achieves the best trade-off, as it leads to notable reduction in evaluated trials (from 29 to 7) while maintaining Top-1 accuracy (i.e., 77.96%) within 1% accuracy from the baseline non-quantized model (i.e., 78.9%). Thresholds below 0.0136 become too conservative. We also observe similar patterns for SDT and SDTv3 models, thereby confirming that the chosen 
+
+τv = 0.0136 is positioned in the stable operating region and generalizes across SDT, SDTv2 and SDTv3 architectures without per-model tuning.     
+
+> TABLE I SENSITIVITY OF DRIFT THRESHOLD τvON SDT V2OBTAINED USING OUR
+> AQ4SV IT G REEDY
+
+τv Trials Trial Reduction [%] Top-1 [%] 
+
+∞ (no gating) 29 0.0 77.96 0.050 25 13.8 77.96 0.030 19 34.5 77.96 0.020 13 55.2 77.96 0.015 8 72.4 77.96 
+
+0.0136 7 75.9 77.96 
+
+0.010 6 79.3 78.16 0.005 5 82.8 78.49 
+
+Policy: Our proposed search gating is implemented as a function presented in Alg. 3. A quantization candidate is gate-passed if δv ≤ τv , and only gate-passed candidates proceed to full-dataset evaluation. Therefore, candidates with high mem-brane potential drift (indication of corrupted spike dynamics) are efficiently eliminated early, dramatically curtailing the number of costly full-dataset evaluations; see Alg. 1: lines 6, 16, and 28 for greedy-based search, and Alg. 2: lines 7, 18, 31, 41, and 47 for beam-based search. IV. E VALUATION METHODOLOGY 
+
+To evaluate our AQ4SViT framework, we build the experi-mental setup based on the PyTorch-based implementation (i.e., PyTorch 1.12 and CUDA 11.6), that employs the SpikingJelly library [29]. Afterward, we run it on a single Nvidia RTX 4090 24GB GPU device with Ubuntu OS v22.04. This setup takes a pre-trained SViT model, post-training quantization (PTQ) scheme, pre-defined precision levels (i.e., 16, 12, 8, and 4 bits), accuracy constraint (i.e., maximum 1.5% accuracy degrada-tion), and ImageNet-1K dataset [1] as inputs. We consider the state-of-the-art SDT [15], SDTv2 [16], and SDTv3 [17] as the pre-trained SViT models. We run SDT, SDTv2, and SDTv3 using their open-source codes in the same GPU machine to provide fair comparison, and we obtain 74.06% accuracy for SDT, 78.9% accuracy for SDTv2, and 86.4% accuracy for SDTv3, which are slightly different from data in the original papers (i.e., 74.57% for SDT, 79.7% for SDTv2, and 86.2% for SDTv3). The drift threshold is set as τv = 0 .0136 based on our sensitivity analysis (Table I) due to its stable operating point. We use T = 4 timesteps for SDT and SDTv2, and employ 
+
+T = 8 timesteps for SDTv3, following the default settings from the original papers [15] [16] [17]. For the comparison partner, we consider the state-of-the-art QSViT [24] as it does not require additional operations, such as costly re-training or distillation. The outputs of experiments include the searching time for obtaining the quantization setting for compressing SViT models, top-1 accuracy when running the quantized SViT models, and memory footprints. V. R ESULTS AND DISCUSSION 
+
+A. Preservation of High Accuracy 
+
+Table II shows the experimental results for accuracy from baselines, state-of-the-art QSViT, and our AQ4SViT. These results show that AQ4SViT-Greedy meets with the given ac-curacy constraint (i.e., maximum 1.5% accuracy degradation) for all generated quantized models. For the SDT model, AQ4SViT-Greedy achieves 73.20% accuracy and AQ4SViT-Beam achieves 73.90% accuracy, which is within 1.5% of the baseline non-quantized accuracy of 74.06%. For the SDTv2 model, AQ4SViT-Greedy achieves 77.96% accuracy and AQ4SViT-Beam achieves 77.54% accuracy, which is within 1.5% of the baseline non-quantized accuracy of 78.9%, and competitive against QSDT (80.30%) which employs ex-pensive distillation from an ANN counterpart. Meanwhile, for the SDTv3 model, AQ4SViT-Greedy achieves 85.45% accu-racy and AQ4SViT-Beam achieves 86.22% accuracy, which is within 1.5% of the baseline non-quantized accuracy of 86.4%. All these results demonstrate that the accuracy constraint is successfully fulfilled across different SViT models. The reason is that, AQ4SViT-Greedy and AQ4SViT-Beam include the accuracy constraint and employs the search gating policy, which ensure that only the promising quantization setting candidates continue to evaluation with the full dataset. 7                                                                                                              
+
+> TABLE II COMPARISON OF QUANTIZATION METHODS FOR SV ITMODELS ON IMAGE NET -1K. (*) A CCURACY FROM OUR EXPERIMENTS USING THE OPEN -SOURCE CODE FROM THE ORIGINAL AUTHORS .
+> Work Backbone #Params. Precision Memory Memory Saving Timestep Top-1 Accuracy Search Time Architecture [M] [bit] [MB] [%] [T][%] [min.]
+> Baselines (FP32)
+> Spikformer [14] Spikformer 66.3 32 253 —474.81 —SDT [15] SDT 66.3 32 253 —474.06* —SDTv2 [16] SDTv2 55.4 32 211 —478.90* —SDTv3 [17] SDTv3 173 32 692 —886.40* —
+> State-of-the-art Quantization for SViTs
+> QSDT [23] SDTv2 6.8 43.2 98.5 480.30 ANN distillation QSViT [24] SDTv2 55.4 mixed 163 22.8 476.80 257
+> AQ4SViT-Greedy (Ours) — Greedy search
+> AQ4SViT-Greedy SDT 66.3 mixed 77 69.6 473.20 98 AQ4SViT-Greedy SDTv2 55.4 mixed 63 70.1 477.96 39 AQ4SViT-Greedy SDTv3 173 mixed 121 82.5 885.45 127
+> AQ4SViT-Beam (Ours) — Beam search
+> AQ4SViT-Beam SDT 66.3 mixed 33 87 473.90 2853 AQ4SViT-Beam SDTv2 55.4 mixed 21 90 477.54 1153 AQ4SViT-Beam SDTv3 173 mixed 85 87.7 886.22 4001
+
+B. Reduction of Memory Footprints 
+
+Experimental results for the memory footprints from base-lines, state-of-the-art QSViT, and our AQ4SViT are shown in Table II. These results show that, both AQ4SViT-Greedy and AQ4SViT-Beam effectively reduce the given SViT models, achieving higher memory saving than the state-of-the-art. For the SDT model, AQ4SViT-Greedy achieves 69.6% memory saving, reducing the model from 253 MB to 77 MB, while AQ4SViT-Beam achieves 87% memory saving, reducing the model from 253 MB to 33 MB For the SDTv2 model, AQ4SViT-Greedy achieves 70.1% memory saving (reduction from 211 MB to 63 MB) and AQ4SViT-Beam achieves 90% memory saving (reduction from 211 MB to 21 MB), which are significantly higher than the state-of-the-art QSViT with 22.8% memory saving. Meanwhile, for the SDTv3 model, AQ4SViT-Greedy achieves 82.5% memory saving (reduction from 692 MB to 121 MB) and AQ4SViT-Beam achieves 87.7% memory saving (reduction from 692 MB to 85 MB). These significant memory savings come from our systematic hierarchical search in AQ4SViT that gradually quantizes and quickly evaluates candidates at network-level, stage-level, and block-level, hence having higher possibility to find quantized models that achieve high accuracy with small memory foot-prints. Here, QSDT achieves more memory saving than others, but requires costly distillation and an ANN counterpart to maintain high accuracy, which is infeasible for SViT models without established ANN equivalents. 
+
+C. Searching Time Speed-ups 
+
+Experimental results for searching time in Table II show that our AQ4SViT effectively expedites the quantization pro-cess compared to the state-of-the-art work. For the SDTv2 model, AQ4SViT-Greedy expedites the search time by 6.6x, since it only requires 39 minutes of search as compared to the state-of-the-art QSViT with 257 minutes. For a larger model (i.e., SDTv3), AQ4SViT-Greedy completes the search in 127 minutes, demonstrating that search time scales well relative to model size. These search time speed-ups come from the following sources.  
+
+> •
+
+Quantization search strategy that decomposes the network into hierarchical search spaces (i.e., network-level, stage-level, and block-level, respectively), avoiding costly layer-wise quantization analysis.  
+
+> •
+
+Search gating policy, that quickly evaluates the quantization setting candidates through: (1) the employment of mini-batch samples ( Nmet =128 ), which avoids the use of the full dataset; and (2) the drift-based gate, which further curtails the search space by eliminating candidates with degraded spike dynamics early, hence reducing the number of costly full-dataset evaluations. Meanwhile, AQ4SViT-Beam generally incurs a longer search time than AQ4SViT-Greedy and state-of-the-art QSViT due to a wider search space, but it typically leads to more memory savings and often offers better performance (e.g., accuracy). 
+
+D. Comparison between AQ4SViT-Greedy and AQ4SViT-Beam 
+
+Table II also presents the results of AQ4SViT-Beam on SDT, SDTv2, and SDTv3. These results show that AQ4SViT-Beam consistently achieves smaller memory footprints than the corresponding AQ4SViT-Greedy configurations, confirm-ing the benefit of maintaining multiple candidate configura-tions across all search phases. The beam-guided exploration in AQ4SViT-Beam prevents the premature commitment to sub-optimal stage-wise precision assignments, and the repair pass further refines each beam member toward the memory-efficient solution. Therefore, AQ4SViT-Beam has a wider exploration space that can uncover configurations for more memory-efficient and possibly higher accuracy than the greedy-based solution. The trade-offs between search speed and compression rate demonstrate that AQ4SViT-Greedy and AQ4SViT-Beam 8
+
+offer different benefits, i.e., AQ4SViT-Greedy aims for rapid compression pipelines and AQ4SViT-Beam aims for maximiz-ing memory reduction, while meeting the accuracy constraint. Such trade-offs (between search time and model compression rate) are important and needed for different compute resources. VI. C ONCLUSION 
+
+We propose a novel AQ4SViT framework to automatically find the quantization setting that meets the accuracy constraint, while minimizing the memory footprint. AQ4SViT employs a hierarchical search strategy with a membrane potential drift gating policy to quickly select promising quantization settings. Its search strategy has two variants based on Greedy search (AQ4SViT-Greedy) and Beam search (AQ4SViT-Beam) to offer trade-off between search time and memory compression rate. Experimental results show that, our AQ4SViT success-fully provides the appropriate quantization settings to maintain high accuracy within 1.5% from the original non-quantized SViT models on the ImageNet-1K dataset. AQ4SViT-Greedy achieves this through faster search time (up to 6.6 × faster) and with reduced memory footprint (up to 82.5% reduction) as compared to the state-of-the-art. Meanwhile, AQ4SViT-Beam achieves this at the cost of longer search time (4.5 ×
+
+longer), but enables significant memory reduction (up to 90% reduction) as compared to the state-of-the-art. Therefore, our AQ4SViT framework offers an efficient and scalable SViT compression approach, which is a substantial advancement toward enabling efficient SViT deployments for embedded AI. ACKNOWLEDGMENT 
+
+This work was partially supported by the NYUAD Center for Artificial Intelligence and Robotics (CAIR), funded by Tamkeen under the NYUAD Research Institute Award CG010. REFERENCES [1] J. Deng, W. Dong, R. Socher, L.-J. Li, K. Li, and L. Fei-Fei, “Imagenet: A large-scale hierarchical image database,” in IEEE Conference on Computer Vision and Pattern Recognition (CVPR) , 2009, pp. 248–255. [2] K. Han, Y. Wang, H. Chen, X. Chen, J. Guo, Z. Liu, Y. Tang, A. Xiao, C. Xu, Y. Xu et al. , “A survey on vision transformer,” IEEE Transactions on Pattern Analysis and Machine Intelligence (TPAMI) , vol. 45, no. 1, pp. 87–110, 2022. [3] M. F. Minhas, R. V. W. Putra, F. Awwad, O. Hasan, and M. Shafique, “Continual learning with neuromorphic computing: Foundations, meth-ods, and emerging applications,” IEEE Access , vol. 13, pp. 124 824– 124 873, 2025. [4] A. Vaswani, N. Shazeer, N. Parmar, J. Uszkoreit, L. Jones, A. N. Gomez, Ł. Kaiser, and I. Polosukhin, “Attention is all you need,” Advances in neural information processing systems , vol. 30, 2017. [5] A. Dosovitskiy, L. Beyer, A. Kolesnikov, D. Weissenborn, X. Zhai, T. Unterthiner, M. Dehghani, M. Minderer, G. Heigold, S. Gelly, J. Uszkoreit, and N. Houlsby, “An image is worth 16x16 words: Trans-formers for image recognition at scale,” in International Conference on Learning Representations (ICLR) , 2021. [6] S. Khan, M. Naseer, M. Hayat, S. W. Zamir, F. S. Khan, and M. Shah, “Transformers in vision: A survey,” ACM Computing Surveys (CSUR) ,vol. 54, no. 10s, pp. 1–41, 2022. [7] K. Roy, A. Jaiswal, and P. Panda, “Towards spike-based machine intelligence with neuromorphic computing,” Nature , vol. 575, no. 7784, pp. 607–617, 2019. [8] N. Rathi, I. Chakraborty, A. Kosta, A. Sengupta, A. Ankit, P. Panda, and K. Roy, “Exploring neuromorphic computing based on spiking neural networks: Algorithms to hardware,” ACM Computing Surveys , vol. 55, no. 12, 2023. [9] R. V. W. Putra and M. Shafique, “Fspinn: An optimization framework for memory-efficient and energy-efficient spiking neural networks,” IEEE Transactions on Computer-Aided Design of Integrated Circuits and Systems (TCAD) , vol. 39, no. 11, pp. 3601–3613, 2020. [10] C. Bartolozzi, G. Indiveri, and E. Donati, “Embodied neuromorphic intelligence,” Nature communications , vol. 13, no. 1, p. 1024, 2022. [11] R. V. W. Putra, P. Wickramasinghe, and M. Shafique, “Enabling ef-ficient processing of spiking neural networks with on-chip learning on commodity neuromorphic processors for edge ai systems,” in 2025 International Joint Conference on Neural Networks (IJCNN) , 2025, pp. 1–8. [12] R. V. W. Putra and M. Shafique, “Spikenas: A fast memory-aware neural architecture search framework for spiking neural network-based embedded ai systems,” IEEE Transactions on Artificial Intelligence ,vol. 7, no. 2, pp. 947–959, 2026. [13] R. V. W. Putra, P. Wickramasinghe, and M. Shafique, “Qslm: Aperformance- and memory-aware quantization framework with tiered search strategy for spike-driven language models,” in 2026 Design, Automation & Test in Europe Conference (DATE) , 2026, pp. 1–7. [14] Z. Zhou, Y. Zhu, C. He, Y. Wang, S. Yan, Y. Tian, and L. Yuan, “Spikformer: When spiking neural network meets transformer,” in The Eleventh International Conference on Learning Representations , 2023. [15] M. Yao, J. Hu, Z. Zhou, L. Yuan, Y. Tian, B. XU, and G. Li, “Spike-driven transformer,” in Thirty-seventh Conference on Neural Information Processing Systems (NeurIPS) , 2023. [16] M. Yao, J. Hu, T. Hu, Y. Xu, Z. Zhou, Y. Tian, B. XU, and G. Li, “Spike-driven transformer v2: Meta spiking neural network architecture inspiring the design of next-generation neuromorphic chips,” in The Twelfth International Conference on Learning Representations , 2024. [17] M. Yao, X. Qiu, T. Hu, J. Hu, Y. Chou, K. Tian, J. Liao, L. Leng, B. Xu, and G. Li, “Scaling spike-driven transformer with efficient spike firing approximation training,” IEEE Transactions on Pattern Analysis and Machine Intelligence , vol. 47, no. 4, pp. 2973–2990, 2025. [18] N. Rathi, P. Panda, and K. Roy, “Stdp-based pruning of connections and weight quantization in spiking neural networks for energy-efficient recognition,” IEEE Transactions on Computer-Aided Design of Inte-grated Circuits and Systems (TCAD) , vol. 38, no. 4, pp. 668–677, April 2019. [19] M. Sorbaro, Q. Liu, M. Bortone, and S. Sheik, “Optimizing the energy consumption of spiking neural networks for neuromorphic applications,” 
+
+Frontiers in Neuroscience (FNINS) , vol. 14, p. 662, 2020. [20] C. Zou, X. Cui, J. Ge, H. Ma, and X. Wang, “A novel conversion method for spiking neural network using median quantization,” in IEEE International Symposium on Circuits and Systems (ISCAS) , 2020. [21] R. V. W. Putra and M. Shafique, “Q-spinn: A framework for quantizing spiking neural networks,” in International Joint Conference on Neural Networks (IJCNN) , 2021, pp. 1–8. [22] B. Xu, Y. Song, and P. Li, “Trimming down large spiking vision transformers via heterogeneous quantization search,” arXiv preprint arXiv:2412.05505 , 2024. [23] X. Qiu, M. Zhang, J. Zhang, W. Wei, H. Cao, J. Guo, R.-J. Zhu, Y. Shan, Y. Yang, and H. Li, “Quantized spike-driven transformer,” in 
+
+International Conference on Learning Representations (ICLR) , 2025. [24] R. V. W. Putra, S. Iftikhar, and M. Shafique, “Qsvit: A methodology for quantizing spiking vision transformers,” in 2025 International Joint Conference on Neural Networks (IJCNN) , 2025, pp. 1–8. [25] F. Akopyan, J. Sawada, A. Cassidy, R. Alvarez-Icaza, J. Arthur, P. Merolla, N. Imam, Y. Nakamura, P. Datta, G. Nam, B. Taba, M. Beakes, B. Brezzo, J. B. Kuang, R. Manohar, W. P. Risk, B. Jackson, and D. S. Modha, “Truenorth: Design and tool flow of a 65 mw 1 million neuron programmable neurosynaptic chip,” IEEE Trans. on Computer-Aided Design of Integrated Circuits and Systems (TCAD) , vol. 34, no. 10, Oct 2015. [26] C. Zhou, L. Yu, Z. Zhou, H. Zhang, J. Wang, H. Zhou, Z. Ma, and Y. Tian, “Spikingformer: A key foundation model for spiking neural networks,” in Proceedings of the AAAI Conference on Artificial Intelligence , vol. 40, no. 3, 2026, pp. 2236–2244. [27] R. Krishnamoorthi, “Quantizing deep convolutional networks for effi-cient inference: A whitepaper,” arXiv , vol. 1806.08342, 2018. [28] M. van Baalen, B. Kahne, E. Mahurin, A. Kuzmin, A. Skliar, M. Nagel, and T. Blankevoort, “Simulated quantization, real power savings,” in 
+
+Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 2022, pp. 2757–2761. [29] W. Fang, Y. Chen, J. Ding, Z. Yu, T. Masquelier, D. Chen, L. Huang, H. Zhou, G. Li, and Y. Tian, “Spikingjelly: An open-source machine learning infrastructure platform for spike-based intelligence,” Science Advances , vol. 9, no. 40, 2023.
