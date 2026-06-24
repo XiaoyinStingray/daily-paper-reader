@@ -6,63 +6,81 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-06-22
-- 运行时间：2026-06-22 22:53:24 UTC
+- 最新运行日期：2026-06-24
+- 运行时间：2026-06-24 20:57:04 UTC
 - 运行状态：成功
-- 本次总论文数：13
-- 精读区：1
+- 本次总论文数：19
+- 精读区：7
 - 速读区：12
 
 ### 今日简报（AI）
-今天精选13篇论文，聚焦高保真长尾细粒度语义分割、脉冲视觉Transformer量化压缩，以及无线系统CSI压缩三大方向。
+今日精读7篇、速读12篇，聚焦图像压缩、分割修复领域新高分论文。
 
-最值得关注的是《GOOSE-M2F》精读论文（8.0分），其针对非结构化户外地形的长尾微细分割取得了高保真效果，是该领域的重要突破。
+最值得关注精读《PaaF》（10分）提升基于INR的图像压缩感知质量，以及《FlowCodec》（9分）的一步流先验生成式压缩；速读中《ZeroGVC》零样本视频压缩与《Optimising Inpainting Data》数据优化方向同样亮点突出。
 
-建议优先精读该文的长尾采样与掩码适配机制，并结合速读中的AQ4SViT了解视觉Transformer压缩与脉冲模型的交叉应用。
-- 详情：[/202606/22/README](/202606/22/README)
+建议普通读者优先精读前两篇高分解码创新，再速读速阅视频压缩与修复数据优化研究。
+- 详情：[/202606/24/README](/202606/24/README)
 
 ### 精读区论文标签
-1. [GOOSE-M2F: Adapting Mask2Former for High-Fidelity, Long-Tailed Fine-Grained Semantic Segmentation in Unstructured Outdoor Terrain](/202606/22/2606.15937v2-goose-m2f-adapting-mask2former-for-high-fidelity-long-tailed-fine-grained-semantic-segmentation-in-unstructured-outdoor-terrain)  
-   标签：评分：8.0/10、query:neural-arch
-   evidence：针对细粒度语义分割改进Mask2Former架构
+1. [PaaF: Raising the perceived quality of INR-Based Image Compression](/202606/24/2606.21655v1-paaf-raising-the-perceived-quality-of-inr-based-image-compression)  
+   标签：评分：10.0/10、query:compress
+   evidence：基于INR的图像压缩，包含自适应量化和熵编码
+2. [FlowCodec: One-Step Flow Prior for Generative Image Compression](/202606/24/2606.21030v1-flowcodec-one-step-flow-prior-for-generative-image-compression)  
+   标签：评分：9.0/10、query:compress
+   evidence：基于流先验的生成式图像压缩
+3. [MoECodec: Image Compression for joint human and machine perception via Mixture-of-Experts](/202606/24/2606.21033v1-moecodec-image-compression-for-joint-human-and-machine-perception-via-mixture-of-experts)  
+   标签：评分：9.0/10、query:compress
+   evidence：基于专家混合的人机联合图像压缩
+4. [ZeroGVC: Zero-Shot Generative Video Compression with Autoregressive Diffusion Priors](/202606/24/2606.22371v1-zerogvc-zero-shot-generative-video-compression-with-autoregressive-diffusion-priors)  
+   标签：评分：9.0/10、query:compress
+   evidence：使用自回归扩散先验的零样本生成式视频压缩
+5. [Structured Hyperedge Adaptation for Parameter-Efficient Fine-Tuning of Vision Transformers](/202606/24/2606.22383v1-structured-hyperedge-adaptation-for-parameter-efficient-fine-tuning-of-vision-transformers)  
+   标签：评分：9.0/10、query:neural-arch
+   evidence：通过超边适配实现视觉Transformer的参数高效微调
+6. [UI-LIC: A Unified Framework for Evaluating Learned Image Compression Models](/202606/24/2606.23545v1-ui-lic-a-unified-framework-for-evaluating-learned-image-compression-models)  
+   标签：评分：9.0/10、query:compress
+   evidence：学习型图像压缩模型统一评估框架，直接关联所有图像压缩需求
+7. [LLM-Driven Heuristic Frame-Level Quantization Parameter Adaptation for VVenC](/202606/24/2606.20847v1-llm-driven-heuristic-frame-level-quantization-parameter-adaptation-for-vvenc)  
+   标签：评分：8.0/10、query:compress
+   evidence：使用大语言模型和率失真优化启发式进行量化参数自适应，直接适用于图像压缩量化策略
 
 ### 速读区论文标签
-1. [AQ4SViT: An Automated Quantization Framework with Search Gating Policy for Compressing Spiking Vision Transformers](/202606/22/2606.15523v1-aq4svit-an-automated-quantization-framework-with-search-gating-policy-for-compressing-spiking-vision-transformers)  
+1. [Neural Architecture Distributions: A New Paradigm for Stochastic Segmentation](/202606/24/2606.21061v1-neural-architecture-distributions-a-new-paradigm-for-stochastic-segmentation)  
+   标签：评分：8.0/10、query:neural-arch
+   evidence：神经架构分布用于随机分割，通过采样算子选择直接改进计算机视觉架构
+2. [Optimising Inpainting Data with Delaunay Averages](/202606/24/2606.21506v1-optimising-inpainting-data-with-delaunay-averages)  
+   标签：评分：8.0/10、query:compress
+   evidence：基于Delaunay三角化的修复压缩，是一种变换编码策略
+3. [ZeroGVC: Zero-Shot Generative Video Compression with Autoregressive Diffusion Priors](/202606/24/2606.22371v2-zerogvc-zero-shot-generative-video-compression-with-autoregressive-diffusion-priors)  
+   标签：评分：8.0/10、query:compress
+   evidence：零样本生成式视频压缩，与图像压缩主题相关
+4. [Differential Unfolding: Efficient Unfolding Reconstruction for Video Snapshot Compressive Imaging](/202606/24/2606.24153v1-differential-unfolding-efficient-unfolding-reconstruction-for-video-snapshot-compressive-imaging)  
+   标签：评分：8.0/10、query:compress
+   evidence：用于视频快照压缩成像的深度展开网络，与图像压缩相关
+5. [Attribution-Guided and Coverage-Maximized Pruning for Structural MoE Compression](/202606/24/2606.18304v1-attribution-guided-and-coverage-maximized-pruning-for-structural-moe-compression)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：自动量化框架进行模型压缩
-2. [GOOSE-M2F: Adapting Mask2Former for High-Fidelity, Long-Tailed Fine-Grained Semantic Segmentation in Unstructured Outdoor Terrain](/202606/22/2606.15937v1-goose-m2f-adapting-mask2former-for-high-fidelity-long-tailed-fine-grained-semantic-segmentation-in-unstructured-outdoor-terrain)  
+   evidence：MoE模型的结构剪枝压缩框架
+6. [SpectralDiT: Timestep-Conditioned Spectral Residual Correction for Flow-Matching DiTs](/202606/24/2606.18765v1-spectraldit-timestep-conditioned-spectral-residual-correction-for-flow-matching-dits)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：计算机视觉架构改进技术
-3. [Context-Aware Markov VAE for CSI Compression in Wireless Systems](/202606/22/2606.16607v1-context-aware-markov-vae-for-csi-compression-in-wireless-systems)  
-   标签：评分：7.0/10、query:compress
-   evidence：基于上下文感知马尔可夫VAE的CSI压缩，方法与图像压缩自编码器类似
-4. [Optimal Multiscale Learning of Linear Operators](/202606/22/2606.16913v1-optimal-multiscale-learning-of-linear-operators)  
-   标签：评分：7.0/10、query:compress
-   evidence：使用小波坐标学习算子，与小波变换编码相关
-5. [KANLib -- An Modular, Extensible and Fast Kolmogorov-Arnold Network Implementation](/202606/22/2606.17927v1-kanlib----an-modular-extensible-and-fast-kolmogorov-arnold-network-implementation)  
+   evidence：扩散Transformer的轻量频谱修正
+7. [LARE: Low-Attention Region Encoding for Text-Image Retrieval](/202606/24/2606.18885v1-lare-low-attention-region-encoding-for-text-image-retrieval)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：Kolmogorov-Arnold网络的模块化框架，一种替代神经网络架构
-6. [Unified Multimodal Autoregressive Modeling with Shared Context-Visual Tokenizer is Key to Unification](/202606/22/2606.18249v2-unified-multimodal-autoregressive-modeling-with-shared-context-visual-tokenizer-is-key-to-unification)  
-   标签：评分：7.0/10、query:compress
-   evidence：无查找逐位量化方案用于视觉分词器，与图像压缩中的量化策略相关
-7. [Training-free sparse attention based on cumulative energy filtering](/202606/22/2606.16317v1-training-free-sparse-attention-based-on-cumulative-energy-filtering)  
-   标签：评分：6.0/10、query:neural-arch
-   evidence：用于视频扩散变换器的不需训练的稀疏注意力
-8. [Optimizing Multiple Feature Types for Image Inpainting in the Linear and Nonlinear Setting](/202606/22/2606.16581v1-optimizing-multiple-feature-types-for-image-inpainting-in-the-linear-and-nonlinear-setting)  
+   evidence：低注意力区域双编码策略
+8. [Towards Robust Training in NNGPT AutoML Pipeline: A Loss-Optimizer Pairing Selection Study](/202606/24/2606.20933v1-towards-robust-training-in-nngpt-automl-pipeline-a-loss-optimizer-pairing-selection-study)  
+   标签：评分：7.0/10、query:neural-arch
+   evidence：自动机器学习中损失函数与优化器配对选择对鲁棒训练的影响研究
+9. [Spiking Pyramid Wavelet Transformation for High-efficient and Low-energy Image Restoration](/202606/24/2606.18644v1-spiking-pyramid-wavelet-transformation-for-high-efficient-and-low-energy-image-restoration)  
    标签：评分：6.0/10、query:compress
-   evidence：基于图像修复的压缩特征优化有损编码
-9. [From Compression to Deployment: Real-Time and Energy-Efficient FastGRNN on Ultra-Constrained Microcontrollers](/202606/22/2606.17249v1-from-compression-to-deployment-real-time-and-energy-efficient-fastgrnn-on-ultra-constrained-microcontrollers)  
+   evidence：使用离散小波变换进行图像恢复
+10. [ITNet: A Learnable Integral Transform That Subsumes Convolution, Attention, and Recurrence](/202606/24/2606.19538v2-itnet-a-learnable-integral-transform-that-subsumes-convolution-attention-and-recurrence)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：模型压缩与部署到超受限微控制器
-10. [Conservation Laws for Modern Neural Architectures](/202606/22/2606.17816v1-conservation-laws-for-modern-neural-architectures)  
+   evidence：统一架构涵盖卷积、注意力和循环网络
+11. [Learning When to Denoise: Optimizing Asynchronous Schedules for Latent Diffusion](/202606/24/2606.19662v1-learning-when-to-denoise-optimizing-asynchronous-schedules-for-latent-diffusion)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：为现代神经网络架构建立守恒定律，有助于理解模型优化
-11. [ConSA: Controllable Sparsity in Hybrid Attention via Learnable Allocation](/202606/22/2606.18056v1-consa-controllable-sparsity-in-hybrid-attention-via-learnable-allocation)  
-   标签：评分：6.0/10、query:neural-arch
-   evidence：可学习的混合注意力分配用于LLM效率提升
-12. [GB-LSR: A Fast Local Spectral Image Representation with a Single Global Bandwidth for Continuous Reconstruction and Super-Resolution](/202606/22/2606.19617v1-gb-lsr-a-fast-local-spectral-image-representation-with-a-single-global-bandwidth-for-continuous-reconstruction-and-super-resolution)  
+   evidence：优化扩散模型中的异步调度，作为性能改进技术
+12. [Flow Map Denoisers: Traversing the Distortion-Perception Plane for Inverse Problems](/202606/24/2606.19802v1-flow-map-denoisers-traversing-the-distortion-perception-plane-for-inverse-problems)  
    标签：评分：6.0/10、query:compress
-   evidence：使用截断傅里叶基进行局部频谱图像表示，类似于变换编码
+   evidence：图像恢复中的率-失真-感知权衡，使用流图去噪器
 
 
 <div class="dpr-home-promo-card">
