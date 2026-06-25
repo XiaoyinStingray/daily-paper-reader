@@ -6,81 +6,79 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-06-24
-- 运行时间：2026-06-24 20:57:04 UTC
+- 最新运行日期：2026-06-25
+- 运行时间：2026-06-25 22:25:52 UTC
 - 运行状态：成功
 - 本次总论文数：19
 - 精读区：7
 - 速读区：12
 
 ### 今日简报（AI）
-今日精读7篇、速读12篇，聚焦图像压缩、分割修复领域新高分论文。
-
-最值得关注精读《PaaF》（10分）提升基于INR的图像压缩感知质量，以及《FlowCodec》（9分）的一步流先验生成式压缩；速读中《ZeroGVC》零样本视频压缩与《Optimising Inpainting Data》数据优化方向同样亮点突出。
-
-建议普通读者优先精读前两篇高分解码创新，再速读速阅视频压缩与修复数据优化研究。
-- 详情：[/202606/24/README](/202606/24/README)
+今日精读19篇论文，重点聚焦图像压缩的联合人机感知和评估框架。  
+最值得关注的是《MoECodec》和《UI-LIC》，分别提出混合专家模型和统一评估框架，推动图像压缩优化。  
+后续可深入这些方向，或关注分层强化学习剪枝量化等压缩技术。
+- 详情：[/202606/25/README](/202606/25/README)
 
 ### 精读区论文标签
-1. [PaaF: Raising the perceived quality of INR-Based Image Compression](/202606/24/2606.21655v1-paaf-raising-the-perceived-quality-of-inr-based-image-compression)  
-   标签：评分：10.0/10、query:compress
-   evidence：基于INR的图像压缩，包含自适应量化和熵编码
-2. [FlowCodec: One-Step Flow Prior for Generative Image Compression](/202606/24/2606.21030v1-flowcodec-one-step-flow-prior-for-generative-image-compression)  
+1. [MoECodec: Image Compression for joint human and machine perception via Mixture-of-Experts](/202606/25/2606.21033v1-moecodec-image-compression-for-joint-human-and-machine-perception-via-mixture-of-experts)  
    标签：评分：9.0/10、query:compress
-   evidence：基于流先验的生成式图像压缩
-3. [MoECodec: Image Compression for joint human and machine perception via Mixture-of-Experts](/202606/24/2606.21033v1-moecodec-image-compression-for-joint-human-and-machine-perception-via-mixture-of-experts)  
+   evidence：基于混合专家模型的图像压缩框架
+2. [UI-LIC: A Unified Framework for Evaluating Learned Image Compression Models](/202606/25/2606.23545v1-ui-lic-a-unified-framework-for-evaluating-learned-image-compression-models)  
    标签：评分：9.0/10、query:compress
-   evidence：基于专家混合的人机联合图像压缩
-4. [ZeroGVC: Zero-Shot Generative Video Compression with Autoregressive Diffusion Priors](/202606/24/2606.22371v1-zerogvc-zero-shot-generative-video-compression-with-autoregressive-diffusion-priors)  
-   标签：评分：9.0/10、query:compress
-   evidence：使用自回归扩散先验的零样本生成式视频压缩
-5. [Structured Hyperedge Adaptation for Parameter-Efficient Fine-Tuning of Vision Transformers](/202606/24/2606.22383v1-structured-hyperedge-adaptation-for-parameter-efficient-fine-tuning-of-vision-transformers)  
+   evidence：评估学习图像压缩模型的统一框架
+3. [REViT: Roto-reflection Equivariant Convolutional Vision Transformer](/202606/25/2606.25318v1-revit-roto-reflection-equivariant-convolutional-vision-transformer)  
    标签：评分：9.0/10、query:neural-arch
-   evidence：通过超边适配实现视觉Transformer的参数高效微调
-6. [UI-LIC: A Unified Framework for Evaluating Learned Image Compression Models](/202606/24/2606.23545v1-ui-lic-a-unified-framework-for-evaluating-learned-image-compression-models)  
-   标签：评分：9.0/10、query:compress
-   evidence：学习型图像压缩模型统一评估框架，直接关联所有图像压缩需求
-7. [LLM-Driven Heuristic Frame-Level Quantization Parameter Adaptation for VVenC](/202606/24/2606.20847v1-llm-driven-heuristic-frame-level-quantization-parameter-adaptation-for-vvenc)  
+   evidence：旋转反射等变视觉Transformer，结合卷积注意力
+4. [ZeroGVC: Zero-Shot Generative Video Compression with Autoregressive Diffusion Priors](/202606/25/2606.22371v1-zerogvc-zero-shot-generative-video-compression-with-autoregressive-diffusion-priors)  
    标签：评分：8.0/10、query:compress
-   evidence：使用大语言模型和率失真优化启发式进行量化参数自适应，直接适用于图像压缩量化策略
+   evidence：端到端学习图像压缩与率失真优化
+5. [ZeroGVC: Zero-Shot Generative Video Compression with Autoregressive Diffusion Priors](/202606/25/2606.22371v2-zerogvc-zero-shot-generative-video-compression-with-autoregressive-diffusion-priors)  
+   标签：评分：8.0/10、query:compress
+   evidence：使用图像编解码器和码本引导自回归潜变量压缩的生成式视频压缩
+6. [Hybrid Compression: Integrating Pruning and Quantization for Optimized Neural Networks](/202606/25/2606.22935v1-hybrid-compression-integrating-pruning-and-quantization-for-optimized-neural-networks)  
+   标签：评分：8.0/10、query:compress
+   evidence：量化策略用于神经网络压缩
+7. [Improving Neural Network Training by Decoupling the Magnitude and Direction of Weight Vectors](/202606/25/2606.25971v1-improving-neural-network-training-by-decoupling-the-magnitude-and-direction-of-weight-vectors)  
+   标签：评分：8.0/10、query:neural-arch
+   evidence：通过解耦权重向量的大小和方向改进神经网络训练
 
 ### 速读区论文标签
-1. [Neural Architecture Distributions: A New Paradigm for Stochastic Segmentation](/202606/24/2606.21061v1-neural-architecture-distributions-a-new-paradigm-for-stochastic-segmentation)  
+1. [Structural Kolmogorov-Arnold Convolutions: Learnable Function on the Values or the Filter Shape as Parameter-Efficient Alternative to Per-Edge Convolutional KANs](/202606/25/2606.24371v1-structural-kolmogorov-arnold-convolutions-learnable-function-on-the-values-or-the-filter-shape-as-parameter-efficient-alternative-to-per-edge-convolutional-kans)  
    标签：评分：8.0/10、query:neural-arch
-   evidence：神经架构分布用于随机分割，通过采样算子选择直接改进计算机视觉架构
-2. [Optimising Inpainting Data with Delaunay Averages](/202606/24/2606.21506v1-optimising-inpainting-data-with-delaunay-averages)  
-   标签：评分：8.0/10、query:compress
-   evidence：基于Delaunay三角化的修复压缩，是一种变换编码策略
-3. [ZeroGVC: Zero-Shot Generative Video Compression with Autoregressive Diffusion Priors](/202606/24/2606.22371v2-zerogvc-zero-shot-generative-video-compression-with-autoregressive-diffusion-priors)  
-   标签：评分：8.0/10、query:compress
-   evidence：零样本生成式视频压缩，与图像压缩主题相关
-4. [Differential Unfolding: Efficient Unfolding Reconstruction for Video Snapshot Compressive Imaging](/202606/24/2606.24153v1-differential-unfolding-efficient-unfolding-reconstruction-for-video-snapshot-compressive-imaging)  
-   标签：评分：8.0/10、query:compress
-   evidence：用于视频快照压缩成像的深度展开网络，与图像压缩相关
-5. [Attribution-Guided and Coverage-Maximized Pruning for Structural MoE Compression](/202606/24/2606.18304v1-attribution-guided-and-coverage-maximized-pruning-for-structural-moe-compression)  
+   evidence：通过结构化可学习函数实现参数高效的卷积KAN变体
+2. [Hierarchical Reinforcement Learning for Neural Network Compression (HiReLC): Pruning and Quantization](/202606/25/2606.26002v1-hierarchical-reinforcement-learning-for-neural-network-compression-hirelc-pruning-and-quantization)  
+   标签：评分：8.0/10、query:neural-arch
+   evidence：分层强化学习自动联合剪枝量化
+3. [StreamKL: Fast and Memory-Efficient KL Divergence for Boosting Attention Distillation](/202606/25/2606.20005v1-streamkl-fast-and-memory-efficient-kl-divergence-for-boosting-attention-distillation)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：MoE模型的结构剪枝压缩框架
-6. [SpectralDiT: Timestep-Conditioned Spectral Residual Correction for Flow-Matching DiTs](/202606/24/2606.18765v1-spectraldit-timestep-conditioned-spectral-residual-correction-for-flow-matching-dits)  
+   evidence：融合GPU原语用于注意力KL散度，实现高效的模型优化
+4. [Breaking chains with trees: Deep learning with $\mathcal{O}(\log N)$ parallel time complexity](/202606/25/2606.21497v1-breaking-chains-with-trees-deep-learning-with-mathcalolog-n-parallel-time-complexity)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：扩散Transformer的轻量频谱修正
-7. [LARE: Low-Attention Region Encoding for Text-Image Retrieval](/202606/24/2606.18885v1-lare-low-attention-region-encoding-for-text-image-retrieval)  
+   evidence：通过层次化块局部学习实现深度网络并行训练
+5. [Boundary-by-Mask: Few-Shot Instance Segmentation with Mask-Conditioned Boundary Learning for Texture-Poor Industrial Parts](/202606/25/2606.21594v1-boundary-by-mask-few-shot-instance-segmentation-with-mask-conditioned-boundary-learning-for-texture-poor-industrial-parts)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：低注意力区域双编码策略
-8. [Towards Robust Training in NNGPT AutoML Pipeline: A Loss-Optimizer Pairing Selection Study](/202606/24/2606.20933v1-towards-robust-training-in-nngpt-automl-pipeline-a-loss-optimizer-pairing-selection-study)  
+   evidence：基于掩码条件边界学习的少样本实例分割，面向无纹理工业零件
+6. [RaysUp: Ultra-light Universal Feature Upsampling via Geometry-Aware Ray Representation](/202606/25/2606.22749v1-raysup-ultra-light-universal-feature-upsampling-via-geometry-aware-ray-representation)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：自动机器学习中损失函数与优化器配对选择对鲁棒训练的影响研究
-9. [Spiking Pyramid Wavelet Transformation for High-efficient and Low-energy Image Restoration](/202606/24/2606.18644v1-spiking-pyramid-wavelet-transformation-for-high-efficient-and-low-energy-image-restoration)  
-   标签：评分：6.0/10、query:compress
-   evidence：使用离散小波变换进行图像恢复
-10. [ITNet: A Learnable Integral Transform That Subsumes Convolution, Attention, and Recurrence](/202606/24/2606.19538v2-itnet-a-learnable-integral-transform-that-subsumes-convolution-attention-and-recurrence)  
+   evidence：面向视觉基础模型的超轻量通用特征上采样方法
+7. [Learning Adaptive Dynamical Features via Multi-$τ$ Liquid-Mamba for All-in-one Image Restoration](/202606/25/2606.22801v1-learning-adaptive-dynamical-features-via-multi--liquid-mamba-for-all-in-one-image-restoration)  
+   标签：评分：7.0/10、query:neural-arch
+   evidence：用于图像修复的自适应状态空间模型，改进神经网络架构
+8. [Leveraging AutoML for Sustainable Deep Learning: A Multi-Objective HPO Approach on Deep Shift Neural Networks](/202606/25/2606.23208v1-leveraging-automl-for-sustainable-deep-learning-a-multi-objective-hpo-approach-on-deep-shift-neural-networks)  
+   标签：评分：7.0/10、query:neural-arch
+   evidence：AutoML多目标超参数优化深度移位神经网络，模型优化策略
+9. [Compressing Observation History into Agent Memory: Distilling Transformers into Recurrent Transformers](/202606/25/2606.21562v1-compressing-observation-history-into-agent-memory-distilling-transformers-into-recurrent-transformers)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：统一架构涵盖卷积、注意力和循环网络
-11. [Learning When to Denoise: Optimizing Asynchronous Schedules for Latent Diffusion](/202606/24/2606.19662v1-learning-when-to-denoise-optimizing-asynchronous-schedules-for-latent-diffusion)  
+   evidence：将Transformer蒸馏为循环Transformer以压缩观测历史
+10. [Radial Basis Function Networks as Projection Heads in Self-Supervised Learning](/202606/25/2606.21590v1-radial-basis-function-networks-as-projection-heads-in-self-supervised-learning)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：优化扩散模型中的异步调度，作为性能改进技术
-12. [Flow Map Denoisers: Traversing the Distortion-Perception Plane for Inverse Problems](/202606/24/2606.19802v1-flow-map-denoisers-traversing-the-distortion-perception-plane-for-inverse-problems)  
-   标签：评分：6.0/10、query:compress
-   evidence：图像恢复中的率-失真-感知权衡，使用流图去噪器
+   evidence：RBFN投影头提升自监督学习效率
+11. [ScalePredictor: Instance-aware Scale Learning for Accurate Quantization of Vision Transformers](/202606/25/2606.21947v1-scalepredictor-instance-aware-scale-learning-for-accurate-quantization-of-vision-transformers)  
+   标签：评分：6.0/10、query:neural-arch
+   evidence：视觉Transformer的实例感知量化方法
+12. [Error Highways: Scaling Predictive Coding to Very Deep Networks](/202606/25/2606.22744v1-error-highways-scaling-predictive-coding-to-very-deep-networks)  
+   标签：评分：6.0/10、query:neural-arch
+   evidence：高速公路误差传播将预测编码扩展到深度网络，提升学习性能
 
 
 <div class="dpr-home-promo-card">
