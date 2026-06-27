@@ -1,0 +1,289 @@
+Title: BEV-Denoise: Learning Intrinsic Noise for Accurate Bird's-Eye-View Semantic Segmentation
+
+URL Source: https://arxiv.org/pdf/2606.22931v1
+
+Published Time: Tue, 23 Jun 2026 03:18:07 GMT
+
+Number of Pages: 14
+
+Markdown Content:
+# BEV-Denoise: Learning Intrinsic Noise for Accurate Bird’s-Eye-View Semantic Segmentation 
+
+## Dooseop Choi 1,2∗ Kyounghwan An 1 Kyoung-Wook Min 11Electronics and Telecommunications Research Institute (ETRI) 
+
+> 2
+
+## University of Science and Technology (UST) 
+
+{d1024.choi, mobileguru, kwmin92 }@etri.re.kr 
+
+## Abstract 
+
+In this paper, we present a framework dubbed BEV-Denoise 
+
+that estimates and removes intrinsic noise from learned Bird’s-Eye-View (BEV) features to achieve accurate BEV semantic segmentation. Inspired by the noise estima-tion capability of Denoising Diffusion Probabilistic Models (DDPM), we design a UNet-based noise estimation mod-ule that learns to estimate the noise from the learned BEV features. The estimated noise is then subtracted from the BEV features and fed to BEV map decoders for the final prediction results. To facilitate supervision for the noise es-timation module, we follow a sequential learning paradigm called Task Decomposition (TD) where a pre-trained BEV map autoencoder is employed to train a view transforma-tion (VT) encoder. We share three key insights learned from our intensive experiments that are critical for improved per-formance. We apply our framework to four existing models, encompassing the three major VT paradigms. Experimen-tal results on a large-scale real-world dataset, nuScenes, demonstrate the effectiveness of our framework. 
+
+## 1. Introduction 
+
+Recognizing driving environments has played a vital role in autonomous driving, as autonomous vehicles (AVs) can only navigate safely with the aid of accurate recognition re-sults. Ranging sensors such as LIDAR or RADAR have long been deployed to perceive the environments since they offer accurate distance information. The fact that the sen-sors are usually expensive and lack the information abun-dant in camera sensors has encouraged researchers to pay more attention to learning a unified representation from surround-view camera images. Detecting 3D objects from the images is one of the most actively researched tasks [2, 21, 25, 26]. Another promising task called Bird’s-Eye-View (BEV) semantic segmentation 
+
+> *Corresponding author.
+
+Figure 1. Visualization of BEV feature maps (the first row), their corresponding predicted BEV maps for Drivable Area (the second row), and input images (the third row). The first, second, and third columns are from the BEV map autoencoder, the VT encoder, and the VT encoder with the proposed denoising network, respectively. 
+
+is to predict multiclass occupancy grid maps (OGM), re-ferred to as BEV maps, from surround-view camera images, which are used for subsequent tasks in autonomous driving such as trajectory prediction or motion planning. Many ap-proaches have been proposed for accurate BEV map predic-tion in the literature [3, 4, 8, 9, 12, 14–16, 18–20, 27, 30]. One major challenge in the BEV map prediction has been how to learn a unified representation, referred to as BEV features, from perspective view (PV) images with-out knowing the true depth, and many research works have been proposed to tackle the challenge. One of the prevalent paradigms is to predict the depth for each pixel position in the image feature maps and then project the features onto BEV grids using the predicted depth as well as camera pa-rameters [20]. Another is to take advantage of the cross-attention of Transformer [24] to learn the mapping from PV features to BEV features from data [13–15, 30]. 
+
+> arXiv:2606.22931v1 [cs.CV] 22 Jun 2026 Figure 2. General architecture of BEV segmentation models.
+
+BEV features produced by existing BEV segmentation models often suffer from intrinsic noise due to unknown depth, fully or partially occluded objects in the images, and adverse weather conditions as shown in Figure 1. In the fig-ure, the area highlighted by red circles is partially visible to the AV, which hinders the models from producing the clean BEV feature map. To address this issue, we propose a denoising frame-work that estimates and removes the intrinsic noise from the learned BEV features. As seen in the figure, the proposed framework effectively estimates and removes the noise, which leads to improved segmentation performance. Our approach is highly inspired by Denoising Diffusion Proba-bilistic Models (DDPM) [6] where a UNet-based noise esti-mator is trained to predict the Gaussian noise contaminating the input image. While existing DDPM-based segmentation methods focus on iteratively removing Gaussian noise con-taminating the BEV features, hoping that the reverse diffu-sion process removes the intrinsic noise as well, we are the first to suggest directly estimating and removing the intrin-sic noise. However, in the conventional view transformation (VT) encoder and map decoder architecture and its corre-sponding training method, as shown in Figure 2, the ground-truth noise is unavailable during the training. This limita-tion motivated us to adopt a sequential training paradigm called Task Decomposition (TD) [29], in which the ground-truth BEV features are obtained by the pre-trained BEV map autoencoder. From extensive experiments, we derived three key insights for improved performance, which will be discussed in detail in later sections. In summary, our contributions are the followings: 
+
+• We propose a new framework that estimates and removes intrinsic noise from BEV features to achieve improved segmentation performance. 
+
+• We derive three key lessons from extensive experiments that are critical for improved performance. 
+
+• We apply our framework to four existing baseline mod-els to demonstrate the effectiveness of the proposed ap-proach. 
+
+## 2. Related Works 
+
+2.1. View Transformation Paradigms 
+
+One of the major challenges in BEV semantic segmenta-tion is transforming image features in PV space into fea-tures in BEV space without access to true depth. Three major paradigms have dominated over the past few years. The first paradigm, often called LSS [20], is to predict the depth for each pixel position in the images and use the pre-dicted depth along with camera parameters to lift the image features into the 3D space. The lifted features are then pro-jected onto the BEV grids to obtain the final BEV features. The second paradigm [14, 30] leverages the cross-attention of Transformer [24] to intrinsically learn the 2D-to-3D cor-respondence through BEV queries from data. To mitigate the computational complexity of the second paradigm, the third paradigm [13] proposes replacing the standard cross-attention with deformable cross-attention [31]. In this pa-per, we apply our framework to the four representative methods [13, 15, 20, 30] to validate the effectiveness of the proposed approach. 
+
+2.2. DDPM for BEV Semantic Segmentation 
+
+[10] first proposed exploiting DDPM for dense prediction tasks, including BEV semantic segmentation. A BEV map decoder is first trained to predict the ground-truth BEV map from both PV image features and a noise-corrupted version of the ground-truth BEV map encoding. During inference, a Gaussian noise map of the same size as the ground-truth BEV map is progressively refined by the decoder via DDIM sampling [22]. [32] suggested employing DDPM to model the distribution over BEV feature maps learned from a VT encoder. A randomly generated BEV feature map is pro-gressively refined via DDIM sampling with the conditional guidance (e.g., the VT encoder output) and then finally used to update the BEV feature map from the VT encoder. [11] proposed a DDPM-based method to fuse features from dif-ferent sensors such as LIDAR and camera. Benefiting from the inherent denoising property of the reverse diffusion pro-cess, the method is able to refine or even synthesize sen-sor features, which leads to improved performance. Re-cently, [28] proposed a DDPM-based denoising approach for 3D object detection. Clean BEV feature maps, which are obtained by the standard DDPM denoising process with 3D object labels, are used to regularize noisy BEV feature maps. While the four methods primarily focus on leverag-ing the generative capabilities of the reverse diffusion pro-cess of DDPM, our approach places an emphasis on the noise estimation capability of DDPM. Specifically, we pro-pose deploying a UNet-based network of DDPM to directly estimate intrinsic noise from the learned BEV features in a single forward pass. 
+
+2.3. Task Decomposition 
+
+[29] first proposed a sequential learning paradigm called Task Decomposition (TD) for frontal camera BEV seman-tic segmentation. Instead of directly supervising a VT en-coder through binary cross entropy between the predicted and ground-truth BEV maps, they proposed training the VT encoder to produce BEV features as close as possible to those from a pre-trained BEV map autoencoder. Finally, the decoder of the autoencoder is fine-tuned using the bi-nary cross entropy to adapt to the learned BEV features. Since the decoder of the autoencoder was initially trained to be robust against noise from a known distribution (e.g., Gaussian) in the BEV space, the combination of the VT en-coder and the decoder is expected to be similarly robust to intrinsic noise in the learned BEV features. However, as seen in our experiments, TD does not always guarantee im-proved performance, suggesting that the intrinsic noise does not necessarily follow the known distribution. In this paper, we follow the TD paradigm to effectively model and esti-mate the noise from the learned BEV features. 
+
+## 3. Proposed Approach 
+
+3.1. Problem Formulation 
+
+Let Ii ∈ RHI ×WI ×3 denote an image captured by the i-th camera mounted on an autonomous vehicle (AV), where HI
+
+and WI respectively denote the height and width of the im-age. Our goal is to predict a BEV map O ∈ RXo×Yo×|C| ,centered at the AV, from the set of images {Ii}Nc
+
+> i=1
+
+. Here 
+
+Xo, Yo, and C denote the width, length, and the set of se-mantic classes in O, respectively, and Nc is the number of the mounted cameras. As shown in Figure 2, a general neural network (NN) architecture for the BEV map predic-tion can be summarized as follows. An image backbone network such as ResNet [5] first processes the input im-ages to produce PV feature maps {Fi ∈ RHF ×WF ×CF }i.Next, a VT encoder transforms them into a BEV feature map B ∈ RXB ×YB ×CB , from which class-specific heads and decoders finally generate the estimate ˆO. In general, 
+
+XB = ⌊Xo/2s⌋ and YB = ⌊Yo/2s⌋ hold with a positive integer s.
+
+3.2. Noise Estimation and Elimination 
+
+We follow the TD paradigm to effectively model intrinsic noise in the learned BEV feature maps. Let Bae and B
+
+denote BEV feature maps from a pre-trained BEV map au-toencoder and a VT encoder trained under the autoencoder’s supervision, respectively. Since Bae is a high-dimensional representation of O and the VT encoder was trained to pro-duce B as close as possible to Bae , we can simply model the noise contamination process as 
+
+B = Bae + N, (1) where N denotes the noise. Our goal is to estimate N and remove it from B. Highly inspired by the noise estimation capacity of DDPM, we introduce a UNet-based noise esti-mation network Nϕ that estimates N as follows: 
+
+ˆN = Nϕ(B), (2) where ˆN and ϕ respectively denote the estimated noise and a set of trainable parameters. The ground-truth for ˆN is directly obtained from Eqn. 1, which can be used for su-pervising Nϕ. Let ON R denote a noise removal operation. Given ˆN, a reasonable choice for ON R is 
+
+ˆB = ON R (B, ˆN) = B − ˆN. (3) The noise eliminated BEV feature map ˆB is then fed to the decoder of the autoencoder for the final prediction. One can consider other operations for ON R such as the cross-attention [32], which will be discussed in a later section. 
+
+3.3. Key Insights 
+
+In this section, we share key lessons learned from our ex-periments to improve performance. 
+
+1) Joint training of the noise estimation network and the decoder outperforms sequential training. A natural choice for the loss function to supervise Nϕ is as follows: 
+
+Lnoise = 1
+
+L || Bae − ˆB|| 22. (4) where L = XB × YB × CB . Following the TD paradigm, one may consider training the noise estimation network first and then training the decoder to adjust to the denoised BEV features. However, we found from the experiment in a later section that joint training of the noise estimation network and the decoder yields better performance. The loss in Eqn. 4 encourages Nϕ to focus on reconstructing the missing signal in Bae from B more effectively when aided by the BEV map prediction error BCE (O, ˆO) in Eqn. 8. The main-task supervision from BCE (O, ˆO) provides strong guidance for Nϕ, leading to more effective noise estimation aligned with the ultimate goal. 
+
+2) Simultaneous elimination of both shared and class-specific noise improves the performance. It is common for BEV segmentation models to predict multi-class infor-mation from a shared BEV feature map B. A widely used approach is to introduce class-specific head networks, each extracting a class-specific BEV feature map Bc from B
+
+where c ∈ C . Following this approach, we modify the archi-tecture of the BEV map autoencoder to have multiple head and decoder networks, each dedicated to a specific class. Even though, in the TD paradigm, the VT encoder is trained to produce B as close as possible to Bae , the class-specific noise estimation is still performed on class-specific BEV feature maps as follows: 
+
+Bc = Bae c + Nc, (5) 
+
+ˆNc = N cls ϕ (Bc|B), (6) where Bae c is the BEV feature map obtained from Bae 
+
+by the head network for class c. Consequently, the class-Figure 3. The overall architecture of the proposed noise estimation network with RU = 3 .
+
+specific loss is 
+
+Lcls noise = 1
+
+L
+
+X
+
+> c∈C
+
+|| Bae c − ˆBc|| 22, (7) where ˆBc = ON R (Bc, ˆNc). Note here that we let N cls ϕ be shared across all classes to avoid a significant increase in the overall network size and complexity. One can consider introducing multiple noise estimation networks, each cor-responding to a specific class, for improved performance at the cost of the increased computational complexity and overall network size. 
+
+3) Noise estimation network learns shape patterns in BEV map images. As shown in Table 3, the proposed de-noising approach works well on static classes such as Driv-able Area and Divider , whose shapes typically exhibit con-sistent patterns on BEV map images. On the other hand, it is not effective for Vehicle and Pedestrian classes. This is because the locations and headings of these objects on BEV map images are typically random, which makes the noise estimation challenging. As a consequence, we propose ap-plying the proposed approach only to the static classes. Un-less stated otherwise in later sections, the proposed noise estimation and elimination processes are not applied to Ve-hicle and Pedestrian , resulting in performance identical to that of TD. 
+
+3.4. Noise Estimation Network Architecture 
+
+Figure 3 shows the overall architecture of the proposed UNet-based noise estimation network, which is inspired by those used in DDPM. The middle layer of the network can optionally have SEBlock [7] to condition the input as shown in Eqn. 6. Finally, whenever Up-Sampling or Down-Sampling operations are required, we let ResBlock include the corresponding layers. The number of UNet layer repe-titions, denoted as RU , in the encoding and decoding layers plays an important role in enhancing the segmentation per-formance. We further analyze its impact on the performance     
+
+> Figure 4. The overall architecture of the proposed approach. For the sake of simplicity, we take an example of class Drivable Area .For the experiments in later sections, the other classes including
+> Divider ,Cross Walk are simultaneously predicted through the cor-responding head and decoder networks. The red arrows are for training purposes only.
+
+in the ablation study section. Unless stated otherwise, we set RU = 3 .
+
+3.5. Overall Training Procedure 
+
+The overall training procedure consists of three stages fol-lowing the TD paradigm as shown in Figure 4. Note that, for simplicity, we use the example of the Drivable Area class in the figure. However, for the experiments in later sections, we predict all seven classes at the same time. We first train a BEV map autoencoder using the ground-truth BEV maps. Next, a VT encoder is trained under the supervision of the autoencoder. Finally, the noise estimation networks (one for shared and the other for class-specific BEV feature maps) are trained using the pre-trained autoencoder and VT en-coder. At the same time, the class-specific decoders of the autoencoder are fine-tuned to adapt to the denoised BEV feature maps. The final loss to be optimized at the third stage is then 
+
+L = BCE (O, ˆO) + α · L noise + β · L cls noise , (8) where BCE denotes the binary cross entropy loss. The pre-defined constants α and β are empirically set to 1. The pro-posed training procedure is different from the TD paradigm in that the noise estimation networks are simultaneously trained with the decoders at the third stage. Model # param. (M) Driv. Div. Ped. X Walk. CarPark. Veh. Ped. Average CVT 18.9 74.9 32.9 38.6 45.3 41.3 28.1 3.3 37.7 CVT+DiffBEV 72.3 75.1 33.0 38.6 45.9 43.8 28.1 3.4 38 .20.5↑
+
+CVT+TD 11.5 72.7 30.5 34.8 44.5 36.6 30.8 9.4 36 .90.8↓
+
+CVT+Ours ( RU = 1 ) 47.0 76.1 34.6 42.8 49.6 41.8 30.9 9.4 40 .83.1↑
+
+CVT+Ours ( RU = 3 ) 101.3 77.2 35.2 44.7 50.8 42.7 30.9 9.4 41.5 3.8↑
+
+PETR 98.5 70.7 30.6 35.8 41.1 36.2 18.0 1.1 33.3 PETR+DiffBEV 151.8 67.8 28.7 30.0 38.0 35.1 15.5 1.3 30 .92.4↓
+
+PETR+TD 91.1 71.2 30.2 32.7 41.6 36.2 21.6 2.9 33 .70.4↑
+
+PETR+Ours ( RU = 1 ) 126.6 72.0 30.9 34.0 42.5 37.0 21.5 2.9 34 .41.1↑
+
+PETR+Ours ( RU = 3 ) 180.9 72.1 31.3 34.8 42.8 37.2 21.5 2.9 34.6 1.3↑
+
+LSS 25.5 72.7 30.5 37.3 43.4 37.5 14.4 1.3 33.8 LSS+DiffBEV 79.1 71.5 30.0 35.5 42.3 36.5 13.1 1.3 32 .71.1↓
+
+LSS+TD 21.0 72.1 30.1 34.4 43.0 35.6 15.3 1.5 33 .10.7↓
+
+LSS+Ours ( RU = 1 ) 57.6 73.1 30.9 36.1 44.2 37.0 15.2 1.5 34 .00.2↑
+
+LSS+Ours ( RU = 3 ) 111.3 73.4 31.2 37.2 44.8 37.3 15.3 1.5 34.3 0.5↑
+
+BEVFormer 30.60 78.3 41.5 51.1 54.4 45.9 37.5 9.6 45.5 
+
+BEVFormer+DiffBEV 84.20 78.5 41.3 49.6 54.8 47.6 36.9 9.6 45 .40.1↓
+
+BEVFormer+TD 26.10 77.2 37.6 45.1 50.5 38.7 35.3 11.9 42 .33.2↓
+
+BEVFormer+Ours ( RU = 1 ) 62.1 77.9 39.5 47.0 51.9 43.1 35.2 11.9 43 .81.7↓
+
+BEVFormer+Ours ( RU = 3 ) 116.4 78.3 40.2 48.4 53.0 41.2 35.2 12.0 44 .01.5↓
+
+Table 1. Quantitative comparison on nuScenes. The values are reported in mIoU. The bold and underline indicate the best and second-best performance, respectively. The values in the subscript indicate the performance gain over the baseline. 
+
+Figure 5. Visualization of (a) surround-view camera images and their corresponding ground-truth BEV maps, and (b) BEV map prediction results. In (b), the first row shows the predictions from the four baseline models. The second, third, and fourth rows show the results when DiffBEV, TD, and Ours are applied to the baseline models, respectively. 4. Experiments 
+
+4.1. Dataset and Evaluation Settings 
+
+To demonstrate the effectiveness of the proposed approach, it is applied to the four representative methods LSS [20], CVT [30], PETR [15], and BEVFormer [13], and is evalu-ated on a large-scale real-world dataset, nuScenes [1]. Fol-lowing the standard practice [3, 4, 30], the ground-truth BEV maps are generated at a resolution of 200 × 200 pix-els by orthographically projecting HD map elements and 3D bounding boxes in a 100m × 100m area around the ego-vehicle onto the ground plane. The input camera images are scaled and cropped to 224 × 448 pixels before being fed to an image backbone. The classes considered are Drivable Area , Divider , Pedestrian Cross , Walkway , CarPark Area ,
+
+Vehicle , and Pedestrian . Finally, for the evaluation met-ric, we use Intersection-over-Union (IoU) score between the ground-truth and its prediction. 
+
+4.2. Network and Training details 
+
+Two image backbones [5, 23] are used for the four baselines following the respective original implementations. Follow-ing the TD paradigm, we first train two BEV map autoen-coders with the initial learning rate of 5 e−4: one produces 
+
+Bae ∈ R25 ×25 ×256 for CVT and PETR, and the other pro-duces Bae ∈ R50 ×50 ×256 for LSS and BEVFormer. Next, a VT encoder is trained under the supervision of the respec-tive autoencoder with the learning rate reported in the cor-responding papers. Finally, the shared and class-specific 
+
+noise estimation networks and the decoder of the autoen-coder are simultaneously trained via the loss in Eqn. 8 with the initial learning rate of 1 e−4. In implementing DiffBEV [32], because the original implementation from the corre-sponding authors does not provide the conditional DDPM part for the semantic segmentation task, we implemented it based on the description in the paper. We adapted the noise estimation network architecture ( RU = 3 ) proposed in our paper for a fair comparison. We incorporated DDIM [22] for fast sampling, and found that the best performance was achieved with four sampling steps. All models are trained with a batch size of 4 for 30 epochs using AdamW [17] on four NVIDIA RTX 3090 GPUs. More details can be found in the supplementary material. 
+
+4.3. Objective Evaluation 
+
+In Table 1, we compare the four models trained with the proposed approach to those trained with or without the ex-isting approaches, DiffBEV [32] and TD [29]. We note that, since the proposed approach is based on the TD paradigm and is not applied to Vehicle and Pedestrian , its perfor-mance on these two classes is nearly identical to that of TD. The table shows that neither DiffBEV nor TD consis-tently improves the performance across all baseline models. Model Shared Class Noise Est. Driv. Div. Ped. X Walk. CarPark. Avg. CVT - - - 74.9 32.9 38.6 45.3 41.3 46.6                                              
+
+> M1 ✔✔✔77.2 35.2 44.7 50.8 42.7 50.1 M2 ✔✔-76.4 33.8 41.5 48.9 42.6 48.6
+> M1a ✔✔✔76.8 35.1 44.2 50.6 41.9 49.7
+> M1b ✔✘✔76.7 34.7 42.9 49.8 43.8 49.6
+> M1c ✘✔✔76.1 34.5 42.1 49.1 40.1 48.4
+
+Table 2. Ablation study on the effectiveness of our insights. The values are reported in mIoU. When training M1a , the noise esti-mation network is trained first, followed by fine-tuning the decoder to adapt to the denoised BEV features. 
+
+Specifically, TD degrades the performance of CVT, LSS, and BEVFormer, with the most noticeable drop observed in BEVFormer. This suggests that TD may be less effective in the surround-view camera setting than in the original front-facing camera setup. DiffBEV, on the other hand, shows noticeable performance improvement only with CVT. We implemented DiffBEV without the depth loss proposed in the corresponding paper, which is one of the key factors contributing to the improved performance, for a fair com-parison. With the introduction of the depth loss, better re-sults than those in Table 1 may be expected. In contrast, the proposed approach consistently improves all the models except BEVFormer, with the most significant gain observed in CVT. Although the proposed method underperforms on BEVFormer due to its reliance on the TD paradigm, it still outperforms BEVFormer+TD by a large margin. 
+
+4.4. Subjective Evaluation 
+
+We present, in Figure 5, the input images, the respective ground-truth BEV maps, and the prediction results. As shown in the figure, the proposed method effectively re-constructs missing parts of the maps predicted under TD. Specifically, the trained noise estimation networks appear to have prior knowledge of general patterns in static classes such as Drivable Area and Divider , leading to improved performance. It is worth noting that the missing parts in the prediction by TD are mainly due to the thresholding op-eration used for visualization. We believe that the weak sig-nals representing these missing parts in the BEV features are recovered by the proposed noise elimination process. On the flip side, this reconstruction ability can sometimes negatively affect predictions, as highlighted by the black ar-rows in the results of BEVFormer+Ours. As a result, BEV-Former+Ours performs worse than BEVFormer in terms of the mIoU metric, despite generating more plausible results overall. On the other hand, both DiffBEV and TD fail to effectively improve the four baseline models. The trends observed in the figure are also similarly found in other pre-diction results in the supplementary materials. Class CVT+TD M1 M2             
+
+> Drivable 72.7 77.2 76.8
+> Divider 30.0 35.2 35.0
+> Vehicle 30.8 30.9 27.3
+> Pedestrian 9.4 9.4 6.1
+
+Table 3. Effect of the proposed approach on static and dynamic classes. The values are reported in mIoU.               
+
+> RU1234
+> #of param. of Nϕ17.7 31.3 44.8 58.4 mIoU 49.0 49.9 50.1 50.6
+
+Table 4. Performance variation of CVT+Ours with respect to the number of U-Net layer repetitions ( RU ). The mIoU values are averaged over static classes, and the number of parameters is re-ported in millions.      
+
+> Subtraction Cross Attn. Concat.+Conv. mIoU 50.1 43.5 49.6
+
+Table 5. Ablation study on the choice of the noise removal process (ON R ). We use CVT as the baseline model, and the mIoU values are averaged over static classes.                       
+
+> CVT PETR LSS BEVFormer -22.1 46.5 55.2 63.8 w/ DiffBEV ( RU= 3 )66.6 78.5 93.0 101.6 w/ Ours ( RU= 1 )42.5 56.9 77.1 84.3 w/ Ours ( RU= 3 )52.1 66.8 87.1 96.6
+
+Table 6. Inference time (ms) per scene. The values are the average across 1000 test scenes. 
+
+4.5. Ablation Study 
+
+We conducted ablation studies to demonstrate the effective-ness of our insights presented in the previous section. The models M1 and M2 in Table 2 denote CVT+Ours trained with and without the noise estimation losses (Eqn. 4 and 7), respectively. The results show that the noise estima-tion networks are effectively trained to remove the intrin-sic noise through the proposed loss. It is also found from 
+
+M1 and M1a that joint training of the noise estimation network and the decoder outperforms sequential training .On the other hand, we estimate and remove noise using either a shared (M1b ) or class-specific (M1c ) noise esti-mation network alone. The experiments show that perfor-mance improvement is maximized when both shared and class-specific noise estimation networks are applied , even though each is also effective when used individually. Fi-nally, to verify that noise estimation network learns shape patterns in BEV map images , we let the class-specific net-work estimate and remove the noise not only for static classes (classes with particular shape patterns on BEV map images such as Drivable Area and Divider ) but also for dy-namic classes (classes without such patterns such as Vehicle 
+
+and Pedestrian ). In Table 3, M2 and M1 denote CVT+Ours applied to all classes and to only static classes, respectively, for the noise estimation and removal process. It shows that the proposed approach is ineffective for dynamic classes. Even though Vehicle and Pedestrian are depicted as rectan-gles on the map images, their sizes, locations, and headings can be arbitrary on the images, resulting in inconsistent pat-terns that are harder to learn. Further experiments were conducted using CVT+Ours to show (1) how the performance varies with the size of the noise estimation network, (2) which operation for ON R 
+
+yields the best performance, and (3) how the inference speed of the four models varies with the proposed approach. As shown in Table 4, the segmentation performance im-proves as we increase the size of the noise estimation net-work, which is natural. Table 5 shows that the simple sub-traction operation in Eqn. 3 is more effective than the cross-attention proposed in [32] and the concatenation, which is reasonable given our noise contamination process in Eqn. 1. Finally, we report the inference time (ms) of each model with or without the proposed approach in Table 6. While the shared noise estimation network processes a single input BEV feature map, the class-specific network must repeat the process |O| times - once for each class. To eliminate this redundancy, we concatenate the class-specific BEV maps along the batch axis and let the noise estimation network process them at once during the inference. The table shows that increasing the number of layers in the noise estima-tion network leads to longer inference time. However, it also verifies that the four baseline models can still run un-der 100ms, which suggests the potential for real-time ap-plications with the proposed method. On the other hand, DiffBEV turned out to be slower than ours because of its iterative sampling during the reverse diffusion process. 
+
+## 5. Conclusion and Future Works 
+
+In this paper, we proposed a new framework that estimates and removes intrinsic noise from BEV feature maps to im-prove BEV segmentation models. This framework is highly inspired by the noise estimation capacity of UNet-based networks in DDPM. While existing DDPM-based methods focus on iteratively removing Gaussian noise contaminating BEV feature maps, hoping that the reverse process removes the intrinsic noise as well, we suggested directly estimating the noise and remove it from the BEV feature maps. Since the noise, in general, is unavailable unlike in DDPM, we adopted the TD paradigm to directly access the noise dur-ing the training. Through extensive experiments, we learned three lessons to make the proposed approach more effective, which is one of our major contributions. We designed the architecture of the noise estimation network based on those in DDPM, which turned out to be successful. However, fur-ther research needs to be done to optimize the network com-plexity without notably compromising performance. 
+
+## References 
+
+[1] H. Caesar, V. Bankiti, A. H. Lang, S. Vora, V. E. Liong, Q. Xu, A. Krishnan, Y. Pan, G. Baldan, and O. Beijbom. nuscenes: a multimodal dataset for autonomous driving. In 
+
+IEEE Conf. Comput. Vis. Pattern Recog. , 2020. 6 [2] D. Chen, J. Li, V. Guizilini, R. Ambrus, and A. Gaidon. Viewpoint equivariance for multi-view 3d object detection. In IEEE Conf. Comput. Vis. Pattern Recog. , 2023. 1 [3] D. Choi, J. Kang, T. An, K. An, and K. Min. Progressive query refinement framework for bird’s-eye-view semantic segmentation from surrounding images. In Int. Conf. Intell. Robots Syst. , 2024. 1, 6 [4] S. Fang, Z. Wang, Y. Zhong, J. Ge, S. Chen, and Y. Wang. Tbp-former: learning temporal bird’s-eye-view pyramid for joint perception and prediction in vision-centric autonomous driving. In IEEE Conf. Comput. Vis. Pattern Recog. , 2023. 1, 6 [5] K. He, X. Zhang, S. Ren, and J. Sun. Deep residual learning for image recognition. In IEEE Conf. Comput. Vis. Pattern Recog. , 2016. 3, 6 [6] J. Ho, A. Jain, and P. Abbeel. Denoising Diffusion Proba-bilistic Models. In Adv. Neural Inform. Process. Syst. , 2020. 2[7] J. Hu, L. Shen, S. Albanie, G. Sun, and E. Wu. Squeeze-and-excitation networks. In IEEE Conf. Comput. Vis. Pattern Recog. , 2018. 4 [8] S. Hu, L. Chen, P. Wu, H. Li, J. Yan, and D. Tao. St-p3: end-to-end vision-based autonomous driving via sptio-temporal feature learning. In Eur. Conf. Comput. Vis. , 2022. 1 [9] Y. Huang, W. Zheng, Y. Zhang, J. Zhou, and J. Lu. Tri-perspective view for vision-based 3d semantic occupancy prediction. In IEEE Conf. Comput. Vis. Pattern Recog. , 2023. 1[10] Y. Ji, Z. Chen, E. Xie, L. Hong, X. Liu, Z. Liu, T. Lu, Z. Li, and P. Luo. DDP: Diffusion Model for Dense Visual Prediction. In Int. Conf. Comput. Vis. , 2023. 2 [11] D.-T. Le, H. Shi, J. Cai, and H. Rezatofighi. DifFUSER: Dif-fusion Model for Robust Multi-Sensor Fusion in 3D Object Detection and BEV Segmentation. In Eur. Conf. Comput. Vis. , 2024. 2 [12] Y. Li, Z. Ge, G. Yu, J. Yang, Z. Wang, Y. Shi, J. Sun, and Z. Li. Bevdepth: Acquisition of reliable depth for multi-view 3d object detection. 2023. 1 [13] Z. Li, W. Wang, H. Li, E. Xie, C. Sima, T. Lu, Y. Qiao, and J. Dai. BEVFormer: learning bird’s-eye-view representation from multi-camera images via spatiotemporal transformers. In Eur. Conf. Comput. Vis. , 2022. 1, 2, 6 [14] Y. Liu, T. Wang, X. Zhang, and J. Sun. PETR: position em-bedding transformation for multi-view 3d object detection. In Eur. Conf. Comput. Vis. , 2022. 1, 2 [15] Y. Liu, J. Yan, F. Jia, S. Li, A. Gao, T. Wang, and X. Zhang. PETRv2: A Unified Framework for 3D Perception from Multi-Camera Images. In Int. Conf. Comput. Vis. , 2023. 1, 2, 6 [16] Z. Liu, H. Tang, A. Amini, X. Yang, H. Mao, D. L. Rus, and S. Han. Bevfusion: multi-task multi-sensor fusion with unified bird’s-eye view representation. In IEEE Int. Conf. Robotics and Automation , 2023. 1 [17] I. Loshchilov and F. Hutter. Decoupled weight decay regu-larization. In Int. Conf. on Learn. Represent. , 2019. 6 [18] C. Pan, Y. He, J. Peng, Q. Zhang, W. Sui, and Z. Zhang. Baeformer: bi-directional and early interaction transformers for bird’s eye view semantic segmentation. In IEEE Conf. Comput. Vis. Pattern Recog. , 2023. 1 [19] L. Peng, Z. Chen, Z. Fu, P. Liang, and E. Cheng. Bevseg-former: Bird’s eye view semantic segmentation from arbi-trary camera rigs. In 2023 IEEE/CVF Winter Conf. on Appli. of Compt. Vis. (WACV) , 2023. [20] J. Philion and S. Fidler. Lift, Splat, Shoot: encoding images from arbitrary camera rigs by implicitly unprojecting to 3D. In Eur. Conf. Comput. Vis. , 2020. 1, 2, 6 [21] C. Shu, J. Deng, F. Yu, and Y. Liu. 3dppe: 3d point positional encoding for multi-camera 3d object detection transformers. In Int. Conf. Comput. Vis. , 2023. 1 [22] J. Song, C. Meng, and S. Ermon. Denoising diffusion im-plicit models. In Int. Conf. on Learn. Represent. , 2021. 2, 6, 1[23] M. Tan and Q. V. Le. Efficientnet: Rethinking model scaling for convolutional neural networks. In Int. Conf. on Mach. Learn. , 2019. 6 [24] A. Vaswani, N. Shazeer, N. Parmar, J. Uszkoreit, L. Jones, A. N. Gomez, L. Kaiser, and I. Polosukhin. Attention is all you need. In Adv. Neural Inform. Process. Syst. , 2017. 1, 2 [25] Y. Wang, Y. Chen, and Z. Zhang. Frustumformer: adaptive instance-aware resampling for multi-view 3d detection. In 
+
+IEEE Conf. Comput. Vis. Pattern Recog. , 2023. 1 [26] K. Xiong, S. Gong, X. Ye, X. Tan, J. Wan, E. Ding, J. Wang, and X. Bai. Cape: camera view position embedding for multi-view 3d object detection. In IEEE Conf. Comput. Vis. Pattern Recog. , 2023. 1 [27] C. Yang, Y. Chen, H. Tian, C. Tao, X. Zhu, Z. Zhang, G. Huang, H. Li, Y. Qiao, L. Lu, J. Zhou, and J. Dai. Bev-former v2: adapting modern image backbones to bird’s-eye-view recognition via perceptive supervision. In IEEE Conf. Comput. Vis. Pattern Recog. , 2023. 1 [28] X. Ye, B. Yaman, S. Cheng, F. Tao, A. Mallik, and L. Ren. Bevdiffuser: Plug-and-play diffusion model for bev denois-ing with ground-truth guidance. In arXiv:2502.19694 , 2025. 2[29] T. Zhao, Y. Chen, Y. Wu, T. Liu, B. Du, P. Xiao, S. Qiu, H. Yang, G. Li, Y. Yang, and Y. Lin. Improving Bird’s Eye View Semantic Segmentation by Task Decomposition. In 
+
+IEEE Conf. Comput. Vis. Pattern Recog. , 2024. 2, 6, 1 [30] B. Zhou and P. Krahenbuhl. Cross-view transformers for real-time map-view semantic segmentation. In IEEE Conf. Comput. Vis. Pattern Recog. , 2022. 1, 2, 6 [31] X. Zhu, W. Su, L. Lu, B. Li, X. Wang, and J. Dai. De-formable detr: deformable transformers for end-to-end ob-ject detection. In Int. Conf. on Learn. Represent. , 2021. 2 [32] J. Zou, Z. Zhu, Y. Ye, and X. Wang. DiffBEV: Conditional Diffusion Model for Bird’s Eye View Perception. In the AAAI Conf. Artificial Intell. , 2024. 2, 3, 6, 7, 1 BEV-Denoise: Learning Intrinsic Noise for Accurate Bird’s-Eye-View Semantic Segmentation 
+
+# Supplementary Material 
+
+## 6. Implementation Details 
+
+6.1. BEV Map Autoencoder 
+
+Figure 6 shows the general architecture of BEV map au-toencoder. We trained two autoencoders, one producing 
+
+Bae ∈ R25 ×25 ×256 for CVT [30] and PETR [15] while the other producing Bae ∈ R50 ×50 ×256 for LSS [20] and BEV-Former [13], with the initial learning rate of 5 e−4. During the training, as proposed in [29], randomly generated noise of the same size as Bae is added to Bae to make the au-toencoder robust. The figure shows an example of decoding the map corresponding to drivable area . If the number of semantic classes is greater than one, additional head and decoder networks dedicated to a specific class is added. For the supervision of the autoencoder, we use binary cross en-tropy loss as follows: 
+
+L = X
+
+> c∈C
+
+λc · BCE (Oc, ˆOc), (9) where Oc and ˆOc respectively denote the ground-truth BEV map for the class c and its prediction. λc is a pre-defined constant for the class, controlling the influence of 
+
+BCE (Oc, ˆOc) on the overall loss. We set λc as shown in Table 7 to reflect the fact that the size of the areas occupied by a class in BEV maps differs across the classes. Note that we used λc values in Table 7 when training DiffBEV and the four baseline models for a fair comparison. 
+
+6.2. TD Paradigm 
+
+Once the autoencoder is trained at the first stage of the TD paradigm as described above, the parameters of the encoder and head networks are fixed for the subsequent training stages. At the second stage, a VT encoder is trained to pro-duce B as close as possible to Bae via l2-loss. Finally, the decoders of the autoencoder are fine-tuned at the third stage through Eqn. 9 with λc = 1 for all classes. When training the noise estimation networks, we train them with the de-coders simultaneously through the loss function proposed in the main paper. 
+
+6.3. DiffBEV 
+
+Because the original implementation code of DiffBEV [32] does not provide the conditional DDPM part for the seman-tic segmentation task, we implemented it based on the de-scription in the paper. First of all, for a fair comparison, we use the noise estimation network architecture similar to that proposed in our paper. Next, we strictly follow the standard Class λc         
+
+> Drivable Area 0.03
+> Divider 0.25
+> Ped. Cross 0.25
+> CarPark Area 0.25
+> Walkway 0.25
+> Vehicle 0.5
+> Pedestrian 1.0
+> Table 7. λcfor each class.
+
+DDPM model to add noise to and predict it from B, while the difference is that condition-modulated denoising is em-ployed as the original paper suggested. We also exclude the depth estimation part of DiffBEV for a fair comparison. With the introduction of the depth estimation part, one can expect better segmentation results.Finally, we incorporated DDIM [22] for fast sampling, and found that the best per-formance was achieved with four sampling steps. 
+
+6.4. Four Baseline Models 
+
+As we mentioned in the paper, we apply our method to the four representative baseline models: CVT [30], PETR [15], LSS [20], and BEVFormer [13]. The implementation codes for the four models are downloaded from the respec-tive github repositories and used for the experiments in this paper. We didn’t change the original configurations except the followings: 1) Following the standard practice, the input images are scaled and cropped to 224 × 448 pixels before being fed to an image backbone. 2) We let LSS and BEV-Former produce B of spatial resolution 50 × 50 to make them trainable on our GPUs. 3) We replace the decoders of the four baselines with the adapted version of CVT’s de-coder to facilitate multi-class prediction in the way that each class is given a dedicated head network and the ConvNet-based original CVT decoder. Figure 6. The overall architecture of the BEV map autoencoder. Depending on the spatial resolution of Bae , MaxPool and DeConv 
+
+operations in the encoder and decoder can be dropped. Figure 7. Prediction examples. Figure 8. Prediction examples. Figure 9. Prediction examples.

@@ -1,0 +1,430 @@
+Title: UNITY: Attention Flow Networks for Adaptive Conditioning in Diffusion
+
+URL Source: https://arxiv.org/pdf/2606.20971v1
+
+Published Time: Tue, 23 Jun 2026 00:30:23 GMT
+
+Number of Pages: 21
+
+Markdown Content:
+# UNITY: Attention Flow Networks for Adaptive Conditioning in Diffusion 
+
+Aryan Das 1 , Koushik Biswas 2 , Moloud Abdar 3 , and Vinay Kumar Verma 4 
+
+> 1
+
+VIT Bhopal, India 2 IIIT Delhi, India  
+
+> 3
+
+The University of Queensland, Australia 4 IIT Kanpur, India 
+
+aryan.das2021@vitbhopal.ac.in, koushikb@iiitd.ac.in, {m.abdar1987,vinayugc}@gmail.com 
+
+Abstract. We introduce UNITY, Universal-to-Specialized adapter for efficient and scalable composite conditioning in diffusion-based image generation. Unlike prior methods that train separate adapters for each condition, UNITY jointly learns shared semantics across multiple con-ditioning modalities and later specializes without altering the architec-ture. The proposed two-stage training paradigm consists of a Univer-sal Stage , which captures cross-modal joint representations across all conditioning types using half of the total training steps, followed by a 
+
+Specialization Stage that refines modality-specific features with the re-maining steps. The core of our design are the Morphable Attention Flow (MAF) Network and Morph Wrapper modules, which enable channel-aware and spatially adaptive feature alignment through learn-able flow fields and attention fusion. This constant-complexity formu-lation supports flexible operation under single or composite condition-ing while significantly reducing inference latency and memory footprint. Extensive experiments on multiple datasets demonstrate that UNITY achieves State-of-the-Art (SoTA) image fidelity and memory efficiency. 
+
+Code: https://github.com/arya-domain/UNITY 
+
+Keywords: Diffusion Models · Conditional Image Generation · Com-posite Conditioning · Morphable Attention · Flow Networks 
+
+Fig. 1: Our results of composite conditioning image generating with UNITY-Adapter.  
+
+> arXiv:2606.20971v1 [cs.CV] 18 Jun 2026 2A. Das et al.
+
+## 1 Introduction  
+
+> Fig. 2: Comparison of FIDs and Infer time across methods.
+
+Conditional image generation has become a foundational capability in modern vi-sual AI, yet as real-world applications in-creasingly demand simultaneous control over structure, semantics, and style, the scalability of existing conditioning frame-works has emerged as a critical and un-solved bottleneck. Diffusion-based mod-els [6, 25, 26] have enabled high-fidelity synthesis guided by diverse signals such as text, depth, sketches, and semantic masks, and attention-based architec-tures with vision transformers have further strengthened cross-modal align-ment [3, 13, 21]. Multi-modal conditioning is not a luxury, it is a necessity for structure-preserving tasks such as text-to-image generation [22, 23, 27] and image-to-image translation [19, 32], where spatial layout and semantic consis-tency are non-negotiable. Composite conditioning, where multiple inputs jointly describe a shared underlying scene, is the natural evolution of this paradigm, offering richer, more coherent guidance than any single modality can provide. Yet the field has treated this as an afterthought, bolting together independent adapters rather than designing systems that fundamentally understand multi-modal structure. This raises an unavoidable question: Can we design a sin-gle adapter that jointly learns shared semantics across all condition-ing modalities, scales to any number of conditions without additional cost, and maintains precise spatial alignment? 
+
+A clear answer has yet to emerge, and the underlying challenges have not been fully examined by the community. Dominant adapter-based frameworks, includ-ing ControlNet [35], T2I-Adapter [17], ControlNet++ [11], and CtrLoRA [34], treat each conditioning modality as an isolated problem, each requiring a fully independent training cycle to reach optimal performance. The consequence is structural and severe: training cost and memory scale linearly with the num-ber of conditions, making four-modality conditioning demand four times the re-sources of a single-modality baseline. Uni-ControlNet [37], the closest attempt at unification, still requires 8× the GPU memory of a single-condition setup, with 1271.42M parameters and no mechanism for shared semantic learning across conditions. More fundamentally, none of these architectures possesses a uni-fied mechanism to model fine-grained spatial correspondences across modalities. ControlNet-style adapters duplicate the entire Stable Diffusion encoder, an ex-pensive design choice that paradoxically sacrifices modality-specific adaptability for scale, and every existing method executes a parallel denoising path alongside the diffusion backbone, which is the primary driver of inference latency. 
+
+We argue that this demands not incremental improvement but a ground-up rethinking of how adapters should handle multiple conditioning modalities. Two core problems must be solved simultaneously, and prior work has ignored both. 
+
+First , efficient multi-modal conditioning requires a framework that jointly learns UNITY 3
+
+the shared semantic structure underlying all modalities, rather than treating each in isolation, and does so without any increase in parameter count or training budget as modalities grow. Second , spatial correspondence across conditioning modalities cannot be captured by attention alone; it demands explicit, learnable geometric alignment that adapts to each modality’s spatial characteristics. We introduce UNITY-Adapter , a Universal-to-Specialized framework that con-fronts both problems directly. UNITY-Adapter trains in two decisive stages: a 
+
+Universal Stage that jointly learns from all K conditions in the first N/ 2 steps, forging a shared discriminative representation space, followed by a Specializa-tion Stage that refines each modality individually in the remaining N/ 2 steps, delivering a provable 37 .5% reduction in training cost for four conditions with 
+
+strictly fixed parameters regardless of K. Complementing this, the proposed 
+
+Morphable Attention Flow (MAF) network introduces learnable displace-ment fields that directly capture spatial correspondences between conditioning inputs and latent representations, enabling precise geometric alignment with-out backbone duplication and without any parallel denoising path, substantially cutting inference latency. The result is striking: UNITY-Adapter achieves State-of-the-Art (SoTA) FID and CLIP scores across all four conditioning modalities on a single 24GB GPU, outperforming methods that require 4× to 8× more memory, as shown in Figure 2. Our contributions are summarized as follows: 
+
+– We propose UNITY-Adapter , a universal-to-specialized framework that en-ables efficient and flexible composite conditioning across multiple modalities without added model complexity or cost. 
+
+– We introduce the Morphable Attention Flow (MAF) network with Morph Wrapper modules, which performs channel-aware and spatially adaptive fea-ture alignment using learnable flow fields and attention-based fusion without duplicating the diffusion backbone. The extensive experiments over the various datasets demonstrate that it achieves the SoTA fidelity and memory efficiency while significantly reducing memory and inference overhead compared to existing multi-adapter frameworks. 
+
+## 2 Related Work 
+
+Conditional Diffusion Models: Text-to-image diffusion models have achieved remarkable success in high-fidelity image synthesis [6, 25, 26, 27]. Controllable generation frameworks introduce additional conditioning modalities beyond text. ControlNet [35] pioneered trainable adapters via UNet encoder duplication with zero convolution initialization. T2I-Adapter [17] proposed lightweight adapters with faster inference. Uni-ControlNet [37] unified multiple controls in all-in-one architectures. UniCon [12] learned joint image-condition distributions enabling flexible sampling. ControlNet++ [11] improved consistency through iterative feedback. UniControl [20] extended multi-modal controllability via task-specific training. CtrLoRA [34] explored LoRA-based extensible control. Despite effec-tiveness, these require independent training per condition, causing linear scaling 4 A. Das et al. 
+
+in cost and memory. They perform parallel denoising, increasing inference la-tency. Our framework maintains constant complexity via the training paradigm, enabling global guidance without architectural duplication. 
+
+Multi-Modal and Composite Conditioning: Handling multiple condition-ing inputs remains a core challenge in controllable generation. Composer [9] introduced composable conditions via a Product-of-Experts formulation, and multi-modal GANs [10] studied composite guidance in adversarial settings. Trans-former based methods have pursued unified control: UniCombine [8] combined condition tokens for multi-conditional generation in DiT models, and OminiCon-trol [31] achieved unified sequence processing with minimal parameter overhead. However, these methods either lack efficient training for composite scenarios or require separate adaptation for each condition set. TCIG [16] used a two-stage framework that separates controllability from quality enhancement but empha-sizes sequential refinement rather than joint multi-modal learning. In contrast, UNITY-Adapter learns shared semantic representations across all conditions in a universal stage before specializing to individual modalities, enabling flexible composite control without retraining. 
+
+Flow-Based Feature Alignment: Flow networks have shown strong efficacy for spatial feature transformation and alignment in generative tasks. Normal-izing flows [2] introduced invertible transformations for density modeling, later extended by Diffusion Normalizing Flow [36], which integrates Stochastic Diffu-sion [29] with learnable flow dynamics. In conditional generation, optical flow-based warping has been widely adopted: Global-Flow Local-Attention [24] en-ables feature-level spatial reassembly for pose-guided synthesis, Latent Flow Dif-fusion Models [18] generate latent flow sequences for video, and Flow-based Fea-ture Warping [33] achieves illumination preserving frontalization via learned flow fields. These works demonstrate that learnable flows support spatial alignment across modalities. Building on this insight, our MAF introduces channel-aware, attention-driven warping within Morph Wrapper modules. Unlike optical flow, which models only spatial displacement, MAF learns parametric flow fields that adaptively align multi-modal conditioning features with denoising features, en-abling semantically consistent fusion while preserving spatial structure. 
+
+Training Strategies for Controllable Diffusion: Efficient training paradigms are crucial for scaling diffusion models. Adapter-based methods [1, 7] offer pa-rameter efficient transfer learning in vision transformers, yet their use for com-posite conditioning remains limited. Two-stage strategies such as Diff2Flow [28] bridge diffusion and flow matching via timestep rescaling and velocity alignment but focus on adaptation rather than control. Our UNITY-Adapter framework introduces a training paradigm tailored to composite conditioning: a univer-sal stage learns shared cross-modal representations, followed by a specialization stage that refines individual condition handling. This design keeps total training cost constant regardless of the number of conditions, unlike prior methods that require separate training cycles per condition. UNITY 5
+
+## 3 Methodology 
+
+3.1 Preliminaries 
+
+Diffusion models generate samples by reversing a gradual noising process. Given a clean image  X0, the forward diffusion process constructs progressively noisier states according to  q(Xt | Xt−1) = N (Xt; √1 − βt Xt−1, β tI), where  {βt}Tt=1  is a predefined noise schedule that produces approximately Gaussian noise after 
+
+T steps. The reverse process aims to denoise by modeling  pθ (Xt−1 | Xt) = 
+
+N (Xt−1; μθ (Xt, t ), Σ θ (t)) , typically reparameterized using a noise prediction network  ϵθ trained via the objective  L(θ) = Et, X0,ϵ [∥ϵ − ϵθ (Xt, t )∥2]. In this work, we employ a pretrained Latent Diffusion Model (LDM) based on the Sta-ble Diffusion [25] architecture, which operates in a compressed latent space using a variational autoencoder (VAE) consisting of an encoder  ε, a decoder  δ, and a denoising UNet. The encoder maps an input image  X0 to its latent represen-tation  Ψ = ε(X0), while the decoder reconstructs the image from the latent as 
+
+ˆX = δ(Ψ ). Forward diffusion is then applied in the latent space, perturbing  Ψ
+
+over  T timesteps to produce noisy latents  Xt. The UNet, parameterized by  θ,performs reverse denoising according to  Xt−1 = fθ (Xt, t, c ), where  c denotes the text-conditioning vector obtained from a frozen CLIP text encoder  CT . The conditioning is integrated into the UNet via cross-attention mechanisms at each denoising step. 
+
+3.2 Framework 
+
+UNITY operates as a Plug-and-Play module for the frozen SD1.5 UNet back-bone and text-encoder CT . The core innovation is our Flow-based Adapter de-sign (Fig. 3) coupled with the two-stage training paradigm in Algorithm 1 that yields K−12K training reduction (37.5% for K = 4 ). Rather than parallel condition-specific denoising, UNITY-Adapter provides global multi-scale guidance to the frozen SD1.5, which performs core denoising while the adapter ensures condi-tional alignment across timesteps. The adapter maintains constant parameters regardless of K, enabling flexible single or composite conditioning at inference. Text embeddings CT maintain semantic coherence between visual conditions and textual intent, enhancing structural consistency without compromising genera-tive quality or computational efficiency. 
+
+3.3 Adapter Architecture 
+
+UNITY introduces a unified conditioning mechanism for the frozen Stable Dif-fusion UNet through two key components: Spatial Encodings and a Morphable Attention Flow (MAF) Network , which consists of a Multi-Scale Flow Estimator 
+
+(MSFE) and Morph Wrappers (MW). The spatial encoders transform condition-ing inputs into hierarchical feature pyramids, modulated by a Scaler Block and aligned with the UNet’s multi-scale architecture. The MAF Network performs cross-modal flow estimation, self-refinement, and text-conditioned fusion, while 6 A. Das et al. 
+
+Fig. 3: Proposed Framework: Conditioning inputs are processed through dual Spatial Encoders with Scaler Block to produce multi-scale feature pyramids F(1) and F(2) . The Morphable Attention Flow (MAF) Network performs Cross-Modal alignment (Cross-MSFE + Morph Wrapper), Self-Refinement (Self-MSFE + Morph Wrapper), and Fu-sion (MSFE), with final features Ff inal i conditioned via Cross-Attention with Text Embeddings CT (c) and injected into the frozen Stable Diffusion’s UNet and fused with Point-Wise Addition. 
+
+the Morph Wrapper applies differentiable spatial warping via learned displace-ment fields and attention maps to achieve precise geometric alignment. 
+
+Spatial Encoding The spatial encoding module transforms conditional inputs into hierarchical feature representations aligned with the UNet’s multi-scale ar-chitecture. It comprises two primary components: a Spatial Encoder , which ex-tracts multi-scale features, and a Scaler Block , which adaptively modulates these features before integration into the UNet. 
+
+Spatial Encoder: The spatial encoder constructs a hierarchical feature pyra-mid that preserves spatial fidelity while aligning with the multi-scale UNet struc-ture. Pixel unshuffle performs a lossless spatial-to-channel transformation, and pre-activation residual blocks ensure stable gradient propagation. Given K con-ditioning inputs C ∈ RH×W ×Ck with Ck = 3 K, we first apply pixel unshuffle with scale factor s:
+
+F0 = PixelUnshuffle (C), F0 ∈ R Hs × Ws ×Ck s2
+
+. (1) The encoder then produces multi-level features {Fi}Li=1 through L hierarchical stages: 
+
+Fi = R(2) 
+
+> i
+
+ R(1)  
+
+> i
+
+(Di(Fi−1)) , i = 1 , . . . , L.  (2) Here, Di denotes a strided 3×3 convolution that reduces spatial resolution and in-creases channel dimension from di−1 to di. Each R(j) 
+
+> i
+
+is a pre-activation residual block defined as, R(X) = X+G(X), where G(·) consists of two 3×3 convolutions with BN and ReLU in pre-activation order. All convolutions use padding to pre-serve spatial resolution, and bias terms are omitted due to normalization. This formulation yields a computationally efficient multi-scale encoder while retaining dense spatial information. UNITY 7
+
+Scaler Block: The Scaler Block applies adaptive channel-wise modulation to en-coded features before fusion. This adaptive modulation enables coherent feature fusion across heterogeneous conditioning types while preserving spatial fidelity. For each encoder output Fi ∈ RHi×Wi×di , the block performs a learnable 1 × 1
+
+transformation: 
+
+˜Fi = Conv 1×1 
+
+> di→di
+
+(Fi), i ∈ { 1, . . . , L }. (3) These pointwise convolutions act as gating mechanisms that emphasize or sup-press channels based on the conditioning modality, enabling dynamic feature reweighting while maintaining spatial structure. The set of modulated features 
+
+{ ˜Fi}Li=1 is further processed through the MAF Network. 
+
+Morphable Attention Flow Network The Morphable Attention Flow (MAF) Network constitutes the core processing that transforms spatial embeddings through iterative refinement via flow estimation and morphological wrapping. Operating on feature pyramids from dual spatial encoders, the MAF Network performs cross-modal alignment and self-refinement across L hierarchical scales. Two parallel spatial encoding pathways process complementary conditioning sig-nals, each producing multi-scale feature pyramids through the spatial encod-ing module described previously. The outputs from the first and second spa-tial encoders, after their respective Scaler Blocks , yield two feature sets F(1) =
+
+{ ˜F(1)  
+
+> i
+
+}Li=1 and F(2) = { ˜F(2)  
+
+> i
+
+}Li=1 , where ˜F(1)  
+
+> i
+
+, ˜F(2)  
+
+> i
+
+∈ RCi×Hi×Wi represent mod-ulated features at scale i. These dual representations capture complementary structural and semantic information that will be progressively refined through the MAF Network’s stage processing design. For each scale i ∈ { 1, . . . , L }, pro-cessing begins with cross-modal flow estimation, where features from both en-coders are concatenated and fed into a MSFE (Section 3.3) to establish inter-modal correspondences: 
+
+Zcross i = MSFE cross 
+
+
+
+Concat   ˜F(1)  
+
+> i
+
+, ˜F(2) 
+
+> i
+
+
+
+, (4) where Zcross i encodes cross-modal flow features. This M SF E cross output cap-tures the geometric and semantic relationships between the two encoding fea-tures, providing the foundation for subsequent morphological alignment. The cross-modal features Zcross i are then processed by a Morph Wrapper (Section 3.3), which warps the primary encoder features ˜F(1)  
+
+> i
+
+using displacement fields and at-tention maps derived from the cross-modal flow: 
+
+Ecross i = MorphWrapper   ˜F(1)  
+
+> i
+
+, Zcross i
+
+, (5) where Ecross i represents the cross-aligned embeddings. The cross Morph Wrap-per extracts displacement fields ∆cross i and attention maps Across i from Zcross i ,performing adaptive spatial warping that aligns multi-modal features through learned geometric transformations. Following cross-modal alignment, the net-work performs self-refinement to enhance intra-modal consistency. A M SF E self 8 A. Das et al. 
+
+Algorithm 1: UNITY: Two-Stage Training 1: Input: {Ci}Ki=1 , N , frozen UNet θ
+
+2: Universal Stage ( N/ 2 steps) 
+
+3: ϕ ← Pretrain ({Ci}, N/ 2) 
+
+4: Specialization Stage ( N/ 2 steps) 
+
+5: for i = 1 to K do 
+
+6: ϕi ← Finetune (Ci, N/ 2) 
+
+7: end for 
+
+8: ϕ ← S 
+
+> i
+
+ϕi
+
+9: TU N IT Y = N 
+
+> 2
+
+(1 + K) vs KN 
+
+Fig. 4: Morph Wrapper: Adaptive feature warping using learned Morpho Fields ∆ and Attention-Weighted Aggregation across M
+
+sampling points. 
+
+processes the concatenation of the original primary features and the cross-aligned embeddings: 
+
+Zself i = MSFE self 
+
+
+
+Concat   ˜F(1)  
+
+> i
+
+, Ecross i
+
+
+
+, (6) where Zself i captures self-consistent flow patterns that refine the representation while preserving structure. Unlike the cross-modal stage, the self Morph Wrap-per operates exclusively on the self-refined features, using Zself i as both the embedding source and the flow guidance: 
+
+Eself i = MorphWrapper  Zself i , Zself i
+
+, (7) where Eself i represents the self-aligned embeddings. The self Morph Wrapper 
+
+similarly extracts displacement fields ∆self i and attention maps Aself i from Zself i ,performing adaptive warping that preserves structural integrity while refining lo-cal spatial details. This self-referential deformation enables fine-grained correc-tion and enhancement without interference from cross-modal signals. The out-puts from both cross-modal and self-refinement pathways are then fused through a refinement MSFE that integrates complementary information: 
+
+Zf used i = MSFE ref ine 
+
+
+
+Concat  Ecross i , Eself i
+
+
+
+, (8) which produces unified flow-estimated embeddings Zf used i that combine cross-modal alignment with self-consistent refinement. These fused features capture both inter-modal correspondences and intra-modal structural coherence. Un-like the T2I-Adapter, to ensure semantic guidance to the adapter with the text prompt, the fused embeddings are conditioned through cross-attention with text embeddings from the frozen CLIP text encoder CT :
+
+Ff inal i = CrossAttention  Zf used i , CT (c), (9) where c denotes the text prompt and Ff inal i represents the semantically aligned feature embedding at scale i. This cross-attention mechanism ensures that the visual conditioning remains consistent with the textual intent throughout the generation process. UNITY 9
+
+Multi-Scale Flow Estimator (MSFE) Multi-Scale Flow Estimator (MSFE) 
+
+serves to learn hierarchical feature transformations that estimate the Morpho Fields and attention weights for flow-aware guidance across spatial scales. It consists of a lightweight convolutional hierarchy that progressively refines la-tent representations through multi-resolution filtering and non-linear activation to produce morphological displacement fields and their corresponding atten-tion maps. This lightweight architecture enables rapid convergence during two-stage training while maintaining sufficient capacity for multi-scale flow patterns. Given an input feature map  Zin ∈ RCz ×Hw ×Ww , the MSFE produces an output 
+
+Zout ∈ R(3 M )×Hw ×Ww through a sequence of convolutional and activation layers: 
+
+Z1 = LReLU  Conv 3×3  
+
+> Cz→C1
+
+(Zin ), Z2 = LReLU  Conv 3×3 
+
+> C1→C2
+
+(Z1),
+
+Z3 = LReLU  Conv 3×3 
+
+> C2→C3
+
+(Z2), Zout = Conv 3×3 
+
+> C3→3M
+
+(Z3), (10) where LReLU denotes the Leaky ReLU activation with a negative slope of 0.1,and M is the number of sampling points. The output  Zout  is then decomposed through channel splitting to extract the Morpho Fields and attention weights: 
+
+∆ = Zout [0 : 2 M, :, :] , A = Zout [2 M : 3 M, :, :] , (11) where the first  2M channels encode the Morpho Fields  ∆ ∈ RM ×2×Hw ×Ww
+
+defining morphological spatial offsets (with 2 coordinates per sampling point), and the remaining  M channels represent the morphological attention weights 
+
+A ∈ RM ×Hw ×Ww . The combined representation  [∆, A] = Zout  directly serves as the conditioning feature for the MorphWrapper function, enabling end-to-end learning of morphological transformations. 
+
+Morph Wrapper As illustrated in Fig. 4, the Morph Wrapper operates as a morphological attention mechanism that unifies spatial embeddings and atten-tion maps through adaptive sampling. Unlike conventional deformable atten-tion with fixed offset patterns, the Morph Wrapper dynamically wraps features, aligning multi-scale embeddings to context-dependent spatial configurations via learned attention modulation to preserve spatial information that is typically lost in standard cross-attention. The MorphWrapper function takes two inputs: a source embedding  P ∈ RCp×Hw ×Ww and the MSFE output  Z ∈ R(3 M )×Hw ×Ww ,where  M denotes the number of sampling points.  Z contains both Morpho Fields and attention maps [∆, A] = Z, with  ∆ ∈ RM ×2×Hw ×Ww representing morphological spatial offsets that define adaptive sampling locations, and  A ∈
+
+RM ×Hw ×Ww denoting attention weights. The mechanism synthesizes wrapped features via differentiable bilinear interpolation: 
+
+P′ 
+
+> m
+
+= GridSample  P, ∆m
+
+, m = 1 , . . . , M.  (12) 10 A. Das et al. 
+
+Each warped embedding is modulated by its attention map through softmax-normalized aggregation:      
+
+> MorphWrapper (P,Z)( p) =
+> MX
+> m=1
+> exp( Am(p))
+> PMj=1 exp( Aj(p)) P′
+> m(p),(13)
+
+where  p indexes spatial positions. This differentiable morphological attention mechanism enables flexible geometric adaptation, enhancing correspondence be-tween conditional inputs and latent representations while maintaining end-to-end trainability. 
+
+3.4 Fusion with Backbone 
+
+At each of the L scales, adapter outputs the final condition-aware features 
+
+{Ff inal i }Li=1 (Eq. 9). These features are integrated with the corresponding en-coder stages of the frozen Stable Diffusion 1.5 UNet through point-wise addition: 
+
+Uf inal i = Uenc i + Ff inal i , (14) where Uenc i denotes the intermediate feature map from the UNet encoder at stage 
+
+i, and Uf inal i represents the fused encoder representation after adapter injection. This point-wise additive fusion retains the UNet’s pretrained representational strength while infusing globally consistent, structure-aware conditioning from the Adapter. Through staged flow estimation from the Morpho Fields , self and cross refinements through MSFE , and text-conditioned guidance, the adapter progressively enhances spatial coherence and semantic alignment across scales, ensuring efficient and stable conditioning throughout the denoising process. 
+
+## 4 Experiments 
+
+Datasets: We train UNITY on MS-COCO 2017 [14] and MultiGen-20M [30] datasets. MS-COCO provides diverse real-world images with rich annotations across multiple object categories, while MultiGen-20M offers large-scale multi-modal conditioning pairs essential for learning universal cross-modal represen-tations. For evaluation, we utilize the MS-COCO 2017 validation set comprising 5,000 images with 25,000 image-caption pairs, enabling assessment of generation quality and fidelity. 
+
+4.1 Results and Discussion 
+
+Table 1 presents a comprehensive comparison of UNITY-Adapter against SoTA conditional image generation methods across four conditioning modalities. We analyze model complexity, quantitative performance, and the effectiveness of our training paradigm. 
+
+Quantitative Performance Discussion. As shown in Table 1, UNITY Pre 
+
+consistently achieves the best FID and CLIP scores across all four conditions on UNITY 11 
+
+Table 1: Comparison of FID ( ↓) and CLIP ( ↑) scores across four conditions. Model complexity includes Parameters (M), FLOPs (G), and Memory (GB), where Memory reflects total training memory to load the SD1.5 with the adapter. Best are in bold .                                                                                                            
+
+> Model Params. (M) FLOPs (G) Memory (GB) Canny Depth Sketch Segmentation FID ↓CLIP ↑FID ↓CLIP ↑FID ↓CLIP ↑FID ↓CLIP ↑
+> ControlNet [35] 361.28 116.61 24 ×222.84 27.41 25.68 27.51 24.93 27.38 27.06 27.04 T2I-Adapter [17] 77.37 29.97 24 ×123.73 26.72 26.03 26.46 26.51 27.21 27.66 26.99 ControlNet++ [11] 361.28 116.61 24 ×223.59 27.09 25.19 27.56 24.71 27.15 26.23 27.11 Uni-ControlNet [37] 1271.42 210.77 24 ×823.11 27.21 24.92 27.43 24.56 27.54 25.33 27.49 CtrLoRA [34] 398.28 135.15 24 ×422.59 27.16 25.65 26.34 26.02 25.46 25.73 25.62 UniCon [12] 150.00 111.62 24 ×822.86 26.92 25.30 27.42 24.61 27.13 26.42 27.04
+> UNITY Ind 365.25 135.82 24 ×122.37 28.09 24.12 27.90 24.38 27.76 25.18 27.89
+> UNITY P re 365.25 135.82 24 ×121.48 28.52 22.44 28.18 23.21 28.54 23.91 27.91
+
+Table 2: Comparison of FID ( ↓) and CLIP ( ↑) scores across four conditions. Model complexity includes Parameters (M), and FLOPs (G) for each adapter with the SDXL backbone. Best are in bold .                                                                      
+
+> Model Params (M) FLOPs (G) Canny Depth Sketch Segmentation FID ↓CLIP ↑FID ↓CLIP ↑FID ↓CLIP ↑FID ↓CLIP ↑
+> ControlNet [35] 1250.98 1336.69 23.75 31.71 26.42 31.68 25.87 31.64 27.82 31.58 T2I-Adapter [17] 79.03 29.95 24.89 31.42 27.18 31.28 27.64 31.36 28.91 31.19 ControlNet++ [11] 1250.98 1336.69 24.12 31.58 26.09 31.54 25.43 31.61 27.35 31.52
+> UNITY Ind 384.83 140.17 21.18 31.86 23.42 31.73 23.89 31.92 24.54 31.68
+> UNITY P re 384.83 140.17 20.35 32.18 21.26 31.89 21.98 32.21 22.67 31.76
+
+SD1.5, reaching an average FID of 22.76 and CLIP of 28.29. This corresponds to a 7.03% improvement in FID and 3.17% in CLIP over the next-best baseline, Uni-ControlNet (24.48 FID, 27.42 CLIP). The largest gains occur on the Depth condition, where FID decreases from 24.92 to 22.44 (9.95%) and CLIP increases to 28.18, surpassing ControlNet++ (27.56). Consistent improvements are also observed for Canny (21.48 FID, 28.52 CLIP) and Sketch (23.21 FID), indicating stronger structural fidelity and semantic alignment across diverse control modal-ities. Notably, these gains are achieved with substantially fewer parameters and lower FLOPs than Uni-ControlNet, highlighting the efficiency of our approach. Table 2 further confirms this trend on SDXL, where UNITY Pre achieves the lowest FID across all conditions—20.35 (Canny), 21.26 (Depth), 21.98 (Sketch), and 22.67 (Segmentation)—while also obtaining the highest CLIP scores, up to 32.21. Compared with ControlNet, the FID improvement on Canny alone reaches 14.32%, decreasing from 23.75 to 20.35, with similarly consistent gains across other conditions. Moreover, the universal pretraining stage yields a 5.22% FID improvement over UNITY Ind on SD1.5, with comparable margins on SDXL, including a 4.91% gain on Depth. Overall, these results demonstrate that joint cross-condition pretraining improves structural consistency and semantic robust-ness without introducing additional inference-time overhead. 
+
+Qualitative Analysis: Figure 5 compares UNITY against eight baseline models across four diverse prompts, testing attribute fidelity and concept fusion. In Row 1, UNITY generates realistic hangar scenes with accurate lighting and spatial composition, while baselines suffer severe color degradation: UniCon produces oversaturated blue-yellow tones; CtrLoRA introduces heavy yellow-orange casts, ControlNet++ displays unnatural blue tinting; Uni-ControlNet generates exces-sive yellow coloring; T2I-Adapter creates harsh contrast, destroying detail; and ControlNet exhibits orange-red contamination, eliminating photorealism. Row 2 12 A. Das et al.  
+
+> Fig. 5: Qualitative results across conditions shows that UNITY consistently produces the most accurate and semantically aligned outputs.
+
+demonstrates UNITY’s superior concept fusion, integrating clock faces within bicycle wheels with clear visibility, whereas UniCon produces abstract forms, CtrLoRA generates poor detail clarity, ControlNet++ creates blurry outputs, Uni-ControlNet obscures features, T2I-Adapter adds distracting backgrounds, and ControlNet compromises legibility. 
+
+Row 3 shows UNITY maintaining photorealistic aircraft quality while base-lines produce overexposure (UniCon), incorrect coloring (CtrLoRA, Uni-ControlNet, T2I-Adapter), a toy-like appearance (ControlNet++), or pure silhouettes (Con-trolNet). Row 4 highlights UNITY’s accurate motorcycle customization render-ing versus baselines’ abstract renderings, poor detail, excessive coloring, or tex-ture destruction. UNITY consistently maintains photorealism, accurate colors, and compositional coherence while baselines systematically fail through color contamination and detail loss. 
+
+Model Complexity Analysis: As summarized in Tables 1 and 2, UNITY achieves SoTA FID and CLIP scores while maintaining competitive computa-tional cost. On SD1.5, it uses 365.25M parameters and 135.82G FLOPs, com-parable to ControlNet (361.28M, 116.61G) but requiring only 24 × 1 memory, whereas ControlNet, ControlNet++, and CtrLoRA demand 24 × 2–24 × 4, and Uni-ControlNet scales to 24 × 8. Despite a 4.72 × parameter reduction relative to Uni-ControlNet (1271.42M, 210.77G), UNITY Pre achieves lower FID in all conditions, demonstrating superior performance-efficiency trade-offs. On SDXL, the advantage becomes more pronounced. UNITY requires only 384.83M parameters and 140.17G FLOPs, drastically lower than ControlNet and ControlNet++ (1250.98M, 1336.69G), yet improves Canny FID from 23.75 to 20.35 and raises CLIP from 31.71 to 32.18. Compared to T2I-Adapter (79.03M, 29.95G), UNITY uses moderately higher compute but consistently achieves sub-stantially better FID (e.g., 21.26 vs. 27.18 on Depth). With constant parameter size across K conditions and shared universal pretraining, the framework reduces multi-task training cost by 37.5% while preserving top-tier generative quality un-der a single-condition memory budget. UNITY 13 
+
+## 5 Ablation Study Table 3: Ablation (Case 1): No-Text-Prompt Set-tings. Without Prompt to Adapter (w/o P2A) and 
+
+Without Prompt to Stable Diffusion and Adapter (w/o P2SD+A) .                                                                            
+
+> Model w/o P2A w/o P2SD+A Sketch Segmentation Sketch Segmentation FID ↓CLIP ↑FID ↓CLIP ↑FID ↓CLIP ↑FID ↓CLIP ↑
+> ControlNet [35] 32.21 19.23 31.62 19.30 38.84 16.98 37.72 15.97 T2I-Adapter [17] ––––36.59 17.53 35.50 16.45 ControlNet++ [11] 32.28 19.26 31.68 19.33 38.90 17.02 37.81 16.01 Uni-ControlNet [37] 30.82 20.16 30.07 20.20 36.28 16.87 35.44 16.47 CtrLoRA [34] 30.12 20.20 29.89 20.24 35.34 16.91 34.52 16.50 UniCon [12] 30.91 19.76 31.12 19.49 37.10 17.61 35.43 17.97
+> UNITY P re 24.94 27.58 25.80 27.04 28.83 24.16 30.08 23.20
+
+Table 4: Comprehensive ablation study of UNITY-Adapter. Three experimental groups analyze: (1) text-conditioning removal, (2) architectural design components, and (3) multi-condition pretraining strategies. FID ( ↓) and CLIP ( ↑) scores are reported for Sketch and Segmentation conditions.                                                
+
+> Cases Sketch Segmentation
+> FID ↓CLIP ↑FID ↓CLIP ↑
+> Case 2: Architectural Design Variants
+> Cross-modal Flow w/ Cross-Attention 25.35 27.31 26.29 26.76 Self-refinement w/ Self-Attention 25.88 27.13 26.75 26.54 w/o Text Cross-Attention 24.73 26.65 25.65 25.98 Single Spatial Encoder 26.40 26.92 27.38 26.33
+> Case 3: Multi-Condition Pretraining
+> Canny + Depth 24.79 27.48 25.63 26.93 Depth + Segmentation 24.64 27.63 25.45 27.07 Depth + Sketch + Segmentation 23.94 28.12 24.77 27.53 Canny + Sketch + Segmentation 23.88 28.17 24.70 27.58
+> UNITY P re 23.21 28.54 23.91 27.91
+
+In Table 3 and 4, we system-atically validate each com-ponent of UNITY-Adapter through targeted ablations spanning text conditioning, architectural design, and multi-condition pretraining. All vari-ants use identical training settings and are evaluated on the MS-COCO validation set with Sketch and Segmen-tation conditioning, showing that every proposed com-ponent contributes meaning-fully. 
+
+Case 1 - No-Text-Prompt Settings: We evaluate two challenging ablation scenarios that progressively suppress text conditioning: removing prompts from the adapter only ( w/o P2A ), and remov-ing prompts from both Sta-ble Diffusion and the adapter (w/o P2SD+A ). As reported in Table 3, UNITY P re con-sistently dominates all baselines across both structural modalities under these constrained settings. In the w/o P2A regime, UNITY P re achieves substantial improvements, reducing FID by 5–7 points over strong competitors such as Ctr-LoRA and Uni-ControlNet, while simultaneously boosting CLIP scores by +7to +8 points, reflecting markedly superior semantic consistency even in the ab-sence of adapter-level text conditioning. When prompts are entirely withheld from both Stable Diffusion and the adapter ( w/o P2SD+A ), competing base-lines degrade sharply, with FID increasing by ∼6–8 points and CLIP scores declining by ∼3 points, unambiguously evidencing their heavy reliance on ex-plicit textual supervision. In stark contrast, UNITY P re preserves consistently superior generation fidelity (lowest FID: 28.83 / 30.08) and semantic alignment (highest CLIP: 24.16 / 23.20) across both Sketch and Segmentation conditions, demonstrating robust structure-driven controllability that does not collapse in text-free inference regimes. These results highlight a fundamental advantage of our unified pretraining strategy: the model internalizes rich structural priors that sustain high-quality, semantically coherent synthesis independent of text prompt availability. 14 A. Das et al. 
+
+Case 2 - Architectural Design Variants: In Table 4, substituting MAF components with standard attention mechanisms validates our flow-based design. 
+
+Cross-modal Flow w/ Cross-Attention replaces flow estimation with vanilla cross-attention, degrading Sketch FID by 9.2% (25.35) and CLIP by 4.3% (27.31), demonstrating that explicit spatial correspondence modeling outperforms atten-tion only alignment. Self-refinement w/ Self-Attention yields worse performance (FID 25.88, CLIP 27.13), confirming that morphological warping’s geometric adaptivity exceeds self-attention’s global relationship modeling. Removing text cross-attention from the final fusion stage ( w/o Text Cross-Attention ) causes the largest CLIP drop of 1.89 points (6.6%), proving that text-guided fusion is essential for semantic alignment. Single Spatial Encoder shows the highest FID degradation (+3.19, +13.7%), validating that dual-pathway encoding enables richer cross-modal representations than sequential processing. 
+
+Case 3 - Multi-Condition Pretraining Strategies: Progressive improve-ment with modality diversity validates our universal pretraining paradigm, as can be observed in Table 4. Two-modality configurations ( Canny + Depth , Depth + Segmentation ) average FID 1.50 above baseline and CLIP 0.98 below, estab-lishing dual-condition baselines. Three-modality combinations significantly im-prove: Depth + Sketch + Segmentation achieves FID 23.94 (+0.73, +3.1%) and CLIP 28.12 (-0.42, -1.5%), while Canny + Sketch + Segmentation reaches FID 23.88 and CLIP 28.17. The consistent trend shows that increased modality diver-sity during universal pretraining establishes stronger shared representations. Our full four-modality pretraining (Canny, Depth, Sketch, Segmentation) achieves optimal performance (FID 23.21, CLIP 28.54), demonstrating that maximal con-ditioning diversity enables the most robust structure-aware semantic learning. This validates the universal-to-specialized training paradigm’s ability to leverage cross-modal information effectively. 
+
+## 6 Conclusion 
+
+In this work, we presented UNITY, a novel adapter that fundamentally ad-dresses scalability and efficiency limitations in multi-modal conditional diffusion models. Our two-stage training paradigm enables significant training reduction while maintaining constant parameters regardless of conditioning diversity. The proposed novel Morphable Attention Flow Network with Dual Spatial Encoders, Multi-Scale Flow Estimators, and Morph Wrapper modules provides precise geo-metric alignment through learned displacement fields and attention-based fusion to preserve spatial information. Unlike existing methods that scale linearly in training cost and require separate adapters per modality, UNITY-Adapter of-fers global guidance without redundant parallel denoising, substantially reducing computational overhead while supporting flexible single or composite condition-ing at deployment. This work presents an efficient paradigm for controllable generation, showing that principled architecture and strategic training can ef-fectively bridge generalization and specialization. Bibliography 
+
+[1] Chen, Z., Duan, Y., Wang, W., He, J., Lu, T., Dai, J., Qiao, Y.: Vision transformer adapter for dense predictions. arXiv preprint arXiv:2205.08534 (2022) [2] Dinh, L., Krueger, D., Bengio, Y.: Nice: Non-linear independent components estimation. arXiv preprint arXiv:1410.8516 (2014) [3] Dosovitskiy, A., Beyer, L., Kolesnikov, A., Weissenborn, D., Zhai, X., Un-terthiner, T., Dehghani, M., Minderer, M., Heigold, G., Gelly, S., et al.: An image is worth 16x16 words: Transformers for image recognition at scale. In: International Conference on Learning Representations [4] Hessel, J., Holtzman, A., Forbes, M., Bras, R.L., Choi, Y.: Clipscore: A reference-free evaluation metric for image captioning. In: Proceedings of the Conference on Empirical Methods in Natural Language Processing (EMNLP). pp. 7514–7528 (2021) [5] Heusel, M., Ramsauer, H., Unterthiner, T., Nessler, B., Hochreiter, S.: Gans trained by a two time-scale update rule converge to a local nash equilib-rium. In: Advances in Neural Information Processing Systems (NeurIPS). pp. 6626–6637 (2017) [6] Ho, J., Jain, A., Abbeel, P.: Denoising diffusion probabilistic models. In: Advances in Neural Information Processing Systems. vol. 33, pp. 6840–6851 (2020) [7] Houlsby, N., Giurgiu, A., Jastrzebski, S., Morrone, B., Laroussilhe, Q.D., Gesmundo, A., Attariyan, M., Gelly, S.: Parameter-efficient transfer learn-ing for nlp. In: International Conference on Machine Learning. pp. 2790– 2799. PMLR (2019) [8] Hu, J., Zhou, X., Liu, Z.: Unicombine: Unified multi-conditional combi-nation with diffusion models for flexible image synthesis. arXiv preprint arXiv:2501.04328 (2025) [9] Huang, L., Chen, D., Liu, Y., Yujun, S., Zhao, D., Jingren, Z.: Com-poser: Creative and controllable image synthesis with composable conditions (2023) [10] Huang, X., Mallya, A., Wang, T.C., Liu, M.Y.: Multimodal conditional image synthesis with product-of-experts gans. In: Computer Vision–ECCV 2022: 17th European Conference, Tel Aviv, Israel, October 23–27, 2022, Proceedings, Part XVI. pp. 91–109. Springer (2022) [11] Li, M., Yang, T., Kuang, H., Wu, J., Wang, Z., Xiao, X., Chen, C.: Control-net++: Improving conditional controls with efficient consistency feedback. In: Computer Vision – ECCV 2024: 18th European Conference, Milan, Italy, September 29–October 4, 2024, Proceedings, Part VII. p. 129–147. Springer-Verlag, Berlin, Heidelberg (2024). https://doi.org/10.1007/978-3-031-72667-5_8 , https://doi.org/10.1007/978-3-031-72667-5_8 16 A. Das et al. 
+
+[12] Li, X., Herrmann, C., Chan, K.C., Li, Y., Sun, D., Yang, M.H.: A simple approach to unifying diffusion-based conditional generation. In: The Thir-teenth International Conference on Learning Representations (2025) [13] Li, Y., Mao, H., Girshick, R., He, K.: Exploring plain vision transformer backbones for object detection. In: Computer Vision–ECCV 2022: 17th Eu-ropean Conference, Tel Aviv, Israel, October 23–27, 2022, Proceedings, Part IX. pp. 280–296. Springer (2022) [14] Lin, T.Y., Maire, M., Belongie, S., Hays, J., Perona, P., Ramanan, D., Dollár, P., Zitnick, C.L.: Microsoft coco: Common objects in context. In: European Conference on Computer Vision (ECCV). pp. 740–755. Springer (2014) [15] Loshchilov, I., Hutter, F.: Decoupled weight decay regularization. In: Inter-national Conference on Learning Representations (ICLR) (2019) [16] Mohamed, S.: Tcig: Two-stage controlled image generation with quality en-hancement through diffusion. arXiv preprint arXiv:2403.01212 (2024) [17] Mou, C., Wang, X., Xie, L., Wu, Y., Zhang, J., Qi, Z., Shan, Y.: T2i-adapter: learning adapters to dig out more controllable ability for text-to-image diffusion models. In: Proceedings of the Thirty-Eighth AAAI Con-ference on Artificial Intelligence and Thirty-Sixth Conference on Innovative Applications of Artificial Intelligence and Fourteenth Symposium on Ed-ucational Advances in Artificial Intelligence. AAAI’24/IAAI’24/EAAI’24, AAAI Press (2024). https://doi.org/10.1609/aaai.v38i5.28226 ,
+
+https://doi.org/10.1609/aaai.v38i5.28226 
+
+[18] Ni, H., Shi, C., Li, K., Huang, S.X., Min, M.R.: Conditional image-to-video generation with latent flow diffusion models. In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition. pp. 7451–7460 (2023) [19] Park, T., Liu, M.Y., Wang, T.C., Zhu, J.Y.: Semantic image synthesis with spatially-adaptive normalization. In: Proceedings of the IEEE/CVF Con-ference on Computer Vision and Pattern Recognition. pp. 2337–2346 (2019) [20] Qin, C., Zhang, S., Yu, N., Feng, Y., Yang, X., Zhou, Y., Wang, H., Niebles, J.C., Xiong, C., Savarese, S., Ermon, S., Fu, Y., Xu, R.: Unicontrol: A unified diffusion model for controllable visual generation in the wild (2023), 
+
+https://arxiv.org/abs/2305.11147 
+
+[21] Radford, A., Kim, J.W., Hallacy, C., Ramesh, A., Goh, G., Agarwal, S., Sas-try, G., Askell, A., Mishkin, P., Clark, J., et al.: Learning transferable visual models from natural language supervision. In: International Conference on Machine Learning. pp. 8748–8763 (2021) [22] Ramesh, A., Dhariwal, P., Nichol, A., Chu, C., Chen, M.: Hierarchi-cal text-conditional image generation with clip latents. arXiv preprint arXiv:2204.06125 (2022) [23] Ramesh, A., Pavlov, M., Goh, G., Gray, S., Voss, C., Radford, A., Chen, M., Sutskever, I.: Zero-shot text-to-image generation. In: International Confer-ence on Machine Learning. pp. 8821–8831. PMLR (2021) [24] Ren, Y., Yu, X., Chen, J., Li, T.H., Li, G.: Deep image spatial transfor-mation for person image generation. In: Proceedings of the IEEE/CVF UNITY 17 
+
+Conference on Computer Vision and Pattern Recognition. pp. 7690–7699 (2020) [25] Rombach, R., Blattmann, A., Lorenz, D., Esser, P., Ommer, B.: High-resolution image synthesis with latent diffusion models (2022), https: //arxiv.org/abs/2112.10752 
+
+[26] Rombach, R., Blattmann, A., Lorenz, D., Esser, P., Ommer, B.: High-resolution image synthesis with latent diffusion models. In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition. pp. 10684–10695 (2022) [27] Saharia, C., Chan, W., Saxena, S., Li, L., Whang, J., Denton, E., Ghasemipour, S.K.S., Ayan, B.K., Mahdavi, S.S., Lopes, R.G., et al.: Photo-realistic text-to-image diffusion models with deep language understanding. arXiv preprint arXiv:2205.11487 (2022) [28] Shi, Y., Bortoli, V.D., Campbell, A., Doucet, A.: Diff2flow: Training flow matching models via diffusion bridges. In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (2025) [29] Song, Y., Sohl-Dickstein, J., Kingma, D.P., Kumar, A., Ermon, S., Poole, B.: Score-based generative modeling through stochastic differential equations. In: International Conference on Learning Representations (ICLR) (2021), 
+
+https://openreview.net/forum?id=PxTIG12RRHS 
+
+[30] Sun, Q., Wei, Z., Chen, J., Wang, Z., Zhang, J.: Multigen-20m: A large-scale multi-modal dataset for controllable image generation. arXiv preprint arXiv:2306.04356 (2023) [31] Tan, Z., Liu, S., Yang, X., Xue, Q., Wang, X.: Ominicontrol: Minimal and universal control for diffusion transformer. In: Proceedings of the IEEE/CVF International Conference on Computer Vision. pp. 7832–7841 (2024) [32] Wang, T.C., Liu, M.Y., Zhu, J.Y., Tao, A., Kautz, J., Catanzaro, B.: High-resolution image synthesis and semantic manipulation with conditional gans. In: Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition. pp. 8798–8807 (2018) [33] Wei, Y., Liu, M., Wang, H., Zhu, R., Hu, G., Zuo, W.: Learning flow-based feature warping for face frontalization with illumination inconsistent supervision. In: European Conference on Computer Vision. pp. 558–574. Springer (2020) [34] Xu, Y., He, Z., Shan, S., Chen, X.: CtrloRA: An extensible and effi-cient framework for controllable image generation. In: The Thirteenth International Conference on Learning Representations (2025), https:// openreview.net/forum?id=3Gga05Jdmj 
+
+[35] Zhang, L., Rao, A., Agrawala, M.: Adding conditional control to text-to-image diffusion models. In: IEEE International Conference on Computer Vision (ICCV) (2023) [36] Zhang, Q., Chen, Y.: Diffusion normalizing flow. In: Advances in Neural Information Processing Systems. vol. 34, pp. 16280–16291 (2021) [37] Zhao, S., Chen, D., Chen, Y.C., Bao, J., Hao, S., Yuan, L., Wong, K.Y.K.: Uni-controlnet: All-in-one control to text-to-image diffusion models. In: Pro-18 A. Das et al. 
+
+ceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition. pp. 11127–11137 (2024) UNITY 19 
+
+# Supplementary Material 
+
+## 1 Training and Evaluation 
+
+We evaluate two configurations: UNITY Ind one that independently trains adapters without the universal-to-specialized transfer, and UNITY Pre , which employs the proposed two-stage strategy in Section 3.2, which are trained for 100k steps. In the Universal Stage , the model is trained on the MS-COCO training set using all four conditioning modalities (Canny, Depth, Sketch, and Segmentation) to train jointly. During the Specialization Stage , each is individually further finetuned on both MS-COCO and MultiGen-20M combined, while the Segmentation adapter is refined solely on MS-COCO due to its annotations. We assess generation per-formance using Fréchet Inception Distance (FID) [5] for visual fidelity and CLIP Score [4] for text-image alignment. All experiments use a frozen Stable Diffu-sion v1.5 backbone for fair comparison. We also trained baselines on identical datasets for 100 k steps. Optimization is performed with AdamW [15] using a constant learning rate  5 × 10 −6, β1 = 0 .9, β2 = 0 .999 , ϵ = 1 × 10 −8, and weight decay of  1 × 10 −2. A linear warm-up of 500 steps stabilizes early training be-fore transitioning to constant learning rate scheduling. Further experiments on additional conditioning types are provided in the supplementary material. 
+
+## 2 Additional Experiments 
+
+2.1 SoTA Results on Stable Diffusion 1.5 with Additional Conditions 
+
+We conducted further experiments to validate the generalization capability and robustness of UNITY in various conditioning modalities. We extend our evalu-ation to four additional conditioning types: Normal Map , Openpose , Color Palette , and Dehaze . Following the two-stage training paradigm established in Section 3.2, we train adapters from scratch using the Universal-to-Specialized strategy on these four new conditions and compare against the three top-performing baselines from main experiments: Uni-ControlNet [37], CtrLoRA [34], and 
+
+ControlNet [35]. Unlike the main experiments which employed Canny, Depth, Sketch, and Segmentation, this configuration trains exclusively on the new con-ditioning quartet to assess UNITY’s adaptability to complementary signal types spanning geometric surface properties (Normal Map), human pose articula-tion (Openpose), content-preserving stylization (Color Palette), and atmospheric degradation modeling (Dehaze). 
+
+Conditional Image Generation and Training Configuration: We gen-erate all conditioning inputs using standard annotators for normal maps, Open-pose, Color Palette, and Dehaze modalities, applied to both MS-COCO 2017 and MultiGen-20M to form paired training data. MS-COCO provides diverse 20 A. Das et al.                                                       
+
+> Table 5: Quantitative comparison on additional conditioning modalities. FID ↓and CLIP ↑scores are reported. Best results in bold .
+> Model Normal Map Openpose Color Palette Dehaze
+> FID ↓CLIP ↑FID ↓CLIP ↑FID ↓CLIP ↑FID ↓CLIP ↑
+> ControlNet [35] 24.46 27.22 25.70 27.08 26.79 26.89 26.12 26.96 Uni-ControlNet [37] 24.29 27.39 25.08 27.33 26.33 27.18 25.86 27.22 CtrLoRA [34] 24.94 26.78 26.14 26.55 26.95 26.33 26.69 26.49 UNITY Ind 23.85 27.96 24.92 27.39 25.91 27.22 25.01 27.16 UNITY P re 22.08 28.72 23.78 28.36 24.51 27.94 24.18 27.82
+
+real-world imagery, while MultiGen-20M supplies large-scale synthetic varia-tion, enabling robust cross-modal learning. All conditioning maps are resized to 512 × 512 and normalized for compatibility with the Stable Diffusion v1.5 backbone. Training follows a two-stage strategy: a 50k-step Universal Stage that jointly learns across all conditions to build shared representations, followed by a 50k-step Specialization Stage that fine-tunes each condition independently. This preserves the total 100k-step training budget used in the main experiments while maintaining a constant parameter count (365.25M) and FLOPs (135.82G) irrespective of the number of supported conditioning types. 
+
+Results and Discussion Table 5 presents a detailed quantitative comparison across four additional conditioning modalities. Several clear trends emerge from the FID and CLIP metrics. Among the baselines, Uni-ControlNet consistently performs better than ControlNet and CtrLoRA, although the gains remain mod-est, with improvements typically in the range of a few tenths of a point for both FID and CLIP, based on the modality. Both versions of our method provide consistent and meaningful improve-ments across all modalities. Even without any pretraining, UNITY Ind already surpasses every baseline, reducing FID by roughly one point or more in several settings and improving CLIP scores by a noticeable margin. These gains reflect the advantages of our unified architecture together with shared conditioning rep-resentations. The best results are achieved by the pretrained variant, UNITY P re ,which obtains the strongest metric values in every modality. For Normal Map, it reduces the FID score from 24.29 for Uni ControlNet to 22.08 and increases the CLIP value from 27.39 to 28.72. For Openpose, it improves the FID score from 25.08 to 23.78. For Color Palette, it reduces FID from 26.33 to 24.51. For Dehaze, it improves the FID score from 25.86 to 24.18. In all cases, CLIP similarity also increases. The largest gains appear in structure-focused modali-ties, confirming that unified pretraining enhances geometric reasoning and the alignment between the condition and the generated image. The quantitative results show that unified pretraining followed by a special-ization stage provides clear benefits across both geometry-oriented and appearance-UNITY 21 
+
+oriented modalities. The consistent reductions in FID and increases in CLIP demonstrate enhanced semantic fidelity together with reliable controllability in a broad range of conditional image generation.
