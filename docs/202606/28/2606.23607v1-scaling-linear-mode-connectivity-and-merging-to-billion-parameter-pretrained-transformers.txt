@@ -1,0 +1,867 @@
+Title: Scaling Linear Mode Connectivity and Merging to Billion Parameter Pretrained Transformers
+
+URL Source: https://arxiv.org/pdf/2606.23607v1
+
+Published Time: Tue, 23 Jun 2026 03:32:14 GMT
+
+Number of Pages: 18
+
+Markdown Content:
+# Scaling Linear Mode Connectivity and Merging to Billion Parameter Pretrained Transformers 
+
+Tianyi Li 
+
+MBZUAI 
+
+Tianyi.Li@mbzuai.ac.ae 
+
+Zhiqiang Shen 
+
+MBZUAI 
+
+Zhiqiang.Shen@mbzuai.ac.ae 
+
+## Abstract 
+
+Linear mode connectivity (LMC) provides a promising foundation for understand-ing and merging independently trained neural networks, but existing methods typically optimize the interpolation path from only one model endpoint, limiting their scalability and effectiveness for large pretrained transformers. We propose a novel and scalable framework for enabling LMC-based model merging to billion-parameter pretrained transformers . Our method applies properly parameterized functionality-preserving weight transformations to align functionally equivalent solutions, and introduces a dual learning procedure in which both models jointly learn their corresponding transformations toward a shared linear interpolation path. This bidirectional optimization substantially reduces interpolation barriers and enables more reliable merging across large-scale architectures. Empirically, we show that our approach achieves near-zero loss barriers on WikiText for lan-guage models with medium-sized parameters, representing, to our knowledge, the first demonstration of near-barrier-free linear connectivity at this scale. In the vision domain, ViT-L maintains above 69% ImageNet top-1 accuracy throughout the interpolation path, while modern billion-parameter LLMs exhibit only small loss barriers. These results suggest that properly resolving parameter symmetries enables large pretrained Transformers to be connected and merged through sim-ple linear paths with substantially improved interpolation performance. Code: 
+
+https://github.com/VILA-Lab/Dual-Learned-Matching .
+
+## 1 Introduction 
+
+Deep neural network weights have recently become an increasingly important object of study in the machine learning community [ 1– 5 ]. Beyond specifying a model’s input-output behavior, trained weights are increasingly viewed as reusable artifacts that can be inspected, edited, adapted, merged, or even treated as data for training other models [ 6 , 7]. This perspective is especially important in the era of large pretrained models, where each checkpoint represents substantial investment in data, computation, optimization, and engineering [ 8]. Understanding the structure of weight space, and how different checkpoints are geometrically and functionally related, is therefore not only a theoretical question about loss landscapes, but also a practical foundation for scalable model reuse and composition. A central idea for studying weight-space structure is linear mode connectivity (LMC) [ 2, 9]. Two models are linearly mode connected if the linear interpolation between their weights remains in a low-loss region. When such connectivity exists, simple weight interpolation becomes a natural and efficient mechanism for model merging, without requiring ensembles, additional architectures, or expensive retraining. However, independently trained models often fail to exhibit low-loss linear paths in their raw parameterization. Even when two networks implement similar functions, they may occupy apparently distant regions of weight space due to differences in initialization, training          
+
+> Preprint.
+> arXiv:2606.23607v1 [cs.LG] 22 Jun 2026 0.0 0.5 1.0
+> 1
+> 3
+> 5
+> 7
+> ImageNet loss
+> (a) ViT-S Interpolation
+> Raw
+> Learned
+> LMC-DM
+> Reduce Barrier
+> 0.00 0.25 0.50 0.75 1.00
+> 3
+> 4
+> 5
+> 6
+> WikiText loss
+> (b) Pythia Interpolation
+> 14M
+> 160M
+> 410M
+> 1B
+> 14M 160M 1.4B 6.9B
+> model size
+> 2.5
+> 3.5
+> 4.5
+> 5.5
+> WikiText loss
+> (c) Pythia Scaling
+> Endpoint avg
+> LMC-DM midpoint
+> scaling to
+> large models
+
+Figure 1: Loss barriers and scaling behavior. Left: Interpolation loss barriers for ViT-S under naive weight interpolation, learned matching, and LMC-DM (Ours). Middle: Interpolation loss curves for Pythia models across different parameter scales. Right: Scaling behavior of LMC-DM–merged Pythia models compared to endpoint models as model size increases. order, datasets, and hyperparameters [ 5 , 10 ]. As a result, naive interpolation can encounter large loss barriers, making model merging unreliable. A major reason for this failure is that neural networks exhibit many function-preserving symmetries: distinct parameter configurations can represent the same underlying function [ 11 , 12 ]. A classic example is neuron permutation symmetry, where hidden units within a layer can be permuted together with corresponding inverse permutations in adjacent layers without changing the network function [ 13 , 14 , 12 ]. In small networks, resolving such symmetries can align independently trained models before interpolation and reveal low-loss paths that are hidden in the original coordinates [ 12 ,15 , 16 ]. Existing alignment methods commonly rely on activation matching, which uses data to align intermediate representations [ 17 , 16 , 3], or weight matching, which aligns parameters directly in a data-free manner [15, 3]. Beyond discrete symmetries like permutation, Transformers, however, introduce a substantially richer and more structured symmetry space than standard multilayer networks. Their residual connections, normalization layers, multi-head attention modules, positional encodings, and feed-forward blocks induce multiple classes of functionality-preserving transformations [ 18 , 19 ]. Recent studies have begun to exploit these Transformer-specific symmetries to uncover hidden connectivity between trained models [ 20 ]. Nevertheless, most activation- or weight-matching methods remain task-agnostic: they align representations or parameters without directly optimizing the performance of interpolated models. This mismatch limits their ability to reduce the actual loss barrier, especially for pretrained Transformers where small misalignments can accumulate across many layers and severely degrade interpolation performance. Learned matching partially addresses this issue by optimizing symmetry transformations using the task loss of interpolated models [ 19 ]. However, existing learned matching approaches still have several limitations. First, they typically exploit only a subset of the full Transformer symmetry group and often rely on simple parameterizations, such as unconstrained variables that are projected during the forward pass. Second, they apply symmetry transformations to only one endpoint model, leading to an asymmetric formulation in which one model is optimized toward a fixed counterpart. This one-sided optimization can create suboptimal landscapes and restrict the search for better-aligned representatives of both models. Consequently, prior demonstrations have largely been limited to models with millions or tens of millions of parameters trained on relatively small datasets. Whether LMC can be effectively revealed in large pretrained Transformers, and whether symmetry learning can scale to billion-parameter models, remains largely unexplored. In this work, we propose a scalable framework for linear mode connectivity and model merg-ing in billion-parameter pretrained Transformers. We systematically formulate a broad family of functionality-preserving weight transformations for Transformers, including normalization absorp-tion, residual-space rotation and scaling, attention-head permutation, head-internal transformations, and feed-forward permutation and scaling. We parameterize these transformations under appropriate structural constraints and optimize them directly with respect to the loss along the interpolation path. Most importantly, we introduce a dual learning procedure, where both endpoint models learn their own symmetry transformations toward a shared linear path. This bidirectional formulation gives both models the flexibility to resolve their internal symmetries, substantially reduces interpolation barriers, and enables more reliable merging at scale. Empirically, we show that ViT-L maintains over 69% ImageNet-1K top-1 accuracy across the entire interpolation path; language models on 2Learned Matching (Single) Dual Learned Matching (Ours) Figure 2: Schematic loss-landscape view of single and dual learned matching. Direct interpolation crosses a high-loss barrier. Single learned matching reduces but does not eliminate this barrier by optimizing one checkpoint toward a fixed reference. Dual learned matching jointly optimizes both checkpoints, yielding a lower barrier in a shared low-loss basin. 160M parameters achieve near-zero loss barriers on WikiText, the first such result in this setting, outperforming all prior counterparts such as Weight Matching [ 3] and Learned Matching [ 19 ]; and modern billion-parameter LLMs exhibit only small loss barriers. These results suggest that large pretrained Transformers can be effectively aligned and merged by simple linear interpolation when equipped with properly parameterized and jointly optimized symmetry transformations. Our contributions are summarized as follows: • We formulate a broad family of functionality-preserving Transformer symmetries. Specifi-cally, our framework covers normalization absorption, residual-space rotation and scaling, attention-head permutation, head-internal transformations, and feed-forward permutation and scaling. We investigate practical parameterizations of continuous symmetry variables, enabling functionality-preserving transformations to be learned directly from the interpola-tion loss. • We propose a dual learning procedure for bidirectional endpoint alignment. Unlike prior one-sided methods, both models learn their own transformations toward a shared linear in-terpolation path, leading to better-conditioned optimization and lower interpolation barriers. • We show strong and extensive empirical results that LMC scales to large pretrained Trans-formers. We demonstrate near-zero loss barriers for language models with 160M parameters on WikiText, over 69% ImageNet top-1 accuracy along the interpolation path for ViT-L, and only small loss barriers for billion-parameter LLMs. 
+
+## 2 Functionality-Preserving Symmetries in Transformers 
+
+This section introduces the functionality-preserving symmetry family used in our work. A symmetry is a reparameterization of the weights that changes the coordinates of internal representations while leaving the network function unchanged. Our goal is to expose equivalent parameterizations of two pretrained Transformers so that their weights can be better aligned before linear interpolation. In particular, we first convert normalization layers into parameter-free RMSNorm operators, which simplifies subsequent merging and enables global orthogonal symmetries on the residual stream. We then describe residual-space, attention-head, attention-circuit, and FFN symmetries. The highlighted symbols in the equations denote symmetry parameters. 
+
+2.1 Normalization and Residual-Space Symmetry Reparameterization of Normalization Layers. Pretrained Transformers usually use normalization layers with learnable affine parameters, whereas the symmetry above is stated for parameter-free RMSNorm. Previously, Ashkboos et al. [18] showed that LayerNorm and RMSNorm with parameters can be exactly converted into parameter-free RMSNorm by absorbing the affine parameters into adjacent linear layers. Given an RMSNorm layer with scaling gain γ followed by a linear map W,
+
+RMSNorm γ (X)W = RMSNorm 0(X) Diag( γ)W, (1) 3where RMSNorm 0 denotes RMSNorm without affine parameters. Thus the gain can be exactly absorbed into the following linear layer, allowing us to treat RMSNorm as parameter-free in the symmetry analysis. For pretrained Transformers that use LayerNorm, the conversion requires an additional centering step. Let 
+
+C = I − 1
+
+d 11 ⊤ (2) be the channel-centering operator. Writing LayerNorm 0 for LayerNorm without affine parameters, we have 
+
+LayerNorm 0(X) = RMSNorm 0(XC ). (3) With affine parameters followed by a linear map, 
+
+LayerNorm γ,β (X)W = RMSNorm 0(XC )Diag( γ)W + βW. (4) Thus the LayerNorm gain is absorbed into the following weight, and the LayerNorm bias is absorbed into the following bias term. By projecting residual writes onto the zero-mean subspace, a pre-LayerNorm Transformer can be represented as a parameter-free pre-RMSNorm Transformer on the centered residual stream. Appendix E gives the exact weight and bias transformations. 
+
+Global Residual-Space Symmetry. A Transformer using parameter-free RMSNorm has a global symmetry in the residual coordinate system. Under a row-vector convention, write one layer as 
+
+Xℓ+1 = Xℓ + Fℓ(RMSNorm( Xℓ)) . (5) Consider a scalar g > 0 and an orthogonal matrix G, shared by all layers, that transform the residual stream as X′ 
+
+> ℓ
+
+= Xℓ gG. RMSNorm removes the scalar but preserves the rotation: 
+
+RMSNorm( X gG) = RMSNorm( X) G, (6) so each residual-read linear map can absorb the rotation by multiplying its input weight by G⊤. To keep the residual stream in the transformed coordinates, every residual write, including attention output projections and FFN down projections, is also multiplied by gG. Denote the block after these weight transformations by F ′ 
+
+> ℓ
+
+. It writes the original update in the new residual coordinates, giving 
+
+X′ 
+
+> ℓ+1
+
+= X′ 
+
+> ℓ
+
++ F ′ 
+
+> ℓ
+
+(RMSNorm( X′
+
+> ℓ
+
+)) = ( Xℓ + Fℓ(RMSNorm( Xℓ))) gG = Xℓ+1 gG. (7) Therefore, G can be viewed as a global coordinate freedom of the residual stream. 
+
+2.2 Attention Head Permutations 
+
+Multi-head attention is invariant to permutations of its heads. For an input X, write one attention layer as 
+
+MHA( X) = 
+
+> h
+
+X
+
+> i=1
+
+softmax 
+
+ XW Q,i (XW K,i )⊤
+
+√dh
+
+
+
+XW V,i WO,i . (8) For any head permutation π, let Ph = P ⊗ Idh be the corresponding lifted permutation over concatenated head channels. In per-head notation, the reparameterization 
+
+W′ 
+
+> Q,i
+
+= WQ,π (i), W′ 
+
+> K,i
+
+= WK,π (i), W′ 
+
+> V,i
+
+= WV,π (i), W′ 
+
+> O,i
+
+= WO,π (i) (9) only reorders the summands, and therefore 
+
+MHA ′(X) = MHA( X). (10) 
+
+2.3 QK and OV Circuit Symmetries 
+
+Each attention head admits internal symmetries that preserve the attention logits and output. For the QK circuit, multiplying the query projection by any invertible matrix can be compensated by multiplying the key projection by its inverse transpose. Concretely, for any invertible matrix MQ,i ,
+
+W′ 
+
+> Q,i
+
+= WQ,i MQ,i , W′ 
+
+> K,i
+
+= WK,i MQ,i −⊤ , (11) which preserves the attention logits: 
+
+XW ′
+
+> Q,i
+
+(XW ′
+
+> K,i
+
+)⊤ = XW Q,i (XW K,i )⊤. (12) 4For the OV circuit, multiplying the value projection by any invertible matrix can be compensated by multiplying the output projection by its inverse. For any invertible matrix MV,i ,
+
+W′ 
+
+> V,i
+
+= WV,i MV,i , W′ 
+
+> O,i
+
+= MV,i −1WO,i , (13) which preserves the value-output product: 
+
+XW ′
+
+> V,i
+
+W′ 
+
+> O,i
+
+= XW V,i WO,i . (14) In practice, additional architectural constraints (e.g., positional encodings such as RoPE [ 21 ]) can further restrict these symmetries. 
+
+2.4 FFN Permutation 
+
+A standard two-layer FFN admits hidden-channel permutations. For 
+
+FFN( X) = ϕ(XW 1 + b1)W2 + b2, (15) any hidden permutation Pf yields 
+
+W′ 
+
+> 1
+
+= W1 Pf , b′ 
+
+> 1
+
+= b1 Pf , W′ 
+
+> 2
+
+= Pf ⊤W2, (16) and therefore 
+
+FFN ′(X) = FFN( X). (17) 
+
+GLU rescaling symmetry. Beyond the hidden-channel permutation above, GLU-style FFNs have an additional value-branch rescaling symmetry: scaling the value branch can be canceled exactly in the down projection, while the gate branch is unchanged. For 
+
+GLU( X) = ( ϕ(XW gate ) ⊙ XW up ) Wdown , (18) any invertible diagonal matrix S, the reparameterization 
+
+W′ 
+
+> up
+
+= Wup S, W′ 
+
+> down
+
+= S−1Wdown (19) satisfies 
+
+GLU ′(X) = GLU( X). (20) 
+
+## 3 Matching Algorithms 
+
+Given the functional preserving symmetries introduced in section 2, we now study how to obtain proper symmetries to align two independently trained models. We consider a design space of matching approaches, including weight matching and learned matching, and discuss how to parameterize these symmetries to make them learnable through gradient descent. Building on this, we introduce dual learned matching , which assigns learnable transformations to both checkpoints, yielding a more favorable optimization landscape for finding low-barrier linear paths. 
+
+3.1 From Weight Matching to Learned Matching Weight Matching. Introduced by Ainsworth et al. [3] , weight matching formulates the weight alignment problem as maximizing weight similarity under the symmetry family. The original paper only discusses permutation symmetries in MLP networks, but the same procedure can be extended to more complex symmetries in Transformers. Following the adoption by Theus et al. [19] , we first recover the global residual-space symmetry: 
+
+G = arg min 
+
+> G⊤G=I
+
+RA − RB G 2 
+
+> F
+
+, g = ⟨RB G, RA⟩∥RB G∥2
+
+> F
+
+. (21) Here RA and RB are the weights along the residual path collected from both models; they may include the token embedding and all residual read/write matrices. The closed-form solution is given by the SVD of RB⊤RA. Then, for each layer ℓ, we recover the head permutation by comparing the induced QK and OV circuits. For each head i from model A and head j from model B we define 
+
+Chead  
+
+> ij
+
+= WAQ,i WA⊤ 
+
+> K,i
+
+− G⊤WBQ,j WB⊤ 
+
+> K,j
+
+G 2 
+
+> F
+
++ WAV,i WAO,i − G⊤WBV,j WBO,j G 2 
+
+> F
+
+, (22) 5Ph,ℓ = arg min 
+
+> P∈Πh
+
+X
+
+> i,j
+
+Pij Chead  
+
+> ij
+
+. (23) This compares heads through their functional QK and OV circuits rather than their raw weights, and therefore avoids the ambiguity from per-head internal invertible symmetries. After the head permuta-tion is fixed, the remaining QK and OV symmetries inside each head can be solved independently in closed form, so we omit their explicit formulas here. For FFN layers, we solve the corresponding bilinear assignment problem: 
+
+Pf,ℓ = arg max 
+
+> P∈Πf
+
+WA
+
+> 1,ℓ
+
+, G⊤WB
+
+> 1,ℓ
+
+P F + WA
+
+> 2,ℓ
+
+, P⊤WB
+
+> 2,ℓ
+
+G F . (24) The same construction extends directly to gated FFNs. Since G, head permutations, and FFN permutations are coupled, these matching steps can be iterated, as in the SOBLAP-style procedure by Ainsworth et al. [3] . After weight matching, the two models are in a substantially better common coordinate system, but weight matching is loss-agnostic and can therefore still leave a visible loss barrier along the linear path. 
+
+Learned Matching. Following Theus et al. [19] , learned matching refines the weight matching solution by directly optimizing the interpolation loss. Starting from the matched model π(Θ B ), we can do linear interpolation with the other model ΘA:
+
+Θinterp = λ ΘA + (1 − λ) π(Θ B ), λ ∈ [0 , 1] . (25) We then optimize the symmetry parameters in π to minimize the interpolation loss through gradient descent. In this way, learned matching uses task loss to refine the loss-agnostic alignment from weight matching into a lower-barrier linear path. 
+
+3.2 Parameterizing Symmetries 
+
+To optimize continuous symmetry transformations using gradient-based methods, we consider a range of parameterizations for orthogonal and invertible symmetries, differing in how they handle structural constraints during training. Table 1: Continuous symmetry parameterizations.                                   
+
+> Method Form Covers
+> Cayley Q= ( I+S)( I−S)−1,S⊤=−SSO (N)\{− 1}
+> Matrix exp. Q= exp( S),S⊤=−SSO (N)
+> Matrix exp. M= exp( U)Subset of GL +(N)
+> Polar M=Q(LL ⊤),Q= Cayley( S),
+> Llower-tri., diag >0
+> Cayley-limited subset of GL +(N)
+
+Orthogonal. For orthogonal sym-metries, we primarily consider the Cayley transform and the matrix exponential. The Cayley trans-form is computationally efficient, numerically stable, and straight-forward to implement, but it can-not represent orthogonal matrices whose spectrum contains the eigenvalue −1, while the matrix exponential provides a standard param-eterization of SO (N ) with a higher computational cost. We avoid Householder products due to their relative inefficiency on GPUs, as well as unconstrained parameterizations followed by projection, which exhibited instability during optimization in our experiments. 
+
+Invertible. For invertible symmetries, we explore matrix exponential and polar decomposition style parameterization. The former guarantees invertibility and a positive determinant by setting 
+
+M = exp( U), although it only covers the subset of GL +(N ) that admits a real matrix logarithm. The latter decomposes the transform into a Cayley-parameterized orthogonal factor and a Cholesky-parameterized symmetric positive-definite factor. Additionally, we evaluate unconstrained direct parameterization as a baseline for invertible transforms. We do not learn discrete symmetries such as FFNs and attention-head permutations, unlike Theus et al. [19] , as learning them is inefficient for large models and hard to optimize in our setting. These symmetries are kept fixed as the weight matching solution. 
+
+3.3 Dual Learned Matching 
+
+In both weight matching and learned matching, only one of the two checkpoints is transformed to align with the other, a design choice motivated by simplicity and efficiency. However, this one-sided procedure can be suboptimal, as it requires aligning to a fixed target in the original coordinate system, 6Table 2: Loss barrier comparison across ViT and Pythia models. Lower is better. 
+
+Method ViT (ImageNet-1K) Pythia (WikiText) Small Base Large 14M 160M 410M 1B Raw Interpolation 6.58 6.57 6.47 9.89 6.28 4.99 4.60 Weight Matching [3] 6.58 6.50 6.48 8.17 6.04 5.65 4.75 Learned Matching [19] 2.18 2.00 1.23 1.26 0.39 0.57 0.42 Enhanced Learned Matching (Ours) 1.20 1.05 0.71 1.00 0.27 0.44 0.28 
+
+Dual Learned Matching (Ours) 1.11 0.82 0.66 0.86 0.18 0.37 0.23 
+
+which may lead to a less favorable optimization landscape. A more natural parameterization is to assign learnable transformations to both checkpoints and optimize them jointly, allowing the models to meet in a shared coordinate system. We call this approach Dual Learned Matching , and it can be formulated as: 
+
+Θinterp = λ π A(Θ A) + (1 − λ) πB (Θ B ), λ ∈ [0 , 1] . (26) 
+
+Algorithm 1 Dual learned matching (LMC-DM) 
+
+Require: Checkpoints ΘA, ΘB ; dataset D; iterations T ; learn-ing rate η. 
+
+> 1:
+
+Initialize ΠA, ΠB from weight matching. 
+
+Πm = ( gm, Gm, MQK,m , MOV,m ), m ∈ { A, B }.
+
+Gm, MQK,m , MOV,m ∈ { CAYLEY , POLAR , EXP }. 
+
+> 2:
+
+for t = 1 to T do  
+
+> 3:
+
+Θ′ 
+
+> A
+
+← πΠA (Θ A), Θ′ 
+
+> B
+
+← πΠB (Θ B ). 
+
+> 4:
+
+Sample λ ∼ U (0 , 1) and a minibatch B ∼ D . 
+
+> 5:
+
+Interpolate: Θinterp ← λ Θ′ 
+
+> A
+
++ (1 − λ) Θ ′ 
+
+> B
+
+. 
+
+> 6:
+
+Compute J ← 1
+
+> |B|
+
+P 
+
+> (x,y )∈B
+
+L(Θ interp ; x, y ). 
+
+> 7:
+
+Update ΠA, ΠB by gradient descent on J . 
+
+> 8:
+
+end for  
+
+> 9:
+
+return ΠA, ΠB .
+
+Starting from the weight matching so-lution, we optimize the transformations on both checkpoints directly through in-terpolation loss. In practice, we keep the discrete head and FFN permutations fixed and optimize the continuous sym-metries on both sides, so that both mod-els can move toward a shared coordinate system rather than forcing one model to match the other exactly. Allowing these discrete permutations to learn does not flip any assignment relative to the weight-matching solution or change the barrier, so we keep them fixed. 
+
+## 4 Experiments 
+
+4.1 Experimental Setup 
+
+We use publicly available independently trained checkpoints with identical architectures, including Vision Transformers [ 22 ] and language models [ 23 , 24 ], to evaluate our method. We assess linear mode connectivity by sampling points along the linear interpolation between two endpoints and measuring the loss along the path. We report the loss barrier [5]: 
+
+max  
+
+> λ
+
+L(Θ λ) − 12
+
+ L(Θ A) + L(Θ B ) (27) approximated over the sampled path. For ViTs, we also evaluate ImageNet-1K [ 25 ] top-1 accuracy along the interpolation path, using interpolation intervals of 0.1. For language models, we report WikiText [ 26 ] perplexity additionally. Weight Matching (WM) and Learned Matching (LM) are methods from Ainsworth et al. [3] and Theus et al. [19] , respectively. LMC-DM denotes our dual learned matching procedure with learnable parameterization of continuous symmetries. Enhanced learned matching refers to the same procedure without dual parameterization. We use Cayley parameterization for orthogonal symmetries and polar-style parameterization for invertible symmetries by default for our methods. We consider two initialization schemes based on weight matching (WM): an absorbed initialization, where the WM solution is absorbed into the endpoints and the symmetries are initialized as identity, and a non-absorbed initialization, where the symmetries are initialized with the WM solution. The two schemes are equivalent at initialization in terms of the resulting interpolation. Additional experimental details are provided in Appendix D. 
+
+4.2 Main Results 
+
+Table 2 summarizes the loss-barrier comparison across ViT and Pythia scales. Simple WM performs poorly under modern vision and language models. While LM substantially reduces the barrier 70.0 0.5 1.0   
+
+> 50
+> 60
+> 70
+> 80
+> 90
+> ImageNet top-1 (%)
+> (a) ViT
+> ViT-S
+> ViT-B
+> ViT-L
+> 0.0 0.5 1.0
+> 0
+> 20
+> 40
+> 60
+> 80
+> ImageNet top-1 (%)
+> (b) ViT-Large matching methods
+> Learned
+> Weight
+> LMC-DM
+> Inv.
+> direct
+> Inv.
+> MatExp
+> Orth.
+> Cayley
+> Orth.
+> MatExp
+> Global
+> MatExp
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> loss barrier
+> (c) Parameterization ablations
+> ViT-B
+> Pythia-160M
+
+Figure 3: Summary of interpolation and parameterization results. (a) LMC-DM across ViT-Small, ViT-Base, and ViT-Large. (b) ViT-Large accuracy paths under learned matching, weight matching, and LMC-DM. (c) Loss-barrier comparison across symmetry parameterizations on ViT-Base and Pythia-160M. compared to WM, it still leaves a significant gap to zero-barrier connectivity. Our enhanced version of learned matching further reduces the barrier. LMC-DM achieves the lowest barrier among all methods, indicating that jointly optimizing both endpoints yields better interpolation paths than one-sided learned matching. 
+
+4.3 Ablation Studies Symmetry Components. We first ablate the symmetry components used in LMC-DM, as shown in Table 4. Disabling the QK or OV symmetries leads to a significantly higher barrier, especially for ViTs. For Pythia, disabling QK symmetries has a smaller impact. Disabling both symmetries further increases the barrier, but still performs better than standard learned matching, which does not leverage attention symmetries and uses a single-sided parameterization. The global scaling symmetry has a smaller but non-negligible effect. 
+
+Symmetry Parameterization. We then compare different parameterizations for continuous sym-metries. Despite having fewer degrees of freedom, Cayley-based orthogonal parameterization outperforms unconstrained and matrix-exponential parameterizations for invertible symmetries. This may be because the Cayley transform is more numerically stable and easier to optimize than the matrix exponential. Combined with Cayley, the polar-style parameterization for invertible symmetries achieves the best performance, balancing both stability and expressivity. Table 3: Single vs. dual endpoint matching.                 
+
+> Setting ViT-B ↓Pythia-160M ↓
+> Single w. Absorb 1.05 0.27 Single w/o Absorb 1.47 0.41 Dual w/o Absorb 0.82 0.21 Dual w. Absorb 0.82 0.18
+
+Single vs. Dual Matching. We compare whether the matching transformation should be learned on one endpoint or on both endpoints. Dual matching gives both checkpoints room to move toward a shared basin, which consistently lowers the bar-rier compared with the single-sided variants. Ab-sorbing the weight-matching solution into the end-points leverages clean identical initialization for symmetries, which further reduces the barrier. 
+
+4.4 Scaling Up to Larger Models 
+
+We apply our method to Pythia and OLMo models up to the billion-parameter scale. As model size increases, the loss barrier for Pythia remains low, even at 6.9B, while OLMo-7B exhibits a significantly higher barrier. These results indicate that large pretrained Transformers can still exhibit linear mode connectivity. At the same time, the discrepancy between Pythia and OLMo suggests that LMC in large models is more nuanced and influenced by factors beyond scale, such as training data, initialization, and optimization dynamics. 
+
+## 5 Related Work 
+
+Linear Mode Connectivity. Early work [ 2, 9] introduced mode connectivity by showing that independently trained networks can be connected through stable low-loss paths. Follow-up studies [ 16 ,12 ] showed that high linear interpolation barriers often arise from unresolved permutation symmetries, and that resolving them can largely recover linear mode connectivity (LMC). Frankle et al. [5] further connected LMC to the lottery ticket hypothesis, showing that lottery tickets can lie in 80 25K 50K 75K 100K     
+
+> Training step
+> 0
+> 1
+> 2
+> Eval loss barrier
+> ViT-B
+> 025K 50K
+> Training step
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> Pythia-410M
+> Learned Matching Enhanced Learned Matching LMC-DM
+
+Figure 4: Evaluation Loss Barriers. We track ViT-B and Pythia-410M during match-ing. LMC-DM reduces barriers faster and reaches lower final barriers than learned matching and the enhanced learned match-ing. For efficiency, these evaluation barriers are measured on a subset rather than the full test or validation set. 
+
+Table 4: Ablation study on ViT-Base and Pythia-160M. Small lower-right numbers report the raw numerical change from the full LMC-DM baseline; green indicates better and red indicates worse. 
+
+Ablation ViT-Base Pythia-160M Barrier ↓ Worst Acc ↑ Mid. Acc ↑ Barrier ↓ Worst PPL ↓ Mid. PPL ↓
+
+Ours (Dual, Global Cayley, Attention Invertible Polar) 0.82 63.79 65.48 0.18 82.47 73.33 
+
+Component removals 
+
+w/o. QK transform 0.97 +0.15 60.68 -3.11 61.80 -3.68 0.18 +0.00 81.81 -0.66 76.85 +3.52 
+
+w/o. OV transform 1.17 +0.35 56.85 -6.94 61.04 -4.44 0.37 +0.19 97.03 +14.56 82.97 +9.64 
+
+w/o. QK and OV 1.48 +0.66 50.98 -12.81 54.96 -10.52 0.37 +0.19 97.06 +14.59 82.11 +8.78 
+
+w/o. global scale 0.82 +0.00 63.50 -0.29 65.39 -0.09 0.23 +0.05 86.01 +3.54 77.53 +4.20 
+
+Attention parameterization 
+
+Invertible, direct 0.97 +0.15 60.72 -3.07 63.68 -1.80 0.29 +0.11 90.20 +7.73 80.31 +6.98 
+
+Invertible, MatExp 0.98 +0.16 60.26 -3.53 63.57 -1.91 0.30 +0.12 90.59 +8.12 78.06 +4.73 
+
+Orthogonal, Cayley 0.88 +0.06 62.42 -1.37 63.62 -1.86 0.24 +0.06 85.18 +2.71 71.86 -1.47 
+
+Orthogonal, MatExp 0.93 +0.11 61.53 -2.26 63.26 -2.22 0.27 +0.09 88.10 +5.63 73.99 +0.66 
+
+Global parameterization 
+
+MatExp 0.84 +0.02 63.33 -0.46 65.63 +0.15 0.23 +0.05 86.00 +3.53 76.45 +3.12 
+
+a shared linearly connected basin. More recent work extends LMC to layer-wise connectivity, broader symmetry groups, multi-model settings, and modern architectures such as Transformers and MoEs [27, 28, 19, 29, 30]. 
+
+Weight Symmetries and Invariances. This refers to the family of transformations of model parameters that exactly preserve the functionality. Neuron permutation symmetries in MLPs have long been known [ 13 , 14 ]. Ashkboos et al. [18] observed orthogonal symmetries in the residual space of Transformers, along with absorbable symmetries between normalization and linear layers. Zhang et al. [20] , Theus et al. [19] identified head-wise symmetries in Transformers. A systematic survey of parameter symmetries is provided by Zhao et al. [4]. 
+
+Pretrained Model Merging. Pretrained model merging aims to combine multiple independently trained checkpoints into a single model, and is significantly more challenging than task arithmetic in the fine-tuning regime, as independently trained models often diverge into different basins [ 5 , 31 , 32 ]. OT-Fusion [ 15 ] first leveraged optimal transport to align neurons, enabling data-driven model merging that outperforms naive interpolation. Subsequent work, such as Git-Rebasin [ 3], proposed practical approaches to align models under permutation symmetries to achieve low-barrier fusion. More recent studies have extended these ideas to pretrained Transformers [33, 20, 19]. 
+
+## 6 Conclusion 
+
+We studied whether and to what extent linear mode connectivity can be achieved in modern pre-trained Transformers by accounting for their weight-space symmetries. We explicitly parameterize the relevant symmetries in modern Transformers and optimize them with dual learned matching, which allows both endpoints to be symmetrically aligned toward a shared linear interpolation path. This alignment places independently trained checkpoints in a shared coordinate system, enabling meaningful linear interpolation across ViTs and LLMs up to the billion-parameter scale. More broadly, this perspective suggests that modern large models are not isolated endpoints in weight space, but rather symmetry-related representations that can be aligned and connected. Future work includes extending this framework to broader architectures and training settings, applying it to practical model merging and ensembling, and further interpreting the geometry of the loss landscape under these symmetries. Limitations and further discussion can be found in Appendix A and Appendix G. 9References 
+
+[1] Xiaolong Han, Zehong Wang, Bo Zhao, Binchi Zhang, Jundong Li, Damian Borth, Rose Yu, Haggai Maron, Yanfang Ye, Lu Yin, et al. A survey of weight space learning: Understanding, representation, and generation. arXiv preprint arXiv:2603.10090 , 2026. [2] Timur Garipov, Pavel Izmailov, Dmitrii Podoprikhin, Dmitry P Vetrov, and Andrew G Wilson. Loss surfaces, mode connectivity, and fast ensembling of dnns. Advances in neural information processing systems , 31, 2018. [3] Samuel K Ainsworth, Jonathan Hayase, and Siddhartha Srinivasa. Git re-basin: Merging models modulo permutation symmetries. arXiv preprint arXiv:2209.04836 , 2022. [4] Bo Zhao, Robin Walters, and Rose Yu. Symmetry in neural network parameter spaces. arXiv preprint arXiv:2506.13018 , 2025. [5] Jonathan Frankle, Gintare Karolina Dziugaite, Daniel Roy, and Michael Carbin. Linear mode connectivity and the lottery ticket hypothesis. In International conference on machine learning ,pages 3259–3269. PMLR, 2020. [6] Kai Wang, Dongwen Tang, Boya Zeng, Yida Yin, Zhaopan Xu, Yukun Zhou, Zelin Zang, Trevor Darrell, Zhuang Liu, and Yang You. Neural network diffusion. arXiv preprint arXiv:2402.13144 ,2024. [7] Boya Zeng, Yida Yin, Zhiqiu Xu, and Zhuang Liu. Generative modeling of weights: General-ization or memorization? arXiv preprint arXiv:2506.07998 , 2025. [8] Shervin Minaee, Tomas Mikolov, Narjes Nikzad, Meysam Chenaghlu, Richard Socher, Xavier Amatriain, and Jianfeng Gao. Large language models: A survey. arXiv preprint arXiv:2402.06196 , 2024. [9] Felix Draxler, Kambis Veschgini, Manfred Salmhofer, and Fred Hamprecht. Essentially no barriers in neural network energy landscape. In International conference on machine learning ,pages 1309–1318. PMLR, 2018. [10] Devin Kwok, Gül Sena Altınta¸ s, Colin Raffel, and David Rolnick. The butterfly effect: Neu-ral network training trajectories are highly sensitive to initial conditions. arXiv preprint arXiv:2506.13234 , 2025. [11] Johanni Brea, Berfin Simsek, Bernd Illing, and Wulfram Gerstner. Weight-space symmetry in deep networks gives rise to permutation saddles, connected by equal-loss valleys across the loss landscape. arXiv preprint arXiv:1907.02911 , 2019. [12] Rahim Entezari, Hanie Sedghi, Olga Saukh, and Behnam Neyshabur. The role of permutation invariance in linear mode connectivity of neural networks. arXiv preprint arXiv:2110.06296 ,2021. [13] Robert Hecht-Nielsen. On the algebraic structure of feedforward network weight spaces. In 
+
+Advanced Neural Computers , pages 129–135. Elsevier, 1990. [14] An Mei Chen, Haw-minn Lu, and Robert Hecht-Nielsen. On the geometry of feedforward neural network error surfaces. Neural computation , 5(6):910–927, 1993. [15] Sidak Pal Singh and Martin Jaggi. Model fusion via optimal transport. Advances in Neural Information Processing Systems , 33:22045–22055, 2020. [16] Norman Tatro, Pin-Yu Chen, Payel Das, Igor Melnyk, Prasanna Sattigeri, and Rongjie Lai. Op-timizing mode connectivity via neuron alignment. Advances in Neural Information Processing Systems , 33:15300–15311, 2020. [17] Yixuan Li, Jason Yosinski, Jeff Clune, Hod Lipson, and John Hopcroft. Convergent learning: Do different neural networks learn the same representations? In Feature Extraction: Modern Questions and Challenges , pages 196–212. PMLR, 2015. 10 [18] Saleh Ashkboos, Maximilian L Croci, Marcelo Gennari do Nascimento, Torsten Hoefler, and James Hensman. Slicegpt: Compress large language models by deleting rows and columns. 
+
+arXiv preprint arXiv:2401.15024 , 2024. [19] Alexander Theus, Alessandro Cabodi, Sotiris Anagnostidis, Antonio Orvieto, Sidak Pal Singh, and Valentina Boeva. Generalized linear mode connectivity for transformers. arXiv preprint arXiv:2506.22712 , 2025. [20] Binchi Zhang, Zaiyi Zheng, Zhengzhang Chen, and Jundong Li. Beyond the permutation sym-metry of transformers: The role of rotation for model fusion. arXiv preprint arXiv:2502.00264 ,2025. [21] Jianlin Su, Murtadha Ahmed, Yu Lu, Shengfeng Pan, Wen Bo, and Yunfeng Liu. Roformer: Enhanced transformer with rotary position embedding. Neurocomputing , 568:127063, 2024. [22] Alexey Dosovitskiy, Lucas Beyer, Alexander Kolesnikov, Dirk Weissenborn, Xiaohua Zhai, Thomas Unterthiner, Mostafa Dehghani, Matthias Minderer, Georg Heigold, Sylvain Gelly, et al. An image is worth 16x16 words: Transformers for image recognition at scale. arXiv preprint arXiv:2010.11929 , 2020. [23] Stella Biderman, Hailey Schoelkopf, Quentin Gregory Anthony, Herbie Bradley, Kyle O’Brien, Eric Hallahan, Mohammad Aflah Khan, Shivanshu Purohit, USVSN Sai Prashanth, Edward Raff, et al. Pythia: A suite for analyzing large language models across training and scaling. In 
+
+International conference on machine learning , pages 2397–2430. PMLR, 2023. [24] Dirk Groeneveld, Iz Beltagy, Pete Walsh, Akshita Bhagia, Rodney Kinney, Oyvind Tafjord, Ananya Harsh Jha, Hamish Ivison, Ian Magnusson, Yizhong Wang, Shane Arora, David Atkinson, Russell Authur, Khyathi Chandu, Arman Cohan, Jennifer Dumas, Yanai Elazar, Yuling Gu, Jack Hessel, Tushar Khot, William Merrill, Jacob Morrison, Niklas Muennighoff, Aakanksha Naik, Crystal Nam, Matthew E. Peters, Valentina Pyatkin, Abhilasha Ravichander, Dustin Schwenk, Saurabh Shah, Will Smith, Nishant Subramani, Mitchell Wortsman, Pradeep Dasigi, Nathan Lambert, Kyle Richardson, Jesse Dodge, Kyle Lo, Luca Soldaini, Noah A. Smith, and Hannaneh Hajishirzi. Olmo: Accelerating the science of language models. Preprint ,2024. [25] Jia Deng, Wei Dong, Richard Socher, Li-Jia Li, Kai Li, and Li Fei-Fei. Imagenet: A large-scale hierarchical image database. In 2009 IEEE conference on computer vision and pattern recognition , pages 248–255. Ieee, 2009. [26] Stephen Merity, Caiming Xiong, James Bradbury, and Richard Socher. Pointer sentinel mixture models, 2016. [27] Zhanpeng Zhou, Yongyi Yang, Xiaojiang Yang, Junchi Yan, and Wei Hu. Going beyond linear mode connectivity: The layerwise linear feature connectivity. Advances in neural information processing systems , 36:60853–60877, 2023. [28] Linara Adilova, Maksym Andriushchenko, Michael Kamp, Asja Fischer, and Martin Jaggi. Layer-wise linear mode connectivity. arXiv preprint arXiv:2307.06966 , 2023. [29] Akira Ito, Masanori Yamada, and Atsutoshi Kumagai. Linear mode connectivity between multiple models modulo permutation symmetries. In Forty-second International Conference on Machine Learning , 2025. [30] Viet-Hoang Tran, Van Hoan Trinh, Khanh Vinh Bui, and Tan M Nguyen. On linear mode connectivity of mixture-of-experts architectures. arXiv preprint arXiv:2509.11348 , 2025. [31] Gabriel Ilharco, Marco Tulio Ribeiro, Mitchell Wortsman, Suchin Gururangan, Ludwig Schmidt, Hannaneh Hajishirzi, and Ali Farhadi. Editing models with task arithmetic. arXiv preprint arXiv:2212.04089 , 2022. [32] Enneng Yang, Li Shen, Guibing Guo, Xingwei Wang, Xiaochun Cao, Jie Zhang, and Dacheng Tao. Model merging in llms, mllms, and beyond: Methods, theories, applications, and opportu-nities. ACM Computing Surveys , 58(8):1–41, 2026. 11 [33] Neha Verma and Maha Elbayad. Merging text transformer models from different initializations. 
+
+arXiv preprint arXiv:2403.00986 , 2024. [34] Leo Gao, Stella Biderman, Sid Black, Laurence Golding, Travis Hoppe, Charles Foster, Jason Phang, Horace He, Anish Thite, Noa Nabeshima, et al. The pile: An 800gb dataset of diverse text for language modeling. arXiv preprint arXiv:2101.00027 , 2020. [35] Anton Lozhkov, Loubna Ben Allal, Leandro von Werra, and Thomas Wolf. Fineweb-edu: the finest collection of educational content, 2024. URL https://huggingface.co/datasets/ HuggingFaceFW/fineweb-edu .[36] Minyoung Huh, Brian Cheung, Tongzhou Wang, and Phillip Isola. The platonic representation hypothesis. arXiv preprint arXiv:2405.07987 , 2024. 12 Appendix 
+
+## A Limitations 
+
+Our framework relies on explicitly parameterized functionality-preserving symmetries, and there-fore may not capture all sources of misalignment between independently pretrained models. The current formulation mainly focuses on models with compatible architectures, dimensions, and to-kenization spaces, extending it to heterogeneous architectures or models trained with substantially different objectives remains challenging. Besides, in some Transformer architectures, the available functionality-preserving symmetries are structurally limited. In such cases, the effectiveness of our method may be limited due to the reduced symmetry capacity. 
+
+## B Societal Impacts 
+
+This work may have positive societal impacts by making large pretrained models easier to reuse, combine, and analyze. If independently trained Transformers can be aligned and merged through low-loss linear paths, practitioners may be able to consolidate useful capabilities from multiple checkpoints without full retraining, reducing computational cost, energy consumption, and barriers to model development. The proposed symmetry-based analysis may also improve transparency by providing a more structured understanding of how different models relate in weight space, which could support safer model editing, auditing, and deployment. The work may also have negative societal impacts. More effective model merging could make it easier to combine capabilities from different models, including potentially harmful capabilities, without extensive training resources. This may lower the barrier for creating models with stronger misuse potential or for obscuring the provenance of merged systems. In addition, if merged models are deployed without sufficient evaluation, they may inherit or amplify biases, unsafe behaviors, or failure modes from their source models. Moreover, if model merging becomes easier or more widely accessible, it may also increase the risk of intellectual property leakage. Proprietary capabilities, memorized content, or model-specific behaviors from a source checkpoint may be transferred to a merged model, while making attribution and ownership more difficult to verify. As a result, model owners may have reduced incentives to openly release their checkpoints due to concerns about uncontrolled reuse and merging. 
+
+## C Discussion: Why Does Dual Learned Matching Work? 
+
+A notable and perhaps surprising fact is that any dual parameterized symmetry can be equivalently absorbed into a single-sided parameterization. We provide a formal proof of this equivalence in Appendix C.1. This result implies that dual parameterization does not introduce additional degrees of freedom, despite its empirical advantage over single-sided optimization. Therefore, the improved performance of dual learned matching cannot be attributed to increased parameter or symmetry capacity, but rather to the more favorable optimization geometry induced by overparameterization. One hypothesis is that dual parameterization enables both checkpoints to move toward a shared, smoother region of the loss landscape, whereas single-sided optimization restricts movement to only one checkpoint, effectively anchoring the other. Moreover, dual parameterization allows complex symmetry transformations between two models to be decomposed into two simpler and more tractable transformations, thereby facilitating optimization. 
+
+C.1 Proof of Dual-to-Single Absorption 
+
+We prove the equivalence by showing that the two endpoint transformations can be rewritten as one relative transformation plus a common functionality-preserving gauge. We first illustrate the reduction using the global residual-space symmetry. Let GA, GB be the global orthogonal transformations applied to endpoints A and B. Under the row-vector convention, a residual-stream representation transforms as X 7 → XG , so residual-reading and residual-writing matrices transform as 
+
+Win 7 → G⊤Win , Wout 7 → Wout G.
+
+13 The dual interpolation gives 
+
+fWin = λG⊤ 
+
+> A
+
+WA 
+
+> in
+
++ (1 − λ)G⊤ 
+
+> B
+
+WB
+
+> in
+
+, fWout = λWA
+
+> out
+
+GA + (1 − λ)WB
+
+> out
+
+GB .
+
+Define the relative global transformation 
+
+RG := GB G⊤ 
+
+> A
+
+.
+
+Then GB = RGGA and G⊤ 
+
+> B
+
+= G⊤ 
+
+> A
+
+R⊤
+
+> G
+
+, so 
+
+fWin = G⊤
+
+> A
+
+ λWA 
+
+> in
+
++ (1 − λ)R⊤
+
+> G
+
+WB
+
+> in
+
+| {z }
+
+> single-sided relative interpolation
+
+,
+
+fWout =  λWA 
+
+> out
+
++ (1 − λ)WB
+
+> out
+
+RG
+
+| {z }
+
+> single-sided relative interpolation
+
+GA.
+
+Because GA and GB are both orthogonal, their product RG = GB G⊤ 
+
+> A
+
+is also orthogonal. Thus the relative transformation RG has exactly the same parameterized form as the original global residual-space symmetry parameter G. Therefore the dual-interpolated layer is exactly the single-sided relative-interpolated layer under a valid global symmetry RG, followed by the same common global gauge GA on the residual stream. Since this gauge is applied consistently to all residual reads and writes, it preserves the model function. Thus dual global matching is equivalent to single-sided relative global matching along the entire interpolation path. For local circuit symmetries, the cancellation can be shown within each attention head by multiplying the paired matrices. For example, for the OV circuit of head i, define 
+
+RV,i := MBV,i (MAV,i )−1.
+
+Then the dual interpolation can be rewritten as 
+
+fWV,i =  λWAV,i +(1 −λ)WBV,i RV,i 
+
+MAV,i , fWO,i = ( MAV,i )−1 λWAO,i +(1 −λ)R−1
+
+> V,i
+
+WBO,i 
+
+,
+
+and hence 
+
+fWV,i fWO,i =  λWAV,i + (1 − λ)WBV,i RV,i 
+
+ MAV,i (MAV,i )−1
+
+| {z }
+
+> I
+
+ λWAO,i + (1 − λ)R−1
+
+> V,i
+
+WBO,i 
+
+.
+
+The same relative-parameter argument applies to the QK circuit in each head with 
+
+RQ,i := MBQ,i (MAQ,i )−1,
+
+and to head and FFN permutations with 
+
+Ph,ℓ := PBh,ℓ (PAh,ℓ )⊤, Pf,ℓ := PBf,ℓ (PAf,ℓ )⊤.
+
+Thus the dual-sided symmetry parameterization used in our method can be absorbed into a single-sided relative parameterization. 
+
+## D Experimental Details 
+
+We provided the details of the original pretrained models used in our study in Table 5. For each experiment, both models are from open-source checkpoints available on Hugging Face. For the ViT models, we adopt the timm version of the Google Research AugReg ViT checkpoints. The ImageNet-21k variants are pretrained on ImageNet-21k and fine-tuned on ImageNet-1k, whereas the ImageNet-1k variants are pretrained solely on ImageNet-1k. For the Pythia series, each model size is trained on the Pile [ 34 ] for approximately 300B tokens by EleutherAI; one checkpoint is trained on the original dataset, while the other is trained on a deduplicated version. For the HuggingFaceFW 1.8B ablation models, both checkpoints are trained for 350B tokens—one on the FineWeb-Edu [ 35 ]dataset and the other on the Pile. For symmetry learning, we optimize the parameters using AdamW with a cosine learning rate sched-uler. For ViT models, training is conducted on ImageNet-1K with a batch size of 64. The learning rate starts at 1e-4 and gradually decreases to 2e-5 over 100,000 steps, equivalent to approximately 5 14 Table 5: Endpoint checkpoints and architecture used in our experiments. Each endpoint pair in a row shares the listed architecture; dh is the attention head dimension.                                                                                                                                
+
+> Model Hugging Face Checkpoint Arch. Lddff dhNorm. Bias ViT-S A: timm/vit_small_patch16_224.augreg_in21k_ft_ in1k ViT 12 384 1536 64 LN Yes B: timm/vit_small_patch16_224.augreg_in1k
+> ViT-B A:
+> timm/vit_base_patch16_224.augreg_in21k_ft_in1k ViT 12 768 3072 64 LN Yes B: timm/vit_base_patch16_224.augreg_in1k
+> ViT-L A: timm/vit_large_patch16_224.augreg_in21k_ft_ in1k ViT 24 1024 4096 64 LN Yes B: glasses/vit_large_patch16_224
+> Pythia-14M A: EleutherAI/pythia-14m GPT-NeoX 6128 512 32 LN Yes B: EleutherAI/pythia-14m-deduped
+> Pythia-70M A: EleutherAI/pythia-70m GPT-NeoX 6512 2048 64 LN Yes B: EleutherAI/pythia-70m-deduped
+> Pythia-160M A: EleutherAI/pythia-160m GPT-NeoX 12 768 3072 64 LN Yes B: EleutherAI/pythia-160m-deduped
+> Pythia-410M A: EleutherAI/pythia-410m GPT-NeoX 24 1024 4096 64 LN Yes B: EleutherAI/pythia-410m-deduped
+> Pythia-1B A: EleutherAI/pythia-1b GPT-NeoX 16 2048 8192 256 LN Yes B: EleutherAI/pythia-1b-deduped
+> Pythia-1.4B A: EleutherAI/pythia-1.4b GPT-NeoX 24 2048 8192 128 LN Yes B: EleutherAI/pythia-1.4b-deduped
+> Pythia-6.9B A: EleutherAI/pythia-6.9b GPT-NeoX 32 4096 16384 128 LN Yes B: EleutherAI/pythia-6.9b-deduped
+> HF-1.8B A: HuggingFaceFW/ablation-model-fineweb-edu LLaMA 24 2048 8192 64 RMSNorm No B: HuggingFaceFW/ablation-model-the-pile
+> OLMo-7B A: allenai/OLMo-7B-hf OLMo 32 4096 11008 128 LN (non-param.) No B: allenai/OLMo-7B-Twin-2T-hf
+
+epochs. For language models, training is performed on WikiText-103 [ 26 ] with a batch size of 16 and a sequence length of 512. For the 14M-1.4B versions of Pythia, we use an initial learning rate of 5e-5, decreasing to 1e-5 over 50,000 steps. For Pythia-6.9B, the learning rate decreases from 3e-5 to 1e-5 over 20,000 steps, while for OLMo-7B, it decreases from 2e-5 to 5e-6 over 20,000 steps. All models are trained using bf16 mixed precision, except for Pythia-14M and Pythia-70M, which used fp32 due to the instability of bf16. This instability may stem from unusually large logits, a known issue report in their official repository. For perplexity evaluation, we use a sequence length of 512 without a sliding window and reported the results on the WikiText-103 test set. The entire symmetry learning procedure is lightweight. ViT and smaller Pythia models are trained on a single A6000 GPU for several hours to one day. For larger models, such as Pythia-6.9B and OLMo-7B, we utilize four A6000 GPUs, with training taking approximately one day. The interpolation paths across model scales after LMC-DM are reported in Table 6. We also report the raw interpolation paths before matching in Table 7 as unaligned baselines. Table 8 gives a preliminary downstream check on zero-shot commonsense tasks. Although LMC-DM improves over raw interpolation, the matched interpolated models still lag behind the original endpoints, indicating that low WikiText barriers do not yet imply lossless downstream behavior. This is a limitation of the current setup: Pythia is a base model, and due to limited resources, our symmetry learning uses only hundreds of millions of tokens without downstream supervision; scaling this training budget may improve downstream preservation, which we leave to future work. 
+
+## E Normalization Reparameterization Details 
+
+This appendix gives the algebra behind the normalization reparameterization used in Section 2. We follow the same row-vector convention as in the main text. Let 
+
+C = I − 1
+
+d 11 ⊤
+
+be the channel-centering operator. Writing LayerNorm 0 and RMSNorm 0 for the corresponding parameter-free normalization operators, the non-affine part of LayerNorm can be written as RMSNorm 15 Table 6: Interpolation paths across model scales after dual learned matching. ViT rows report ImageNet-1K accuracy (%), language-model rows report WikiText perplexity, and the rightmost column reports loss barrier. 
+
+Model Interpolation coefficient λ Loss Barrier 
+
+0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0
+
+ViT, Accuracy (%) 
+
+Small 81.40 81.08 79.01 74.52 66.42 57.10 56.13 64.51 72.71 77.71 78.68 1.11 Base 84.62 84.05 81.46 74.99 63.77 64.51 71.95 76.32 78.39 79.25 79.14 0.82 Large 85.82 85.89 85.30 83.96 80.62 73.96 69.40 75.67 80.43 82.67 82.97 0.66 
+
+Pythia, WikiText PPL 
+
+14M 138.64 156.44 240.76 320.79 352.91 353.30 329.13 271.16 192.75 144.78 165.88 0.86 70M 63.09 42.77 44.27 53.15 63.31 68.91 65.41 55.65 46.28 44.82 66.30 0.06 160M 71.27 45.44 50.47 65.79 82.47 73.33 73.70 73.04 54.11 47.81 64.67 0.18 410M 22.31 16.72 18.66 23.81 30.25 33.76 30.59 24.32 19.24 17.45 24.46 0.37 1B 17.69 12.99 13.73 16.15 19.76 22.25 20.11 16.47 13.91 13.12 17.64 0.23 1.4B 15.91 11.84 12.32 14.27 17.47 20.43 19.38 15.84 13.15 12.21 18.10 0.19 6.9B 13.22 9.72 9.84 11.11 13.42 15.71 14.79 12.09 10.28 9.80 12.98 0.18 
+
+Other Models, WikiText PPL 
+
+HF 1.8B 15.71 11.73 12.26 14.90 20.02 26.72 24.02 17.16 13.15 11.86 15.01 0.55 OLMo-7B 10.83 9.84 12.60 20.68 42.19 51.80 25.16 15.41 11.32 10.09 11.61 1.53 
+
+Table 7: Raw interpolation paths between checkpoints before matching. Large perplexities are written in scientific notation. 
+
+Model Interpolation coefficient λ Loss Barrier 
+
+0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0
+
+ViT, Accuracy (%) 
+
+Small 81.46 75.88 32.43 0.89 0.16 0.13 0.12 0.27 6.08 62.60 78.71 6.58 Base 84.58 75.93 0.45 0.11 0.10 0.10 0.22 2.90 54.28 76.60 79.14 6.57 Large 85.82 84.25 65.73 0.46 0.09 0.10 0.10 0.06 6.36 69.28 83.00 6.47 
+
+Pythia, WikiText PPL 
+
+14M 138.35 4.49e3 6.02e4 3.56e5 1.77e6 2.97e6 1.31e6 2.42e5 1.12e4 638.47 165.04 9.89 70M 63.05 188.16 1.09e3 5.44e3 1.67e4 2.36e4 1.45e4 4.37e3 849.15 134.67 66.16 5.90 160M 71.19 140.68 678.87 4.15e3 2.02e4 3.61e4 1.93e4 5.17e3 899.95 154.55 64.09 6.28 410M 22.35 45.10 161.37 643.52 2.11e3 3.45e3 2.28e3 677.88 153.22 48.98 24.50 4.99 1B 17.69 23.82 76.79 367.14 1.17e3 1.76e3 1.11e3 348.00 72.13 23.49 17.63 4.60 1.4B 15.95 22.92 78.35 603.05 3.37e3 6.31e3 3.82e3 707.46 98.97 28.56 18.40 5.91 6.9B 13.43 16.21 29.49 92.80 321.88 557.83 303.33 87.71 26.29 15.03 13.03 3.74 
+
+Other Models, WikiText PPL 
+
+HF 1.8B 15.71 19.22 116.63 8.62e3 2.07e4 2.79e4 2.40e4 1.26e4 177.02 18.55 15.01 7.50 OLMo-7B 10.80 13.63 153.74 5.38e3 3.64e4 3.06e4 5.66e3 734.08 34.20 12.95 11.45 8.10 
+
+on the centered residual stream: 
+
+LayerNorm 0(X) = RMSNorm 0(XC ).
+
+Thus a pre-LayerNorm Transformer can be represented in a parameter-free pre-RMSNorm form by keeping residual writes centered. If a branch writes to the residual stream as 
+
+Y = UW out + 1b ⊤
+
+> out
+
+,
+
+then its centered form is 
+
+YC = U(Wout C) + 1(Cb out )⊤.
+
+Therefore the final weight matrix of each residual-writing branch is projected as Wout C. If a bias is present, only its all-ones component is removed, while the centered component is kept or absorbed into an adjacent affine term. 16 Table 8: Zero-shot commonsense accuracy for Pythia endpoints and matched models. Model Method PIQA SciQ ARC-E 410M Original Pythia 66.43 81.50 51.89 410M Raw Interpolation 55.39 31.50 29.71 410M Learned Matching 55.44 56.30 33.25 410M Dual Learned Matching 55.71 60.00 35.69 1B Original Endpoint 70.95 83.90 56.73 1B Raw Interpolation 54.35 35.50 29.08 1B Learned Matching 55.98 64.80 36.57 1B Dual Learned Matching 56.42 64.40 37.16 The affine parameters of LayerNorm or RMSNorm can also be absorbed into the next linear layer. Let γ and β be the normalization gain and bias, and let the following affine map have weight W and bias b. Then 
+
+LayerNorm γ,β (X)W + 1b ⊤ = RMSNorm 0(XC )Diag( γ)W + 1(b + W⊤β)⊤
+
+= RMSNorm 0(XC )W′ + 1b ′⊤ ,
+
+where 
+
+W′ = Diag( γ)W, b′ = b + W⊤β.
+
+## F Continuous Symmetry Parameterizations 
+
+This section gives additional details on the continuous symmetry parameterizations used in LMC-DM. In all cases, the goal is not merely to introduce learnable variables, but to keep the transformed weights inside the valid functionality-preserving symmetry family throughout gradient-based optimization. In our implementation, both endpoint models maintain their own symmetry modules, initialized from weight matching when available. 
+
+F.1 Cayley Transform with Signs 
+
+For orthogonal symmetries, we mainly use the Cayley transform with a fixed sign component. Given a free matrix S, we form a skew-symmetric matrix 
+
+A = S − S⊤,
+
+and parameterize the smooth orthogonal factor as 
+
+C(A) = ( I − A)−1(I + A).
+
+This guarantees C(A)⊤C(A) = I at every optimization step, avoiding the need for projection after each update. In the implementation, the signed variant composes this standard Cayley factor with a fixed signed left factor chosen at initialization, which allows us to represent weight matching solutions with positive or negative determinant without changing the optimization formula. 
+
+F.2 Matrix Exponential Parameterization 
+
+We use two matrix-exponential parameterizations, depending on whether the symmetry is constrained to be orthogonal or merely invertible. For orthogonal symmetries, the exponent is skew-symmetric: 
+
+A = S − S⊤, Q = exp( A), Q−1 = Q⊤,
+
+with an optional fixed reflector handled in the implementation to match the determinant component selected at initialization. For general invertible symmetries, the exponent is unconstrained: 
+
+M = exp( U), M−1 = exp( −U),
+
+where U is a free matrix. The implementation again optionally composes this standard form with a fixed reflector when needed. This keeps M invertible by construction and gives an exact inverse. 17 F.3 Polar-style Parameterization 
+
+For invertible symmetries, polar decomposition style parameterization provides a promising alter-native to the matrix exponential parameterization. We decompose the symmetry matrix into an orthogonal factor and a positive-definite factor, 
+
+M = QP ,
+
+where Q is an orthogonal factor parameterized by the Cayley transform previously discussed, and P
+
+is positive definite. The positive-definite factor P is represented as 
+
+P = LL ⊤,
+
+where L is lower triangular with positive diagonal entries. This parameterization keeps the matrix invertible, provides a stable inverse 
+
+M−1 = P−1Q⊤,
+
+and separates rotational and scaling/shearing degrees of freedom, which we found more stable than unconstrained direct matrices in some settings. 
+
+F.4 Potential Alternative Parameterizations 
+
+We also considered several other alternatives. Direct invertible parameterization optimizes a free matrix and computes its inverse explicitly; it is simple and expressive, but can become ill-conditioned during training. For orthogonal symmetry, SVD projection parameterizes an unconstrained matrix and projects it to the nearest orthogonal factor in the forward pass; while flexible, this introduces an expensive projection and can lead to instability in backpropagation. Householder products provide a structured orthogonal parameterization, but we found them relatively slow on large matrices in GPU-based training. 
+
+## G Further Discussion 
+
+Insights from Linear Mode Connectivity. Our study demonstrates that independently trained checkpoints exhibit linear mode connectivity when accounting for weight-space symmetries. This suggests that neural networks converge to functionally similar solutions within a structured, low-loss region of the parameter space, rather than isolated minima. These findings align with the Platonic Representation Hypothesis [ 36 ], suggesting that representational convergence extends into the weight space itself. This perspective reveals a significant degree of structural redundancy that is often underestimated when models are viewed only through their raw parameterization. 
+
+Potential Applications. We provide several potential applications of the proposed LMC-DM method: • Weight Space Learning and Generation: By resolving symmetries between different checkpoints, LMC-DM produces a family of aligned models that share a consistent weight-space structure. This may facilitate training generative models over neural network weights. In addition, low-loss interpolation paths themselves provide a principled way to sample new models, which could be useful for model ensembling or as training data for weight-space generative methods. • Federated Learning: Symmetry-based alignment can reduce inter-client variance by mapping locally trained models into a shared coordinate system, potentially improving aggregation quality and convergence stability in federated learning. • Efficient AI: If independently trained models can be reliably merged without performance degradation, it becomes possible to consolidate capabilities from multiple checkpoints with-out full retraining. This could significantly reduce computational cost, energy consumption, and barriers to large-scale model development. 18

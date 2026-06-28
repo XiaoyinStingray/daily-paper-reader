@@ -6,79 +6,57 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-06-27
-- 运行时间：2026-06-27 20:29:26 UTC
+- 最新运行日期：2026-06-28
+- 运行时间：2026-06-28 21:12:06 UTC
 - 运行状态：成功
-- 本次总论文数：19
-- 精读区：7
-- 速读区：12
+- 本次总论文数：11
+- 精读区：1
+- 速读区：10
 
 ### 今日简报（AI）
-今日共筛选19篇论文，精读7篇，其中零样本视频生成式压缩《ZeroGVC》以9.0分领跑。  
-最值得关注的是零样本视频压缩结合自回归扩散先验的突破，以及视觉语言模型测试时对抗鲁棒性方向。  
-建议优先精读《ZeroGVC》理解生成式压缩前沿，并关注《T-VSS》以提升视觉语言模型安全性。
-- 详情：[/202606/27/README](/202606/27/README)
+今日精读1篇、速读10篇，重点聚焦视频编码、目标姿态估计与图像复原。
+
+最值得关注的是精读文章《Boosting Neural Video Codec via Scale-Driven Online Flow Refinement》（9.0/10），在神经网络视频编码中引入在线流精炼提升性能；速读中的《ScalingAttention》和《LogicIR》也值得一看，分别探索视频扩散模型的稀疏注意力拓扑与逻辑门网络用于图像复原。
+
+建议优先精读视频编码领域的流精炼方法，再速览注意力机制与逻辑门网络的新思路，可从这些方向入手跟进最新进展。
+- 详情：[/202606/28/README](/202606/28/README)
 
 ### 精读区论文标签
-1. [ZeroGVC: Zero-Shot Generative Video Compression with Autoregressive Diffusion Priors](/202606/27/2606.22371v1-zerogvc-zero-shot-generative-video-compression-with-autoregressive-diffusion-priors)  
+1. [Boosting Neural Video Codec via Scale-Driven Online Flow Refinement](/202606/28/2606.23023v1-boosting-neural-video-codec-via-scale-driven-online-flow-refinement)  
    标签：评分：9.0/10、query:compress
-   evidence：零样本生成式视频压缩，使用自回归扩散先验，端到端学习压缩
-2. [ZeroGVC: Zero-Shot Generative Video Compression with Autoregressive Diffusion Priors](/202606/27/2606.22371v2-zerogvc-zero-shot-generative-video-compression-with-autoregressive-diffusion-priors)  
-   标签：评分：9.0/10、query:compress
-   evidence：零样本生成式视频压缩，使用自回归扩散先验，属于端到端学习压缩
-3. [UI-LIC: A Unified Framework for Evaluating Learned Image Compression Models](/202606/27/2606.23545v1-ui-lic-a-unified-framework-for-evaluating-learned-image-compression-models)  
-   标签：评分：9.0/10、query:compress
-   evidence：学习图像压缩统一评估框架
-4. [From Spatial to Spectral: An Efficient, Frequency-Guided Feature Representation Learner for Small Object Detection](/202606/27/2606.23825v1-from-spatial-to-spectral-an-efficient-frequency-guided-feature-representation-learner-for-small-object-detection)  
-   标签：评分：8.0/10、query:neural-arch
-   evidence：频率引导的特征表示用于小目标检测
-5. [Structuring Sparsity: Block-Sparse Featurizers Capture Visual Concept Manifolds](/202606/27/2606.25234v1-structuring-sparsity-block-sparse-featurizers-capture-visual-concept-manifolds)  
-   标签：评分：8.0/10、query:neural-arch
-   evidence：提出块稀疏特征化器捕获视觉概念流形，提升表示质量
-6. [Layer-Specific Prompt Fusion Discovery via Differentiable Search in Vision Foundation Models](/202606/27/2606.26379v1-layer-specific-prompt-fusion-discovery-via-differentiable-search-in-vision-foundation-models)  
-   标签：评分：8.0/10、query:neural-arch
-   evidence：视觉Transformer中提示融合的可微分架构搜索
-7. [Safe Autoregressive Image Generation with Iterative Self-Improving Codebooks](/202606/27/2606.27147v1-safe-autoregressive-image-generation-with-iterative-self-improving-codebooks)  
-   标签：评分：8.0/10、query:compress
-   evidence：迭代自改进码本用于自回归生成中的量化视觉令牌
+   evidence：神经视频编码器改进，采用尺度驱动流细化，与压缩相关
 
 ### 速读区论文标签
-1. [T-VSS: Test-Time Visual Subspace Steering for Adversarial Robustness of Vision-Language Models](/202606/27/2606.23132v1-t-vss-test-time-visual-subspace-steering-for-adversarial-robustness-of-vision-language-models)  
+1. [Learning Cross-View Semantic Priors for Single-Reference Unseen Object Pose Estimation](/202606/28/2606.22076v1-learning-cross-view-semantic-priors-for-single-reference-unseen-object-pose-estimation)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：提出在视觉特征空间进行测试时自适应以提高对抗鲁棒性
-2. [Convergence of Gradient Descent for General Neural Network Architectures Beyond the NTK Regime](/202606/27/2606.23364v1-convergence-of-gradient-descent-for-general-neural-network-architectures-beyond-the-ntk-regime)  
+   evidence：基于对应关系的未见物体姿态估计架构，使用视觉基础模型特征
+2. [ScalingAttention: Discovering Intrinsic Sparse Attention Topology for Video Diffusion Transformers](/202606/28/2606.23019v1-scalingattention-discovering-intrinsic-sparse-attention-topology-for-video-diffusion-transformers)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：针对通用神经网络架构的梯度下降收敛分析
-3. [Sublinearly Structured Deep Neural Networks Achieve Feature Learning Consistency for Compositional Functions](/202606/27/2606.23477v1-sublinearly-structured-deep-neural-networks-achieve-feature-learning-consistency-for-compositional-functions)  
+   evidence：稀疏注意力拓扑提升Transformer效率
+3. [LogicIR: Logic Gate Networks for Image Restoration](/202606/28/2606.26609v1-logicir-logic-gate-networks-for-image-restoration)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：为亚线性结构DNN提供特征学习一致性理论保证
-4. [VSANet: View-aware Sparse Attention Network for Light Field Image Denoising](/202606/27/2606.24737v1-vsanet-view-aware-sparse-attention-network-for-light-field-image-denoising)  
+   evidence：用于图像恢复的轻量级逻辑门网络
+4. [Liquid Fusion of Heterogeneous Representations Towards General Salient Object Detection](/202606/28/2606.26849v1-liquid-fusion-of-heterogeneous-representations-towards-general-salient-object-detection)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：面向光场图像去噪的视角感知稀疏注意力网络
-5. [GeMoE: Gating Entropy is All You Need for Uncertainty-aware Adaptive Routing in MoE-based Large Vision-Language Models](/202606/27/2606.26287v1-gemoe-gating-entropy-is-all-you-need-for-uncertainty-aware-adaptive-routing-in-moe-based-large-vision-language-models)  
+   evidence：融合CNN和SSM表示的显著性检测
+5. [TMP: Tree-structured Mixed-policy Pruning for Large-scale Image Generation and Editing](/202606/28/2606.27089v1-tmp-tree-structured-mixed-policy-pruning-for-large-scale-image-generation-and-editing)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：提出基于熵的自适应路由用于MoE大视觉语言模型，提升资源利用率
-6. [Focusing on What Matters: Saliency-Harnessing Accurate Routing for Diffusion MoE](/202606/27/2606.26938v1-focusing-on-what-matters-saliency-harnessing-accurate-routing-for-diffusion-moe)  
+   evidence：面向大规模图像生成模型的树结构混合策略剪枝，属于模型优化策略
+6. [CARVE: Content-Aware Recurrent with Value Efficiency for Chunk-Parallel Linear Attention](/202606/28/2606.27229v1-carve-content-aware-recurrent-with-value-efficiency-for-chunk-parallel-linear-attention)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：基于显著性的扩散MoE路由，提升视觉生成架构效率
-7. [UNITY: Attention Flow Networks for Adaptive Conditioning in Diffusion](/202606/27/2606.20971v1-unity-attention-flow-networks-for-adaptive-conditioning-in-diffusion)  
+   evidence：改进的线性注意力架构，具有内容感知循环和值效率
+7. [Scaling Linear Mode Connectivity and Merging to Billion Parameter Pretrained Transformers](/202606/28/2606.23607v1-scaling-linear-mode-connectivity-and-merging-to-billion-parameter-pretrained-transformers)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：提出注意力流网络用于扩散模型自适应条件化，改进架构设计
-8. [Expressivity Saturation: Reduced Affine Region Usage Under Increasing Task Complexity](/202606/27/2606.21687v1-expressivity-saturation-reduced-affine-region-usage-under-increasing-task-complexity)  
+   evidence：缩放线性模式连通性用于模型合并的优化策略
+8. [Progressive Pixel-Neighborhood Deformable Cross-Attention for Multispectral Object Detection](/202606/28/2606.24092v1-progressive-pixel-neighborhood-deformable-cross-attention-for-multispectral-object-detection)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：研究分段线性网络表达力差距，指导容量感知设计
-9. [Learning Entropy Signature for Image Representation and Classification](/202606/27/2606.22634v1-learning-entropy-signature-for-image-representation-and-classification)  
+   evidence：高效可变形交叉注意力用于多光谱检测
+9. [M^2C-EvDet: Multi-Domain Multi-Order Cross-Modal Knowledge Distillation for Event-based Object Detection](/202606/28/2606.24248v1-m2c-evdet-multi-domain-multi-order-cross-modal-knowledge-distillation-for-event-based-object-detection)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：引入学习熵签名作为图像描述符用于表示和分类
-10. [BEV-Denoise: Learning Intrinsic Noise for Accurate Bird's-Eye-View Semantic Segmentation](/202606/27/2606.22931v1-bev-denoise-learning-intrinsic-noise-for-accurate-birds-eye-view-semantic-segmentation)  
+   evidence：跨模态知识蒸馏用于事件目标检测，神经网络架构改进技术
+10. [Semantic Allocation in Ordered Bottlenecks: Predictive Residual Inference for Visual Representation Learning](/202606/28/2606.25232v1-semantic-allocation-in-ordered-bottlenecks-predictive-residual-inference-for-visual-representation-learning)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：使用受DDPM启发的噪声估计模块提升BEV分割精度
-11. [Black-Box Continual Learning for Vision-Language Models](/202606/27/2606.22999v1-black-box-continual-learning-for-vision-language-models)  
-   标签：评分：6.0/10、query:neural-arch
-   evidence：提出黑盒持续学习基准，改善模型自适应性能
-12. [Training-free Cross-domain Few-shot Segmentation via Robust Semantic Representation and Matching](/202606/27/2606.24297v1-training-free-cross-domain-few-shot-segmentation-via-robust-semantic-representation-and-matching)  
-   标签：评分：6.0/10、query:neural-arch
-   evidence：提出跨域小样本分割的无训练框架
+   evidence：有序瓶颈的预测残差推理在视觉表示学习中的应用
 
 
 <div class="dpr-home-promo-card">

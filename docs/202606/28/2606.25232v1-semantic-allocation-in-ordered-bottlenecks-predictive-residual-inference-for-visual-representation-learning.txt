@@ -1,0 +1,321 @@
+Title: Semantic Allocation in Ordered Bottlenecks: Predictive Residual Inference for Visual Representation Learning
+
+URL Source: https://arxiv.org/pdf/2606.25232v1
+
+Published Time: Thu, 25 Jun 2026 00:18:27 GMT
+
+Number of Pages: 12
+
+Markdown Content:
+# Semantic Allocation in Ordered Bottlenecks: Predictive Residual Inference for Visual Representation Learning 
+
+Erik Ayari [0009 −0003 −9408 −9762] , Manuel Traub [0000 −0003 −0897 −1701] , and Martin V. Butz [0000 −0002 −8120 −8537] 
+
+Neuro-Cognitive Modeling Group, University of Tübingen, Tübingen, Germany 
+
+erik.ayari@uni-tuebingen.de manuel.traub@uni-tuebingen.de, martin.butz@uni-tuebingen.de 
+
+Abstract. Ordered bottlenecks aim to provide utility at flexible budgets by assigning coarse information to early tokens and task-relevant detail to later ones. Prior work, including tail dropping (TD), typically enforces ordering by means of a masking-based ordering pressure (MBOP): Late tokens are masked more frequently than early tokens and are therefore encouraged to store less essential fine details. We introduce predictive residual inference for ordered representations (PRIOR), a framework de-signed to address inherent weaknesses of MBOP. MBOP is prone to weak late-token utility because it lacks an explicit refinement objective and uses gradient exposure as a proxy for importance. Furthermore, rep-resentations may become particularly brittle in optimization-sensitive settings, such as when using discrete or quantized token representations. PRIOR replaces activation-rate control with log 2-scaled levels and level-wise predictors. These predictors separate already explained from un-explained information, focusing each level on residual error. We com-pare PRIOR against MBOP-TD and independent tail-biased dropout (MBOP-ITD) in contrastive learning and image reconstruction tasks. Unlike the baselines, PRIOR learns well-ordered representations across experiments: low budgets provide coarse descriptors, while high budgets add refinements. Simultaneously, full-budget performance with PRIOR is higher in all but one experimental setting, where performance remains comparable. MBOP baselines are severely limited in discrete and quan-tized settings, while PRIOR approaches the performance of continuous counterparts. Taken together, these findings establish PRIOR as an ef-fective framework for ordered representation learning. 
+
+Keywords: predictive residual inference · ordered representations · tail dropping · contrastive learning · coarse-to-fine processing 
+
+## 1 Introduction 
+
+Most deep learning architectures treat latent representations as fixed-size codes: During training and inference, the full code is produced, transmitted, and con-sumed by downstream components. This assumption becomes restrictive when  
+
+> arXiv:2606.25232v1 [cs.LG] 23 Jun 2026 2E. Ayari et al.
+
+computational, storage, or communication resources vary. With limited band-width, a mobile system may initially transmit only coarse scene information, and load additional details only after a user expresses interest. Similarly, an embodied agent may first obtain rough object estimates, select task-relevant ob-jects, and then request finer details only for those. To support such adaptive use cases, representations should be hierarchically structured such that early tokens provide compact descriptors, while later tokens add complementary information when richer inference is needed. Common methods for learning ordered representations impose order through masking or truncation during training, thereby inducing a masking-based or-dering pressure (MBOP). For example, nested dropout stochastically removes contiguous sets of hidden units, making earlier dimensions more important for reconstruction and retrieval [13]. Related rateless auto-encoding approaches use gradually varying dropout rates to support flexible representation sizes [8]. More recently, quality-controllable image tokenizers have used tail dropping (TD) to concentrate important information near the beginning of a discrete token se-quence [9]. Together, these methods show that masking and truncation can turn an otherwise flat latent sequence into a useful prefix code. Despite their effectiveness, MBOP methods have notable weaknesses. First, the ordering pressure is tied directly to gradient exposure: later positions are masked more often and therefore receive weaker training signals. As a result, increasing the representation budget may yield diminishing returns, undermin-ing the goal of budget-controllable representations. Second, reduced gradient exposure may be especially problematic for representations with biased or high-variance gradient estimates, such as categorical one-hot or quantized vectors. Finally, MBOP encourages ordering only implicitly, without an explicit objec-tive that trains later tokens to refine the content already provided by earlier ones. Models of human cognition offer a useful complementary perspective. Percep-tion is not only a bottom-up accumulation of local features. Instead, global struc-ture can influence perception from early on. Accordingly, the visual system can be viewed as a hierarchical processing system, in which coarse prior knowledge about scenes or objects activates top-down expectations that facilitate percep-tion [2,4,10]. Predictive coding models make this idea computationally explicit: higher levels predict lower-level activity in a top-down manner, while feedfor-ward signals transmit residual prediction errors from lower to higher levels [11]. These findings suggest a representational principle: priors predict coarse struc-tural outlines, while additional capacity should encode residual information, that is, details the coarser representation cannot explain. We introduce PRIOR, a framework for learning hierarchical representations with flexible operating points. PRIOR separates ordering pressure from gradient exposure by learning a log 2-scaled hierarchy of token sequences. From coarse to fine, self-predictive modules double the latent resolution at each level and use residual errors to explicitly recruit the added capacity for information not yet explained by coarser levels. Semantic Allocation in Ordered Bottlenecks 3
+
+We evaluate PRIOR across training objectives, downstream tasks, and archi-tectural choices, comparing it against two MBOP baselines: standard tail drop-ping (TD) and independent tail-biased dropout (ITD). The first experimental track uses instance-level temporal contrastive learning and evaluates class read-outs at multiple hierarchy levels. The second track studies reconstruction quality in an autoencoding task. 
+
+## 2 Methods 
+
+For all bottlenecks, we denote the latent representation as Z, an arrangement of N tokens with channel size C. MBOP methods use a flat token sequence, i.e., an [N, C ] tensor; PRIOR arranges tokens into a pyramidal hierarchy. Fig. 1 summarizes the architectural distinction between MBOP-TD, MBOP-ITD, and PRIOR. 
+
+2.1 MBOP 
+
+We consider the forward pass of a single training sample and let i index tokens in Z. The probability of token i being masked is denoted by mi. TD samples a single cutoff c from a log-uniform distribution: 
+
+u ∼ U (0 , log( N + 1)) , c = ⌊exp( u)⌋, mi = 1[i ≥ c]. (1) ITD instead samples masks independently for each token: 
+
+mi ∼ Bernoulli 
+
+ log( i + 1) log( N + 1) 
+
+
+
+. (2) Besides serving as an additional baseline, ITD allows us to test specific hy-potheses within the MBOP framework. With TD, late tokens face a double dis-advantage: they are updated less often, and their contribution to the loss may remain small because downstream components rely on earlier, more strongly trained tokens. ITD may improve attribution by creating low-probability events in which late tokens have increased downstream influence. At the same time, ITD may inadvertently increase redundancy, because conditioning on preceding tokens is weakened. 
+
+2.2 PRIOR 
+
+In PRIOR, Z is decomposed into L levels with doubling sequence lengths: 
+
+> L−1
+
+X
+
+> ℓ=0
+
+2ℓ = N. (3) Let yℓ, a tensor of shape 2ℓ, C , be the unprocessed encoded input to PRIOR at level ℓ. From coarser to finer levels, predictor modules fℓ−1 refine the latent 4 E. Ayari et al.       
+
+> MBOP-TD
+> Single sampled cutoff keeps a prefix
+> and masks the entire tail during training.
+> flat ordered sequence
+> cutoff
+> early late
+> Late tokens require the full earlier prefix.
+> MBOP-ITD
+> Independent position-wise masking;
+> later tokens are dropped more often.
+> flat ordered sequence
+> mask rate rises
+> early late
+> Independent masks can leave gaps anywhere.
+> PRIOR
+> Each finer level is predicted from the coarser
+> one; the residuals are the unexplained encoder
+> features from lower-level prediction.
+> prediction
+> stored residual
+> Budgets add whole levels: 1,3,7,15 , . . .
+
+Fig. 1. Visual summary of the three bottleneck architectures. 
+
+approximation ˆyℓ−1 from level ℓ − 1. The residual error rℓ is compressed through a token bottleneck Qℓ. The compressed result is then added to the prediction 
+
+ˆypred 
+
+ℓ , yielding ˆyℓ, which serves as both the level output and the input to the next refinement stage: 
+
+ˆypred 
+
+ℓ = fℓ−1(ˆ yℓ−1), rℓ = yℓ − ˆypred 
+
+ℓ , ˆyℓ = ˆ ypred 
+
+ℓ + Qℓ(rℓ). (4) For ℓ = 0 , the predictor output is zero. Refinement predictions are trained with 
+
+Rpred = 1
+
+L − 1
+
+L−1X
+
+ℓ=1 
+
+ˆypred 
+
+ℓ − sg[ yℓ] 22
+
+, (5) where sg (stop-gradient) prevents the encoder from adjusting to the predictor. Each level output ˆyℓ serves a separate downstream head with objective J (ℓ).Normalized geometric weighting yields the scalar loss: 
+
+JPRIOR = 1
+
+Z
+
+L−1X
+
+ℓ=0 
+
+2−(L−1−ℓ)J (ℓ), Z =
+
+L−1X
+
+k=0 
+
+2−k. (6) This preserves the training signal at all levels, while assigning exponentially larger loss weights to deeper levels, which contain an exponentially larger number of tokens. In our experiments, all levels use the same objective. 
+
+2.3 Token Parametrizations 
+
+Three variants of tokens are considered in this study: Gaussians, Categoricals, and EMA-VQ codebook vectors. In the contrastive learning task, tokens are additionally regularized to encourage compression and code usage, as this was found to stabilize performance (cf. Table 1). For PRIOR, parametrized tokens encode the residuals at each level with an added continuous predictor component. We still consider PRIOR to be a token-bottlenecked model, as the predictor component does not transmit additional sample-specific information beyond the retained residual tokens. Gaussians are sampled via the reparameterization trick, Categoricals and EMA-VQ use straight-through gradient estimates. EMA-VQ vectors may select the null state. Semantic Allocation in Ordered Bottlenecks 5                            
+
+> Table 1. Token parametrizations, masked states, and token-specific regularization terms. Hdenotes categorical entropy. Token Type Masked State Token Regularization Gaussian N(0,I)Free-bits KL [7]: Ej[max(0 , D KL −κ)]
+> Categorical 1
+> C·1Sample entropy: E[H(q)]
+> Negative batch entropy: −H(E[q])
+> EMA-VQ 0Commitment: E
+> h
+> ˆx−sg xEMA 22
+> i
+
+Effective Information For each retained set of tokens S, we use the validation set to estimate effective information from a token-wise bottleneck usage b:
+
+I(S) = X
+
+> u∈S
+
+b(u) (7) Across token types, b(u) estimates the information gained from token u relative to its marginal or inactive state: mutual information for discrete tokens, and the Gaussian variational-rate estimate via KL to the prior [1]: 
+
+b(u) = 
+
+
+
+Ex[DKL (qu(z | x) ∥ p(z))] for Gaussians 
+
+max(0 , H (Ex [qu(z | x)]) − Ex [H(qu(z | x))]) for Categoricals 
+
+H(Ex [onehot( au(x))]) for EMA-VQ (8) 
+
+2.4 Contrastive Learning 
+
+Training data are sampled from MVImgNet2 [16] object tracks, where separate frames of the same object instance constitute a positive pair. We use the standard NT-Xent objective [3,14]: 
+
+ℓi = − log exp  s(hi, hp(i))/τ P2Bj=1 1j̸ =i exp( s(hi, hj )/τ ) , LNTX = 12B
+
+> 2B
+
+X
+
+> i=1
+
+ℓi. (9) Here, p(i) denotes the positive partner of view i, s is cosine similarity, τ is a temperature parameter, and B is the number of pairs in the batch. The numer-ator rewards similarity of encoded positive pairs; the denominator avoids model collapse by penalizing similarities of negative pairs. As in [3], we use projection heads, i.e., small MLPs producing hi as a projected, lower-dimensional descrip-tor of view i. We adapt this idea to PRIOR by means of level-wise projection heads. For the encoder, we use FLIP [15], a transformer-based, object-centric vi-sion model with foveal multi-scale patching to selectively process individual ob-jects. Regularizer weights were selected by a two-stage Bayesian optimization procedure. Broad stage-1 samples were first evaluated in short-horizon runs; 6 E. Ayari et al. 
+
+a Gaussian-process surrogate [12] then guided stage-2 refinement using strong anchors, posterior-mean candidates, and expected improvement [5]. MVImgNet2 provides category labels at four taxonomy levels, from abstract to nuanced, referred to here as Coarse-, Mid-, Fine-, and Class-level. Readouts are evaluated by means of linear probes trained on frozen representations. Ta-ble 2 reports the resulting contrastive model sizes, separating shared encoders, projection heads, EMA codebooks, and PRIOR self-predictors.                                      
+
+> Table 2. Model parameters in millions by architecture, token type and model compo-nent. EMA codebooks are accounted for separately, as they are not directly optimized but track network activity over time and become a component of the representation. Self-Pred. refers to the parameters of PRIOR’s refinement modules. Total accounts for parameters used in downstream tasks, i.e., without projection heads, with bracketed numbers including them. Architecture Token Type FLIP Projection EMA Self-Pred. Total PRIOR Gaussian 3.042 0.929 –3.778 6.819 [7.748] Categorical 2.926 0.929 –3.778 6.704 [7.633] EMA-VQ 2.811 0.929 0.259 3.778 6.847 [7.776] MBOP Gaussian 6.996 0.133 ––6.996 [7.129] Categorical 4.899 0.133 ––4.899 [5.032] EMA-VQ 2.802 0.133 4.145 –6.948 [7.080]
+
+2.5 Reconstruction 
+
+A wavelet-space vision transformer is trained on FFHQ autoencoding [6]. As in contrastive learning, reconstruction with PRIOR uses level-wise decoders. The parameter count for full-budget reconstruction was approximately 11 .479 million for MBOP models and 11 .761 million for PRIOR. 
+
+## 3 Results 
+
+We evaluate ordered bottlenecks according to two criteria: whether they preserve strong peak performance, and whether additional tokens provide complementary, fine-grained information. 
+
+3.1 Contrastive Learning of Ordered Object Codes 
+
+Before analyzing frozen linear probes, Table 3 reports the validation NT-Xent losses of the trained contrastive models. PRIOR reaches the lowest validation loss in all token families; among MBOP models, ITD is lower for Categorical and EMA-VQ, and TD for Gaussian. Semantic Allocation in Ordered Bottlenecks 7
+
+Table 3. NT-Xent validation loss of the trained models. Bold marks the lowest loss within the token family. PRIOR models report the loss value from the head of the final level. Token type PRIOR opt. MBOP-ITD opt. (match) MBOP-TD opt. (match) Gaussian 1.244 1.337 (1.391) 1.288 (1.424) Categorical 1.400 1.844 (2.137) 2.881 (2.664) EMA-VQ 1.350 1.426 (1.994) 2.183 (2.376) Token Type Gaussian Categorical EMA-VQ 0          
+
+> 20
+> 40
+> 60
+> 80
+> Accuracy [%]
+> PRIOR MBOP-ITD MBOP-TD
+> Class Token Budget 13715 31 63 127 0
+> 20
+> 40
+> 60
+> 80
+> PRIOR MBOP-ITD MBOP-TD
+> Coarse
+
+Fig. 2. Budget-wise linear-probe accuracy for class and coarse taxonomy levels. Shad-ing decomposes readout quality by utilized tokens up to the highest-performing prefix of the respective model; for PRIOR, a prefix corresponds to the first k concatenated levels. 
+
+Fig. 2 summarizes budget-wise linear-probe accuracy for class and coarse taxonomy readouts; complete results are given in Table 4. Differences between MBOP-ITD and MBOP-TD tend to be small, with a tendency for higher accura-cies in MBOP-ITD. EMA-VQ models are the exception; ITD strongly improves over TD (e.g., peak class accuracy of 26 .37% vs. 15 .9% ). As these models were tuned individually to generate maximally strong baselines against PRIOR with respect to their training objective, ITD–TD results on their own do not grant clear attribution to masking schemes. Therefore, we conducted a control experi-ment in which each ITD–TD pair was tuned to optimize the combined, average performance. Within the control, MBOP differences were similar with respect to directionality and magnitude (cf. Fig. 3). Conversely, PRIOR and MBOP baselines differ strongly, both with respect to peak accuracies and in relation to ordering. Highest accuracies per model and token parametrizations are predominantly observed with PRIOR. The exception is Gaussian class accuracy, where MBOP-ITD peaks at 81 .75% , followed by PRIOR at 79 .74% and MBOP-TD at 77 .95% . Coarse, mid, and fine readouts are all maximized by PRIOR, followed by MBOP-ITD. For instance, within the Gaussian family at the mid level, PRIOR reaches 75 .46% , MBOP-ITD 68 .78% ,and MBOP-TD 66 .25% .8 E. Ayari et al. 
+
+Table 4. Frozen linear-probe accuracy across architectures, tokens, budgets, and taxonomy levels. Budgets describe (level-) prefixes; bold and underlining indicate the best and second-best model within each family, budget, and taxonomy level. Star and plus mark the best and second-best model within each family and taxonomy level, 
+
+across budgets.                                                                                                                                                                                                                                                                          
+
+> PRIOR MBOP-ITD MBOP-TD Budget Coarse Mid Fine Class Coarse Mid Fine Class Coarse Mid Fine Class
+> Gaussian
+> 170.11 60.46 44.60 49.23 73.35 63.95 51.68 73.49 74.45 65.23 53.10 76.91
+> 371.22 61.46 46.05 56.45 73.75 64.67 52.27 76.12 74.62 66.25 53.97 77.60
+> 772.46 63.19 48.67 62.91 74.20 65.56 53.32 77.72 74.94 65.95 54.16 77.64 15 74.32 65.33 51.88 68.71 74.60 66.09 54.05 79.70 74.71 66.00 54.18 77.75 31 77.55 68.82 56.17 73.01 75.07 66.64 55.26 80.58 74.76 66.06 54.28 77.75 63 82.70 73.52 63.65 78.95 75.75 67.57 56.72 81.75 ⋆74.80 65.53 54.12 77.95 127 82.94 ⋆75.46 ⋆64.97 ⋆79.74 +76.82 +68.78 +58.57 +80.30 74.80 66.23 54.53 77.35
+> Categorical
+> 175.37 65.42 48.32 24.16 63.66 54.03 36.49 7.96 63.22 53.68 36.38 6.48 380.27 71.05 56.14 48.17 68.70 59.02 42.25 22.11 67.36 57.67 40.99 16.28 781.14 72.44 58.45 59.11 72.35 62.85 47.10 35.91 70.66 61.16 44.42 24.34 15 82.87 74.41 61.67 66.63 74.92 65.58 51.08 45.41 73.49 64.05 48.01 35.61 31 83.85 75.95 64.88 71.94 76.83 67.56 53.64 50.92 77.42 68.16 54.33 49.50 63 86.07 79.51 68.43 77.17 ⋆78.89 70.45 56.59 54.91 79.45 70.81 57.88 58.02 127 88.01 ⋆80.45 ⋆70.37 ⋆75.81 81.73 +73.40 +60.97 +61.87 79.73 71.32 58.51 63.67 +
+> EMA-VQ
+> 163.28 52.93 35.03 4.55 62.83 52.68 34.74 4.37 62.50 51.68 27.87 9.74
+> 368.44 58.68 40.78 20.50 62.79 52.51 34.75 6.18 65.50 52.25 33.28 14.40 771.85 61.80 45.82 40.71 65.87 56.17 39.08 17.75 67.42 56.15 31.61 15.35 15 76.21 67.16 52.68 54.16 66.52 56.45 39.22 18.06 67.59 55.82 34.82 15.90 31 78.16 69.83 56.01 60.03 66.48 56.86 39.43 17.30 67.01 57.00 35.54 15.00 63 80.50 70.98 60.01 64.63 69.02 +58.56 +40.73 +26.37 +67.21 54.57 35.63 14.91 127 81.57 ⋆73.31 ⋆61.86 ⋆69.42 ⋆67.33 56.72 37.05 24.97 66.75 57.25 35.63 13.77
+
+Particularly strong differences are observed in the Categorical and EMA-VQ families. For example, Categorical-PRIOR reaches a class accuracy of 77 .17% 
+
+versus 63 .67% for MBOP-TD, and EMA-VQ-PRIOR peaks at 69 .42% compared to MBOP-ITD at only 26 .37% .Considering peak accuracies, PRIOR generally improves over MBOP within token families. More importantly, peak accuracies fall into a tighter range, lifting discrete and quantized tokens much closer to the Gaussian ceiling. As represen-tational capacity across models differs significantly, Fig. 3 controls for effective information I. Accuracy differences in the discrete and quantized settings remain high, making mere bandwidth differences unlikely as a viable explanation. PRIOR shows robust ordering of fine-grained semantic information as mea-sured by readouts. Across token families, class-level accuracies strongly improve with increased budgets. Gaussian PRIOR, for instance, improves from 49 .23% 
+
+at one token to 79 .74% at full budget; EMA-VQ PRIOR does so from 4.55% to 
+
+69 .42% . Qualitatively, budget-dependent differences are more evenly distributed and stepwise in PRIOR models (cf. Fig. 2, Fig. 3). Adjusting for their weaker ceiling performance, discrete and quantized MBOP models show similarly strong class-level ordering effects. However, their Gaussian ITD counterpart is only weakly ordered ( 73 .49% − 81 .75% ), and TD is virtually flat ( 76 .91% − 77 .95% ). The control experiments show that lower regularization Semantic Allocation in Ordered Bottlenecks 94 16 64 256                                
+
+> 20
+> 40
+> 60
+> Categorical Reg. match: λent-s ↓,λent-B ↑
+> 416 64 256
+> 20
+> 40
+> 60
+> EMA-VQ Reg. match: λcommit ↑
+> 64 256 1024 4096 16384 65536 262144
+> Effective Information [nats]
+> 50
+> 60
+> 70
+> 80
+> Gaussian Reg. match: λKL ↓,κfree ↓/↑
+> Class Accuracy [%]
+> PRIOR opt. MBOP-ITD opt. MBOP-TD opt. MBOP-ITD match MBOP-TD match
+
+Fig. 3. Class accuracy versus log-scaled effective information for retained prefix bud-gets across tuned architectures and regularizer-matched controls. Arrows indicate di-rectional changes of the respective weights in the control setting. Single arrows indicate both variants, two arrows indicate ITD/TD changes. 
+
+can improve ordering in Gaussian MBOP. However, the contrastive training ob-jective is suboptimal in these cases and, more importantly, effective information is exponentially higher (cf. Fig. 3, Table 3). Because of their strong but quickly saturating performance, Gaussian MBOP models tend to outperform Gaussian PRIOR within the first budget quantile (up to 31 tokens), after which PRIOR converts additional budget into stronger readouts. Within the Categorical and EMA-VQ families, PRIOR yields stronger readouts across nearly all budgets; the one exception is EMA-VQ class readout with a single token. The contrastive experiments can therefore be summarized as follows: Com-pared against baselines, PRIOR yields strong, coarse-to-fine ordered representa-tions without exception. It most clearly improves discrete and quantized repre-sentations where MBOP models are comparatively weak, especially with EMA-VQ. With Gaussian tokens, accuracy differences are small and inconsistent; PRIOR improves mainly the budget profiles. 
+
+3.2 Ordered Variational Autoencoding 
+
+Fig. 4 and Table 5 show a complementary pattern for FFHQ reconstruction. MBOP-TD is strongest at the smallest budgets, while MBOP-ITD is weakest. From 15 tokens onward, MBOP-ITD overtakes MBOP-TD, but both variants saturate early. In contrast, PRIOR improves steadily as additional levels become active, surpasses both MBOP variants from 31 tokens onward and continues improving up to the full budget. Representative examples in Fig. 5 are consistent with this result: TD provides plausible low-budget reconstruction but changes little later; ITD fails at the one-token extreme; and PRIOR adds visible detail across successive levels. 10 E. Ayari et al. 1 3 7 15 31 63 127 Token Budget 
+
+> 0.45
+> 0.50
+> 0.55
+> 0.60
+> 0.65
+> 0.70
+> 0.75
+> SSIM
+> MBOP-TD MBOP-ITD PRIOR
+
+Fig. 4. Mean validation SSIM ( ↑) across cumulative token budgets. ITD TD PRIOR 
+
+GT 1 3 7 15 31 63 127 
+
+Fig. 5. Representative ground-truth (GT) images and reconstructions across architec-tures and token budgets. 
+
+## 4 Discussion 
+
+The results suggest that PRIOR is a promising framework for ordered representa-tion learning. Across several experimental settings, we compared PRIOR against strong baselines. In these experiments, PRIOR was the only model that consis-tently approached the main goal of ordered representations: learning coarse-to-fine codes while maintaining strong peak performance. For MBOP, our results indicate a tension between prefix performance and overall representation quality. At high capacity, MBOP can use early tokens very efficiently, but it does not produce a clearly ordered semantic allocation. Settings that improve ordering tend to reduce peak performance. The results suggest that the forms of ordering induced by MBOP constrain capacity or lead to underfitting, rather than inducing robust structural organization. Independent masking does not fully resolve this tension in our experiments. MBOP-ITD sometimes improves over MBOP-TD, especially at moderate to high budgets, but the gains are comparatively small and less consistent than the differences between PRIOR and MBOP. Semantic Allocation in Ordered Bottlenecks 11 
+
+Table 5. FFHQ reconstruction validation means across token budgets. Best values are bold; second-best values are underlined.                                                          
+
+> Metric Setup 115 31 127 SSIM ( ↑)PRIOR 0.5370 0.6777 0.7232 0.7639
+> MBOP-ITD 0.4403 0.6851 0.6968 0.6990 MBOP-TD 0.5778 0.6734 0.6849 0.6860 L1 ( ↓)PRIOR 0.0833 0.0420 0.0348 0.0301
+> MBOP-ITD 0.1716 0.0411 0.0385 0.0379 MBOP-TD 0.0725 0.0440 0.0419 0.0419 L2 ( ↓)PRIOR 0.0143 0.0044 0.0031 0.0023
+> MBOP-ITD 0.0585 0.0043 0.0038 0.0037 MBOP-TD 0.0116 0.0047 0.0043 0.0043 MS-SSIM ( ↑)PRIOR 0.7156 0.9184 0.9505 0.9699
+> MBOP-ITD 0.4882 0.9227 0.9348 0.9366 MBOP-TD 0.7669 0.9127 0.9247 0.9250
+
+Overall, the results support the main hypotheses that motivated PRIOR. Strong coarse readouts from early levels, together with consistent late-level im-provements in detailed readouts, suggest that self-predictive residual refinement provides an effective ordering mechanism. The pronounced utility of late tokens in discrete and quantized models further supports the view that restricted gra-dient exposure is a limiting factor for MBOP, but not for PRIOR. The analysis of effective information is consistent with this interpretation, indicating that PRIOR-induced orderings can transmit information more efficiently. Taken together, these findings point to several directions for future work. Further evaluations should assess the breadth of PRIOR’s applicability, the ro-bustness of learned hierarchical encodings, and the semantic nature of these encodings. PRIOR also offers additional design choices that were not exhaus-tively studied here, such as alternative weighting schemes or different per-level objectives. Most importantly, we intend to embed PRIOR into larger architec-tures and broader problem settings. PRIOR’s emergent hierarchical predictive structure enables refinement “on demand”. We believe that this ability could be especially useful for developing hierarchical world models that can be flex-ibly recruited for task-adaptive perception and planning. Such models may be particularly powerful in environments where relevant objects and interactions change depending on the task and environmental context. 
+
+Acknowledgments. We acknowledge funding by the Deutsche Forschungsgemein-schaft (DFG, German Research Foundation) – 381713393, 467045002, 564829065. Mar-tin Butz is a member of the Machine Learning Cluster of Excellence – 390727645. The authors thank the International Max Planck Research School for Intelligent Systems (IMPRS-IS) for supporting Manuel Traub. 
+
+Disclosure of Interests. The authors have no competing interests to declare that are relevant to the content of this article. 12 E. Ayari et al. 
+
+## References 
+
+1. Alemi, A.A., Fischer, I., Dillon, J.V., Murphy, K.: Deep variational informa-tion bottleneck. In: International Conference on Learning Representations (2017), 
+
+https://arxiv.org/abs/1612.00410 
+
+2. Bar, M., Kassam, K.S., Ghuman, A.S., Boshyan, J., Schmid, A.M., Dale, A.M., et al.: Top-down facilitation of visual recognition. Proceedings of the National Academy of Sciences 103 (2), 449–454 (2006). https://doi.org/10.1073/pnas. 0507062103 
+
+3. Chen, T., Kornblith, S., Norouzi, M., Hinton, G.: A simple framework for con-trastive learning of visual representations. In: Proceedings of the 37th Interna-tional Conference on Machine Learning. Proceedings of Machine Learning Re-search, vol. 119, pp. 1597–1607. PMLR (2020) 4. Hochstein, S., Ahissar, M.: View from the top: Hierarchies and reverse hierarchies in the visual system. Neuron 36 (5), 791–804 (2002). https://doi.org/10.1016/ S0896-6273(02)01091-7 
+
+5. Jones, D.R., Schonlau, M., Welch, W.J.: Efficient global optimization of expensive black-box functions. Journal of Global Optimization 13 (4), 455–492 (1998). https: //doi.org/10.1023/A:1008306431147 
+
+6. Karras, T., Laine, S., Aila, T.: A style-based generator architecture for generative adversarial networks (2019), https://arxiv.org/abs/1812.04948 
+
+7. Kingma, D.P., Salimans, T., Jozefowicz, R., Chen, X., Sutskever, I., Welling, M.: Improving variational inference with inverse autoregressive flow (2017), https: //arxiv.org/abs/1606.04934 
+
+8. Koike-Akino, T., Wang, Y.: Stochastic bottleneck: Rateless auto-encoder for flex-ible dimensionality reduction. In: 2020 IEEE International Symposium on Infor-mation Theory (ISIT). pp. 2735–2740. IEEE (2020). https://doi.org/10.1109/ ISIT44484.2020.9174302 
+
+9. Miwa, K., Sasaki, K., Arai, H., Takahashi, T., Yamaguchi, Y.: One-d-piece: Image tokenizer meets quality-controllable compression. arXiv preprint arXiv:2501.10064 (2025) 10. Navon, D.: Forest before trees: The precedence of global features in visual per-ception. Cognitive Psychology 9(3), 353–383 (1977). https://doi.org/10.1016/ 0010-0285(77)90012-3 
+
+11. Rao, R.P.N., Ballard, D.H.: Predictive coding in the visual cortex: A functional interpretation of some extra-classical receptive-field effects. Nature Neuroscience 
+
+2(1), 79–87 (1999). https://doi.org/10.1038/4580 
+
+12. Rasmussen, C.E., Williams, C.K.I.: Gaussian Processes for Machine Learning. MIT Press (2006) 13. Rippel, O., Gelbart, M., Adams, R.: Learning ordered representations with nested dropout. In: Proceedings of the 31st International Conference on Machine Learning. Proceedings of Machine Learning Research, vol. 32, pp. 1746–1754. PMLR (2014) 14. Sohn, K.: Improved deep metric learning with multi-class n-pair loss objective. In: Lee, D., Sugiyama, M., Luxburg, U., Guyon, I., Garnett, R. (eds.) Advances in Neural Information Processing Systems. vol. 29. Curran Associates, Inc. (2016) 15. Traub, M., Butz, M.V.: Looking locally: Object-centric vision transformers as foun-dation models for efficient segmentation (2025), https://arxiv.org/abs/2502. 02763 
+
+16. Yu, X., Xu, M., Zhang, Y., Liu, H., Ye, C., Wu, Y., et al.: Mvimgnet: A large-scale dataset of multi-view images (2023)
