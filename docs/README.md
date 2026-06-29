@@ -6,57 +6,67 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-06-28
-- 运行时间：2026-06-28 21:12:06 UTC
+- 最新运行日期：2026-06-29
+- 运行时间：2026-06-29 20:50:04 UTC
 - 运行状态：成功
-- 本次总论文数：11
-- 精读区：1
-- 速读区：10
+- 本次总论文数：15
+- 精读区：6
+- 速读区：9
 
 ### 今日简报（AI）
-今日精读1篇、速读10篇，重点聚焦视频编码、目标姿态估计与图像复原。
-
-最值得关注的是精读文章《Boosting Neural Video Codec via Scale-Driven Online Flow Refinement》（9.0/10），在神经网络视频编码中引入在线流精炼提升性能；速读中的《ScalingAttention》和《LogicIR》也值得一看，分别探索视频扩散模型的稀疏注意力拓扑与逻辑门网络用于图像复原。
-
-建议优先精读视频编码领域的流精炼方法，再速览注意力机制与逻辑门网络的新思路，可从这些方向入手跟进最新进展。
-- 详情：[/202606/28/README](/202606/28/README)
+今日精读6篇、速读9篇，视频压缩与新视角合成成亮点。
+重点关注《Enhanced Neural Video Representation Compression》在极端质量缩放下的高效编码，以及《Learning Stable Canonical Worlds》对稳定新视角合成的突破。
+建议优先精读这两篇，并速览《Prism Transformer》中渐进式注意力调度的新思路。
+- 详情：[/202606/29/README](/202606/29/README)
 
 ### 精读区论文标签
-1. [Boosting Neural Video Codec via Scale-Driven Online Flow Refinement](/202606/28/2606.23023v1-boosting-neural-video-codec-via-scale-driven-online-flow-refinement)  
+1. [Enhanced Neural Video Representation Compression across Extreme Complexity and Quality Scales](/202606/29/2606.28163v1-enhanced-neural-video-representation-compression-across-extreme-complexity-and-quality-scales)  
    标签：评分：9.0/10、query:compress
-   evidence：神经视频编码器改进，采用尺度驱动流细化，与压缩相关
+   evidence：神经视频压缩与率失真优化
+2. [Learning Stable Canonical Worlds for Novel View Synthesis and Beyond](/202606/29/2606.23027v1-learning-stable-canonical-worlds-for-novel-view-synthesis-and-beyond)  
+   标签：评分：8.0/10、query:neural-arch
+   evidence：新视角合成架构改进
+3. [Learning Stable Canonical Worlds for Novel View Synthesis and Beyond](/202606/29/2606.23027v2-learning-stable-canonical-worlds-for-novel-view-synthesis-and-beyond)  
+   标签：评分：8.0/10、query:neural-arch
+   evidence：新视角合成架构改进
+4. [PatchINR: Patch-Based Implicit Neural Representations for Efficient and Scalable Inference](/202606/29/2606.25534v1-patchinr-patch-based-implicit-neural-representations-for-efficient-and-scalable-inference)  
+   标签：评分：8.0/10、query:neural-arch
+   evidence：基于块的隐式神经表示，降低推理计算量
+5. [A Unified Framework for Vision Transformers Equivariant to Discrete Subgroups of $\mathrm{O}(2)$](/202606/29/2606.27864v1-a-unified-framework-for-vision-transformers-equivariant-to-discrete-subgroups-of-mathrmo2)  
+   标签：评分：8.0/10、query:neural-arch
+   evidence：等变视觉Transformer的统一框架，推进架构设计
+6. [SEADA: An efficient methodology for optimizing mixed-precision DNNs on multi-precision spatial architectures](/202606/29/2606.27884v1-seada-an-efficient-methodology-for-optimizing-mixed-precision-dnns-on-multi-precision-spatial-architectures)  
+   标签：评分：8.0/10、query:compress
+   evidence：面向DNN的混合精度量化优化方法
 
 ### 速读区论文标签
-1. [Learning Cross-View Semantic Priors for Single-Reference Unseen Object Pose Estimation](/202606/28/2606.22076v1-learning-cross-view-semantic-priors-for-single-reference-unseen-object-pose-estimation)  
+1. [Don't Settle at the Mode! Mitigating Diversity Collapse in Pretrained Flow Models via Feature Self-Guidance](/202606/29/2606.27371v1-dont-settle-at-the-mode-mitigating-diversity-collapse-in-pretrained-flow-models-via-feature-self-guidance)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：基于对应关系的未见物体姿态估计架构，使用视觉基础模型特征
-2. [ScalingAttention: Discovering Intrinsic Sparse Attention Topology for Video Diffusion Transformers](/202606/28/2606.23019v1-scalingattention-discovering-intrinsic-sparse-attention-topology-for-video-diffusion-transformers)  
+   evidence：特征自引导缓解流模型多样性坍塌
+2. [Prism Transformer: Progressive Head Schedules for Hierarchical Attention Processing](/202606/29/2606.27449v1-prism-transformer-progressive-head-schedules-for-hierarchical-attention-processing)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：稀疏注意力拓扑提升Transformer效率
-3. [LogicIR: Logic Gate Networks for Image Restoration](/202606/28/2606.26609v1-logicir-logic-gate-networks-for-image-restoration)  
+   evidence：视觉Transformer中渐进式头部调度以提升效率
+3. [Mitigating Position Bias in Transformers via Layer-Specific Positional Embedding Scaling](/202606/29/2606.27705v1-mitigating-position-bias-in-transformers-via-layer-specific-positional-embedding-scaling)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：用于图像恢复的轻量级逻辑门网络
-4. [Liquid Fusion of Heterogeneous Representations Towards General Salient Object Detection](/202606/28/2606.26849v1-liquid-fusion-of-heterogeneous-representations-towards-general-salient-object-detection)  
+   evidence：层特定位置嵌入缩放以改善注意力分布
+4. [PixelU: A U-Shaped Transformer for Efficient End-to-End Pixel Diffusion](/202606/29/2606.27760v1-pixelu-a-u-shaped-transformer-for-efficient-end-to-end-pixel-diffusion)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：融合CNN和SSM表示的显著性检测
-5. [TMP: Tree-structured Mixed-policy Pruning for Large-scale Image Generation and Editing](/202606/28/2606.27089v1-tmp-tree-structured-mixed-policy-pruning-for-large-scale-image-generation-and-editing)  
-   标签：评分：7.0/10、query:neural-arch
-   evidence：面向大规模图像生成模型的树结构混合策略剪枝，属于模型优化策略
-6. [CARVE: Content-Aware Recurrent with Value Efficiency for Chunk-Parallel Linear Attention](/202606/28/2606.27229v1-carve-content-aware-recurrent-with-value-efficiency-for-chunk-parallel-linear-attention)  
-   标签：评分：7.0/10、query:neural-arch
-   evidence：改进的线性注意力架构，具有内容感知循环和值效率
-7. [Scaling Linear Mode Connectivity and Merging to Billion Parameter Pretrained Transformers](/202606/28/2606.23607v1-scaling-linear-mode-connectivity-and-merging-to-billion-parameter-pretrained-transformers)  
+   evidence：用于像素扩散的U形扩散Transformer架构
+5. [NullFlow: One-Step Generative Reconstruction](/202606/29/2606.22696v1-nullflow-one-step-generative-reconstruction)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：缩放线性模式连通性用于模型合并的优化策略
-8. [Progressive Pixel-Neighborhood Deformable Cross-Attention for Multispectral Object Detection](/202606/28/2606.24092v1-progressive-pixel-neighborhood-deformable-cross-attention-for-multispectral-object-detection)  
+   evidence：一步生成重建提升推理效率
+6. [OrthoMotion:Disentangling Camera and Subject Motion via Geometry Semantics Orthogonal Attention](/202606/29/2606.22835v1-orthomotiondisentangling-camera-and-subject-motion-via-geometry-semantics-orthogonal-attention)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：高效可变形交叉注意力用于多光谱检测
-9. [M^2C-EvDet: Multi-Domain Multi-Order Cross-Modal Knowledge Distillation for Event-based Object Detection](/202606/28/2606.24248v1-m2c-evdet-multi-domain-multi-order-cross-modal-knowledge-distillation-for-event-based-object-detection)  
+   evidence：用于解耦相机和主体运动的正交注意力机制
+7. [Data Selection Through Iterative Self-Filtering for Vision-Language Settings](/202606/29/2606.23611v1-data-selection-through-iterative-self-filtering-for-vision-language-settings)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：跨模态知识蒸馏用于事件目标检测，神经网络架构改进技术
-10. [Semantic Allocation in Ordered Bottlenecks: Predictive Residual Inference for Visual Representation Learning](/202606/28/2606.25232v1-semantic-allocation-in-ordered-bottlenecks-predictive-residual-inference-for-visual-representation-learning)  
+   evidence：迭代自过滤数据选择用于视觉语言模型
+8. [Layerwise Progressive Freezing: A Training Scaffold for Depth-Scalable Binary Networks](/202606/29/2606.27759v1-layerwise-progressive-freezing-a-training-scaffold-for-depth-scalable-binary-networks)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：有序瓶颈的预测残差推理在视觉表示学习中的应用
+   evidence：用于优化二值神经网络的渐进二值化训练策略
+9. [FlexMoE: One-for-All Nested Intra-Expert Pruning for MoE Language Models](/202606/29/2606.27866v1-flexmoe-one-for-all-nested-intra-expert-pruning-for-moe-language-models)  
+   标签：评分：6.0/10、query:neural-arch
+   evidence：MoE模型嵌套子网络剪枝
 
 
 <div class="dpr-home-promo-card">
