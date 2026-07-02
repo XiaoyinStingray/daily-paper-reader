@@ -1,0 +1,5438 @@
+Title: Closed-Form Steepest Descent Direction toward Flat Minima: Reducing Upper Bounds on the Loss Hessian Eigenspectrum in Neural Networks
+
+URL Source: https://arxiv.org/pdf/2606.28662v1
+
+Published Time: Tue, 30 Jun 2026 00:22:21 GMT
+
+Number of Pages: 25
+
+Markdown Content:
+> PREPRINT 1
+
+# Closed-Form Steepest Descent Direction toward Flat Minima: Reducing Upper Bounds on the Loss Hessian Eigenspectrum in Neural Networks 
+
+Yuto Omae 1, Kazuki Sakai 2, Yohei Kakimoto 1, Makoto Sasaki 1, Yusuke Sakai 3, Hirotaka Takahashi 3
+
+Abstract —One influential theory for explaining the generaliza-tion ability of neural networks (NNs) is the flatness hypothesis, which suggests that the flatness of the loss landscape is related to generalization performance. In general, the flatness of the loss landscape is quantified by the eigenvalues of the Hessian matrix of the Taylor-expanded loss function. Several training algorithms have been proposed to reduce the eigenvalues of the loss Hessian. However, most existing studies focus on the design of training algorithms and do not clarify how the training data distribution and the internal parameters of NNs contribute to directions leading to flatter minima. One direct way to achieve this is to analytically characterize the directions in which the eigenvalues decrease; however, deriving such directions is generally difficult. On the other hand, recent studies have reported the Wolkowicz-Styan (WS) upper bound, a theorem that analytically describes an upper bound on the largest eigenvalue of the cross-entropy (CE) loss Hessian in a three-layer hierarchical NN. However, that study was limited to deriving the upper bound and did not derive its gradient. Therefore, in this study, we analytically derive the gradient of the WS upper bound and use its closed-form expression to characterize directions leading to flatter minima. To examine whether this direction facilitates convergence to flatter minima, we propose a regularization method that updates the network parameters along the steepest descent direction of the WS upper bound. Results from several numerical experiments show that this regularization narrows the range of the Hessian eigenvalue spectrum, avoids both sharp minima and saddle points, and promotes convergence to flatter minima. Therefore, we name this method Hessian Spectral Range (HSR) Regulariza-tion. Comparisons with existing regularization methods show that HSR Regularization outperforms Hessian Regularization and achieves solutions that are as flat as those obtained by Sharpness-Aware Minimization (SAM). The applicability of the proposed method is limited because it only works for the combination of the CE loss and a three-layer hierarchical NN. However, to the best of the authors’ knowledge, no previous study has reported a closed-form gradient that promotes convergence to flatter minima without relying on numerical approximations. Therefore, this study contributes to the theoretical development of NNs. 
+
+Index Terms —Neural network, Cross-entropy, Flat minima, Hessian, Eigenspectrum 
+
+I. I NTRODUCTION 
+
+Neural networks (NNs) are widely utilized in a broad range of tasks and have achieved state-of-the-art performance in numerous domains [1] [2] [3]. On the other hand, the theoretical understanding of their generalization capabilities is still under development. As a prominent theory concerning 
+
+1: Nihon University (Japan) 2: National Institute of Technology, Nagaoka College (Japan) 3: Tokyo City University (Japan) 
+
+the generalization of NNs, the flatness hypothesis is widely recognized [4]. According to the flatness hypothesis, if the loss function exhibits a sharp landscape in the vicinity of a solution obtained through training, the generalization error tends to be large; conversely, if the loss function has a flat shape, the generalization error is expected to be small [5] [6]. To quantify the sharpness of the loss, the eigenspectrum of the Hessian matrix has been widely employed as a representative metric. This is because when the loss function is Taylor-expanded around a critical point, its local curvature is characterized by the Hessian matrix appearing in the quadratic term [5] [7]. Previous studies have proposed several optimization al-gorithms aimed at reaching flat minima by mitigating sharp-ness. Representative examples of such approaches include Hessian regularization [5] and sharpness-aware minimization (SAM) [8], both of which have demonstrated improvements in test performance across various tasks. However, these methods focus primarily on algorithmic design, and the factors that dictate the direction toward flat minima are not yet fully under-stood. To theoretically comprehend the structural mechanisms that form flat minima, it is essential to analytically describe the direction leading toward them. Therefore, the objective of this study is to derive a closed-form solution for the direction toward flat minima. In this paper, we define this direction as the steepest descent direction of sharpness. In other words, the research objective is to derive the parameter gradient of the maximum eigenvalue. However, because it is generally difficult to analytically express the maximum eigenvalue, obtaining its gradient analytically is inherently challenging. Nevertheless, a recent study [9] derived a closed-form solution for the upper bound of the maximum eigenvalue under the condition of the cross-entropy (CE) loss in three-layer hierarchical NNs. This theorem describes the upper bound of the maximum eigenvalue based on the traces of the Hessian and the squared Hessian, which is referred to as the “Wolkowicz-Styan (WS) upper bound.” Although this function is expected to possess an analytical derivative, the aforementioned study did not extend to its derivation. Therefore, this study attempts to describe the steepest descent direction of sharpness as a closed-form function by deriving the parameter gradient of the WS upper bound. This enables us to investigate how the training data distribution and the internal network parameters influence the direction toward flat minima. To the best of the authors’ knowledge, no prior study has reported the derivation of the direction toward flat minima in a closed form. This work provides a new foundation for the  
+
+> arXiv:2606.28662v1 [cs.LG] 27 Jun 2026 PREPRINT 2
+
+analytical understanding of flat minima. In this paper, we name the optimization approach that moves in the steepest descent direction of the WS upper bound “Hessian Spectral Range (HSR) Regularization.” HSR regular-ization has the effects of decreasing the maximum eigenvalue and increasing the minimum eigenvalue of the Hessian matrix. That is, this method has the effect of narrowing the range of the eigenspectrum, which is expected to prevent the model from falling into both sharp minima and saddle points. In this work, we verify whether HSR regularization can achieve flatness comparable to existing methods, such as Hessian regularization and SAM. At present, HSR regularization can only be applied to three-layer hierarchical NNs, which poses a significant limitation in practical applications. However, because it can achieve flatness comparable to existing methods without relying on numerical approximations, the direction toward flat minima derived in this study can be regarded as a closed-form function of considerable value. The above constitutes the academic contribution of this study to the NN domain. II. R ELATED WORKS 
+
+A. Flat minima 
+
+In 1997, Hochreiter et al. [4] argued that as a requirement for NNs with high generalization performance, it is important not only that the error is low but also that the errors in its vicinity are low, meaning that the loss landscape is flat. Regarding this hypothesis, some studies have questioned its validity due to issues such as invariance under reparameteri-zation [10]. On the other hand, numerous practical applications have reported that reaching flat minima improves general-ization performance [11] [12] [13]. Furthermore, it has been reported that several empirical techniques considered effective for improving the generalization performance of NNs may be related to the reduction of sharpness. For instance, the verification of sharpness reduction effects achieved by batch normalization [14] [15] [7], stochastic gradient descent [16] [17], and skip connections [13] constitutes an intriguing area of research. As can be seen from these examples, the pursuit of flat minima is considered an important perspective for constructing deep learning models with high generalization capabilities. 
+
+B. Numerical Approaches to Eigenspectrum Analysis 
+
+This sharpness is evaluated by the quadratic term when the loss function is Taylor-expanded around a critical point [5]. The reason for this is that the eigenvalues of the Hessian matrix represent the curvature [6]. While the eigenspectrum consists of multiple eigenvalues, the maximum eigenvalue in particular is utilized as a crucial indicator representing the curvature of the loss landscape [7]. The eigenspectrum can be obtained by solving the characteristic equation of the Hessian. Letting D denote the parameter size of the NN, the Hessian becomes a matrix of size D × D. When D ≥ 5,the eigenvalues of the Hessian cannot be obtained analytically because a characteristic equation of degree five or higher does not possess a closed-form solution. However, in modern deep learning, which is currently the mainstream, the parameter size D of networks is exceedingly large. For instance, in the implementation using PyTorch [18], D ∼ 1.38 × 10 8
+
+for VGG16 [19] and D ∼ 1.17 × 10 7 for ResNet18 [20]. To determine the eigenspectrum of such a massive Hessian matrix, numerical approximations are employed. As prominent approaches for this purpose, Hutchinson’s method [21] and the Lanczos method [22] are well known. Hutchinson’s method is a technique for estimating the Hessian trace, whereas the Lanczos method is used to estimate the eigenspectrum; by leveraging these methods, it is possible to numerically evaluate the sharpness. In fact, several studies have proposed methods to compute the eigenspectrum of deep learning models using the Lanczos method [15] [23], as well as techniques to calculate the Hessian trace via Hutchinson’s method [5] [24]. 
+
+C. Analytical Approaches to Eigenspectrum Analysis 
+
+On the other hand, the numerical approximation approach suffers from an inherent limitation in that it cannot clarify what causes the loss landscape to become sharp. To achieve this, it is necessary to express the eigenvalues analytically. As a pioneering study on the analytical computation of the Hessian, Bishop [25] proposed an extended backpropagation algorithm that precisely calculates all components of the Hessian matrix for feedforward networks with arbitrary topologies. However, this study provides a foundational method for computing the Hessian and does not delve into the analytical represen-tation of the eigenvalues themselves. To express eigenval-ues analytically, it is necessary to impose certain structural constraints on the network, making it difficult to achieve this for general networks with arbitrary layer structures. For this reason, analytical studies have been conducted using simplified network architectures. For instance, Singh et al. [26] derived a closed-form expression for the rank of the Hessian in networks utilizing linear activations. Additionally, Wu et al. [27] proposed a separation conjecture that approximates the layer-wise Hessian using Kronecker products, analytically explaining common structures such as the low-rank properties of the Hessian and the overlapping of eigenspaces among different models. Furthermore, Singh et al. [28] obtained closed-form representations of the eigenvalues of the loss Hessian in linear networks with identity or ReLU activations. While obtaining closed-form representations of eigenvalues is inherently difficult for non-linear activations, it is possible to derive upper bounds for them. For example, Omae et al. [9] derived an upper bound for the maximum eigenvalue under the CE loss in a three-layer hierarchical NN. A key advantage of this approach is that it allows the activation function of the hidden layer to be chosen arbitrarily. 
+
+D. Optimization Algorithms for Sharpness Reduction 
+
+Based on various reports indicating that a sharper critical point of the loss function leads to a larger generalization error, several methods aimed at mitigating sharpness have been devised. For instance, Yue et al. [29] proposed the Sharpness-Aware Learning Rate Scheduler, which dynamically adjusts the learning rate according to the sharpness of the PREPRINT 3
+
+loss landscape to promote convergence to flat minima. Liu et al. [5] proposed Hessian regularization, which suppresses curvature by regularizing the trace of the Hessian matrix. Sankar et al. [30] proposed Layerwise Hessian Trace Reg-ularization to reduce the Hessian trace of each layer. Luo et al. [31] proposed an eigenvalue regularization method that explicitly suppresses the maximum eigenvalue of the Hessian. In addition, Sharpness-Aware Minimization (SAM) is widely recognized as a representative approach for suppressing large eigenvalues of the Hessian [8]. SAM is an optimization method that avoids sharp local minima by finding a perturbation that maximizes the loss in the vicinity of the parameters and subsequently minimizing this worst-case loss. As theoretical advancements of SAM, modified versions have been proposed, such as a variant that overcomes the vulnerability to weight pa-rameter scaling [32] and another that functions effectively even with imbalanced data [33]. Research dedicated to theoretically elucidating the effectiveness of SAM is also progressing [34]. Beyond theoretical studies, it has been reported that both SAM and Hessian regularization have the effect of enhancing test performance in practical application tasks [11] [12] [35]. 
+
+E. Originality of This Study 
+
+Most of the aforementioned methods adopt an approach that numerically searches for the direction that reduces the sharpness of the loss function and subsequently updates the parameters in that direction. In other words, they can be regarded as techniques for estimating the direction toward flat minima through numerical computation. These methods are applicable to large-scale neural networks and are highly effective for the practical purpose of improving generalization performance. On the other hand, it is not straightforward to understand how the numerically obtained direction relates to the distribution of training data or the internal parameter structure of the network. Therefore, an inherent limitation exists in terms of clarifying the underlying mechanisms behind the direction toward flat minima. In this study, we adopt an analytical approach to address this issue. Specifically, we analytically derive the direction toward flat minima based on the eigenvalue statistics of the Hessian matrix. While analytical methods are generally applicable only to small-scale models or under specific assumptions, and thus may be inferior to numerical methods in terms of applicability, they offer a distinct advantage. Specifically, they allow the re-lationship between sharpness reduction and network structure to be described mathematically, which is expected to facilitate a theoretical understanding of neural networks. Therefore, the numerical and analytical approaches are not in competition with each other, but rather serve different purposes. The former is useful as a practical optimization method for large-scale models, whereas the latter is valuable as a theoretical framework for understanding the behavior of neural networks. The originality of this study lies in analytically expressing the direction toward flat minima, thereby enabling its theoretical interpretation. 
+
+Fig. 1: Three-layer hierarchical NN analyzed in this study. III. O VERVIEW OF THE PREVIOUS MODEL 
+
+In this study, we adopt the denominator layout for the arrangement of derivatives within matrices and vectors. For further details, please refer to Appendix A-A. Additionally, this work is a continuation of Omae et al. [9], and the definitions of all variables and functions are identical to those in the previous study. Therefore, we provide a brief overview here. 
+
+A. Model Assumptions and Loss Function 
+
+The target model considered in this study is a three-layer hierarchical NN for binary classification. Given an input x,the estimated probability p is computed as 
+
+y = W h (x), r = f (y), z = V h (r), p = s(z),
+
+where s denotes the sigmoid function, which outputs the estimated probability. Specifically, an input is classified into class 1 if p ≥ 0.5, and into class 0 if p < 0.5. Here, 
+
+x ∈ RM , y ∈ RN , and r ∈ RN , where M and N denote the dimensionalities of the input and the hidden layer, respectively. Note that f (y) represents the activation function of the hidden layer; for further details, refer to Eq. (64). We also note that various expressions for the activation functions used in this paper are summarized in Appendix A-B. The function h prepends a 1 to the 0-th dimension of the input vector. Specifically, h(x) = [1 x⊤]⊤ ∈ RM +1 
+
+and h(r) = [1 r⊤]⊤ ∈ RN +1 . The matrices W and V
+
+represent the affine mapping parameters, defined as W =[b fW ] ∈ RN ×(M +1) and V = [ c eV ] ∈ R1×(N +1) . Here, 
+
+fW ∈ RN ×M and eV ∈ R1×N are the weight parameters, whereas b ∈ RN and c ∈ R correspond to the bias parameters. The network architecture using this notation is illustrated in Fig. 1. As can be seen, the object of analysis in this study is a fundamental NN with a single hidden layer. Letting w and v denote the vectors obtained by vertically concatenating the column vectors of W and V , respectively, the vector θ formed by vertically stacking these vectors constitutes the full parameter set of the NN. That is, 
+
+θ =
+
+wv
+
+
+
+∈ RD , w ∈ R(M +1) N , v ∈ RN +1 .
+
+Note that in this paper, the set of real matrices with D rows and 1 column, denoted as RD×1, is abbreviated as RD . In addition, the total number of dimensions is given by D =PREPRINT 4
+
+M N + 2 N + 1 . For the specific arrangement of the elements in w and v, please refer to Eq. (3) in [9]. Since this model is an NN designed for binary classification, the loss function is given by the binary cross-entropy. Specif-ically, letting pi denote the estimated probability that the i-th data sample belongs to class 1, and qi ∈ { 0, 1} denote its ground-truth label, the loss function is expressed as 
+
+L(θ) = −
+
+> I
+
+X
+
+> i=1
+
+ qi log pi(θ) + (1 − qi) log(1 − pi(θ)) ,
+
+where I represents the total number of training data samples. 
+
+B. Wolkowicz-Styan Upper Bound 
+
+While the previous study [9] denoted the Hessian of the loss L with respect to θ as HL(θ, θ), this paper denotes it as 
+
+HL(θ) to save space. Furthermore, let λ1 ≥ λ2 ≥ · · · ≥ λD
+
+represent the eigenvalues of HL(θ). That is, λ1 and λD
+
+correspond to the maximum and minimum eigenvalues, re-spectively. By applying Eq. (2.3) of Wolkowicz and Styan in [36], the upper bound of the maximum eigenvalue λ1 of 
+
+HL(θ) can be expressed as 
+
+λ1 ≤ λsup (θ) = μ(θ) + √D − 1σ(θ), (1) 
+
+μ(θ) = 1
+
+D tr( HL(θ)) , σ (θ)2 = 1
+
+D tr( HL(θ)2) − μ(θ)2.
+
+(2) Here, μ(θ) and σ(θ)2 represent the mean and variance of the eigenspectrum, respectively. The term λsup (θ) denotes the WS upper bound, which is a function comprising three arguments: 
+
+D, tr( HL(θ)) , and tr( HL(θ)2). Omae et al. [9] obtained the WS upper bound of the NN as a closed-form function by deriving tr( HL(θ)) and tr( HL(θ)2) in closed form under the CE loss in a three-layer hierarchical NN. According to their work [9], tr( HL(θ)) is given by 
+
+tr( HL(θ)) = 
+
+> I
+
+X
+
+> i=1
+
+s′(zi)(1 + f (yi)⊤f (yi)) +
+
+> I
+
+X
+
+> i=1
+
+(1 + x⊤ 
+
+> i
+
+xi)
+
+
+
+s′(zi)∥F ′(yi) eV ⊤∥2 + δi eV f ′′ (yi)
+
+
+
+. (3) The terms s′(zi) and δi correspond to s′(z) and δ for the i-th data sample, respectively, which are given by Eqs. (52) and (53) in [9] as 
+
+s′(z) = p(1 − p), δ = p − q. 
+
+Similarly, tr( HL(θ)2) is given by 
+
+tr( HL(θ)2) = 
+
+> I
+
+X
+
+> i=1
+> I
+
+X
+
+> j=1
+
+(1 + x⊤ 
+
+> i
+
+xj )2ϕij 
+
++ 2 
+
+> I
+
+X
+
+> i=1
+> I
+
+X
+
+> j=1
+
+(1 + x⊤ 
+
+> i
+
+xj )ψij 
+
++
+
+> I
+
+X
+
+> i=1
+> I
+
+X
+
+> j=1
+
+(1 + f (yi)⊤f (yj )) 2ωij . (4) This expression was derived by Omae et al. [9]. Here, the component ϕij is defined as 
+
+ϕij = o⊤ 
+
+> i
+
+Φij oj ∈ R, Φij ∈ R2×2, (5) 
+
+(Φij )11 = ( eV F ′(yj )F ′(yi) eV ⊤)2, (6) 
+
+(Φij )12 = eV F ′(yi)diag( eV ⊤)F ′′ (yj )F ′(yi) eV ⊤, (7) 
+
+(Φij )21 = eV F ′(yj )diag( eV ⊤)F ′′ (yi)F ′(yj ) eV ⊤, (8) 
+
+(Φij )22 = eV F ′′ (yi)F ′′ (yj ) eV ⊤. (9) For the detailed definitions of F ′(y) and F ′′ (y), refer to Eq. (66). Furthermore, o is defined as 
+
+o = s′(z) δ⊤ , (10) where oi and oj correspond to o for the i-th and j-th data samples, respectively. ψij is defined as 
+
+ψij = o⊤ 
+
+> i
+
+Ψij oj ∈ R, Ψij ∈ R2×2, (11) 
+
+(Ψij )11 = (1 + f (yi)⊤f (yj )) eV F ′(yj )F ′(yi) eV ⊤, (12) 
+
+(Ψij )12 = f (yi)⊤F ′(yj )F ′(yi) eV ⊤, (13) 
+
+(Ψij )21 = eV F ′(yj )F ′(yi)f (yj ), (14) 
+
+(Ψij )22 = f ′(yi)⊤f ′(yj ). (15) For f ′(y), refer to Eq. (65). ωij is defined as 
+
+ωij = o⊤ 
+
+> i
+
+Ωij oj ∈ (0 , 1/16] , Ωij =
+
+1 00 0
+
+
+
+. (16) IV. S TEEPEST DESCENT DIRECTION OF THE WS U PPER 
+
+BOUND 
+
+A. Main Theorem 
+
+In our previous study [9], we derived the upper bound of the maximum eigenvalue, λsup (θ), as a closed-form function, as shown in Eq. (1). As a continuation of that work, this study derives the steepest descent direction of the WS upper bound as a closed-form function. Since this direction corresponds to the negative gradient of the WS upper bound, it is given as follows. 
+
+Theorem 1. 
+
+− ∂λ sup (θ)
+
+∂θ = − ∂μ (θ)
+
+∂θ − √D − 1 ∂σ (θ)
+
+∂θ , (17) 
+
+∂μ (θ)
+
+∂θ = 1
+
+D∂tr( HL(θ)) 
+
+∂θ , (18) 
+
+∂σ (θ)
+
+∂θ = 12σ(θ)D∂tr( HL(θ)2)
+
+∂θ − μ(θ)
+
+σ(θ)
+
+∂μ (θ)
+
+∂θ . (19) 
+
+Proof. See Appendix B-A. By clarifying the gradients of the Hessian trace and the squared Hessian trace, the closed-form expression for the steepest descent direction of the WS upper bound can be ob-tained. Furthermore, since ∂/ ∂ θ comprises ∂/ ∂ w and ∂/ ∂ v
+
+as its components, it is sufficient to clarify ∂tr( HL(θ)) / ∂ w,
+
+∂tr( HL(θ)) / ∂ v, ∂tr( HL(θ)2)/ ∂ w, and ∂tr( HL(θ)2)/ ∂ v.Observing the main theorem reveals that the steepest descent direction of λsup (θ) is composed of the steepest descent directions of the mean μ(θ) and the standard deviation σ(θ)
+
+of the eigenspectrum. That is, moving in the direction of PREPRINT 5
+
+Fig. 2: Computation time of ∂λ sup (θ)/ ∂ θ. “Num.” denotes the numerical solution, and “Ana.” denotes the analytical solution. Left: Variation with respect to the dimensionality D,with the training data size fixed at I = 200 . Right: Variation with respect to the data size I, with the dimensionality fixed at 
+
+D = 21 . All computations were executed via serial processing on an Apple M2 CPU (clock frequency: 3.49 GHz). The three-point finite difference method was used for numerical differentiation. The activation function of the hidden layer is sigmoid. 
+
+− ∂λ sup (θ)/ ∂ θ represents an operation that reduces the WS upper bound λsup (θ) by shifting down the entire eigen-spectrum and suppressing its variance. The operation that contributes most to reducing both the mean and the standard deviation is bringing the maximum eigenvalue λ1 closer to the mean. Therefore, moving in the steepest descent direction of the WS upper bound can be expected to have the effect of decreasing the maximum eigenvalue λ1. Consequently, 
+
+− ∂λ sup (θ)/ ∂ θ can be regarded as a direction toward flat minima. Although it is possible to solve ∂λ sup (θ)/ ∂ θ using nu-merical differentiation, this approach does not allow us to analyze how the direction toward flat minima is characterized. Therefore, this study aims to clarify the analytical solution, which is established in Theorems 2, 3, 4, and 5. From another perspective, the analytical solution offers a distinct advantage in terms of computation time. Fig. 2 shows the computation times of the numerical and analytical solutions required to derive ∂λ sup (θ)/ ∂ θ. Fig. 2 (left) represents the case where the parameter size D of the NN is increased by increasing the dimensionality of the hidden layer N while fixing the input dimensionality at M = 2 . It can be observed that the computation time increases linearly with respect to D. The WS upper bound is a function based on the traces of the Hessian and the squared Hessian, and the computation time of the trace is affected by the number of diagonal components 
+
+D. Therefore, it is considered that the computation time increases linearly with D. Fig. 2 (right) illustrates the case where the training data size I is increased. Although the details are described later, ∂λ sup (θ)/ ∂ θ includes a double sum with respect to I. Thus, the computation time is expected to be proportional to I2. Although an increasing trend in computation time is observed with respect to both D and I,the analytical solution completes the computation in less time than the numerical solution in either case. 
+
+Fig. 3: Comparison between numerical and analytical solu-tions. “Num.” denotes the numerical solution, and “Ana.” de-notes the analytical solution. The three-point finite difference method was used for numerical differentiation. The activation function of the hidden layer is sigmoid. 
+
+B. Gradients of the Hessian Trace 
+
+Here, we address the derivation of ∂tr( HL(θ)) / ∂ w and 
+
+∂tr( HL(θ)) / ∂ v, which are the components of the steepest descent direction of the WS upper bound. The gradient of 
+
+tr( HL(θ)) with respect to the affine parameters w from the input layer to the hidden layer is given as follows. 
+
+Theorem 2. 
+
+∂tr( HL(θ)) 
+
+∂w =
+
+> I
+
+X
+
+> i=1
+
+
+
+h(xi) ⊗ X
+
+> a∈A
+
+Wai
+
+
+
+. (20) 
+
+Proof. See Appendix B-B. Where 
+
+a ∈ A := {I, II , III }
+
+and 
+
+WI 
+
+> i
+
+= (1 + x⊤ 
+
+> i
+
+xi)
+
+
+
+s′′ (zi)F ′(yi) eV ⊤ eV F ′(yi)+ 2 s′(zi)diag( eV ⊤)F ′′ (yi)
+
+
+
+F ′(yi) eV ⊤, (21) 
+
+WII  
+
+> i
+
+= (1 + x⊤ 
+
+> i
+
+xi)
+
+×
+
+
+
+s′(zi)F ′(yi) eV ⊤ eV f ′′ (yi) + δiF ′′′ (yi) eV ⊤
+
+, (22) 
+
+WIII  
+
+> i
+
+= s′′ (zi)(1 + f (yi)⊤f (yi)) F ′(yi) eV ⊤
+
++ 2 s′(zi)F ′(yi)f (yi). (23) For f ′′ (y) and F ′′′ (y), refer to Eqs. (65) and (66). The term 
+
+s′′ (z) represents the second derivative of the sigmoid function, which is given by 
+
+s′′ (z) = (1 − 2p)(1 − p)p. PREPRINT 6
+
+The dimensions of these variables are given by 
+
+∂tr( HL(θ)) 
+
+∂w ∈ R(M +1) N , WI
+
+> i
+
+, WII  
+
+> i
+
+, WIII  
+
+> i
+
+∈ RN , ∀i ∈ N≤I .
+
+The gradient of the Hessian trace with respect to the affine parameters v from the hidden layer to the output layer is given as follows. 
+
+Theorem 3. 
+
+∂tr( HL(θ)) 
+
+∂v =
+
+> I
+
+X
+
+> i=1
+
+X
+
+> a∈A
+
+Vai . (24) 
+
+Proof. See Appendix B-C. Where 
+
+VI 
+
+> i
+
+= (1 + x⊤ 
+
+> i
+
+xi)
+
+
+
+s′′ (zi)h(f (yi)) eV F ′(yi)+ 2 s′(zi)F ′
+
+> 0
+
+(yi)
+
+
+
+F ′(yi) eV ⊤, (25) 
+
+VII  
+
+> i
+
+= (1 + x⊤ 
+
+> i
+
+xi)
+
+×  s′(zi)h(f (yi)) eV f ′′ (yi) + δif ′′  
+
+> 0
+
+(yi), (26) 
+
+VIII  
+
+> i
+
+= s′′ (zi)(1 + f (yi)⊤f (yi)) h(f (yi)) . (27) For F ′
+
+> 0
+
+(y) and f ′′  
+
+> 0
+
+(y), refer to Eq. (67). The dimensions of these variables are given by 
+
+∂tr( HL(θ)) 
+
+∂v , VI
+
+> i
+
+, VII  
+
+> i
+
+, VIII  
+
+> i
+
+∈ RN +1 , ∀i ∈ N≤I .
+
+The top two panels of Fig. 3 compare the numerical and an-alytical solutions of ∂tr( HL(θ)) / ∂ w and ∂tr( HL(θ)) / ∂ v.The difference norms between the numerical and analytical solutions are both on the order of ∼ 10 −9, confirming that they are strongly consistent. This trend remains identical for parameters generated with different random seeds. These results demonstrate that the analytical solutions derived in this study are correct. 
+
+C. Gradients of the Squared Hessian Trace 
+
+Here, we address ∂tr( HL(θ)2)/ ∂ w and 
+
+∂tr( HL(θ)2)/ ∂ v, which are the components of the steepest descent direction of the WS upper bound. The gradient of the squared Hessian trace with respect to the affine parameters w from the input layer to the hidden layer is given as follows. 
+
+Theorem 4. 
+
+∂tr( HL(θ)2)
+
+∂w = 2 
+
+> I
+
+X
+
+> i=1
+> I
+
+X
+
+> j=1
+
+
+
+h(xi) ⊗ X
+
+> a∈B
+
+Waij 
+
+
+
+. (28) 
+
+Proof. See Appendix B-D. Where 
+
+Waij = Aaij + Baij , a ∈ B := {Φ, Ψ, Ω},
+
+AΦ 
+
+> ij
+
+= (1 + x⊤ 
+
+> i
+
+xj )2GΦ 
+
+> ij
+
+(oi ⊗ oj ), (29) 
+
+AΨ 
+
+> ij
+
+= 2(1 + x⊤ 
+
+> i
+
+xj )GΨ 
+
+> ij
+
+(oi ⊗ oj ), (30) 
+
+AΩ 
+
+> ij
+
+= (1 + f (yi)⊤f (yj )) 2s′′ (zi)s′(zj )F ′(yi) eV ⊤, (31) 
+
+BΦ 
+
+> ij
+
+= (1 + x⊤ 
+
+> i
+
+xj )2F ′(yi) eV ⊤s′′ /′(zi)⊤Φij oj , (32) 
+
+BΨ 
+
+> ij
+
+= 2(1 + x⊤ 
+
+> i
+
+xj )F ′(yi) eV ⊤s′′ /′(zi)⊤Ψij oj , (33) 
+
+BΩ 
+
+> ij
+
+= 2 s′(zi)s′(zj )(1 + f (yi)⊤f (yj )) F ′(yi)f (yj ), (34) 
+
+s′′ /′(z) = s′′ (z) s′(z)⊤ . (35) Here, GΦ 
+
+> ij
+
+is given by 
+
+GΦ 
+
+> ij
+
+= aΦ 
+
+> ij
+
+bΦ 
+
+> ij
+
+cΦ 
+
+> ij
+
+dΦ
+
+> ij
+
+ ∈ RN ×4, (36) 
+
+aΦ 
+
+> ij
+
+= 2( Φij )1/211 F ′′ (yi)F ′(yj ) eV ⊙2⊤, (37) 
+
+bΦ 
+
+> ij
+
+= 2 F ′(yi)F ′′ (yi)F ′′ (yj ) eV ⊙3⊤, (38) 
+
+cΦ 
+
+> ij
+
+= F ′′′ (yi)F ′(yj )2 eV ⊙3⊤, (39) 
+
+dΦ 
+
+> ij
+
+= F ′′′ (yi)F ′′ (yj ) eV ⊙2⊤, (40) and GΨ 
+
+> ij
+
+is given by 
+
+GΨ 
+
+> ij
+
+= aΨ 
+
+> ij
+
+bΨ 
+
+> ij
+
+cΨ 
+
+> ij
+
+dΨ
+
+> ij
+
+ ∈ RN ×4, (41) 
+
+aΨ 
+
+> ij
+
+=
+
+
+
+F ′(yi)f (yj ) eV F ′(yi)+ diag( eV ⊤)F ′′ (yi)(1 + f (yi)⊤f (yj )) 
+
+
+
+F ′(yj ) eV ⊤, (42) 
+
+bΨ 
+
+> ij
+
+= ( F ′(yi)2 + F ′′ (yi)F (yi)) F ′(yj ) eV ⊤, (43) 
+
+cΨ 
+
+> ij
+
+= F ′′ (yi)F (yj )F ′(yj ) eV ⊤, (44) 
+
+dΨ 
+
+> ij
+
+= F ′′ (yi)f ′(yj ). (45) The dimensions of these variables are given by 
+
+∂tr( HL(θ)2)
+
+∂w ∈ R(M +1) N , Aaij , Baij , ∈ RN , ∀a ∈ B,
+
+abij , bbij , cbij , dbij ∈ RN , ∀b ∈ B \ { Ω}, ∀i, j ∈ N≤I .
+
+The gradient of the squared Hessian trace with respect to the affine parameters v from the hidden layer to the output layer is given as follows. 
+
+Theorem 5. 
+
+∂tr( HL(θ)2)
+
+∂v = 2 
+
+> I
+
+X
+
+> i=1
+> I
+
+X
+
+> j=1
+
+X
+
+> a∈B
+
+Vaij . (46) 
+
+Proof. See Appendix B-E. Where 
+
+Vaij = Caij + Daij , a ∈ B,
+
+CΦ 
+
+> ij
+
+= (1 + x⊤ 
+
+> i
+
+xj )2KΦ 
+
+> ij
+
+(oi ⊗ oj ), (47) 
+
+CΨ 
+
+> ij
+
+= 2(1 + x⊤ 
+
+> i
+
+xj )KΨ 
+
+> ij
+
+(oi ⊗ oj ), (48) 
+
+CΩ 
+
+> ij
+
+= s′′ (zi)s′(zj )(1 + f (yi)⊤f (yj )) 2h(f (yi)) , (49) 
+
+DΦ 
+
+> ij
+
+= (1 + x⊤ 
+
+> i
+
+xj )2 h(f (yi)) s′′ /′(zi)⊤Φij oj
+
+, (50) 
+
+DΨ 
+
+> ij
+
+= 2(1 + x⊤ 
+
+> i
+
+xj ) h(f (yi)) s′′ /′(zi)⊤Ψij oj
+
+, (51) 
+
+DΩ 
+
+> ij
+
+= 0N +1 . (52) PREPRINT 7
+
+Fig. 4: Relationship between |δi| and gradient norms. A single NN trained in the experiment in Section VI (described later) was used. Since I = 50 , there are 50 data points. The bottom two panels show the results with j fixed. The activation function of the hidden layer is sigmoid. Here, 0N +1 denotes an (N + 1) -dimensional zero vector. KΦ
+
+> ij
+
+is given by 
+
+KΦ 
+
+> ij
+
+= eΦ 
+
+> ij
+
+fΦ 
+
+> ij
+
+0N +1 gΦ
+
+> ij
+
+ ∈ R(N +1) ×4, (53) 
+
+eΦ 
+
+> ij
+
+= 2( Φij )1/211 V ⊤ ⊙ f ′
+
+> 0
+
+(yj ) ⊙ f ′
+
+> 0
+
+(yi), (54) 
+
+fΦ 
+
+> ij
+
+= 3 V ⊙2⊤ ⊙ f ′
+
+> 0
+
+(yi)⊙2 ⊙ f ′′  
+
+> 0
+
+(yj ), (55) 
+
+gΦ 
+
+> ij
+
+= V ⊤ ⊙ f ′′  
+
+> 0
+
+(yi) ⊙ f ′′  
+
+> 0
+
+(yj ), (56) and KΨ 
+
+> ij
+
+is given by 
+
+KΨ 
+
+> ij
+
+= eΨ 
+
+> ij
+
+fΨ 
+
+> ij
+
+0N +1 0N +1 
+
+ ∈ R(N +1) ×4, (57) 
+
+eΨ 
+
+> ij
+
+= (1 + f (yi)⊤f (yj )) F ′
+
+> 0
+
+(yi)F ′(yj ) eV ⊤, (58) 
+
+fΨ 
+
+> ij
+
+= F ′
+
+> 0
+
+(yi)F ′(yj )f (yi). (59) The dimensions of these variables are given by 
+
+∂tr( HL(θ)2)
+
+∂v , Caij , Daij , ebij , fbij , gΦ 
+
+> ij
+
+∈ R(N +1) ×1,
+
+∀a ∈ B, ∀b ∈ B \ { Ω}, ∀i, j ∈ N≤I .
+
+The bottom two panels of Fig. 3 compare the numer-ical and analytical solutions of ∂tr( HL(θ)2)/ ∂ w and 
+
+∂tr( HL(θ)2)/ ∂ v. The difference norms between the numer-ical and analytical solutions are both on the order of ∼ 10 −9,confirming that they are strongly consistent. This trend remains identical for parameters generated with different random seeds. These results demonstrate that the analytical solutions derived in this study are correct. V. D ISCUSSION 
+
+A. Influence of Individual Data Samples on the Gradient Norm 
+
+All four gradients derived in this study possess the following property. 
+
+Fig. 5: Relationship between the covariance of the bivariate Gaussian distribution generating the input data x and the gradient of the squared Hessian trace. The left panel represents the case of linear activation, and the right panel represents the case of sigmoid activation. The values are normalized to a range of 0 to 1 to clearly illustrate the scale of variation. Solid lines represent the median, and shaded areas represent the IQR. 
+
+Proposition 1. 
+
+pi → qi
+
+⇒
+
+
+
+h(xi) ⊗ X
+
+> a∈A
+
+Wai → 0(M +1) N
+
+
+
+∧
+
+ X
+
+> a∈A
+
+Vai → 0N +1 
+
+
+
+∧
+
+
+
+h(xi) ⊗ X
+
+> a∈B
+
+Waij → 0(M +1) N
+
+
+
+∧
+
+ X
+
+> a∈B
+
+Vaij → 0N +1 
+
+
+
+.
+
+(60) 
+
+Proof. See Appendix B-F. From Eq. (53) of the predecessor study [9], |δ| represents the degree of proximity between p and q. Therefore, this proposition asserts that when the NN’s estimate p for a given training data sample is sufficiently close to the ground-truth label q, resulting in a sufficiently small |δ|, that specific data sample does not affect the gradient of the WS upper bound. To verify whether this phenomenon actually occurs, we extracted a single NN trained in the experiments described later in Section VI and plotted a scatter plot illustrating the relationship between |δ| and the gradient norm of the WS upper bound. This result is shown in Fig. 4. As can be seen from the figure, the closer |δ| is to 0, that is, the closer p
+
+is to q, the smaller the gradient norm becomes. From this observation, it can be concluded that data samples that can be correctly estimated with high confidence do not influence the direction toward a flat minimum. As a practical advantage, it is conceivable that training data samples whose |δ| is close to 0 can be removed when computing the direction to achieve a flat minimum. PREPRINT 8
+
+Fig. 6: Comparison of gradient norms between the mean and standard deviation terms of ∂λ sup (θ)/ ∂ θ. Calculated using 100 randomly generated NN patterns under the condition of 
+
+(I, M, N ) = (50 , 2, 3) . Asterisks indicate p-values from the two-sided Wilcoxon signed-rank test (**: 0.1% level, *: 1% level). Boxes represent the IQR, and whiskers indicate the 
+
+±1.5×IQR range. The activation function of the hidden layer is sigmoid. 
+
+B. Inner Product of Input Data and the Norm of the Steepest Descent Direction 
+
+By observing ∂tr( HL(θ)2)/ ∂ w and ∂tr( HL(θ)2)/ ∂ v,one can confirm the presence of the inner product between input data samples, x⊤ 
+
+> i
+
+xj , within terms such as AΦ 
+
+> ij
+
+and BΦ
+
+> ij
+
+in Eqs. (29) and (32), as well as CΦ 
+
+> ij
+
+and DΦ 
+
+> ij
+
+in Eqs. (47) and (50). Therefore, it is considered that the directional similarity among training data samples affects the scaling factor of the gradient of the squared Hessian trace. To verify this, we observed the variation in the gradient norm of the squared Hessian trace with respect to changes in the covariance of the Gaussian distribution used to generate the training data 
+
+x. The training data samples were centered at the origin of a two-dimensional space, where a sample was assigned to class 0 if x1 < 0 and to class 1 if x1 ≥ 0. The structure of the NN and the size of the training dataset were configured as (M, N, I ) = (2 , 3, 100) . The obtained results are shown in Fig. 5. The left panel represents the case with linear activation, while the right panel represents the case with sigmoid activation. As can be seen from the figure, training data with a higher inner product leads to a larger gradient norm of the squared Hessian trace. In light of Eq. (2), this implies that pairs of similar training data samples exert a strong influence in the direction that reduces the standard deviation of the eigenspectrum. However, the scaling effect due to the inner product is large for linear activation and small for sigmoid activation. In the case of saturating activation functions, the influence exerted by the inner product of the training data appears to diminish. 
+
+C. Dominant Terms for the Direction Toward Flat Minima 
+
+From Eq. (17), the direction toward flat minima, 
+
+− ∂λ sup (θ)/ ∂ θ, can be decomposed into terms that reduce the mean and standard deviation of the eigenspectrum, which are given by 
+
+− ∂μ (θ)
+
+∂θ , −√D − 1 ∂σ (θ)
+
+∂θ .
+
+Fig. 7: Top: Training dynamics of the WS upper bound and top eigenvalues. Middle: Training dynamics of the WS upper and lower bounds, maximum eigenvalue, and minimum eigenvalue. Bottom: Details of the eigenspectrum during training. Here, 
+
+(γ1, γ 2) = (0 , 0.01) , which represents the case where only the WS upper bound is reduced without decreasing the loss. The activation function of the hidden layer is sigmoid. From Eqs. (20) and (24), ∂μ (θ)/ ∂ θ is expressed by a single summation over the training dataset size I, whereas from Eqs. (28) and (46), ∂σ (θ)/ ∂ θ is expressed by a double summation over the training dataset size I. Furthermore, the architecture is structured such that ∂σ (θ)/ ∂ θ is scaled by the NN parameter size D. Therefore, it is expected that the direction toward flat minima, − ∂λ sup (θ)/ ∂ θ, is strongly in-fluenced by the direction that reduces the standard deviation of the eigenspectrum rather than its mean. To verify whether this hypothesis is correct, we calculated the norms of ∂μ (θ)/ ∂ θ
+
+and √D − 1 ∂σ (θ)/ ∂ θ using multiple randomly generated initial parameters. The results are shown in Fig. 6. As can be seen from the figure, as expected, it can be determined that the norm of √D − 1 ∂σ (θ)/ ∂ θ is larger than that of ∂μ (θ)/ ∂ θ.PREPRINT 9
+
+D. HSR Regularization 
+
+Although moving the NN parameters in the direction of 
+
+− ∂λ sup (θ)/ ∂ θ is expected to decrease the WS upper bound and consequently reduce the eigenvalues, it is practically necessary to simultaneously reduce the loss L(θ). Therefore, in this study, we refer to λsup (θ) as the HSR regularization term, and we propose a method termed “HSR Regularization” that minimizes the weighted sum of L(θ) and λsup (θ). That is, the update equation is given by 
+
+θ(t+1) = θ(t) −
+
+
+
+γ1
+
+∂L (θ)
+
+∂θ θ=θ(t)
+
++ γ2
+
+∂λ sup (θ)
+
+∂θ θ=θ(t)
+
+
+
+,
+
+where γ1 is the weight for the loss reduction and γ2 is the weight for the reduction of the WS upper bound. To verify whether moving in the steepest descent direction of the WS upper bound decreases both the WS upper bound and the eigenvalues, we executed the gradient descent method under the conditions of γ1 = 0 and γ2 = 0 .01 . The results are shown in the upper panel of Fig. 7. As can be seen from the figure, both the WS upper bound and the eigenvalues decrease as the training progresses. Therefore, it can be said that HSR regularization has the effect of lowering the second-order derivatives of the loss function, and it is considered to have the effect of facilitating the attainment of flat minima. 
+
+E. Effect of Elevating the Wolkowicz-Styan Lower Bound 
+
+Wolkowicz et al. [36] derived not only the upper bound for the maximum eigenvalue but also a closed-form expression for the lower bound of the minimum eigenvalue. By applying Eq. (2.2) in [36], the lower bound λinf (θ) for the minimum eigenvalue λD is given by 
+
+λD ≥ λinf (θ) = μ(θ) − √D − 1σ(θ). (61) Moreover, Fig. 6 indicates that the direction toward flat minima is more easily determined by reducing σ(θ) rather than μ(θ).As an extreme example of this, let us consider a case where 
+
+μ(θ) remains unchanged while only σ(θ) decreases. Under this condition, the following holds true. 
+
+Proposition 2. 
+
+
+
+σ(θ(t+1) ) < σ (θ(t))
+
+
+
+∧
+
+
+
+μ(θ(t+1) ) = μ(θ(t))
+
+
+
+⇒
+
+
+
+λsup (θ(t+1) ) < λ sup (θ(t))
+
+
+
+∧
+
+
+
+λinf (θ(t+1) ) > λ inf (θ(t))
+
+
+
+.
+
+(62) 
+
+Proof. See Appendix B-G. This proposition asserts that training to decrease the WS upper bound to reduce the maximum eigenvalue inherently increases the WS lower bound. To verify whether this phe-nomenon actually occurs, we performed the gradient descent method with γ1 = 0 and γ2 = 0 .01 to minimize only the WS upper bound. The results are shown in the middle panel of Fig. 7. As can be seen from the figure, as the training progresses, the WS upper bound decreases while the WS lower bound increases. Concurrently, it can be observed that the maximum eigenvalue approaches 0 from the positive direction, and the minimum eigenvalue approaches 0 from the negative 
+
+Fig. 8: Left: Training data (50 samples), Right: Test data (1,000 samples). Both are balanced datasets. direction. The lower panel of Fig. 7 illustrates the details of the eigenspectrum, confirming that the range of the eigenvalues narrows as the training progresses. Generally, when executing an operation to reduce the maximum eigenvalue, there is a potential risk of the eigenvalues becoming negative. However, because HSR regularization also has the effect of increasing the WS lower bound, this risk is mitigated. Since HSR regu-larization can be interpreted as having the effect of narrowing the range of the eigenspectrum, it is considered to facilitate the attainment of flat minima. From the perspective of the flatness hypothesis, this is a highly desirable property. VI. E XPERIMENTS 
+
+A. Determination of Critical Points for Analysis 
+
+Experiments were conducted with the objective of verifying whether the steepest descent direction of the WS upper bound derived in this study has the effect of improving generalization. In this verification, a key factor is whether the attainment of sharp minima can be avoided. Therefore, we searched for initial parameters that lead to sharp minima using aplain gradient descent method without any modifications. The specific procedure for this process is described below. First, we constructed a three-layer feedforward NN with input layer dimension M = 2 and hidden layer dimension 
+
+N = 3 . The activation function of the hidden layer was set as the sigmoid function. Specifically, by using 
+
+f (y) = 1 /(1 + exp( −y)) ,f ′(y) = (1 − f (y)) f (y),f ′′ (y) = (1 − 2f (y))(1 − f (y)) f (y),f ′′′ (y) = 6( f (y) − a+)( f (y) − a−)(1 − f (y)) f (y),a+ = (3 + √3) /6, a − = (3 − √3) /6
+
+to construct f (y), f (k)(y), F (k)(y), f (k)0 (y), and F (k)0 (y) in accordance with Appendix A-B, both the WS upper bound and its steepest descent direction can be obtained as closed-form functions. The task assigned to the NN is a two-class classification problem aimed at estimating which of two Gaussian distri-butions a given data sample x in a two-dimensional space was generated from. Regarding the distribution parameters, Class 0 has a mean of 1 1⊤, and Class 1 has a mean of PREPRINT 10 
+
+Fig. 9: Left: Comparison between λ1 and λsup (θ♯). Right: Histogram of λsup (θ♯). Results are shown for 1,124 unique critical points that satisfy the convergence criteria. 
+
+−1 −1⊤. This specific classification problem has also been utilized in prior research investigating the eigenspectrum of the Hessian [37]. The variances along both the x1 and x2 axes were set to 2, and the covariance was set to 0. The training dataset size was configured as I = 50 , and the test dataset size was set to 10 3, with an equal split between Class 0 and Class 1. For reference, a scatter plot generated under these conditions is shown in Fig. 8. To construct the NNs, the initial parameters θ = θ(0) were generated using 3,000 different random seeds. For the random number generation, a uniform distribution over the open in-terval (−10 , 10) D was adopted. The reason for employing a wide range for random number generation was to observe a diverse set of critical points. For the parameter update, a plain gradient descent method given by 
+
+θ(t+1) = θ(t) − γ ∂L (θ)
+
+∂θ θ=θ(t)
+
+, t ∈ { 0, · · · , T − 1},
+
+where T denotes the maximum number of training iterations, and T = 10 4 was utilized. When the gradient norm of the loss L fell below 0.1% of its initial gradient norm, it was determined that convergence to a critical point had been achieved, and the training was terminated. Furthermore, since it is inappropriate to include duplicate critical points in the analysis, only one of the closely located critical points was retained. Specifically, duplicate points were defined as those where the distance between critical points was less than 
+
+Ave . − 3 × Std ., where “ Ave .” and “ Std .” denote the mean and standard deviation of the Euclidean distances among all critical points. Critical points are represented as θ♯.As a result of executing the aforementioned procedure, 2,799 out of the 3,000 parameters satisfied the convergence condition to a critical point. Furthermore, the number of non-duplicate critical points was found to be 1,124. A scatter plot of the maximum eigenvalues and their upper bounds at these critical points is shown in the left panel of Fig. 9. As can be seen from the figure, the WS upper bound is tight with respect to the maximum eigenvalue. Therefore, the WS upper bound can be regarded as a function that evaluates the sharpness of the loss function. Additionally, a histogram regarding the WS upper bound of the 1,124 critical points is shown in the right panel of Fig. 9. From this plot, it can be confirmed that the distribution of the WS upper bound is right-skewed with a long tail. Therefore, the 113 critical points whose WS upper bounds     
+
+> (A) L(θ)Dynamics
+> (B) λ1Dynamics
+
+Fig. 10: Comparison of training dynamics for each method. Results for all seeds belonging to Sharp Minima Seeds and Flat Minima Seeds are shown. lie in the top 90% or higher are termed “Sharp Minima” and serve as the primary subject of analysis in this study. To perform a comparative analysis, the 113 critical points whose WS upper bounds lie in the bottom 10% or lower are termed “Flat Minima” and are also included in the analysis of this study. The red and blue dashed lines in the right panel of Fig. 9 represent these respective thresholds. That is, the analysis in this study targets a total of 226 independent critical points. 
+
+B. Controllability of the Eigenspectrum 
+
+Here, we discuss the capability of HSR regularization to control the eigenspectrum. For convenience, the 113 random seeds that resulted in sharp minima via the plain gradient descent method are referred to as “Sharp Minima Seeds,” while the 113 random seeds that resulted in flat minima are referred to as “Flat Minima Seeds.” If initializing training with parameters θ(0) from the Sharp Minima Seeds can successfully guide the model toward flat minima, it can be interpreted that HSR regularization is effective. However, it is also necessary to verify whether executing training with initial parameters θ(0) from the Flat Minima Seeds induces any adverse effects. Therefore, we applied HSR regularization to both the Sharp Minima Seeds and the Flat Minima Seeds. Furthermore, to evaluate the relative effectiveness of HSR reg-ularization, we also implemented existing methods designed to reduce eigenvalues, namely Hessian Regularization [5] and Adaptive Sharpness-Aware Minimization [32] (A-SAM). Although SAM [8] is available as a more basic approach, it PREPRINT 11 
+
+should be noted that we employed its advanced variant, A-SAM [32], due to previously documented issues regarding parameter scaling in SAM. Hessian Regularization is a method that minimizes the Hessian trace, whereas A-SAM identifies and moves toward a flatter region by introducing perturbations to the parameters. For all methods, the maximum number of training iterations was set to T = 10 4. However, the operation to reduce the eigenvalues was executed only during the first 5,000 iterations, whereas the operation to minimize only the loss function 
+
+L(θ) was performed during the remaining 5,000 iterations. The reason for this strategy is that we prioritized reducing the eigenvalues in the first half of training and focused on driving the loss function to reach a critical point in the second half. Specifically, during the first 5,000 training iterations, the weight for the loss gradient term was γ1 = 0 .01 , and the weight for HSR regularization was γ2 = 0.01 . Similarly, the weight for the Hessian trace term in Hessian Regular-ization was set to 0.01. Additionally, the perturbation radius for A-SAM was configured to 0.1, as a larger perturbation radius failed to yield a noticeable reduction in the maximum eigenvalue. In the subsequent 5,000 training iterations, a plain gradient descent method with a loss gradient term weight of 
+
+γ1 = 0 .01 was implemented for all methods. As before, when the gradient norm of the loss L fell below 0.1% of its initial gradient norm, it was determined that convergence to a critical point had been achieved, and the training was terminated. The training dynamics obtained through these procedures are shown in Fig. 10. Fig. 10A represents the evolution of the loss, and Fig. 10B illustrates the evolution of the maximum eigenvalue. Here, “Baseline” refers to the plain gradient descent method that minimizes only the loss, “Hessian Reg.” denotes Hessian Regularization, “A-SAM” represents Adaptive SAM, and “HSR Reg.” signifies HSR regularization. Furthermore, the upper panel of each figure displays the results for the Flat Minima Seeds, which are the initial parameters where even the plain gradient descent method reaches flat minima. Looking at the results for the Flat Minima Seeds, it can be confirmed that both the loss and the eigenvalues exhibit almost identical behavior across all methods. The lower panel of each figure shows the results for the Sharp Minima Seeds, indicating that the loss decreases across all methods. On the other hand, it can be observed that the maximum eigenvalue reaches a large value at the critical point under the plain gradient descent method. In contrast, the three methods that control the eigenvalues finish training while maintaining the maximum eigenvalue at a low value. Fig. 11 visualizes the loss function at the converged critical points at the end of training for the Sharp Minima Seeds. Since the loss function is high-dimensional, it cannot be visualized directly. Therefore, we performed the visualization along the direction of the eigenvector u1 corresponding to the maximum eigenvalue λ1. From this plot, it can be seen that each method controlling the eigenvalues prefers flatter minima compared to the plain gradient descent method. Among them, it can be confirmed that HSR regularization consistently converges to flat minima. To quantitatively compare the sharpness of the critical 
+
+Fig. 11: Loss landscapes at critical points for Sharp Minima Seeds (113 critical points). One-dimensional visualization along the direction of the eigenvector u1 corresponding to the maximum eigenvalue. For visual clarity, the curves are vertically shifted so that the loss at each critical point is aligned at 0. points, we examined several statistics regarding the eigenspec-trum at the converged critical points. The results are shown in Fig. 12. Fig. 12A presents a comparison of the maximum eigenvalues. In the case of the Sharp Minima Seeds, it can be seen that all methods successfully reduced the maximum eigenvalue compared to the plain gradient descent method without regularization. Among these, A-SAM and HSR reg-ularization were particularly effective. The reason HSR reg-ularization outperformed Hessian regularization is considered to be that while Hessian regularization relies solely on the Hessian trace, HSR regularization additionally incorporates the squared Hessian trace. In the case of the Flat Minima Seeds, all methods achieved low values. Therefore, no adverse effects of eigenvalue control on the maximum eigenvalue were observed. Fig. 12B and Fig. 12C present the mean and standard de-viation of the eigenspectrum, respectively. For these statistics, almost the same trends as the maximum eigenvalue were ob-served. In deep learning, it is widely known that the resulting eigenspectrum tends to have only a few top eigenvalues with non-zero values, while the remaining eigenvalues are close to zero [27] [38] [39]. In such a situation, the operation to decrease the maximum eigenvalue is equivalent to the operation to lower the mean of the eigenvalues. Furthermore, lowering the top eigenvalues implies that they approach the mean, which leads to a reduction in the standard deviation of the eigenspectrum. That is, a low maximum eigenvalue and low values for both the mean and standard deviation of the eigenspectrum are considered to be strongly related properties. Fig. 12D summarizes the minimum eigenvalues of the critical points reached by each method. From this plot, it can be seen that the minimum eigenvalues are close to 0 PREPRINT 12   
+
+> (A) Maximum eigenvalue (B) Average of eigenvalues
+> (C) Standard deviation of eigenvalues (D) Minimum eigenvalue
+
+Fig. 12: Statistics of the Hessian eigenspectrum at critical points. Asterisks indicate p-values from the two-sided Wilcoxon signed-rank test (**: 0.1% level, *: 1% level). Boxes represent the IQR, and whiskers indicate the ±1.5 × IQR range. in most cases. On the other hand, for the case of A-SAM with the Flat Minima Seeds, the distribution of the minimum eigenvalues tended to be left-skewed with a long tail in the negative direction. Since this suggests the presence of saddle points, we performed a one-dimensional visualization of the loss at the critical point located at the tip of the whisker for A-SAM. For comparison, we also examined the loss shape at the critical point located at the tip of the whisker of the minimum eigenvalue for HSR regularization. The resulting plots are shown in Fig. 13. The blue and red lines represent the loss shapes along the directions of the eigenvectors corresponding to the maximum and minimum eigenvalues, respectively. From these results, a clear saddle point was observed for A-SAM. In recent deep learning literature, this may not pose a significant issue because several methods exist to escape from saddle points. However, since the termination of training at a saddle point carries a potential risk of training failure, it cannot be considered a desirable state. In contrast, no clear saddle point was observed for HSR regularization. The reason for this is considered to be that HSR regularization controls not only the maximum eigenvalue but also the lower bound of the minimum eigenvalue. 
+
+C. Impact on Generalization Performance 
+
+In the previous section, it was confirmed that HSR regu-larization has the effect of reducing the maximum eigenvalue while avoiding convergence to saddle points. Although this is a desirable property from the perspective of pursuing flat minima, it would be counterproductive if it did not lead to an improvement in generalization performance. Therefore, in this section, we verify whether HSR regularization has the effect of improving generalization performance. Fig. 14 summarizes the macro F1 scores at the critical points reached by each method, evaluated using the test dataset. Looking at the results for the Sharp Minima Seeds, it can be PREPRINT 13 
+
+Fig. 13: Loss landscape along the eigenvector directions at the critical point. Here, u1 and uD represent the eigenvectors cor-responding to λ1 and λD , respectively. The result is obtained using a random seed where the minimum eigenvalue is located around −1.5 × IQR in the distribution shown in Fig. 12D. For better visual clarity, the loss function is vertically shifted such that its minimum value is 0 along the u1 direction, and its maximum value is 0 along the uD direction. 
+
+Fig. 14: Macro F1-scores at the critical point. Asterisks indi-cate statistical significance based on the two-sided Wilcoxon signed-rank test ( ∗∗ : 0.1% level, ∗: 1% level). Boxes represent the IQR, and whiskers extend to ±1.5 × IQR. confirmed that the three methods controlling the eigenvalues successfully improved the test performance compared to the plain gradient descent method without regularization. Among these, A-SAM and HSR regularization exhibited a higher improvement than Hessian regularization. Therefore, it can be said that HSR regularization is expected to achieve a performance improvement comparable to that of A-SAM. Furthermore, the results for the Flat Minima Seeds suggest that HSR regularization does not induce any adverse effects on initial parameters that inherently lead to flat minima without any specific modifications. To investigate the reasons behind the performance im-provement of HSR regularization, we visualized the decision 
+
+Fig. 15: Relationship between decision boundaries and the presence of HSR regularization for Sharp Minima Seeds. Top: Without regularization (baseline). Bottom: With HSR regularization. boundaries for both the unregularized method and HSR regu-larization in the case of the Sharp Minima Seeds. The results are shown in Fig. 15. The upper panel represents the decision boundaries without regularization, while the lower panel shows those obtained with HSR regularization. Since the results in the same column are derived from the identical initial parameters 
+
+θ(0) , they have a one-to-one correspondence. From these plots, it can be seen that the application of HSR regularization has the effect of simplifying the decision boundaries. This implies the suppression of overfitting, which is a desirable property from the perspective of generalization. VII. L IMITATIONS AND FUTURE WORK 
+
+In prior studies, a closed-form expression for the direction toward flat minima under the CE loss in feedforward NNs had not been discovered. Therefore, in this study, we derived the steepest descent direction of the WS upper bound, which represents one such expression, in a closed form. Through this derivation, it was confirmed that the eigenvalues can be controlled, and the proposed method demonstrated superior performance compared to the existing Hessian regularization. Furthermore, it was confirmed to yield a performance im-provement comparable to that of A-SAM. These findings suggest that the closed-form expression of the steepest descent direction of the WS upper bound is a valuable function from the perspective of clarifying the relationship between NNs and generalization. However, because the resulting function is extensively large, the theoretical investigation remains in-sufficient at this stage. Accordingly, as one of our future tasks, we intend to conduct a detailed analysis of this closed-form function. Furthermore, extending this approach toward practical ap-plications is also crucial. At present, the value of the WS upper bound demonstrated in this study remains limited to the theoretical aspect. This limitation arises because the steepest descent direction of the WS upper bound can only be applied to a three-layer feedforward NN designed for solving two-class classification problems. As a method intended for NNs capable of addressing a wide variety of tasks, such as multi-class classification, regression, and segmentation, this current for-mulation is overly restrictive. In addition, HSR regularization PREPRINT 14 
+
+cannot be applied to NNs with four or more layers. Therefore, for future work, we plan to devise a methodology that enables the implementation of HSR regularization for arbitrary layer architectures and diverse tasks. APPENDIX APRELIMINARIES 
+
+A. Derivative Layout 
+
+In this study, we adopt the denominator layout for arranging derivatives in gradients and Jacobians. That is, 
+
+κκκ(θ) ∈ RD1 ∧ θ ∈ R ⇒ ∂κκκ(θ)
+
+∂θ =
+
+h ∂κ1 
+
+> ∂θ
+
+· · · ∂κD1
+
+> ∂θ
+
+i
+
+,
+
+κ(θ) ∈ R ∧ θ ∈ RD2 ⇒ ∂κ(θ)
+
+∂θ =
+
+h ∂κ(θ) 
+
+> ∂θ 1
+
+· · · ∂κ(θ)
+
+> ∂θ D2
+
+i⊤
+
+holds. The Jacobian is defined as 
+
+κκκ(θ) ∈ RD1 ∧ θ ∈ RD2 ⇒
+
+∂κκκ(θ)
+
+∂θ = ∂∂θ κκκ(θ)⊤ =
+
+ 
+
+> ∂κ1
+> ∂θ 1
+
+· · · ∂κD1
+
+> ∂θ 1
+
+... . . . ...
+
+> ∂κ1
+> ∂θ D2
+
+· · · ∂κD1
+
+> ∂θ D2
+
+ .
+
+In this case, according to Eq. (4) of [40], the Leibniz rule for the gradient of an inner product is given by 
+
+κκκ(θ), ξ(θ) ∈ RD1 ∧ θ ∈ RD2 ⇒
+
+∂κκκ(θ)⊤ξ(θ)
+
+∂θ = ∂κκκ(θ)
+
+∂θ ξ(θ) + ∂ξ(θ)
+
+∂θ κκκ(θ) ∈ RD2 . (63) 
+
+B. Activation Functions 
+
+Let f (y) ∈ R be an activation function for a scalar value 
+
+y ∈ R. For an intermediate-layer data vector y ∈ RN , we define the vector obtained by applying the activation function element-wise as 
+
+f (y) = f (y1) · · · f (yN )⊤ ∈ RN . (64) Let f (k)(y) denote the k-th derivative of f (y). We define the vector composed of these derivatives as 
+
+f (k)(y) = f (k)(y1) · · · f (k)(yN )⊤ ∈ RN , (65) where k ∈ N. We also define the Jacobian matrix with respect to the input y as 
+
+F (k)(y) = ∂f (k−1) (y)
+
+∂y = diag( f (k)(y)) , (66) where f (0) = f . We further define the vector and matrix obtained by prepending a zero element or a zero row to the gradient and Jacobian, respectively, as 
+
+f (k)0 (y) = 
+
+ 0
+
+f (k)(y)
+
+
+
+, F (k)0 (y) = 
+
+ 0⊤
+
+> N
+
+F (k)(y)
+
+
+
+, (67) where 0N denotes the N -dimensional zero vector. In this paper, however, only the cases k ∈ { 1, 2, 3} are considered. Therefore, the value of k is indicated using prime notation. Specifically, f (1) = f ′, f (2) = f ′′ , and f (3) = f ′′′ . Omae et al. [9] summarize the first-, second-, and third-order derivatives of several activation functions, including the linear, sigmoid, tanh, SmoothReLU, and GELU activations. Readers may refer to that work for details when needed. 
+
+C. Kronecker Product 
+
+The Kronecker product appears frequently throughout this paper. In this subsection, we present several identities that will be used in subsequent derivations. 
+
+Lemma 1. 
+
+x ⊗ (AB ) = ( x ⊗ A)B, (68) 
+
+x ⊗ (A + B) = x ⊗ A + x ⊗ B, (69) 
+
+x ⊗ A B = x ⊗ A x ⊗ B . (70) 
+
+Proof. If AB is well-defined, 
+
+(x ⊗ A)B =
+
+
+
+x1A
+
+...
+
+xM A
+
+ B =
+
+
+
+x1AB 
+
+...
+
+xM AB 
+
+ = x ⊗ (AB ).
+
+If A + B is well-defined, 
+
+x ⊗ A + x ⊗ B =
+
+
+
+x1A
+
+...
+
+xM A
+
+ +
+
+
+
+x1B
+
+...
+
+xM B
+
+ =
+
+
+
+x1(A + B)
+
+...
+
+xM (A + B)
+
+
+
+= x ⊗ (A + B).
+
+If A B is well-defined, 
+
+x ⊗ A x ⊗ B =
+
+
+
+x1A x1B
+
+... ...
+
+xM A xM B
+
+ =
+
+
+
+x1
+
+A B
+
+...
+
+xM
+
+A B
+
+= x ⊗ A B
+
+is obtained. APPENDIX BPROOFS 
+
+A. Proof for Eqs. (17) , (18) , and (19) From Eq. (1), Eq. (17) follows directly. Likewise, Eq. (18) follows from Eq. (2). From Eq. (2), the gradient ∂σ (θ)/ ∂ θ
+
+is given by 
+
+∂σ (θ)
+
+∂θ = ∂(σ(θ)2)1/2
+
+∂σ (θ)2
+
+∂σ (θ)2
+
+∂θ
+
+= 12σ(θ)
+
+ 1
+
+D∂tr( HL(θ)2)
+
+∂θ − ∂μ (θ)2
+
+∂θ
+
+
+
+= 12σ(θ)
+
+ 1
+
+D∂tr( HL(θ)2)
+
+∂θ − ∂μ (θ)2
+
+∂μ (θ)
+
+∂μ (θ)
+
+∂θ
+
+
+
+= 12σ(θ)
+
+ 1
+
+D∂tr( HL(θ)2)
+
+∂θ − 2μ(θ) ∂μ (θ)
+
+∂θ
+
+
+
+= 12σ(θ)D∂tr( HL(θ)2)
+
+∂θ − μ(θ)
+
+σ(θ)
+
+∂μ (θ)
+
+∂θ .PREPRINT 15 
+
+B. Proof for Eq. (20) 
+
+1) Gradient Decomposition: From Eq. (3), the gradient of the Hessian trace can be decomposed as 
+
+∂tr( HL(θ)) 
+
+∂θ =
+
+> I
+
+X
+
+> i=1
+
+∂s ′(zi)(1 + f (yi)⊤f (yi)) 
+
+∂θ
+
++
+
+> I
+
+X
+
+> i=1
+
+(1 + x⊤ 
+
+> i
+
+xi)
+
+ ∂s ′(zi)∥F ′(yi) eV ⊤∥2
+
+∂θ + ∂δ i eV f ′′ (yi)
+
+∂θ
+
+
+
+.
+
+(71) Applying Eq. (63) to the first gradient term, we obtain 
+
+∂s ′(z)(1 + f (y)⊤f (y)) 
+
+∂θ
+
+= ∂s ′(z)
+
+∂θ (1 + f (y)⊤f (y)) + s′(z) ∂f (y)⊤f (y)
+
+∂θ
+
+= ∂s ′(z)
+
+∂θ (1 + f (y)⊤f (y)) + 2 s′(z) ∂f (y)
+
+∂θ f (y). (72) Applying Eq. (63) to the second gradient term, we obtain 
+
+∂s ′(z)∥F ′(y) eV ⊤∥2
+
+∂θ = ∂s ′(z)( F ′(y) eV ⊤)⊤F ′(y) eV ⊤
+
+∂θ
+
+= ∂s ′(z)
+
+∂θ eV F ′(y)2 eV ⊤ + s′(z) ∂(F ′(y) eV ⊤)⊤F ′(y) eV ⊤
+
+∂θ
+
+=
+
+ ∂s ′(z)
+
+∂θ eV F ′(y) + 2 s′(z) ∂F ′(y) eV ⊤
+
+∂θ
+
+
+
+F ′(y) eV ⊤. (73) Since eV f ′′ (yi) is the inner product of eV ⊤ and f ′′ (yi),Eq. (63) gives 
+
+∂δ eV f ′′ (y)
+
+∂θ = ∂δ ∂θ eV f ′′ (y) + δ ∂ eV f ′′ (y)
+
+∂θ
+
+= ∂δ ∂θ eV f ′′ (y) + δ ∂ eV ⊤
+
+∂θ f ′′ (y) + δ ∂f ′′ (y)
+
+∂θ eV ⊤ (74) for the third gradient term. 
+
+2) Individual Gradients: 
+
+Lemma 2. 
+
+∂s ′(z)∥F ′(y) eV ⊤∥2
+
+∂w = h(x) ⊗
+
+
+
+s′′ (z)F ′(y) eV ⊤ eV F ′(y)+ 2 s′(z)diag( eV ⊤)F ′′ (y)
+
+
+
+F ′(y) eV ⊤ ∈ R(M +1) N . (75) 
+
+Proof. Using Eqs. (51) and (54) in [9], we obtain 
+
+∂z ∂W:m
+
+= ∂y
+
+∂W:m
+
+∂r
+
+∂y
+
+∂h(r)
+
+∂r
+
+∂z ∂h(r) = xmF ′(y) eV ⊤. (76) Therefore, 
+
+∂s ′(z)
+
+∂W:m
+
+= ∂z ∂W:m
+
+∂s ′(z)
+
+∂z = xms′′ (z)F ′(y) eV ⊤,∂s ′(z)
+
+∂w = h(x) ⊗ (s′′ (z)F ′(y) eV ⊤). (77) From Eq. (51) in [9], we have 
+
+∂y
+
+∂w = h(x) ⊗ EN . (78) Therefore, by Eq. (68), 
+
+∂F ′(y) eV ⊤
+
+∂w = ∂f ′(y) ⊙ eV ⊤
+
+∂w
+
+=
+
+h
+
+v1 ∂f ′(y1) 
+
+> ∂w
+
+· · · vN ∂f ′(yN )
+
+> ∂w
+
+i
+
+=
+
+h
+
+v1 ∂f ′(y1) 
+
+> ∂y 1
+> ∂y 1
+> ∂w
+
+· · · vN ∂f ′(yN )
+
+> ∂y N
+> ∂y N
+> ∂w
+
+i
+
+= v1f ′′ (y1) ∂y 1 
+
+> ∂w
+
+· · · vN f ′′ (yN ) ∂y N
+
+> ∂w
+
+
+
+=  ∂y 1 
+
+> ∂w
+
+· · · ∂y N
+
+> ∂w
+
+
+
+v1f ′′ (y1) · · · 0
+
+... . . . ...
+
+0 · · · vN f ′′ (yN )
+
+
+
+= ∂y
+
+∂w diag( eV ⊤)F ′′ (y) = h(x) ⊗ diag( eV ⊤)F ′′ (y). (79) Substituting Eqs. (77) and (79) into Eq. (73), we obtain 
+
+∂s ′(z)∥F ′(y) eV ⊤∥2
+
+∂w
+
+=
+
+ ∂s ′(z)
+
+∂w eV F ′(y) + 2 s′(z) ∂F ′(y) eV ⊤
+
+∂w
+
+
+
+F ′(y) eV ⊤
+
+= h(x) ⊗
+
+
+
+s′′ (z)F ′(y) eV ⊤ eV F ′(y)+ 2 s′(z)diag( eV ⊤)F ′′ (y)
+
+
+
+F ′(y) eV ⊤, (80) where Eq. (69) was used. 
+
+Lemma 3. 
+
+∂δ eV f ′′ (y)
+
+∂w = h(x)⊗
+
+(s′(z)F ′(y) eV ⊤ eV f ′′ (y) + δF ′′′ (y) eV ⊤) ∈ R(M +1) N . (81) 
+
+Proof. Combining Eq. (76) with Eq. (52) in [9] yields 
+
+∂δ ∂W:m
+
+= ∂p ∂W:m
+
+= ∂z ∂W:m
+
+∂p ∂z = xms′(z)F ′(y) eV ⊤,∂δ ∂w = h(x) ⊗ (s′(z)F ′(y) eV ⊤). (82) Since eV does not depend on w,
+
+∂ eV ⊤
+
+∂w = 0(M +1) N ×N . (83) From Eq. (78) and Eq. (35) in [9], we obtain 
+
+∂f (y)
+
+∂w = ∂y
+
+∂w
+
+∂f (y)
+
+∂y = h(x) ⊗ F ′(y), (84) 
+
+∂f ′(y)
+
+∂w = ∂y
+
+∂w
+
+∂f ′(y)
+
+∂y = h(x) ⊗ F ′′ (y), (85) 
+
+∂f ′′ (y)
+
+∂w = ∂y
+
+∂w
+
+∂f ′′ (y)
+
+∂y = h(x) ⊗ F ′′′ (y). (86) By substituting Eqs. (82), (83), and (86) into Eq. (74), we obtain 
+
+∂δ eV f ′′ (y)
+
+∂w = ∂δ ∂w eV f ′′ (y) + δ ∂ eV ⊤
+
+∂w f ′′ (y) + δ ∂f ′′ (y)
+
+∂w eV ⊤
+
+= h(x) ⊗ (s′(z)F ′(y) eV ⊤ eV f ′′ (y) + δF ′′′ (y) eV ⊤),
+
+where Eq. (69) was used. PREPRINT 16 
+
+Lemma 4. 
+
+∂s ′(z)(1 + f (y)⊤f (y)) 
+
+∂w = h(x)⊗
+
+
+
+s′′ (z)(1 + f (y)⊤f (y)) F ′(y) eV ⊤ + 2 s′(z)F ′(y)f (y)
+
+
+
+∈ R(M +1) N . (87) 
+
+Proof. Substituting Eqs. (77) and (84) into Eq. (72) yields 
+
+∂s ′(z)(1 + f (y)⊤f (y)) 
+
+∂w
+
+= ∂s ′(z)
+
+∂w (1 + f (y)⊤f (y)) + 2 s′(z) ∂f (y)
+
+∂w f (y)= h(x) ⊗
+
+
+
+s′′ (z)(1 + f (y)⊤f (y)) F ′(y) eV ⊤
+
++ 2 s′(z)F ′(y)f (y)
+
+
+
+,
+
+where Eq. (69) was used. 
+
+3) Completion of the Proof: From Eqs. (21), (22), (23), (75), (81), and (87), 
+
+h(xi) ⊗ WI 
+
+> i
+
+= (1 + x⊤ 
+
+> i
+
+xi) ∂s ′(zi)∥F ′(yi) eV ⊤∥2
+
+∂w ,
+
+h(xi) ⊗ WII  
+
+> i
+
+= (1 + x⊤ 
+
+> i
+
+xi) ∂δ i eV f ′′ (yi)
+
+∂w ,
+
+h(xi) ⊗ WIII  
+
+> i
+
+= ∂s ′(zi)(1 + f (yi)⊤f (yi)) 
+
+∂w
+
+hold. Therefore, from Eq. (71), we obtain 
+
+∂tr( HL(θ)) 
+
+∂w =
+
+> I
+
+X
+
+> i=1
+
+∂s ′(zi)(1 + f (yi)⊤f (yi)) 
+
+∂w
+
++
+
+> I
+
+X
+
+> i=1
+
+(1 + x⊤ 
+
+> i
+
+xi)
+
+ ∂s ′(zi)∥F ′(yi) eV ⊤∥2
+
+∂w + ∂δ i eV f ′′ (yi)
+
+∂w
+
+
+
+=
+
+> I
+
+X
+
+> i=1
+
+h(xi) ⊗ (WI 
+
+> i
+
++ WII  
+
+> i
+
++ WIII  
+
+> i
+
+).
+
+C. Proof for Eq. (24) 
+
+1) Individual Gradients: 
+
+Lemma 5. 
+
+∂s ′(z)∥F ′(y) eV ⊤∥2
+
+∂v =
+
+
+
+s′′ (z)h(f (y)) eV F ′(y)+ 2 s′(z)F ′
+
+> 0
+
+(y)
+
+
+
+F ′(y) eV ⊤ ∈ RN +1 . (88) 
+
+Proof. Using Eq. (55) in [9], we obtain 
+
+∂s ′(z)
+
+∂v = ∂s ′(z)
+
+∂z ∂z ∂v = s′′ (z)h(f (y)) . (89) We also have 
+
+∂F ′(y) eV ⊤
+
+∂v = ∂f ′(y) ⊙ eV ⊤
+
+∂v
+
+= f ′(y1) ∂v 1 
+
+> ∂v
+
+· · · f ′(yN ) ∂v N
+
+> ∂v
+
+
+
+=  ∂v 1 
+
+> ∂v
+
+· · · ∂v N
+
+> ∂v
+
+ F ′(y) = 
+
+ 0⊤
+
+> N
+
+EN
+
+
+
+F ′(y) = F ′
+
+> 0
+
+(y). (90) Therefore, from Eq. (73), 
+
+∂s ′(z)∥F ′(y) eV ⊤∥2
+
+∂v
+
+=
+
+ ∂s ′(z)
+
+∂v eV F ′(y) + 2 s′(z) ∂F ′(y) eV ⊤
+
+∂v
+
+
+
+F ′(y) eV ⊤
+
+=
+
+
+
+s′′ (z)h(f (y)) eV F ′(y) + 2 s′(z)F ′
+
+> 0
+
+(y)
+
+
+
+F ′(y) eV ⊤
+
+is obtained. 
+
+Lemma 6. 
+
+∂δ eV f ′′ (y)
+
+∂v = s′(z)h(f (y)) eV f ′′ (y) + δf ′′  
+
+> 0
+
+(y) ∈ RN +1 .
+
+(91) 
+
+Proof. Since f ′′ (y) does not depend on v, and eV contains v,
+
+∂f ′′ (y)
+
+∂v = 0(N +1) ×N , ∂ eV ⊤
+
+∂v =
+
+ 0⊤
+
+> N
+
+EN
+
+
+
+.
+
+Furthermore, from Eq. (62) in [9], we obtain 
+
+∂δ ∂v = ∂p ∂v = s′(z)h(f (y)) . (92) Substituting these results into Eq. (74), 
+
+∂δ eV f ′′ (y)
+
+∂v = ∂δ ∂v eV f ′′ (y) + δ ∂ eV ⊤
+
+∂v f ′′ (y) + δ ∂f ′′ (y)
+
+∂v eV ⊤
+
+= s′(z)h(f (y)) eV f ′′ (y) + δ
+
+ 0⊤
+
+> N
+
+EN
+
+
+
+f ′′ (y)= s′(z)h(f (y)) eV f ′′ (y) + δf ′′  
+
+> 0
+
+(y)
+
+holds. 
+
+Lemma 7. 
+
+∂s ′(z)(1 + f (y)⊤f (y)) 
+
+∂v
+
+= s′′ (z)(1 + f (y)⊤f (y)) h(f (y)) ∈ RN +1 . (93) 
+
+Proof. Since f (y) does not depend on v,
+
+∂f (y)
+
+∂v = 0(N +1) ×N . (94) Substituting Eqs. (94) and (89) into Eq. (72), we obtain Eq. (93). 
+
+2) Completion of the Proof: Substituting Eqs. (88), (91), and (93) into Eq. (71), we obtain 
+
+∂tr( HL(θ)) 
+
+∂v =
+
+> I
+
+X
+
+> i=1
+
+∂s ′(zi)(1 + f (yi)⊤f (yi)) 
+
+∂v
+
++
+
+> I
+
+X
+
+> i=1
+
+(1 + x⊤ 
+
+> i
+
+xi)
+
+ ∂s ′(zi)∥F ′(yi) eV ⊤∥2
+
+∂v + ∂δ eV f ′′ (yi)
+
+∂v
+
+
+
+=
+
+> I
+
+X
+
+> i=1
+
+(VI 
+
+> i
+
++ VII  
+
+> i
+
++ VIII  
+
+> i
+
+),
+
+where Eqs. (25), (26), and (27) were used. PREPRINT 17 
+
+D. Proof for Eq. (28) 
+
+1) Gradient Decomposition: From Eq. (4), 
+
+∂tr( HL(θ)2)
+
+∂θ =
+
+> I
+
+X
+
+> i=1
+> I
+
+X
+
+> j=1
+
+(1 + x⊤ 
+
+> i
+
+xj )2 ∂ϕ ij 
+
+∂θ
+
++ 2 
+
+> I
+
+X
+
+> i=1
+> I
+
+X
+
+> j=1
+
+(1 + x⊤ 
+
+> i
+
+xj ) ∂ψ ij 
+
+∂θ
+
++
+
+> I
+
+X
+
+> i=1
+> I
+
+X
+
+> j=1
+
+(1 + f (yi)⊤f (yj )) 2 ∂ω ij 
+
+∂θ
+
++
+
+> I
+
+X
+
+> i=1
+> I
+
+X
+
+> j=1
+
+∂(1 + f (yi)⊤f (yj )) 2
+
+∂θ ωij (95) holds. We decompose it into three parts 
+
+"
+
+∂tr( HL(θ)2)
+
+∂θ†
+
+#
+
+> Φ
+
+=
+
+> I
+
+X
+
+> i=1
+> I
+
+X
+
+> j=1
+
+(1 + x⊤ 
+
+> i
+
+xj )2 ∂ϕ ij 
+
+∂θ† , (96) 
+
+"
+
+∂tr( HL(θ)2)
+
+∂θ†
+
+#
+
+> Ψ
+
+= 2 
+
+> I
+
+X
+
+> i=1
+> I
+
+X
+
+> j=1
+
+(1 + x⊤ 
+
+> i
+
+xj ) ∂ψ ij 
+
+∂θ† , (97) 
+
+"
+
+∂tr( HL(θ)2)
+
+∂θ†
+
+#
+
+> Ω
+
+=
+
+> I
+
+X
+
+> i=1
+> I
+
+X
+
+> j=1
+
+(1 + f (yi)⊤f (yj )) 2 ∂ω ij 
+
+∂θ†
+
++
+
+> I
+
+X
+
+> i=1
+> I
+
+X
+
+> j=1
+
+∂(1 + f (yi)⊤f (yj )) 2
+
+∂θ† ωij , θ† ∈ { w, v}. (98) 
+
+Lemma 8. 
+
+∂ϕ ij 
+
+∂θ = ∂ϕij 
+
+∂θ (oi ⊗ oj ) + ∂oi
+
+∂θ Φij oj + ∂oj
+
+∂θ Φji oi, (99) 
+
+∂ψ ij 
+
+∂θ = ∂ψij 
+
+∂θ (oi ⊗ oj ) + ∂oi
+
+∂θ Ψij oj + ∂oj
+
+∂θ Ψji oi, (100) 
+
+∂ϕ ij 
+
+∂θ , ∂ψ ij 
+
+∂θ ∈ RD .
+
+Proof. Since quadratic forms are equivalent to inner products, from Eq. (63) we have 
+
+∂ϕ ij 
+
+∂θ = ∂o⊤ 
+
+> i
+
+Φij oj
+
+∂θ =
+
+ ∂(o⊤ 
+
+> i
+
+Φij )⊤
+
+∂θ
+
+
+
+oj +
+
+ ∂oj
+
+∂θ
+
+
+
+(o⊤ 
+
+> i
+
+Φij )⊤
+
+=
+
+ ∂Φ⊤ 
+
+> ij
+
+oi
+
+∂θ
+
+
+
+oj +
+
+ ∂oj
+
+∂θ
+
+
+
+Φ⊤ 
+
+> ij
+
+oi
+
+= ∂ϕij 
+
+∂θ (oi ⊗ oj ) + ∂oi
+
+∂θ Φij oj + ∂oj
+
+∂θ Φ⊤ 
+
+> ij
+
+oi
+
+= ∂ϕij 
+
+∂θ (oi ⊗ oj ) + ∂oi
+
+∂θ Φij oj + ∂oj
+
+∂θ Φji oi.
+
+Using Eqs. (6)–(9), we obtain 
+
+Φ⊤ 
+
+> ij
+
+= Φji 
+
+and we also use 
+
+∂Φ⊤ 
+
+> ij
+
+oi
+
+∂θ oj =
+
+∂
+
+(Φ⊤ 
+
+> ij
+
+)1: oi
+
+(Φ⊤ 
+
+> ij
+
+)2: oi
+
+
+
+∂θ oj
+
+=
+
+h ∂(Φ⊤  
+
+> ij )1: oi
+> ∂θ
+> ∂(Φ⊤
+> ij )2: oi
+> ∂θ
+
+i s′(zj )
+
+δj
+
+
+
+= s′(zj ) ∂(Φ⊤ 
+
+> ij
+
+)1: oi
+
+∂θ + δj
+
+∂(Φ⊤ 
+
+> ij
+
+)2: oi
+
+∂θ
+
+= s′(zj )
+
+ ∂(Φij )11 s′(zi)
+
+∂θ + ∂(Φij )21 δi
+
+∂θ
+
+
+
++ δj
+
+ ∂(Φij )12 s′(zi)
+
+∂θ + ∂(Φij )22 δi
+
+∂θ
+
+
+
+= s′(zj )s′(zi) ∂(Φij )11 
+
+∂θ + δj s′(zi) ∂(Φij )12 
+
+∂θ
+
++ s′(zj )δi
+
+∂(Φij )21 
+
+∂θ + δj δi
+
+∂(Φij )22 
+
+∂θ
+
++ s′(zj )( Φij )11 
+
+∂s ′(zi)
+
+∂θ + s′(zj )( Φij )21 
+
+∂δ i
+
+∂θ
+
++ δj (Φij )12 
+
+∂s ′(zi)
+
+∂θ + δj (Φij )22 
+
+∂δ i
+
+∂θ
+
+= ∂ϕij 
+
+∂θ (oi ⊗ oj ) + ∂oi
+
+∂θ Φij oj .
+
+From these results, ∂ψ ij / ∂ θ can be proved in the same manner. Note that ϕij is the vector obtained by flattening Φij ,and ψij is the vector obtained by flattening Ψij , respectively, i.e., 
+
+ϕij = (Φij )11 (Φij )12 (Φij )21 (Φij )22 
+
+⊤ ,
+
+ψij = (Ψij )11 (Ψij )12 (Ψij )21 (Ψij )22 
+
+⊤ .
+
+Also, the Jacobians are given by 
+
+∂ϕij 
+
+∂θ =
+
+h ∂(Φij )11    
+
+> ∂θ
+> ∂(Φij )12
+> ∂θ
+> ∂(Φij )21
+> ∂θ
+> ∂(Φij )22
+> ∂θ
+
+i
+
+, (101) 
+
+∂ψij 
+
+∂θ =
+
+h ∂(Ψij )11    
+
+> ∂θ
+> ∂(Ψij )12
+> ∂θ
+> ∂(Ψij )21
+> ∂θ
+> ∂(Ψij )22
+> ∂θ
+
+i
+
+. (102) 
+
+Lemma 9. 
+
+∂ω ij 
+
+∂θ = ∂s ′(zi)
+
+∂θ s′(zj ) + ∂s ′(zj )
+
+∂θ s′(zi) ∈ RD×1. (103) 
+
+Proof. From Eq. (16), 
+
+∂ω ij 
+
+∂θ = ∂o⊤ 
+
+> i
+
+Ωij oj
+
+∂θ = ∂s ′(zi)s′(zj )
+
+∂θ
+
+= ∂s ′(zi)
+
+∂θ s′(zj ) + ∂s ′(zj )
+
+∂θ s′(zi)
+
+is obtained. 
+
+2) Gradient with Respect to Affine Parameters from Input to Hidden Layer: ∂ϕ ij / ∂ θ contains ∂o/ ∂ θ. Therefore, we show the Jacobian of o with respect to w here. 
+
+Lemma 10. 
+
+∂o
+
+∂w = h(x) ⊗ (F ′(y) eV ⊤s′′ /′(z)⊤) ∈ R(M +1) N ×2. (104) PREPRINT 18 
+
+Proof. From Eqs. (35), (68), (70), (77), and (82), 
+
+∂o
+
+∂w =
+
+h ∂s ′(z)
+
+> ∂w
+> ∂δ ∂w
+
+i
+
+=
+
+h
+
+h(x) ⊗ (s′′ (z)F ′(y) eV ⊤) h(x) ⊗ (s′(z)F ′(y) eV ⊤)
+
+i
+
+= h(x) ⊗
+
+h
+
+s′′ (z)F ′(y) eV ⊤ s′(z)F ′(y) eV ⊤
+
+i
+
+= h(x) ⊗ F ′(y) eV ⊤ s′′ (z) s′(z)
+
+= h(x) ⊗ (F ′(y) eV ⊤s′′ /′(z)⊤)
+
+is obtained. 
+
+3) Gradients of the Phi Term: Here, we clarify 
+
+[∂tr( HL(θ)2)/ ∂ w]Φ shown in Eq. (96). 
+
+Lemma 11. 
+
+∂(Φij )11 
+
+∂w = h(xi) ⊗ aΦ 
+
+> ij
+
++ h(xj ) ⊗ aΦ 
+
+> ji
+
+∈ R(M +1) N . (105) 
+
+Proof. From yn = PMm=1 wnm xm + bn, wnm appears only in 
+
+yn. Also, from Eq. (6), 
+
+∂(Φij )1/211 
+
+∂w nm 
+
+= v2
+
+> n
+
+∂f ′(yjn )f ′(yin )
+
+∂w nm 
+
+= v2
+
+> n
+
+ ∂f ′(yjn )
+
+∂w nm 
+
+f ′(yin ) + ∂f ′(yin )
+
+∂w nm 
+
+f ′(yjn )
+
+
+
+= v2
+
+> n
+
+ ∂f ′(yjn )
+
+∂y jn 
+
+∂y jn 
+
+∂w nm 
+
+f ′(yin ) + ∂f ′(yin )
+
+∂y in 
+
+∂y in 
+
+∂w nm 
+
+f ′(yjn )
+
+
+
+= v2
+
+> n
+
+
+
+f ′′ (yjn )xjm f ′(yin ) + f ′′ (yin )xim f ′(yjn )
+
+
+
+holds. Therefore, 
+
+∂(Φij )1/211 
+
+∂W:m
+
+= eV ⊙2⊤ ⊙
+
+
+
+xim f ′′ (yi) ⊙ f ′(yj ) + xjm f ′′ (yj ) ⊙ f ′(yi)
+
+
+
+= xim F ′′ (yi)F ′(yj ) eV ⊙2⊤ + xjm F ′′ (yj )F ′(yi) eV ⊙2⊤
+
+is obtained, where eV ⊙2⊤ = eV ⊤ ⊙ eV ⊤. Using this, we obtain 
+
+∂(Φij )1/211 
+
+∂w = h(xi) ⊗ (F ′′ (yi)F ′(yj ) eV ⊙2⊤)+ h(xj ) ⊗ (F ′′ (yj )F ′(yi) eV ⊙2⊤).
+
+Therefore, using Eq. (37), we obtain 
+
+∂(Φij )11 
+
+∂w = ∂(Φij )11 
+
+∂(Φij )1/211 
+
+∂(Φij )1/211 
+
+∂w
+
+= 2( Φij )1/211 
+
+
+
+h(xi) ⊗ (F ′′ (yi)F ′(yj ) eV ⊙2⊤)+ h(xj ) ⊗ (F ′′ (yj )F ′(yi) eV ⊙2⊤)
+
+
+
+= h(xi) ⊗ (2( Φij )1/211 F ′′ (yi)F ′(yj ) eV ⊙2⊤)+ h(xj ) ⊗ (2( Φji )1/211 F ′′ (yj )F ′(yi) eV ⊙2⊤)= h(xi) ⊗ aΦ 
+
+> ij
+
++ h(xj ) ⊗ aΦ
+
+> ji
+
+.
+
+Note that we utilized (Φij )11 = ( Φji )11 from Eq. (6). 
+
+Lemma 12. 
+
+∂(Φij )12 
+
+∂w = h(xi) ⊗ bΦ 
+
+> ij
+
++ h(xj ) ⊗ cΦ 
+
+> ji
+
+∈ R(M +1) N , (106) 
+
+∂(Φij )21 
+
+∂w = h(xi) ⊗ cΦ 
+
+> ij
+
++ h(xj ) ⊗ bΦ 
+
+> ji
+
+∈ R(M +1) N . (107) 
+
+Proof. From yn = PMm=1 wnm xm + bn, wnm appears only in 
+
+yn. Also, from Eq. (7), 
+
+∂(Φij )12 
+
+∂w nm 
+
+= v3
+
+> n
+
+∂f ′(yin )2f ′′ (yjn )
+
+∂w nm 
+
+= v3
+
+> n
+
+ ∂f ′(yin )2
+
+∂w nm 
+
+f ′′ (yjn ) + ∂f ′′ (yjn )
+
+∂w nm 
+
+f ′(yin )2
+
+
+
+= 2 xim v3
+
+> n
+
+f ′(yin )f ′′ (yin )f ′′ (yjn ) + xjm v3
+
+> n
+
+f ′′′ (yjn )f ′(yin )2,
+
+where 
+
+∂f ′(yin )2
+
+∂w nm 
+
+= ∂f ′(yin )2
+
+∂f ′(yin )
+
+∂f ′(yin )
+
+∂y in 
+
+∂y in 
+
+∂w nm 
+
+,∂f ′′ (yjn )
+
+∂w nm 
+
+= ∂f ′′ (yjn )
+
+∂y jn 
+
+∂y jn 
+
+∂w nm 
+
+are utilized. Thus, we have 
+
+∂(Φij )12 
+
+∂W:m
+
+= 2 xim eV ⊙3⊤ ⊙ f ′(yi) ⊙ f ′′ (yi) ⊙ f ′′ (yj )+ xjm eV ⊙3⊤ ⊙ f ′′′ (yj ) ⊙ f ′(yi)⊙2
+
+= 2 xim F ′(yi)F ′′ (yi)F ′′ (yj ) eV ⊙3⊤
+
++ xjm F ′′′ (yj )F ′(yi)2 eV ⊙3⊤
+
+and using Eqs. (38) and (39) yields 
+
+∂(Φij )12 
+
+∂w = h(xi) ⊗  2F ′(yi)F ′′ (yi)F ′′ (yj ) eV ⊙3⊤
+
++ h(xj ) ⊗  F ′′′ (yj )F ′(yi)2 eV ⊙3⊤
+
+= h(xi) ⊗ bΦ 
+
+> ij
+
++ h(xj ) ⊗ cΦ
+
+> ji
+
+.
+
+Also, since (Φij )21 = ( Φji )12 from Eqs. (7) and (8), 
+
+∂(Φij )21 
+
+∂w = ∂(Φji )12 
+
+∂w = h(xi) ⊗ cΦ 
+
+> ij
+
++ h(xj ) ⊗ bΦ
+
+> ji
+
+is obtained. 
+
+Lemma 13. 
+
+∂(Φij )22 
+
+∂w = h(xi) ⊗ dΦ 
+
+> ij
+
++ h(xj ) ⊗ dΦ 
+
+> ji
+
+∈ R(M +1) N . (108) 
+
+Proof. From yn = PMm=1 wnm xm + bn, wnm appears only in 
+
+yn. Also, from Eq. (9), since 
+
+∂(Φij )22 
+
+∂w nm 
+
+= v2
+
+> n
+
+∂f ′′ (yin )f ′′ (yjn )
+
+∂w nm 
+
+= v2
+
+> n
+
+ ∂f ′′ (yin )
+
+∂w nm 
+
+f ′′ (yjn ) + ∂f ′′ (yjn )
+
+∂w nm 
+
+f ′′ (yin )
+
+
+
+= v2
+
+> n
+
+ ∂f ′′ (yin )
+
+∂y in 
+
+∂y in 
+
+∂w nm 
+
+f ′′ (yjn ) + ∂f ′′ (yjn )
+
+∂y jn 
+
+∂y jn 
+
+∂w nm 
+
+f ′′ (yin )
+
+
+
+= v2
+
+> n
+
+ xim f ′′′ (yin )f ′′ (yjn ) + xjm f ′′′ (yjn )f ′′ (yin ),
+
+we have 
+
+∂(Φij )22 
+
+∂W:m
+
+= xim F ′′′ (yi)F ′′ (yj ) eV ⊙2⊤
+
++ xjm F ′′′ (yj )F ′′ (yi) eV ⊙2⊤PREPRINT 19 
+
+and using Eq. (40), 
+
+∂(Φij )22 
+
+∂w = h(xi) ⊗  F ′′′ (yi)F ′′ (yj ) eV ⊙2⊤
+
++ h(xj ) ⊗  F ′′′ (yj )F ′′ (yi) eV ⊙2⊤
+
+= h(xi) ⊗ dΦ 
+
+> ij
+
++ h(xj ) ⊗ dΦ
+
+> ji
+
+is obtained. 
+
+Lemma 14. 
+
+"
+
+∂tr( HL(θ)2)
+
+∂w
+
+#
+
+> Φ
+
+=
+
+> I
+
+X
+
+> i=1
+> I
+
+X
+
+> j=1
+
+
+
+h(xi) ⊗ (AΦ 
+
+> ij
+
++ BΦ 
+
+> ij
+
+) + h(xj ) ⊗ (AΦ 
+
+> ji
+
++ BΦ
+
+> ji
+
+)
+
+
+
+. (109) 
+
+Proof. Since the Kronecker product of oi and oj is given by 
+
+oi ⊗ oj = s′(zi)s′(zj ) s′(zi)δj δis′(zj ) δiδj
+
+⊤ ,
+
+(110) we have 
+
+aΦ 
+
+> ji
+
+cΦ 
+
+> ji
+
+bΦ 
+
+> ji
+
+dΦ
+
+> ji
+
+ (oi ⊗ oj )= aΦ 
+
+> ji
+
+bΦ 
+
+> ji
+
+cΦ 
+
+> ji
+
+dΦ
+
+> ji
+
+ (oj ⊗ oi) ∈ RN . (111) From Eqs. (36), (101), (105), (106), (107), (108), (110), and (111), the first term of Eq. (99) becomes 
+
+∂ϕij 
+
+∂w (oi ⊗ oj )=
+
+h ∂(Φij )11    
+
+> ∂w
+> ∂(Φij )12
+> ∂w
+> ∂(Φij )21
+> ∂w
+> ∂(Φij )22
+> ∂w
+
+i
+
+(oi ⊗ oj )= h(xi) ⊗ aΦ 
+
+> ij
+
+bΦ 
+
+> ij
+
+cΦ 
+
+> ij
+
+dΦ
+
+> ij
+
+ (oi ⊗ oj )+ h(xj ) ⊗ aΦ 
+
+> ji
+
+cΦ 
+
+> ji
+
+bΦ 
+
+> ji
+
+dΦ
+
+> ji
+
+ (oi ⊗ oj )= h(xi) ⊗ aΦ 
+
+> ij
+
+bΦ 
+
+> ij
+
+cΦ 
+
+> ij
+
+dΦ
+
+> ij
+
+ (oi ⊗ oj )+ h(xj ) ⊗ aΦ 
+
+> ji
+
+bΦ 
+
+> ji
+
+cΦ 
+
+> ji
+
+dΦ
+
+> ji
+
+ (oj ⊗ oi)= h(xi) ⊗ GΦ 
+
+> ij
+
+(oi ⊗ oj ) + h(xj ) ⊗ GΦ
+
+> ji
+
+(oj ⊗ oi). (112) From Eqs. (68) and (104), the second and third terms of Eq. (99) become 
+
+∂oi
+
+∂w Φij oj = h(xi) ⊗ (F ′(yi) eV ⊤s′′ /′(zi)⊤Φij oj ), (113) 
+
+∂oj
+
+∂w Φji oi = h(xj ) ⊗ (F ′(yj ) eV ⊤s′′ /′(zj )⊤Φji oi). (114) From Eqs. (29), (32), (69), (96), (99), (112), (113), and (114), 
+
+"
+
+∂tr( HL(θ)2)
+
+∂w
+
+#
+
+> Φ
+
+=
+
+> I
+
+X
+
+> i=1
+> I
+
+X
+
+> j=1
+
+(1 + x⊤ 
+
+> i
+
+xj )2 ∂ϕ ij 
+
+∂w
+
+=
+
+> I
+
+X
+
+> i=1
+> I
+
+X
+
+> j=1
+
+
+
+h(xi) ⊗ (AΦ 
+
+> ij
+
++ BΦ 
+
+> ij
+
+) + h(xj ) ⊗ (AΦ 
+
+> ji
+
++ BΦ
+
+> ji
+
+)
+
+
+
+holds. 
+
+4) Gradients of the Psi Term: Here, we clarify 
+
+[∂tr( HL(θ)2)/ ∂ w]Ψ shown in Eq. (97). 
+
+Lemma 15. 
+
+∂(Ψij )11 
+
+∂w = h(xi) ⊗ aΨ 
+
+> ij
+
++ h(xj ) ⊗ aΨ 
+
+> ji
+
+∈ R(M +1) N .
+
+(115) 
+
+Proof. From Eq. (12), 
+
+∂(Ψij )11 
+
+∂θ = ∂(1 + f (yi)⊤f (yj )) eV F ′(yj )F ′(yi) eV ⊤
+
+∂θ
+
+= ∂f (yi)⊤f (yj )
+
+∂θ eV F ′(yj )F ′(yi) eV ⊤
+
++ (1 + f (yi)⊤f (yj )) ∂ eV F ′(yj )F ′(yi) eV ⊤
+
+∂θ
+
+=
+
+ ∂f (yi)
+
+∂θ f (yj ) + ∂f (yj )
+
+∂θ f (yi)
+
+eV F ′(yj )F ′(yi) eV ⊤
+
++ (1 + f (yi)⊤f (yj )) 
+
+×
+
+ ∂F ′(yj ) eV ⊤
+
+∂θ F ′(yi) + ∂F ′(yi) eV ⊤
+
+∂θ F ′(yj )
+
+eV ⊤ (116) holds. Note that eV F ′(yj )F ′(yi) eV ⊤ is an inner product because eV F ′(yj ) is a row vector and F ′(yi) eV ⊤ is a column vector. Therefore, Eq. (63) is applied. From Eqs. (42), (68), (79), (84), and (116), 
+
+∂(Ψij )11 
+
+∂w =
+
+
+
+h(xi) ⊗ (F ′(yi)f (yj )) + h(xj ) ⊗ (F ′(yj )f (yi)) 
+
+ eV F ′(yj )F ′(yi) eV ⊤
+
++ (1 + f (yi)⊤f (yj )) 
+
+
+
+h(xj ) ⊗ (diag( eV ⊤)F ′′ (yj )F ′(yi)) + h(xi) ⊗ (diag( eV ⊤)F ′′ (yi)F ′(yj )) 
+
+ eV ⊤
+
+= h(xi) ⊗
+
+ F ′(yi)f (yj ) eV F ′(yi)+ diag( eV ⊤)F ′′ (yi)(1 + f (yi)⊤f (yj )) F ′(yj ) eV ⊤
+
++ h(xj ) ⊗
+
+
+
+(F ′(yj )f (yi) eV F ′(yj )+ diag( eV ⊤)F ′′ (yj )(1 + f (yj )⊤f (yi))) F ′(yi) eV ⊤
+
+= h(xi) ⊗ aΨ 
+
+> ij
+
++ h(xj ) ⊗ aΨ
+
+> ji
+
+is obtained. 
+
+Lemma 16. 
+
+∂(Ψij )12 
+
+∂w = h(xi) ⊗ bΨ 
+
+> ij
+
++ h(xj ) ⊗ cΨ 
+
+> ji
+
+∈ R(M +1) N , (117) 
+
+∂(Ψij )21 
+
+∂w = h(xi) ⊗ cΨ 
+
+> ij
+
++ h(xj ) ⊗ bΨ 
+
+> ji
+
+∈ R(M +1) N . (118) 
+
+Proof. From Eq. (13), 
+
+∂(Ψij )12 
+
+∂θ = ∂f (yi)⊤F ′(yj )F ′(yi) eV ⊤
+
+∂θ
+
+= ∂F ′(yj )f (yi)
+
+∂θ F ′(yi) eV ⊤ + ∂F ′(yi) eV ⊤
+
+∂θ F ′(yj )f (yi)
+
+(119) holds. Note that f (yi)⊤F ′(yj )F ′(yi) eV ⊤ is an inner prod-uct because f (yi)⊤F ′(yj ) is a row vector and F ′(yi) eV ⊤PREPRINT 20 
+
+is a column vector. Therefore, Eq. (63) is applied. Since 
+
+F ′(yj )f (yi) = f ′(yj1)f (yi1) · · · f ′(yjN )f (yiN )⊤, deriving the partial derivative of f ′(yjn )f (yin ) with respect to wnm 
+
+yields 
+
+∂f ′(yjn )f (yin )
+
+∂w nm 
+
+= ∂f ′(yjn )
+
+∂w nm 
+
+f (yin ) + ∂f (yin )
+
+∂w nm 
+
+f ′(yjn )= ∂f ′(yjn )
+
+∂y jn 
+
+∂y jn 
+
+∂w nm 
+
+f (yin ) + ∂f (yin )
+
+∂y in 
+
+∂y in 
+
+∂w nm 
+
+f ′(yjn )= xjm f ′′ (yjn )f (yin ) + xim f ′(yin )f ′(yjn ).
+
+Therefore, 
+
+∂F ′(yj )f (yi)
+
+∂w nm 
+
+=
+
+h ∂f ′(yj1)f (yi1) 
+
+> ∂w nm
+
+· · · ∂f ′(yjn )f (yin ) 
+
+> ∂w nm
+
+· · · ∂f ′(yjN )f (yiN )
+
+> ∂w nm
+
+i
+
+= 0 · · · xjm f ′′ (yjn )f (yin ) + xim f ′(yin )f ′(yjn ) · · · 0 ,
+
+and 
+
+∂F ′(yj )f (yi)
+
+∂W:m
+
+= xim F ′(yj )F ′(yi) + xjm F ′′ (yj )F (yi),∂F ′(yj )f (yi)
+
+∂w = h(xi) ⊗ (F ′(yj )F ′(yi)) + h(xj ) ⊗ (F ′′ (yj )F (yi)) (120) are obtained. Finally, from Eqs. (43), (44), (68), (69), (79), (119), and (120), we obtain 
+
+∂(Ψij )12 
+
+∂w =
+
+
+
+h(xi) ⊗ (F ′(yj )F ′(yi)) + h(xj ) ⊗ (F ′′ (yj )F (yi)) 
+
+
+
+F ′(yi) eV ⊤
+
++ h(xi) ⊗ (diag( eV ⊤)F ′′ (yi)F ′(yj )f (yi)) = h(xi) ⊗ (( F ′(yi)2 + F ′′ (yi)F (yi)) F ′(yj ) eV ⊤)+ h(xj ) ⊗ (F ′′ (yj )F (yi)F ′(yi) eV ⊤)= h(xi) ⊗ bΨ 
+
+> ij
+
++ h(xj ) ⊗ cΨ
+
+> ji
+
+, (121) where 
+
+diag( eV ⊤)F ′′ (yi)F ′(yj )f (yi) = F ′′ (yi)F (yi)F ′(yj ) eV ⊤
+
+is used. Also, from Eqs. (13) and (14), 
+
+(Ψij )21 = eV F ′(yj )F ′(yi)f (yj )= f (yj )⊤F ′(yi)F ′(yj ) eV ⊤ = ( Ψji )12 (122) holds. Therefore, from Eq. (117), 
+
+∂(Ψij )21 
+
+∂w = ∂(Ψji )12 
+
+∂w = h(xi) ⊗ cΨ 
+
+> ij
+
++ h(xj ) ⊗ bΨ
+
+> ji
+
+is obtained. 
+
+Lemma 17. 
+
+∂(Ψij )22 
+
+∂w = h(xi) ⊗ dΨ 
+
+> ij
+
++ h(xj ) ⊗ dΨ 
+
+> ji
+
+∈ R(M +1) N .
+
+(123) 
+
+Proof. From Eqs. (45), (63), and (85), 
+
+∂(Ψij )22 
+
+∂w = ∂f ′(yi)⊤f ′(yj )
+
+∂w
+
+= ∂f ′(yi)
+
+∂w f ′(yj ) + ∂f ′(yj )
+
+∂w f ′(yi)= h(xi) ⊗ (F ′′ (yi)f ′(yj )) + h(xj ) ⊗ (F ′′ (yj )f ′(yi)) = h(xi) ⊗ dΨ 
+
+> ij
+
++ h(xj ) ⊗ dΨ
+
+> ji
+
+is obtained. 
+
+Lemma 18. 
+
+"
+
+∂tr( HL(θ)2)
+
+∂w
+
+#
+
+> Ψ
+
+=
+
+> I
+
+X
+
+> i=1
+> I
+
+X
+
+> j=1
+
+
+
+h(xi) ⊗ (AΨ 
+
+> ij
+
++ BΨ 
+
+> ij
+
+) + h(xj ) ⊗ (AΨ 
+
+> ji
+
++ BΨ
+
+> ji
+
+)
+
+
+
+. (124) 
+
+Proof. From Eqs. (41), (102), (111), (115), (117), (118), and (123), the first term of Eq. (100) becomes 
+
+∂ψij 
+
+∂w (oi ⊗ oj )=
+
+h ∂(Ψij )11    
+
+> ∂w
+> ∂(Ψij )12
+> ∂w
+> ∂(Ψij )21
+> ∂w
+> ∂(Ψij )22
+> ∂w
+
+i
+
+(oi ⊗ oj )= h(xi) ⊗ aΨ 
+
+> ij
+
+bΨ 
+
+> ij
+
+cΨ 
+
+> ij
+
+dΨ
+
+> ij
+
+ (oi ⊗ oj )+ h(xj ) ⊗ aΨ 
+
+> ji
+
+cΨ 
+
+> ji
+
+bΨ 
+
+> ji
+
+dΨ
+
+> ji
+
+ (oi ⊗ oj )= h(xi) ⊗ aΨ 
+
+> ij
+
+bΨ 
+
+> ij
+
+cΨ 
+
+> ij
+
+dΨ
+
+> ij
+
+ (oi ⊗ oj )+ h(xj ) ⊗ aΨ 
+
+> ji
+
+bΨ 
+
+> ji
+
+cΨ 
+
+> ji
+
+dΨ
+
+> ji
+
+ (oj ⊗ oi)= h(xi) ⊗ GΨ 
+
+> ij
+
+(oi ⊗ oj ) + h(xj ) ⊗ GΨ
+
+> ji
+
+(oj ⊗ oi). (125) From Eqs. (68) and (104), the second and third terms of Eq. (100) become 
+
+∂oi
+
+∂w Ψij oj = h(xi) ⊗ (F ′(yi) eV ⊤s′′ /′(zi)⊤Ψij oj ), (126) 
+
+∂oj
+
+∂w Ψji oi = h(xj ) ⊗ (F ′(yj ) eV ⊤s′′ /′(zj )⊤Ψji oi). (127) From Eqs. (30), (33), (69), (97), (100), (125), (126), and (127), 
+
+"
+
+∂tr( HL(θ)2)
+
+∂w
+
+#
+
+> Ψ
+
+= 2 
+
+> I
+
+X
+
+> i=1
+> I
+
+X
+
+> j=1
+
+(1 + x⊤ 
+
+> i
+
+xj ) ∂ψ ij 
+
+∂w
+
+=
+
+> I
+
+X
+
+> i=1
+> I
+
+X
+
+> j=1
+
+
+
+h(xi) ⊗ (AΨ 
+
+> ij
+
++ BΨ 
+
+> ij
+
+) + h(xj ) ⊗ (AΨ 
+
+> ji
+
++ BΨ
+
+> ji
+
+)
+
+
+
+holds. 
+
+5) Gradient of the Omega Term: With respect to ωij , the following holds. 
+
+Lemma 19. 
+
+ωij = ωji . (128) 
+
+Proof. From Eq. (16), Ωij = Ωji holds. Therefore, we obtain 
+
+ωij = o⊤ 
+
+> i
+
+Ωij oj = o⊤ 
+
+> j
+
+Ωji oi = ωji .
+
+Note that ωij = s′(zi)s′(zj ) from Eq. (10). PREPRINT 21 
+
+Lemma 20. 
+
+"
+
+∂tr( HL(θ)2)
+
+∂w
+
+#
+
+> Ω
+
+=
+
+> I
+
+X
+
+> i=1
+> I
+
+X
+
+> j=1
+
+
+
+h(xi) ⊗ (AΩ 
+
+> ij
+
++ BΩ 
+
+> ij
+
+) + h(xj ) ⊗ (AΩ 
+
+> ji
+
++ BΩ
+
+> ji
+
+)
+
+
+
+. (129) 
+
+Proof. From Eqs. (16) and (77), 
+
+∂ω ij 
+
+∂w = ∂o⊤ 
+
+> i
+
+Ωij oj
+
+∂w = ∂s ′(zi)s′(zj )
+
+∂w
+
+= ∂s ′(zi)
+
+∂w s′(zj ) + ∂s ′(zj )
+
+∂w s′(zi)= s′′ (zi)s′(zj )h(xi) ⊗ (F ′(yi) eV ⊤)+ s′′ (zj )s′(zi)h(xj ) ⊗ (F ′(yj ) eV ⊤)
+
+holds. From Eq. (31) we obtain 
+
+(1 + f (yi)⊤f (yj )) 2 ∂ω ij 
+
+∂w
+
+= h(xi) ⊗ ((1 + f (yi)⊤f (yj )) 2s′′ (zi)s′(zj )F ′(yi) eV ⊤)+ h(xj ) ⊗ ((1 + f (yj )⊤f (yi)) 2s′′ (zj )s′(zi)F ′(yj ) eV ⊤)= h(xi) ⊗ AΩ 
+
+> ij
+
++ h(xj ) ⊗ AΩ
+
+> ji
+
+.
+
+From Eqs. (34), (63), and (84), 
+
+ωij 
+
+∂(1 + f (yi)⊤f (yj )) 2
+
+∂w
+
+= ωij 
+
+∂(1 + f (yi)⊤f (yj )) 2
+
+∂(1 + f (yi)⊤f (yj )) 
+
+∂f (yi)⊤f (yj )
+
+∂w
+
+= 2 ωij (1 + f (yi)⊤f (yj )) 
+
+ ∂f (yi)
+
+∂w f (yj ) + ∂f (yj )
+
+∂w f (yi)
+
+
+
+= 2 ωij (1 + f (yi)⊤f (yj )) 
+
+× (h(xi) ⊗ F ′(yi)f (yj ) + h(xj ) ⊗ F ′(yj )f (yi)) = h(xi) ⊗ BΩ 
+
+> ij
+
++ h(xj ) ⊗ BΩ
+
+> ji
+
+holds. Therefore, from Eqs. (69) and (98), 
+
+"
+
+∂tr( HL(θ)2)
+
+∂w
+
+#
+
+> Ω
+
+=
+
+> I
+
+X
+
+> i=1
+> I
+
+X
+
+> j=1
+
+(1 + f (yi)⊤f (yj )) 2 ∂ω ij 
+
+∂w
+
++
+
+> I
+
+X
+
+> i=1
+> I
+
+X
+
+> j=1
+
+ωij 
+
+∂(1 + f (yi)⊤f (yj )) 2
+
+∂w
+
+=
+
+> I
+
+X
+
+> i=1
+> I
+
+X
+
+> j=1
+
+
+
+h(xi) ⊗ (AΩ 
+
+> ij
+
++ BΩ 
+
+> ij
+
+) + h(xj ) ⊗ (AΩ 
+
+> ji
+
++ BΩ
+
+> ji
+
+)
+
+
+
+is obtained. 
+
+6) Completion of the Proof: From Eqs. (95), (96), (97), (98), (109), (124), and (129), we have 
+
+∂tr( HL(θ)2)
+
+∂w = X
+
+> a∈B
+
+"
+
+∂tr( HL(θ)2)
+
+∂w
+
+#
+
+> a
+
+=
+
+> I
+
+X
+
+> i=1
+> I
+
+X
+
+> j=1
+
+h(xi) ⊗ (AΦ 
+
+> ij
+
++ AΨ 
+
+> ij
+
++ AΩ 
+
+> ij
+
++ BΦ 
+
+> ij
+
++ BΨ 
+
+> ij
+
++ BΩ 
+
+> ij
+
+)+
+
+> I
+
+X
+
+> i=1
+> I
+
+X
+
+> j=1
+
+h(xj ) ⊗ (AΦ 
+
+> ji
+
++ AΨ 
+
+> ji
+
++ AΩ 
+
+> ji
+
++ BΦ 
+
+> ji
+
++ BΨ 
+
+> ji
+
++ BΩ
+
+> ji
+
+)= 2 
+
+> I
+
+X
+
+> i=1
+> I
+
+X
+
+> j=1
+
+h(xi) ⊗ (WΦ 
+
+> ij
+
++ WΨ 
+
+> ij
+
++ WΩ 
+
+> ij
+
+).
+
+Therefore, Eq. (28) holds. 
+
+E. Proof for Eq. (46) 
+
+1) Gradient with Respect to Affine Parameters from Hidden to Output Layer: ∂ϕ ij / ∂ θ contains ∂o/ ∂ θ. Therefore, we present the Jacobian of o with respect to v here. 
+
+Lemma 21. 
+
+∂o
+
+∂v = h(f (y)) s′′ /′(z)⊤ ∈ R(N +1) ×2. (130) 
+
+Proof. From Eqs. (35), (89), and (92), 
+
+∂o
+
+∂v =
+
+h ∂s ′(z)
+
+> ∂v
+> ∂δ ∂v
+
+i
+
+= h(f (y)) s′′ (z) s′(z)
+
+= h(f (y)) s′′ /′(z)⊤
+
+holds, which is the Jacobian of o with respect to v.
+
+2) Gradient of the Phi Term: 
+
+Lemma 22. 
+
+∂(Φij )11 
+
+∂v = eΦ 
+
+> ij
+
++ eΦ 
+
+> ji
+
+∈ RN +1 . (131) 
+
+Proof. From Eq. (6), we have 
+
+(Φij )1/211 = eV F ′(yj )F ′(yi) eV ⊤ =
+
+> N
+
+X
+
+> n=1
+
+v2
+
+> n
+
+f ′(yjn )f ′(yin ).
+
+Therefore, 
+
+∂(Φij )1/211 
+
+∂v n
+
+=
+
+(
+
+0, n = 0 2vnf ′(yjn )f ′(yin ), n ∈ N≤N
+
+holds. Using Eq. (54), we obtain 
+
+∂(Φij )11 
+
+∂v = ∂(Φij )11 
+
+∂(Φij )1/211 
+
+∂(Φij )1/211 
+
+∂v
+
+= 4( Φij )1/211 V ⊤ ⊙ f ′
+
+> 0
+
+(yj ) ⊙ f ′
+
+> 0
+
+(yi)= 2( Φij )1/211 V ⊤ ⊙ f ′
+
+> 0
+
+(yj ) ⊙ f ′
+
+> 0
+
+(yi)+ 2( Φji )1/211 V ⊤ ⊙ f ′
+
+> 0
+
+(yi) ⊙ f ′
+
+> 0
+
+(yj )= eΦ 
+
+> ij
+
++ eΦ
+
+> ji
+
+,
+
+where (Φij )11 = ( Φji )11 from Eq. (6) is utilized. PREPRINT 22 
+
+Lemma 23. 
+
+∂(Φij )12 
+
+∂v = fΦ 
+
+> ij
+
+∈ RN +1 , (132) 
+
+∂(Φij )21 
+
+∂v = fΦ 
+
+> ji
+
+∈ RN +1 . (133) 
+
+Proof. From Eq. (7), since 
+
+(Φij )12 = eV F ′(yi)diag( eV ⊤)F ′′ (yj )F ′(yi) eV ⊤
+
+=
+
+> N
+
+X
+
+> n=1
+
+v3
+
+> n
+
+f ′(yin )2f ′′ (yjn ),
+
+we obtain 
+
+∂(Φij )12 
+
+∂v n
+
+=
+
+(
+
+0, n = 0 3v2
+
+> n
+
+f ′(yin )2f ′′ (yjn ), n ∈ N≤N
+
+.
+
+Therefore, from Eq. (55) we have 
+
+∂(Φij )12 
+
+∂v = 3 V ⊙2⊤ ⊙ f ′
+
+> 0
+
+(yi)⊙2 ⊙ f ′′  
+
+> 0
+
+(yj ) = fΦ 
+
+> ij
+
+.
+
+Also, from Eqs. (7) and (8), 
+
+∂(Φij )21 
+
+∂v = ∂(Φji )12 
+
+∂v = fΦ
+
+> ji
+
+holds. 
+
+Lemma 24. 
+
+∂(Φij )22 
+
+∂v = gΦ 
+
+> ij
+
++ gΦ 
+
+> ji
+
+∈ RN +1 . (134) 
+
+Proof. From Eq. (9) we have 
+
+∂(Φij )22 
+
+∂v n
+
+= ∂ PNn=1 v2
+
+> n
+
+f ′′ (yin )f ′′ (yjn )
+
+∂v n
+
+=
+
+(
+
+0, n = 0 2vnf ′′ (yin )f ′′ (yjn ), n ∈ N≤N
+
+.
+
+Then, from this and Eq. (56), 
+
+∂(Φij )22 
+
+∂v = 2 V ⊤ ⊙ f ′′  
+
+> 0
+
+(yi) ⊙ f ′′  
+
+> 0
+
+(yj )= V ⊤ ⊙ f ′′  
+
+> 0
+
+(yi) ⊙ f ′′  
+
+> 0
+
+(yj ) + V ⊤ ⊙ f ′′  
+
+> 0
+
+(yj ) ⊙ f ′′  
+
+> 0
+
+(yi)= gΦ 
+
+> ij
+
++ gΦ
+
+> ji
+
+holds. 
+
+Lemma 25. 
+
+"
+
+∂tr( HL(θ)2)
+
+∂v
+
+#
+
+> Φ
+
+=
+
+> I
+
+X
+
+> i=1
+> I
+
+X
+
+> j=1
+
+
+
+CΦ 
+
+> ij
+
++ DΦ 
+
+> ij
+
++ CΦ 
+
+> ji
+
++ DΦ
+
+> ji
+
+
+
+(135) 
+
+Proof. From Eqs. (53), (101), (110), (131), (132), (133), and (134), the first term of Eq. (99) becomes 
+
+∂ϕij 
+
+∂v (oi ⊗ oj )=
+
+h ∂(Φij )11    
+
+> ∂v
+> ∂(Φij )12
+> ∂v
+> ∂(Φij )21
+> ∂v
+> ∂(Φij )22
+> ∂v
+
+i
+
+(oi ⊗ oj )= s′(zi)s′(zj )( eΦ 
+
+> ij
+
++ eΦ
+
+> ji
+
+) + s′(zi)δj fΦ
+
+> ij
+
++ δis′(zj )fΦ 
+
+> ji
+
++ δiδj (gΦ 
+
+> ij
+
++ gΦ
+
+> ji
+
+)=  s′(zi)s′(zj )eΦ 
+
+> ij
+
++ s′(zi)δj fΦ 
+
+> ij
+
++ δiδj gΦ
+
+> ij
+
+
+
++  s′(zj )s′(zi)eΦ 
+
+> ji
+
++ s′(zj )δifΦ 
+
+> ji
+
++ δj δigΦ
+
+> ji
+
+
+
+= eΦ 
+
+> ij
+
+fΦ 
+
+> ij
+
+0N +1 gΦ
+
+> ij
+
+ (oi ⊗ oj )+ eΦ 
+
+> ji
+
+fΦ 
+
+> ji
+
+0N +1 gΦ
+
+> ji
+
+ (oj ⊗ oi)= KΦ 
+
+> ij
+
+(oi ⊗ oj ) + KΦ
+
+> ji
+
+(oj ⊗ oi).
+
+Also, from Eq. (130), the second and third terms of Eq. (99) become 
+
+∂oi
+
+∂v Φij oj + ∂oj
+
+∂v Φji oi
+
+= h(f (yi)) s′′ ,′(zi)⊤Φij oj + h(f (yj )) s′′ ,′(zj )⊤Φji oi.
+
+Finally, from Eqs. (47), (50), (96), and (99), 
+
+"
+
+∂tr( HL(θ)2)
+
+∂v
+
+#
+
+> Φ
+
+=
+
+> I
+
+X
+
+> i=1
+> I
+
+X
+
+> j=1
+
+(1 + x⊤ 
+
+> i
+
+xj )2 ∂ϕ ij 
+
+∂v
+
+=
+
+> I
+
+X
+
+> i=1
+> I
+
+X
+
+> j=1
+
+
+
+CΦ 
+
+> ij
+
++ DΦ 
+
+> ij
+
++ CΦ 
+
+> ji
+
++ DΦ
+
+> ji
+
+
+
+is obtained. 
+
+3) Gradient of the Psi Term: 
+
+Lemma 26. 
+
+∂(Ψij )11 
+
+∂v = eΨ 
+
+> ij
+
++ eΨ 
+
+> ji
+
+∈ RN +1 . (136) 
+
+Proof. Substituting Eqs. (90) and (94) into Eq. (116) yields 
+
+∂(Ψij )11 
+
+∂v = (1 + f (yi)⊤f (yj )) 
+
+×  F ′
+
+> 0
+
+(yj )F ′(yi) + F ′
+
+> 0
+
+(yi)F ′(yj ) eV ⊤
+
+= (1 + f (yi)⊤f (yj )) F ′
+
+> 0
+
+(yi)F ′(yj ) eV ⊤
+
++ (1 + f (yj )⊤f (yi)) F ′
+
+> 0
+
+(yj )F ′(yi) eV ⊤
+
+= eΨ 
+
+> ij
+
++ eΨ
+
+> ji
+
+,
+
+where Eqs. (58) are utilized. 
+
+Lemma 27. 
+
+∂(Ψij )12 
+
+∂v = fΨ 
+
+> ij
+
+∈ RN +1 , (137) 
+
+∂(Ψij )21 
+
+∂v = fΨ 
+
+> ji
+
+∈ RN +1 . (138) 
+
+Proof. Since F ′(yj )f (yi) does not depend on v, its Jacobian becomes 
+
+∂F ′(yj )f (yi)
+
+∂v = 0(N +1) ×N .PREPRINT 23 
+
+From Eqs. (59), (90), and (119), we have 
+
+∂(Ψij )12 
+
+∂v = 0(N +1) ×N F ′(yi) eV ⊤ + F ′
+
+> 0
+
+(yi)F ′(yj )f (yi)= F ′
+
+> 0
+
+(yi)F ′(yj )f (yi) = fΨ 
+
+> ij
+
+.
+
+Using Eq. (122), 
+
+∂(Ψij )21 
+
+∂v = ∂(Ψji )12 
+
+∂v = fΨ
+
+> ji
+
+is obtained. 
+
+Lemma 28. 
+
+∂(Ψij )22 
+
+∂v = 0N +1 . (139) 
+
+Proof. As it can be seen from Eq. (15), (Ψij )22 does not depend on v.
+
+Lemma 29. 
+
+"
+
+∂tr( HL(θ)2)
+
+∂v
+
+#
+
+> Ψ
+
+=
+
+> I
+
+X
+
+> i=1
+> I
+
+X
+
+> j=1
+
+
+
+CΨ 
+
+> ij
+
++ DΨ 
+
+> ij
+
++ CΨ 
+
+> ji
+
++ DΨ
+
+> ji
+
+
+
+.
+
+(140) 
+
+Proof. From Eqs. (57), (102), (110), (136), (137), (138), and (139), the first term of Eq. (100) becomes 
+
+∂ψij 
+
+∂v (oi ⊗ oj )=
+
+h ∂(Ψij )11    
+
+> ∂v
+> ∂(Ψij )12
+> ∂v
+> ∂(Ψij )21
+> ∂v
+> ∂(Ψij )22
+> ∂v
+
+i
+
+(oi ⊗ oj )= s′(zi)s′(zj )( eΨ 
+
+> ij
+
++ eΨ
+
+> ji
+
+) + s′(zi)δj fΨ 
+
+> ij
+
++ δis′(zj )fΨ
+
+> ji
+
+)=  s′(zi)s′(zj )eΨ 
+
+> ij
+
++ s′(zi)δj fΨ
+
+> ij
+
+
+
++  s′(zj )s′(zi)eΨ 
+
+> ji
+
++ s′(zj )δifΨ
+
+> ji
+
+
+
+= eΨ 
+
+> ij
+
+fΨ 
+
+> ij
+
+0N +1 0N +1 
+
+ (oi ⊗ oj )+ eΨ 
+
+> ji
+
+fΨ 
+
+> ji
+
+0N +1 0N +1 
+
+ (oj ⊗ oi)= KΨ 
+
+> ij
+
+(oi ⊗ oj ) + KΨ 
+
+> ji
+
+(oj ⊗ oi).
+
+Also, from Eq. (130), the second and third terms of Eq. (100) become 
+
+∂oi
+
+∂v Ψij oj + ∂oj
+
+∂v Ψji oi
+
+= h(f (yi)) s′′ ,′(zi)⊤Ψij oj + h(f (yj )) s′′ ,′(zj )⊤Ψji oi.
+
+From Eqs. (48), (51), (97), and (100), 
+
+"
+
+∂tr( HL(θ)2)
+
+∂v
+
+#
+
+> Ψ
+
+= 2 
+
+> I
+
+X
+
+> i=1
+> I
+
+X
+
+> j=1
+
+(1 + x⊤ 
+
+> i
+
+xj ) ∂ψ ij 
+
+∂v
+
+=
+
+> I
+
+X
+
+> i=1
+> I
+
+X
+
+> j=1
+
+
+
+CΨ 
+
+> ij
+
++ DΨ 
+
+> ij
+
++ CΨ 
+
+> ji
+
++ DΨ
+
+> ji
+
+
+
+is obtained. 
+
+4) Gradient of the Omega Term: 
+
+Lemma 30. 
+
+"
+
+∂tr( HL(θ)2)
+
+∂v
+
+#
+
+> Ω
+
+=
+
+> I
+
+X
+
+> i=1
+> I
+
+X
+
+> j=1
+
+
+
+CΩ 
+
+> ij
+
++ DΩ 
+
+> ij
+
++ CΩ 
+
+> ji
+
++ DΩ
+
+> ji
+
+
+
+.
+
+(141) 
+
+Proof. From Eqs. (16) and (89), we have 
+
+∂ω ij 
+
+∂v = ∂o⊤ 
+
+> i
+
+Ωij oj
+
+∂v = ∂s ′(zi)s′(zj )
+
+∂v
+
+= ∂s ′(zi)
+
+∂v s′(zj ) + ∂s ′(zj )
+
+∂v s′(zi)= s′′ (zi)s′(zj )h(f (yi)) + s′′ (zj )s′(zi)h(f (yj )) .
+
+From this and Eq. (49), we obtain 
+
+(1 + f (yi)⊤f (yj )) 2 ∂ω ij 
+
+∂v
+
+= s′′ (zi)s′(zj )(1 + f (yi)⊤f (yj )) 2h(f (yi)) + s′′ (zj )s′(zi)(1 + f (yj )⊤f (yi)) 2h(f (yj )) = CΩ 
+
+> ij
+
++ CΩ
+
+> ji
+
+.
+
+Using the fact that f (y) does not depend on v and Eq. (52), 
+
+ωij 
+
+∂(1 + f (yi)⊤f (yj )) 2
+
+∂v = ωij 0N +1 + ωji 0N +1 
+
+= DΩ 
+
+> ij
+
++ DΩ
+
+> ji
+
+holds, where Eq. (128) is utilized. From these and Eq. (98), 
+
+"
+
+∂tr( HL(θ)2)
+
+∂v
+
+#
+
+> Ω
+
+=
+
+> I
+
+X
+
+> i=1
+> I
+
+X
+
+> j=1
+
+
+
+(1 + f (yi)⊤f (yj )) 2 ∂ω ij 
+
+∂v + ωij 
+
+∂(1 + f (yi)⊤f (yj )) 2
+
+∂v
+
+
+
+=
+
+> I
+
+X
+
+> i=1
+> I
+
+X
+
+> j=1
+
+
+
+CΩ 
+
+> ij
+
++ DΩ 
+
+> ij
+
++ CΩ 
+
+> ji
+
++ DΩ
+
+> ji
+
+
+
+is obtained. 
+
+5) Completion of the Proof: From Eqs. (95), (96), (97), (98), (135), (140), (141), we have 
+
+∂tr( HL(θ)2)
+
+∂v = X
+
+> a∈B
+
+"
+
+∂tr( HL(θ)2)
+
+∂v
+
+#
+
+> a
+
+=
+
+> I
+
+X
+
+> i=1
+> I
+
+X
+
+> j=1
+
+(CΦ 
+
+> ij
+
++ CΨ 
+
+> ij
+
++ CΩ 
+
+> ij
+
++ DΦ 
+
+> ij
+
++ DΨ 
+
+> ij
+
++ DΩ 
+
+> ij
+
+)+
+
+> I
+
+X
+
+> i=1
+> I
+
+X
+
+> j=1
+
+(CΦ 
+
+> ji
+
++ CΨ 
+
+> ji
+
++ CΩ 
+
+> ji
+
++ DΦ 
+
+> ji
+
++ DΨ 
+
+> ji
+
++ DΩ
+
+> ji
+
+)= 2 
+
+> I
+
+X
+
+> i=1
+> I
+
+X
+
+> j=1
+
+(VΦ 
+
+> ij
+
++ VΨ 
+
+> ij
+
++ VΩ 
+
+> ij
+
+).
+
+Therefore, Eq. (46) holds. PREPRINT 24 
+
+F. Proof for Eq. (60) Each term in the gradient of tr( HL(θ)) becomes 
+
+pi → qi
+
+⇒ (s(zi) → 0 ∨ 1) ∧ (δi → 0) ⇒ s′(zi) → 0 ∧ s′′ (zi) → 0
+
+⇒
+
+
+
+h(xi) ⊗ X
+
+> a∈A
+
+Wai → 0(M +1) N
+
+
+
+∧
+
+ X
+
+> a∈A
+
+Vai → 0N +1 
+
+
+
+.
+
+Similarly, each term in the gradient of tr( HL(θ)2) becomes 
+
+pi → qi ⇒ (s(zi) → 0 ∨ 1) ∧ (δi → 0) 
+
+⇒ (s′(zi) → 0) ∧ (s′′ (zi) → 0) 
+
+⇒ (oi ⊗ oj → 04) ∧ (s′′ /′(z) → 02)
+
+⇒ (Aaij → 0N ) ∧ (Baij → 0N ) ∧ (Caij → 0N +1 )
+
+∧ (Dbij → 0N +1 ), ∀a ∈ B, ∀b ∈ B \ { Ω}⇒
+
+
+
+h(xi) ⊗ X
+
+> a∈B
+
+Waij → 0(M +1) N
+
+
+
+∧
+
+ X
+
+> a∈B
+
+Vaij → 0N +1 
+
+
+
+.
+
+Therefore, Eq. (60) holds. 
+
+G. Proof for Eq. (62) First, we focus on the upper bound. From Eq. (1), since 
+
+
+
+σ(θ(t+1) ) < σ (θ(t))
+
+
+
+∧
+
+
+
+μ(θ(t+1) ) = μ(θ(t))
+
+
+
+⇒
+
+λsup (θ(t+1) ) = μ(θ(t+1) ) + √D − 1σ(θ(t+1) )
+
+< μ (θ(t+1) ) + √D − 1σ(θ(t))= μ(θ(t)) + √D − 1σ(θ(t)) = λsup (θ(t))
+
+holds, we obtain λsup (θ(t+1) ) < λ sup (θ(t)). Next, we focus on the lower bound. From Eq. (61), since 
+
+
+
+σ(θ(t+1) ) < σ (θ(t))
+
+
+
+∧
+
+
+
+μ(θ(t+1) ) = μ(θ(t))
+
+
+
+⇒
+
+λinf (θ(t+1) ) = μ(θ(t+1) ) − √D − 1σ(θ(t+1) )
+
+> μ (θ(t+1) ) − √D − 1σ(θ(t))= μ(θ(t)) − √D − 1σ(θ(t)) = λinf (θ(t))
+
+holds, we obtain λinf (θ(t+1) ) > λ inf (θ(t)).REFERENCES [1] J. Chai, H. Zeng, A. Li, E. W. T. Ngai, Deep learning in computer vision: A critical review of emerging techniques and application scenarios, Machine Learning with Applications 6 (2021) 100134. doi:10. 1016/j.mlwa.2021.100134 .[2] A. Mehrish, N. Majumder, R. Bharadwaj, R. Mihalcea, S. Poria, A re-view of deep learning techniques for speech processing, Information Fu-sion 99 (2023) 101869. doi:10.1016/j.inffus.2023.101869 .[3] E. O. Arkhangelskaya, S. I. Nikolenko, Deep Learning for Natural Language Processing: A Survey, Journal of Mathematical Sciences 273 (4) (2023) 533–582. doi:10.1007/s10958-023-06519-6 .[4] S. Hochreiter, J. Schmidhuber, Flat minima, Neural Computation 9 (1) (1997) 1–42. doi:10.1162/neco.1997.9.1.1 .[5] Y. Liu, S. Yu, T. Lin, Hessian regularization of deep neural networks: A novel approach based on stochastic estimators of Hessian trace, Neurocomputing 536 (2023) 13–20. doi:10.1016/j.neucom. 2023.03.017 .[6] S. Arora, Z. Li, A. Panigrahi, Understanding Gradient Descent on Edge of Stability in Deep Learning (2022). arXiv:2205.09745 , doi: 10.48550/arXiv.2205.09745 .[7] K. Lyu, Z. Li, S. Arora, Understanding the Generalization Benefit of Normalization Layers: Sharpness Reduction (2023). arXiv:2206. 07085 , doi:10.48550/arXiv.2206.07085 .[8] P. Foret, A. Kleiner, H. Mobahi, B. Neyshabur, Sharpness-Aware Min-imization for Efficiently Improving Generalization (2021). arXiv: 2010.01412 , doi:10.48550/arXiv.2010.01412 .[9] Y. Omae, K. Sakai, Y. Kakimoto, M. Sasaki, Y. Sakai, H. Takahashi, Wolkowicz-Styan Upper Bound on the Hessian Eigenspectrum for Cross-Entropy Loss in Nonlinear Smooth Neural Networks, arXiv.org (2026). doi:10.48550/arXiv.2604.10202 .[10] L. Dinh, R. Pascanu, S. Bengio, Y. Bengio, Sharp Minima Can Gener-alize For Deep Nets, Proceedings of the 34th International Conference on Machine Learning (2017). doi:arXiv:1703.04933 .[11] X. Chen, C.-J. Hsieh, B. Gong, When Vision Transformers Outperform ResNets without Pre-training or Strong Data Augmentations (2022). 
+
+arXiv:2106.01548 , doi:10.48550/arXiv.2106.01548 .[12] W. Huang, X. Liu, X. Wang, J. Yamagishi, Y. Qian, From Sharpness to Better Generalization for Speech Deepfake Detection (2025). arXiv: 2506.11532 , doi:10.48550/arXiv.2506.11532 .[13] H. Li, Z. Xu, G. Taylor, C. Studer, T. Goldstein, Visualizing the Loss Landscape of Neural Nets, Advances in Neural Information Processing Systems 31 (2018). [14] N. S. Keskar, D. Mudigere, J. Nocedal, M. Smelyanskiy, P. T. P. Tang, On Large-Batch Training for Deep Learning: Generalization Gap and Sharp Minima (2017). arXiv:1609.04836 , doi:10.48550/ arXiv.1609.04836 .[15] B. Ghorbani, S. Krishnan, Y. Xiao, An Investigation into Neural Net Optimization via Hessian Eigenvalue Density, Proceedings of the 36th International Conference on Machine Learning (2019) 2232–2241. [16] L. Wu, W. J. Su, The Implicit Regularization of Dynamical Stability in Stochastic Gradient Descent (2023). arXiv:2305.17490 , doi: 10.48550/arXiv.2305.17490 .[17] M. Wei, D. J. Schwab, How noise affects the Hessian spectrum in overparameterized neural networks (2019). arXiv:1910.00195 ,
+
+doi:10.48550/arXiv.1910.00195 .[18] Torchvision — Torchvision 0.27 documentation, https://docs.pytorch.org/vision/stable/index.html. [19] K. Simonyan, A. Zisserman, Very Deep Convolutional Networks for Large-Scale Image Recognition, CoRR (2014). [20] H. Kaiming, Z. Xiangyu, R. Shaoqing, S. Jian, Deep Residual Learning for Image Recognition, 2016 IEEE Conference on Computer Vision and Pattern Recognition (CVPR) 1 (2016) 770–778. doi:10.1109/ cvpr.2016.90 .[21] M. Hutchinson, A Stochastic Estimator of the Trace of the Influence Matrix for Laplacian Smoothing Splines, Communications in Statistics - Simulation and Computation 18 (3) (1989) 1059–1076. doi:10. 1080/03610918908812806 .[22] C. Lanczos, An iteration method for the solution of the eigenvalue problem of linear differential and integral operators, Journal of Research of the National Bureau of Standards 45 (4) (1950) 255–282. [23] Z. Yao, A. Gholami, K. Keutzer, M. W. Mahoney, PyHessian: Neural Networks Through the Lens of the Hessian, 2020 IEEE International Conference on Big Data (Big Data) (2020) 581–590 doi:10.1109/ BigData50022.2020.9378171 .[24] Z. Dong, Z. Yao, D. Arfeen, A. Gholami, M. W. Mahoney, K. Keutzer, HAWQ-V2: Hessian Aware trace-Weighted Quantization of Neural Net-works, Advances in Neural Information Processing Systems 33 (2020) 18518–18529. [25] C. Bishop, Exact Calculation of the Hessian Matrix for the Multilayer Perceptron, Neural Computation 4 (4) (1992) 494–501. doi:10. 1162/neco.1992.4.4.494 .[26] S. P. Singh, G. Bachmann, T. Hofmann, Analytic Insights into Structure and Rank of Neural Network Hessian Maps (2021). arXiv:2106. 16225 , doi:10.48550/arXiv.2106.16225 .[27] Y. Wu, X. Zhu, C. Wu, A. Wang, R. Ge, Dissecting Hessian: Under-standing Common Structure of Hessian in Neural Networks (2022). 
+
+arXiv:2010.04261 , doi:10.48550/arXiv.2010.04261 .[28] S. P. Singh, W. Ormaniec, T. Hofmann, Cracking the Hessian: Closed-Form Hessian Spectra for Fundamental Neural Networks, OpenReview in ICLR2026 (2026). [29] X. Yue, M. Nouiehed, R. A. Kontar, SALR: Sharpness-aware Learning Rate Scheduler for Improved Generalization, IEEE Transactions on Neural Networks and Learning Systems 35 (9) (2024) 12518–12527. 
+
+arXiv:2011.05348 , doi:10.1109/TNNLS.2023.3263393 .PREPRINT 25 
+
+[30] A. R. Sankar, Y. Khasbage, R. Vigneswaran, V. N Balasubrama-nian, A Deeper Look at the Hessian Eigenspectrum of Deep Neural Networks and its Applications to Regularization, Proceedings of the AAAI Conference on Artificial Intelligence 35 (11) (2021) 9481–9488. 
+
+doi:10.1609/aaai.v35i11.17142 .[31] H. Luo, T. Truong, T. Pham, M. Harandi, D. Phung, T. Le, Explicit Eigenvalue Regularization Improves Sharpness-Aware Minimization (2025). arXiv:2501.12666 , doi:10.48550/arXiv.2501. 12666 .[32] J. Kwon, J. Kim, H. Park, I. K. Choi, ASAM: Adaptive Sharpness-Aware Minimization for Scale-Invariant Learning of Deep Neural Networks, Proceedings of the 38th International Conference on Machine Learning (2021) 5905–5914. [33] Y. Zhou, Y. Qu, X. Xu, H. Shen, ImbSAM: A Closer Look at Sharpness-Aware Minimization in Class-Imbalanced Recognition, 2023 IEEE/CVF International Conference on Computer Vision (ICCV) (2023) 11311– 11321 doi:10.1109/ICCV51070.2023.01042 .[34] M. Andriushchenko, N. Flammarion, Towards Understanding Sharpness-Aware Minimization, Proceedings of the 39th International Conference on Machine Learning (2022) 639–668. [35] H. R. Zhang, D. Li, H. Ju, Noise Stability Optimization for Finding Flat Minima: A Hessian-based Regularization Approach (2024). arXiv: 2306.08553 , doi:10.48550/arXiv.2306.08553 .[36] H. Wolkowicz, G. P. H. Styan, Bounds for eigenvalues using traces, Linear Algebra and its Applications 29 (1980) 471–506. doi:10. 1016/0024-3795(80)90258-X .[37] L. Sagun, L. Bottou, Y. LeCun, Eigenvalues of the Hessian in Deep Learning: Singularity and Beyond (2017). arXiv:1611.07476 ,
+
+doi:10.48550/arXiv.1611.07476 .[38] Z. Xie, Q.-Y. Tang, Y. Cai, M. Sun, P. Li, On the Power-Law Hessian Spectrums in Deep Learning (2022). arXiv:2201.13011 , doi: 10.48550/arXiv.2201.13011 .[39] V. Papyan, Traces of Class/Cross-Class Structure Pervade Deep Learning Spectra, Journal of Machine Learning Research 21 (2020). [40] M. A. Khamis, H. Q. Ngo, X. Nguyen, D. Olteanu, M. Schleich, Learning Models over Relational Data using Sparse Tensors and Functional Dependencies (2020). arXiv:1703.04780 , doi:10. 48550/arXiv.1703.04780 .
