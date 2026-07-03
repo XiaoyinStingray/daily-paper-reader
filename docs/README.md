@@ -6,79 +6,65 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-02
-- 运行时间：2026-07-02 21:56:11 UTC
+- 最新运行日期：2026-07-03
+- 运行时间：2026-07-03 21:03:15 UTC
 - 运行状态：成功
-- 本次总论文数：19
-- 精读区：7
+- 本次总论文数：15
+- 精读区：3
 - 速读区：12
 
 ### 今日简报（AI）
-1) 今日推荐19篇论文，精读7篇，速读12篇，聚焦信息论神经压缩与等变视觉Transformer等前沿方向。
-2) 最值得精读的是《SoftBinary Coding》开创的信息论压缩新范式（9.0分）和《Vision Transformers Equivariant to O(2)离散子群》的统一框架（8.0分）。
-3) 建议优先阅读这两篇精读论文，理解信息论压缩与群等变设计的核心思想，再结合速读论文拓展应用思路。
-- 详情：[/202607/02/README](/202607/02/README)
+今日精选2篇9分高价值论文，聚焦神经视频压缩与任务导向图像传输。最值得关注：极端复杂度下的神经视频表示压缩，以及低延迟任务导向图像传输的频谱接入优化。建议优先精读这两篇，再按兴趣浏览速读中的光学流编码与跨模态学习。
+- 详情：[/202607/03/README](/202607/03/README)
 
 ### 精读区论文标签
-1. [SoftBinary Coding: A New Information-Theoretic Neural Compression Paradigm](/202607/02/2606.29578v1-softbinary-coding-a-new-information-theoretic-neural-compression-paradigm)  
+1. [Enhanced Neural Video Representation Compression across Extreme Complexity and Quality Scales](/202607/03/2606.28163v1-enhanced-neural-video-representation-compression-across-extreme-complexity-and-quality-scales)  
    标签：评分：9.0/10、query:compress
-   evidence：使用随机二进制潜变量的端到端神经压缩学习范式
-2. [A Unified Framework for Vision Transformers Equivariant to Discrete Subgroups of $\mathrm{O}(2)$](/202607/02/2606.27864v1-a-unified-framework-for-vision-transformers-equivariant-to-discrete-subgroups-of-mathrmo2)  
-   标签：评分：8.0/10、query:neural-arch
-   evidence：通过等变性改进计算机视觉架构
-3. [A Unified Framework for Vision Transformers Equivariant to Discrete Subgroups of $\mathrm{O}(2)$](/202607/02/2606.27864v2-a-unified-framework-for-vision-transformers-equivariant-to-discrete-subgroups-of-mathrmo2)  
-   标签：评分：8.0/10、query:neural-arch
-   evidence：通过等变性改进计算机视觉架构
-4. [Enhanced Neural Video Representation Compression across Extreme Complexity and Quality Scales](/202607/02/2606.28163v1-enhanced-neural-video-representation-compression-across-extreme-complexity-and-quality-scales)  
+   evidence：端到端神经视频压缩，含率失真优化
+2. [Low-Latency Task-Oriented Image Transmission with Opportunistic Spectrum Access](/202607/03/2607.01921v1-low-latency-task-oriented-image-transmission-with-opportunistic-spectrum-access)  
+   标签：评分：9.0/10、query:compress
+   evidence：使用VQ-VAE进行面向任务的图像压缩，与自编码器压缩直接匹配
+3. [ViQ: Text-Aligned Visual Quantized Representations at Any Resolution](/202607/03/2606.27313v2-viq-text-aligned-visual-quantized-representations-at-any-resolution)  
    标签：评分：8.0/10、query:compress
-   evidence：隐式神经表示用于视频压缩，可迁移至图像压缩
-5. [Semantic-Aware Generative Image Transmission for Resource-Constrained Visual IoT Systems](/202607/02/2606.28398v1-semantic-aware-generative-image-transmission-for-resource-constrained-visual-iot-systems)  
-   标签：评分：8.0/10、query:compress
-   evidence：使用VQ编码器进行图像压缩和生成式传输
-6. [BLUE: A Stale-Pixel Optical-Flow Compositor for Entropy-Efficient Surveillance Video Encoding](/202607/02/2606.28753v1-blue-a-stale-pixel-optical-flow-compositor-for-entropy-efficient-surveillance-video-encoding)  
-   标签：评分：8.0/10、query:compress
-   evidence：利用陈旧像素合成实现熵高效的监控视频编码
-7. [Bilevel Optimization for Neural Architecture Search](/202607/02/2606.29582v1-bilevel-optimization-for-neural-architecture-search)  
-   标签：评分：8.0/10、query:neural-arch
-   evidence：神经架构搜索的双层优化方法，属于模型优化策略
+   evidence：文本对齐的视觉量化表示，支持任意分辨率；离散视觉表示的量化策略
 
 ### 速读区论文标签
-1. [Gradient Smoothing: Coupling Layer-wise Updates for Improved Optimization](/202607/02/2606.30813v1-gradient-smoothing-coupling-layer-wise-updates-for-improved-optimization)  
-   标签：评分：8.0/10、query:neural-arch
-   evidence：梯度平滑作为深度网络的通用优化范式
-2. [MEPA: Multi-Scale Representation Alignment for Visual Autoregressive Modeling with Mixture of Experts](/202607/02/2607.00371v1-mepa-multi-scale-representation-alignment-for-visual-autoregressive-modeling-with-mixture-of-experts)  
-   标签：评分：8.0/10、query:neural-arch
-   evidence：面向视觉自回归模型的多尺度表示对齐，采用尺度感知的混合专家架构
-3. [LUMA: Benchmarking Segmentation via a Lightweight Universal Mask Adapter](/202607/02/2607.00687v1-luma-benchmarking-segmentation-via-a-lightweight-universal-mask-adapter)  
-   标签：评分：8.0/10、query:neural-arch
-   evidence：通过轻量级头部基准测试20种骨干网络和11种预训练方案的分割性能
-4. [Soft Mixture-of-Recursions: Going Deeper with Recursive Vision Transformers](/202607/02/2607.00774v1-soft-mixture-of-recursions-going-deeper-with-recursive-vision-transformers)  
-   标签：评分：8.0/10、query:neural-arch
-   evidence：递归视觉Transformer结合软混合递归实现更深网络，提升表示能力
-5. [S-GAI: Spectral Geometry-Aware Initialization for Sigmoidal MLPs -- From Dataset Geometry to Network Weights](/202607/02/2606.28444v1-s-gai-spectral-geometry-aware-initialization-for-sigmoidal-mlps----from-dataset-geometry-to-network-weights)  
+1. [BLUE: A Stale-Pixel Optical-Flow Compositor for Entropy-Efficient Surveillance Video Encoding](/202607/03/2606.28753v1-blue-a-stale-pixel-optical-flow-compositor-for-entropy-efficient-surveillance-video-encoding)  
+   标签：评分：7.0/10、query:compress
+   evidence：利用静态像素合成器利用时间冗余；仍使用基于DCT的编码器
+2. [MSNN-LINet: Cross-Modal Learning via Continuous Linear Integration](/202607/03/2606.31135v1-msnn-linet-cross-modal-learning-via-continuous-linear-integration)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：基于谱几何的S型MLP初始化方法
-6. [CLEAR-MoE: Shared-Basis Expert Extraction from Frozen Vision Transformers via Calibration-Driven Layer Selection](/202607/02/2606.28516v1-clear-moe-shared-basis-expert-extraction-from-frozen-vision-transformers-via-calibration-driven-layer-selection)  
+   evidence：提出具有连续跨模态学习的新型多流架构，用于RGB-D分类
+3. [GEAR: Guided End-to-End AutoRegression for Image Synthesis](/202607/03/2606.32039v1-gear-guided-end-to-end-autoregression-for-image-synthesis)  
+   标签：评分：7.0/10、query:compress
+   evidence：向量量化tokenizer用于图像生成；生成流水线中的量化策略
+4. [Information-Regularized Attention for Visual-Centric Reasoning](/202607/03/2607.00434v1-information-regularized-attention-for-visual-centric-reasoning)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：通过MoE转换实现高效神经网络架构设计
-7. [Closed-Form Steepest Descent Direction toward Flat Minima: Reducing Upper Bounds on the Loss Hessian Eigenspectrum in Neural Networks](/202607/02/2606.28662v1-closed-form-steepest-descent-direction-toward-flat-minima-reducing-upper-bounds-on-the-loss-hessian-eigenspectrum-in-neural-networks)  
+   evidence：随机注意力机制正则化视觉信息；VLM模型优化
+5. [Post-Training Pruning for Diffusion Transformers](/202607/03/2607.00927v1-post-training-pruning-for-diffusion-transformers)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：分析神经网络泛化的平坦最小值方向
-8. [HASTE: A Framework for Training-Free, Dynamic, and Steerable Compression of Pre-Trained Convolutional Neural Networks](/202607/02/2606.30516v1-haste-a-framework-for-training-free-dynamic-and-steerable-compression-of-pre-trained-convolutional-neural-networks)  
+   evidence：扩散Transformer的后训练剪枝减少计算开销
+6. [Approximate Attention Weighting for Sustainable FPGA-Based Vision Transformer Inference](/202607/03/2607.01798v1-approximate-attention-weighting-for-sustainable-fpga-based-vision-transformer-inference)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：无需训练的CNN动态压缩方法，用于模型优化
-9. [CARVE: Content-Aware Recurrent with Value Efficiency for Chunk-Parallel Linear Attention](/202607/02/2606.27229v2-carve-content-aware-recurrent-with-value-efficiency-for-chunk-parallel-linear-attention)  
+   evidence：用于FPGA上高效ViT推理的近似注意力加权
+7. [Accelerating Hierarchical Sparse Predictive Coding with Hybrid Amortized Inference](/202607/03/2606.27802v1-accelerating-hierarchical-sparse-predictive-coding-with-hybrid-amortized-inference)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：用于视觉模型的高效注意力机制设计
-10. [Flexformer: Flexible Linear Transformer with Learnable Attention Kernel](/202607/02/2606.27748v1-flexformer-flexible-linear-transformer-with-learnable-attention-kernel)  
+   evidence：加速分层稀疏预测编码推理
+8. [ScaLe-INR: Scale and Learn Implicit Neural Representations](/202607/03/2606.27862v1-scale-inr-scale-and-learn-implicit-neural-representations)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：可学习注意力核用于高效Transformer设计
-11. [There and Back Again: A Flexible-Frame Transformer for Multi-Exposure Fusion](/202607/02/2606.27905v2-there-and-back-again-a-flexible-frame-transformer-for-multi-exposure-fusion)  
+   evidence：多分支架构匹配频谱
+9. [FreqOrtho-SR: Frequency-Guided Orthogonal Expert Learning for Real-World Image Super-Resolution](/202607/03/2606.28745v1-freqortho-sr-frequency-guided-orthogonal-expert-learning-for-real-world-image-super-resolution)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：提出用于多曝光融合的灵活帧变压器，属于计算机视觉通用方法
-12. [TextDS: Parameter-Efficient Representation Alignment for Scene Text Detection under Distribution Shifts](/202607/02/2606.28077v1-textds-parameter-efficient-representation-alignment-for-scene-text-detection-under-distribution-shifts)  
+   evidence：频率引导的专家混合用于图像超分辨率，是一种计算机视觉架构改进技术
+10. [Adaptive Spectrum-Aware Feature Disentangled Network for Small Object Detection](/202607/03/2606.29029v1-adaptive-spectrum-aware-feature-disentangled-network-for-small-object-detection)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：基于LoRA适配的参数高效表示对齐
+   evidence：频谱感知特征解耦用于小目标检测
+11. [ScAle: Attention Head Scaling as a Minimal Adapter for Spatial Reasoning in Vision Language Models](/202607/03/2606.29579v1-scale-attention-head-scaling-as-a-minimal-adapter-for-spatial-reasoning-in-vision-language-models)  
+   标签：评分：6.0/10、query:neural-arch
+   evidence：超轻量适配器通过重缩放注意力和MLP激活；神经网络性能提升技术
+12. [Nemotron-Labs-Diffusion-Image: Advancing Masked Discrete Diffusion for High-Resolution Image Synthesis](/202607/03/2606.29814v1-nemotron-labs-diffusion-image-advancing-masked-discrete-diffusion-for-high-resolution-image-synthesis)  
+   标签：评分：6.0/10、query:compress
+   evidence：使用大词汇量的掩码离散扩散模型；离散tokenizer量化
 
 
 <div class="dpr-home-promo-card">

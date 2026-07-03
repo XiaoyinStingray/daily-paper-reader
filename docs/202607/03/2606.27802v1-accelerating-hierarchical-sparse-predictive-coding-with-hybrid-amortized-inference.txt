@@ -1,0 +1,1466 @@
+Title: Accelerating Hierarchical Sparse Predictive Coding with Hybrid Amortized Inference
+
+URL Source: https://arxiv.org/pdf/2606.27802v1
+
+Published Time: Mon, 29 Jun 2026 00:34:34 GMT
+
+Number of Pages: 24
+
+Markdown Content:
+# Accelerating Hierarchical Sparse Predictive Coding with Hybrid Amortized Inference 
+
+## Kazuhisa Fujita 1
+
+> 1
+
+Department of Clinical Engineering, Komatsu University, 10-10 Doihara-Machi, Komatsu, Ishikawa, Japan 923-0921 
+
+Corresponding author: Kazuhisa Fujita 1
+
+Email address: kazu@spikingneuron.net 
+
+## ABSTRACT 
+
+Hierarchical predictive coding provides an interpretable framework for perception as error-driven inference in multi-layer generative models, while sparse coding imposes parsimonious latent representations through explicit sparsity constraints. Their combination yields hierarchical sparse predictive coding models with appealing computational and neuroscientific properties, but practical use is often limited by the cost of iterative latent inference. In such models, each input may require many recurrent refinement steps before a useful sparse representation is obtained, and this burden becomes more severe as the hierarchy deepens. We study this bottleneck by holding the hierarchical sparse energy fixed and varying the inference procedure. The comparison includes four schemes: classical iterative inference based on ISTA, an accelerated MFISTA reference, structurally informed amortized inference using a LISTA-style bottom-up encoder adapted to the hierarchical model, and a hybrid method in which this fast amortized initialization is followed by a small number of corrective energy-based refinement steps. Under this shared objective, we measure reconstruction quality, sparsity, latency, and stability on static image benchmarks. The results show that a shallow LISTA-style initializer plus short corrective recurrence improves over pure amortization while remaining much faster than long iterative inference. 
+
+## 1 INTRODUCTION 
+
+Perception can be formulated as inference over latent causes. A useful model should recover those causes efficiently and reliably, while keeping the representation interpretable. Predictive coding frames this process as hierarchical error minimization: top-down predictions are compared with bottom-up inputs, and residual prediction errors propagate through the hierarchy (Rao and Ballard, 1999; Friston and Kiebel, 2009). Sparse coding instead explains sensory signals with a small number of active coefficients in an overcomplete dictionary. This yields efficient and biologically meaningful representations; on natural images, sparse coding recovers localized, oriented, band-pass features resembling simple-cell receptive fields in primary visual cortex (Olshausen and Field, 1996). These traditions are compatible. Predictive coding provides hierarchical generative structure and local error-driven inference; sparse coding provides an explicit sparsity prior and competition among units. Their combination has led to hierarchical sparse predictive coding models, most notably Sparse Deep Predictive Coding (SDPC), which integrates recurrent sparse inference within layers with feedforward and feedback interactions across layers (Boutin et al., 2021). SDPC can learn oriented low-level receptive fields, more complex higher-level features, and context-sensitive effects such as contour integration, supporting hierarchical sparse predictive coding as both a computational and neuroscientific framework (Boutin et al., 2021). The main practical weakness is the inference engine. Standard formulations require sparsity-regularized inverse problems to be solved for each input, often by ISTA or related proximal methods (Daubechies et al., 2004; Beck and Teboulle, 2009a,b). These methods are principled, but they can be expensive: each new input may need many refinement steps before reaching a useful latent state. The cost becomes more serious in deeper hierarchies, where latency, instability, and repeated inner-loop optimization can dominate the system. Recurrent sparse inference has also been studied as a neural 
+
+> arXiv:2606.27802v1 [cs.LG] 26 Jun 2026
+
+computation model with thresholding dynamics and local competition (Rozell et al., 2008). A natural improvement to this bottleneck is amortization, especially when the amortized map retains structure from the original sparse optimization problem. In sparse inference, Learning ISTA (LISTA) replaces many ISTA-like optimization steps with a learned feedforward network obtained by algorithm unrolling, yielding a structurally informed amortized predictor of approximate sparse codes (Gregor and LeCun, 2010). In predictive coding more broadly, hybrid predictive coding has shown how amortized and iterative inference can optimize one objective, combining fast feedforward initialization with recurrent refinement (Tschantz et al., 2023). We study how to equip hierarchical sparse predictive coding for static images with faster and more stable inference. We treat the inference mechanism, rather than the image architecture or sparse objective, as the experimental variable. The objective, model family, and evaluation protocol are held fixed so that iterative, LISTA-style amortized, and hybrid amortized-plus-iterative inference can be compared under the same energy-based formulation. The paper contributes a fixed-objective benchmark for hierarchical sparse predictive coding on static images, a unified comparison of iterative, LISTA-style amortized, and Hybrid inference, and an empirical analysis of their quality–latency–stability trade-offs. 
+
+## 2 RELATED WORK 
+
+2.1 Sparse coding and dictionary learning 
+
+Sparse coding provides a foundational framework for efficient representation learning. It frames perception as reconstruction from a small number of active features in a large, overcomplete dictionary. The seminal work of Olshausen and Field (1996) showed that sparse coding trained on natural images learns basis functions resembling receptive fields in primary visual cortex. It has therefore become established as both a useful feature-extraction method and a biologically plausible model of early vision. A large body of later work focused on scalable optimization and dictionary learning. Iterative shrinkage-thresholding methods and their accelerated variants became standard tools for solving the underlying ℓ1-regularized inverse problems (Beck and Teboulle, 2009a,b). Related work developed online dictionary learning for sparse coding practical at larger scale (Mairal et al., 2010). Other work also extended patch-based sparse coding to convolutional settings, which are better suited to images because they model translation structure more directly (Bristow et al., 2013). These developments made sparse coding much more practical, but they did not remove its central inference bottleneck: obtaining sparse latent codes still usually requires iterative optimization for each input. 
+
+2.2 Predictive coding and free-energy-based inference 
+
+Predictive coding is often formulated as a framework for approximate inference in hierarchical generative models (Rao and Ballard, 1999; Friston, 2005; Friston and Kiebel, 2009). In classical hierarchical formulations, higher cortical areas send predictions to lower areas, while lower areas return the mismatch between predicted and observed activity, that is, prediction errors (Rao and Ballard, 1999; Friston, 2005; Bastos et al., 2012). Recurrent exchanges between predictions and errors then iteratively update latent representations so that they better explain sensory input (Rao and Ballard, 1999; Friston, 2005). This line of work was later generalized within the free-energy framework, in which perceptual inference is written as the minimization of a variational objective under a hierarchical generative model (Friston and Kiebel, 2009). These formulations are attractive in computational neuroscience because both inference and learning can be described in terms of local message passing based on prediction errors (Friston, 2005; Bastos et al., 2012). Later work also showed that predictive-coding-style networks can approximate backpropagation under suitable conditions (Whittington and Bogacz, 2017; Rosenbaum, 2022). Related top-down modulation mechanisms have also been studied in biologically motivated visual models, including dynamic gating of task-relevant information in primary visual cortex and categorization-oriented interactions between higher and lower visual areas (Kamiyama et al., 2016; Abe et al., 2018; Kashimori et al., 2007). Here, predictive coding matters as both a neuroscientific theory and an algorithmic template. It provides hierarchical structure, local error-driven updates, and a natural iterative inference procedure. However, standard predictive coding networks require multiple recurrent steps per input, making deep inference costly and sometimes difficult to stabilize (Tschantz et al., 2023). 
+
+> 2/24
+
+2.3 Bridging predictive coding and sparse hierarchical generative models 
+
+Several works have highlighted the compatibility between predictive coding and sparse coding. Predictive coding contributes hierarchical generative structure and error-driven inference; sparse coding contributes an explicit sparsity prior and competition among latent units. This has motivated models that embed sparse latent inference in predictive-coding-style top-down and bottom-up interactions. A representative example is Sparse Deep Predictive Coding (SDPC), which combines predictive coding across layers with sparse recurrent inference within each layer in a hierarchical convolutional architecture (Boutin et al., 2021). SDPC can learn oriented low-level receptive fields, structured higher-level representations, and context-sensitive effects such as contour integration. It therefore shows that predictive coding and sparse coding can be unified in a single model family for realistic image data. At the same time, it illustrates the main practical limitation of this approach: inference remains recurrent and expensive, especially as model depth and complexity increase (Boutin et al., 2021). 
+
+2.4 Algorithm unrolling and learned sparse inference 
+
+A separate but closely related line of work comes from algorithm unrolling for sparse inference. LISTA showed that the iterations of ISTA can be unfolded into a finite-depth neural network whose parameters are learned from data, thereby replacing slow iterative optimization with fast feedforward (i.e., amortized) inference that approximates sparse codes (Gregor and LeCun, 2010). Later work clarified and expanded this design space. For example, learned-step-size variants of unfolded ISTA were shown to be competitive with state-of-the-art learned sparse-inference networks when the target solutions are sufficiently sparse (Ablin et al., 2019). Analytic LISTA (ALISTA) further showed that strong performance can be obtained even when only the step-sizes and thresholds are learned (Liu et al., 2019). Despite this progress, most unrolled sparse coding work has focused on single-layer sparse recovery rather than hierarchical predictive coding with explicit top-down generative interactions. This leaves an open question: how should fast amortized inference be combined with recurrent error-correcting refinement in a multi-layer sparse generative model? 
+
+2.5 Hybrid predictive coding and amortized-plus-iterative inference 
+
+Recent work in predictive coding has begun to address this question from the viewpoint of amortized inference. Hybrid Predictive Coding (HPC) interprets feedforward inference as amortized inference and recurrent predictive-coding updates as iterative refinement under the same objective (Tschantz et al., 2023). It formalizes a dual-process view: fast feedforward pathways provide cheap initial beliefs, while recurrent dynamics improve accuracy, context sensitivity, and robustness when more refinement is needed. HPC provides a strong conceptual precedent, but it does not focus on hierarchical sparse coding with explicit ℓ1-type latent sparsity for static image representation. Furthermore, while HPC typically relies on unstructured black-box neural networks for the amortized pathway, our approach employs a structurally informed LISTA-style encoder with dictionary-derived initialization and learned shrinkage blocks. HPC establishes the general principle of combining amortized and iterative inference in predictive coding, while sparse coding provides tools for sparse objectives. This combination has been less directly studied for hierarchical sparse image models. 
+
+2.6 Positioning of the present work 
+
+Our work is closest to SDPC on the modeling side and to LISTA and HPC on the inference side. The emphasis is different. Relative to SDPC, we vary the inference engine while keeping the sparse generative model fixed. Relative to LISTA and related unrolling methods, we study hierarchical latent inference rather than single-layer sparse recovery. Relative to HPC, we specialize amortized-plus-iterative inference to hierarchical sparse coding for static images, where reconstruction quality, sparsity, latency, and stability can be compared under one sparse energy. We therefore focus on a narrower question: how amortized and iterative inference should be combined when the sparse objective and hierarchical generative model are held fixed. 
+
+## 3 METHODS 
+
+3.1 Overview 
+
+We compare four inference schemes for the hierarchical sparse model defined below: (i) ISTA-style iterative inference as the basic iterative baseline (Daubechies et al., 2004; Beck and Teboulle, 2009a), (ii) 
+
+> 3/24
+
+MFISTA as a monotone accelerated iterative baseline (Beck and Teboulle, 2009a), (iii) a shared-parameter LISTA-style amortized bottom-up encoder adapted to the hierarchical model (Gregor and LeCun, 2010), and (iv) a proposed Hybrid method in which this encoder provides an initialization that is further refined by a small number of ISTA-style steps. All four use the same hierarchical sparse objective. 
+
+3.2 Hierarchical sparse generative model 
+
+Let xxx ∈ Rn0 denote an observed image represented as a column vector, and let aaaℓ ∈ Rnℓ denote the latent code at layer ℓ ∈ { 1, . . . , L}. For each layer, DDDℓ ∈ Rnℓ−1×nℓ denotes a dictionary matrix. The hierarchical generative model is 
+
+xxx ≈ DDD1aaa1, (1) 
+
+aaaℓ−1 ≈ DDDℓaaaℓ, ℓ = 2, . . . , L. (2) Equivalently, the layerwise residuals are 
+
+rrr1 = xxx − DDD1aaa1, (3) 
+
+rrrℓ = aaaℓ−1 − DDDℓaaaℓ, ℓ = 2, . . . , L. (4) Thus, the first layer explains the sensory input, while deeper layers explain the activities of lower layers. 
+
+3.3 Hierarchical sparse energy 
+
+We define the single-sample energy as 
+
+E(xxx, {aaaℓ}, {DDDℓ}) = 12 ∥xxx − DDD1aaa1∥22 +
+
+> L
+
+# ∑
+
+> ℓ=2
+
+βℓ−1
+
+2 ∥aaaℓ−1 − DDDℓaaaℓ∥22 +
+
+> L
+
+# ∑
+
+> ℓ=1
+
+λℓ∥aaaℓ∥1, (5) where λℓ > 0 controls sparsity and βℓ−1 > 0 controls inter-layer coupling. The quadratic terms penalize input reconstruction error and inconsistency between adjacent latent layers. The ℓ1 terms encourage sparse latent codes like lasso regression. Thus, the objective extends standard sparse coding, reconstruction error plus sparsity, to a coupled hierarchical setting (Olshausen and Field, 1996; Aberdam et al., 2019). For a mini-batch {xxx(b)}Bb=1 where B is the batch size and xxx(b) denotes the b-th sample in the batch, the training objective is the batch average of the same energy: 
+
+L = 1
+
+B
+
+> B
+
+# ∑
+
+> b=1
+
+"
+
+12 ∥xxx(b) − DDD1aaa(b) 
+
+> 1
+
+∥22 +
+
+> L
+
+# ∑
+
+> ℓ=2
+
+βℓ−1
+
+2 ∥aaa(b) 
+
+> ℓ−1
+
+− DDDℓaaa(b) 
+
+> ℓ
+
+∥22 +
+
+> L
+
+# ∑
+
+> ℓ=1
+
+λℓ∥aaa(b) 
+
+> ℓ
+
+∥1
+
+#
+
+. (6) 
+
+3.4 ISTA-style latent inference 
+
+With dictionaries fixed, latent inference is posed as the minimization of Eq. (5) with respect to {aaaℓ}L
+
+> ℓ=1
+
+.Our basic iterative baseline is an ISTA-style proximal-gradient method: each refinement step computes layerwise gradients for the smooth part of the hierarchical energy and then applies soft-thresholding to the latent codes (Daubechies et al., 2004; Beck and Teboulle, 2009a). Let f denote the smooth part of Eq. (5) , i.e. the same objective without the ℓ1 penalties. In column-vector form, the layerwise gradients are as follows. For ℓ = 1, 
+
+∇aaa1 f = DDD⊤ 
+
+> 1
+
+(DDD1aaa1 − xxx) + β1(aaa1 − DDD2aaa2), (7) when L > 1, and the second term is omitted when L = 1. For 1 < ℓ < L,
+
+∇aaaℓ f = βℓ−1DDD⊤ 
+
+> ℓ
+
+(DDDℓaaaℓ − aaaℓ−1) + βℓ(aaaℓ − DDDℓ+1aaaℓ+1). (8) For ℓ = L,
+
+∇aaaL f = βL−1DDD⊤ 
+
+> L
+
+(DDDLaaaL − aaaL−1). (9) We then apply the proximal update 
+
+aaaℓ ← Sθℓ
+
+ aaaℓ − ηℓ∇aaaℓ f  , (10) 
+
+> 4/24
+
+where Sθ is the soft-thresholding operator 
+
+Sθ (v) = sign (v) max (|v| − θ , 0), (11) applied elementwise, and ηℓ and θℓ are the step size and threshold for layer ℓ, respectively. In implementation, all layer gradients are evaluated at the current iterate, and the proximal updates are then applied within the same refinement step. The iterative baseline is therefore a block-Jacobi proximal-gradient refinement on the joint latent variables (Beck and Teboulle, 2009a,b; Parikh and Boyd, 2014; Xu, 2018), not a Gauss–Seidel or cyclic block-coordinate method (Beck and Tetruashvili, 2013; Xu, 2018). We use “ISTA-style” to emphasize the gradient-plus-soft-thresholding update form, while distinguishing this simultaneous multi-layer update from a literal cyclic application of classical single-block ISTA. In standard proximal-gradient methods, fixed step sizes are determined by the Lipschitz constant of the full gradient (Beck and Teboulle, 2009a,b; Parikh and Boyd, 2014). Similarly, block-coordinate variants use block-specific Lipschitz constants for each partial gradient (Nesterov, 2012; Richt ´arik and Tak ´a ˘c, 2014). Following this principle, we determine layerwise step sizes based on the block-Lipschitz constants of the partial gradients for the smooth term. For our smooth objective, the relevant block Hessians are 
+
+∇2 
+
+> a1a1
+
+f = DDD⊤ 
+
+> 1
+
+DDD1 + β1IIIn1 (L > 1), (12) 
+
+∇2 
+
+> aℓaℓ
+
+f = βℓ−1DDD⊤ 
+
+> ℓ
+
+DDDℓ + βℓIIInℓ , (1 < ℓ < L), (13) 
+
+∇2 
+
+> aLaL
+
+f = βL−1DDD⊤ 
+
+> L
+
+DDDL. (14) Taking the spectral norm of each block Hessian, the corresponding block-Lipschitz constants are 
+
+L1 = ∥DDD1∥2spec + β1 (L > 1), (15) 
+
+Lℓ = βℓ−1∥DDDℓ∥2spec + βℓ (1 < ℓ < L), (16) 
+
+LL = βL−1∥DDDL∥2spec , (17) and for the single-layer case L1 = ∥DDD1∥2spec . Here, ∥·∥ spec is the spectral norm, so ∥DDDℓ∥2spec = λmax (DDD⊤ 
+
+> ℓ
+
+DDDℓ)
+
+is the largest eigenvalue of DDD⊤ 
+
+> ℓ
+
+DDDℓ. In practice, ∥DDDℓ∥2spec is estimated by 10 power iterations on DDD⊤ 
+
+> ℓ
+
+DDDℓ
+
+from a fixed all-ones initial vector, followed by a Rayleigh-quotient estimate (Demmel, 1997; Golub and van Loan, 2013). The actual step sizes are 
+
+ηℓ = ηscale 
+
+Lℓ
+
+, θℓ = ηℓλℓ, (18) where ηscale is a single global scaling hyperparameter that controls the overall speed of inference. Because these layerwise updates are applied simultaneously to coupled latent variables, this blockwise rule should be read as a practical scaling choice rather than a monotonicity guarantee for the full joint objective. In training, the step sizes are recomputed from the current detached dictionaries. When dictionaries are fixed at evaluation time, the same rule may be precomputed once and then reused for all inputs. 
+
+3.5 LISTA-style amortized encoder 
+
+For fast approximate inference, we use a bottom-up amortized encoder inspired by LISTA (Gregor and LeCun, 2010). Classical LISTA unfolds ISTA into a learned finite-depth sparse-coding network for a single sparse-coding problem. Here, we use the same idea as a structurally informed feed-forward inference module adapted to the hierarchical sparse model. This module is used both as the amortized initializer for Hybrid and as the LISTA-style inference method for hierarchical sparse coding in the comparisons below. The encoder is composed of L layerwise blocks. Each block maps the current layer input to an approximate latent code for that layer, and the resulting code is then passed to the next block in a 
+
+> 5/24
+
+bottom-up manner: 
+
+aaa1 = f1(xxx), (19) 
+
+aaa2 = f2(aaa1), (20) ... (21) 
+
+aaaL = fL(aaaL−1). (22) Thus, the encoder defines a feed-forward LISTA-style amortized approximation to the hierarchical latent codes. It should not be read as an exact unrolling of proximal-gradient inference for the full coupled hierarchical objective. Instead, it is a layerwise bottom-up initializer whose blocks have ISTA-like shrinkage structure; the full reconstruction and inter-layer coupling terms are enforced directly only by the iterative refinement stage and by the training loss. In the main experiments, we use the shared-parameter variant. For a given layer input uuuℓ, one encoder block first computes 
+
+BBBℓ = Wx,ℓ uuuℓ, (23) where Wx,ℓ is an encoder weight matrix, and then applies a fixed number of shrinkage stages: 
+
+aaa(0) 
+
+> ℓ
+
+= Sϑℓ (BBBℓ), (24) 
+
+aaa(t+1) 
+
+> ℓ
+
+= Sϑℓ
+
+
+
+BBBℓ +Wa,ℓ aaa(t)
+
+> ℓ
+
+
+
+, t = 0, . . . , K − 2, (25) where K is the total number of LISTA-style shrinkage stages in the block, the final output is aaa(K−1) 
+
+> ℓ
+
+, and 
+
+Wa,ℓ is another encoder weight matrix. Thus, K = 1 means that only the initial shrinkage stage is applied. Here, Sϑℓ denotes elementwise soft-thresholding with the learned LISTA threshold ϑℓ, distinct from the ISTA refinement threshold θℓ in Eq. (18) . The same parameters (Wx,ℓ ,Wa,ℓ , ϑℓ) are shared across all internal shrinkage stages within a block. To ensure non-negative thresholds, we reparameterize 
+
+ϑℓ = softplus (ρℓ), (26) where ρℓ is an unconstrained encoder parameter. During training and evaluation, LISTA-style amortized inference uses the current encoder weights and thresholds directly. Its shrinkage stages in Eq. (25) do not recompute an ISTA step size; any step-size-like scaling is learned in Wx,ℓ , Wa,ℓ , and ρℓ. Pure LISTA returns this feed-forward code directly. In the Hybrid variant, the same forward pass produces an initial latent code, then refines it with ISTA-style updates under the full hierarchical energy. 
+
+3.6 Hybrid inference 
+
+The proposed method combines amortized latent-code initialization with iterative refinement. Here “initialization” means the starting latent codes for the current input, not initialization of encoder parameters. Hybrid first runs the LISTA-style amortized encoder and then applies ISTA-style refinement. Given xxx, the bottom-up initialization is 
+
+{aaa(0) 
+
+> ℓ
+
+}L 
+
+> ℓ=1
+
+= LISTA (xxx; φ ), (27) where φ denotes the encoder parameters. This forward pass gives a fast approximate latent code. Other amortized architectures could in principle be substituted. Starting from this initialization, we then perform Tref ISTA-style refinement steps using Eq. (10) . The final inferred codes are ˆaaaℓ = aaa(Tref ) 
+
+> ℓ
+
+, ℓ = 1, . . . , L. (28) These refinement steps correct the initial amortized codes using gradients and shrinkage operations derived from the full hierarchical sparse energy. Thus, the proposed Hybrid method is defined as: 
+
+> 6/24
+
+bottom-up amortized initialization with a shared LISTA-style encoder, followed by a small number of ISTA-style refinement steps under the full hierarchical sparse energy. 
+
+The motivation is simple: the amortized encoder provides a useful initial estimate with low cost, and iterative refinement corrects it by minimizing the full hierarchical sparse energy. LISTA uses the encoder output directly; Hybrid corrects it with full-energy recurrence. 
+
+3.7 Training procedure and gradient flow  
+
+> Alternating training view
+
+Training alternates between latent inference and parameter updates. This design is best viewed as an alternating-optimization-style approximation: 1. infer latent codes while holding dictionaries fixed; 2. evaluate the batch loss using the learnable dictionaries; 3. update dictionaries, and when applicable encoder parameters, using that final loss. The inferred codes are therefore treated as the result of optimizing latent variables with fixed dictionaries. Dictionary updates are driven by the final sparse-coding loss, without backpropagating dictionary gradients through every refinement step, which reduces memory use and improves training stability.  
+
+> Dictionary gradient flow
+
+During latent inference, the dictionaries are treated as fixed. In the imple-mentation, the learnable dictionaries {DDDℓ}L 
+
+> ℓ=1
+
+are first converted into detached inference dictionaries, ˜DDDℓ = stopgrad (DDDℓ), ℓ = 1, . . . , L, (29) and the inference engine receives { ˜DDDℓ}L 
+
+> ℓ=1
+
+rather than the original parameters. Conceptually, the inferred codes are computed as 
+
+{ ˆaaaℓ}L 
+
+> ℓ=1
+
+= Infer  xxx; { ˜DDDℓ}L
+
+> ℓ=1
+
+ . (30) Thus, inference uses the current dictionary values, but the computation graph does not keep a gradient path from the inferred codes back to the dictionary parameters through the inference trajectory. After inference, the final mini-batch loss is evaluated with the original learnable dictionaries, not with the detached copies: 
+
+L = E  xxx, { ˆaaaℓ}L
+
+> ℓ=1
+
+, {DDDℓ}L
+
+> ℓ=1
+
+ . (31) Dictionary learning is therefore driven by the explicit dependence of the final loss on {DDDℓ}L
+
+> ℓ=1
+
+. If the detached dictionaries were also used in this final loss, the loss would contain no dictionary-gradient path and the dictionaries would not be learned from the reconstruction and inter-layer consistency terms. The inferred codes are treated as constants when updating dictionaries. Equivalently, the update differentiates the final energy with respect to dictionary parameters, but not through the iterative inference procedure.  
+
+> Encoder gradient flow
+
+In Hybrid, the LISTA-style encoder provides the initial codes for refinement. These codes are not detached, so gradients from the final refined codes can flow back to encoder parameters. The dictionaries used inside refinement are detached, so the refinement trajectory does not provide a gradient path back to dictionary parameters. The appendix-only Hybrid-MFISTA ablation uses the same encoder-gradient convention. After refinement, the final loss is evaluated using the refined codes and the original learnable dictio-naries. Dictionary parameters are updated through their explicit appearance in this loss, whereas encoder parameters are updated through their influence on the refined codes. The Hybrid encoder is trained to produce initial codes that become good solutions after refinement.  
+
+> Learned parameter groups
+
+The learnable dictionary parameters are 
+
+ΘΘΘD = {DDDℓ}L
+
+> ℓ=1
+
+. (32) For LISTA and Hybrid, the model also contains amortized encoder parameters, denoted by 
+
+ΘΘΘE = φ . (33) 
+
+> 7/24
+
+ISTA and MFISTA do not contain such encoder parameters, since they compute latent codes only by iterative inference. Parameter learning uses standard gradient-based optimization. In all modes, ΘΘΘD is updated from the final loss. In LISTA and Hybrid, ΘΘΘE is updated from the same loss. Both parameter groups are optimized with Adam using separate learning rates. Thus, the same hierarchical sparse objective trains the dictionaries and, when present, the amortized encoder. LISTA and Hybrid are trained as separate models. They share the same encoder architecture and initialization rule, but their learned encoder parameters are not shared. The appendix-only Hybrid-MFISTA ablation is also trained separately, using the Hybrid encoder setup while replacing only the refinement rule.  
+
+> Dictionary normalization
+
+After each parameter update, all dictionary atoms are normalized: 
+
+dddℓ, m ← dddℓ, m
+
+max (∥dddℓ, m∥2, δ ) , (34) where dddℓ, m denotes the m-th atom of dictionary DDDℓ and δ > 0 is a small constant.  
+
+> Encoder initialization
+
+Before training, the generative dictionaries are randomly initialized and column-normalized. For LISTA and Hybrid, the LISTA-style encoder parameters are then initialized once from these dictionaries. This dictionary-derived initialization is not repeated during later inference or evaluation. For layer ℓ, let DDDℓ be the initial local dictionary and let 
+
+Lenc  
+
+> ℓ
+
+≈ ∥ DDDℓ∥2spec (35) be the spectral estimate used for this encoder initialization. This estimate uses the same 10-step power-iteration procedure as the inference step-size rule. We set 
+
+ηenc  
+
+> ℓ
+
+= ηscale 
+
+Lenc 
+
+> ℓ
+
+, (36) and initialize 
+
+Wx,ℓ ← ηenc  
+
+> ℓ
+
+DDD⊤ 
+
+> ℓ
+
+, (37) 
+
+Wa,ℓ ← IIInℓ − ηenc  
+
+> ℓ
+
+DDD⊤ 
+
+> ℓ
+
+DDDℓ, (38) 
+
+ϑℓ ← ηenc  
+
+> ℓ
+
+λℓ. (39) In the softplus parameterization, this last assignment is implemented by setting ρℓ so that softplus (ρℓ) = 
+
+ηenc  
+
+> ℓ
+
+λℓ.After this one-time initialization, the encoder is not reinitialized as dictionaries change. Instead, Wx,ℓ ,
+
+Wa,ℓ , and ρℓ are learned by minimizing the same hierarchical sparse loss in Eq. (6) . Thus, Lenc  
+
+> ℓ
+
+and ηenc 
+
+> ℓ
+
+serve only as initialization quantities, not as step-size parameters used during later LISTA inference. No teacher-code imitation loss is used; LISTA is trained end-to-end under the shared sparse objective.  
+
+> Overall training procedure
+
+Training proceeds as follows: 1. sample a mini-batch of images; 2. flatten images into vectors and optionally remove the per-sample DC component; 3. infer latent codes using one of the four inference engines: ISTA-style iterative inference, MFISTA, shared LISTA, or Hybrid; 4. compute the batch-averaged hierarchical sparse loss in Eq. (6); 5. update dictionaries and, when applicable, encoder parameters by gradient-based optimization; 6. normalize all dictionary atoms. The generative model, dictionary capacity, sparsity coefficients, and evaluation protocol are fixed across methods. The main difference is the inference engine in Step 3, with LISTA and Hybrid additionally introducing amortized encoder parameters trained under the same sparse objective. 
+
+> 8/24
+
+Table 1. Dataset summary.                       
+
+> Dataset Resolution train size validation size test size MNIST 28 ×28 54000 6000 10000 Fashion-MNIST 28 ×28 54000 6000 10000 CIFAR-10 Gray 32 ×32 45000 5000 10000
+
+3.8 Algorithm summaries 
+
+The complete implementation-level procedures for Hybrid inference and training are summarized in Algorithm 1 and Algorithm 2, respectively; the shared model, encoder block, step-size rule, and fixed inference budgets are specified in the surrounding method and experimental-protocol sections. The gradients in the method description above are written for a single column-vector sample. In Algorithm 1, batches are written in the implementation convention with samples as rows, so aaaℓ and gggℓ denote B × nℓ
+
+matrices and the b-th row of gggℓ is the transpose of the corresponding column-vector gradient ∇aaaℓ f .
+
+## 4 EXPERIMENTAL SETUP 
+
+The experiments evaluate inference mechanisms for the hierarchical sparse generative model. We specify the datasets, shared hyperparameters, inference-budget sweeps, latency measurements, and other plotted quantities used to generate the reported figures. The experimental design is organized around three questions: 1. How do ISTA, MFISTA, LISTA, and the proposed Hybrid method compare in final test loss, reconstruction error, and inference latency? 2. How does this comparison change as the hierarchical model becomes deeper? 3. Are the observed trends stable under changes in sparsity strength and implementation-level choices in the refinement step size? 
+
+4.1 Datasets 
+
+The main experiments use three static-image benchmarks: MNIST, Fashion-MNIST, and CIFAR-10 Gray. MNIST provides a simple reference regime, Fashion-MNIST adds more structured grayscale images, and CIFAR-10 Gray, a grayscale version of CIFAR-10, tests whether the same inference trade-off persists on compact natural images. Appendix C adds BSDS500 Patch as a natural-image patch check connected to the classical sparse-coding setting; it consists of 16 × 16 patches derived from the BSDS500 natural-image dataset (Arbelaez et al., 2011). For MNIST, Fashion-MNIST, and CIFAR-10 Gray, we keep the official test split untouched and reserve 10% of the official training split for validation using a fixed random seed. The validation split is used for model monitoring and epoch-wise convergence curves. Final quality metrics for method comparisons are computed on the held-out test split. The dedicated latency-only pass also uses test batches. Table 1 summarizes the actual train/validation/test partitions used for the main experiments. 
+
+4.2 Compared methods and protocol 
+
+The primary comparison includes four inference schemes: ISTA, MFISTA, LISTA, and Hybrid. ISTA and MFISTA are iterative reference methods, LISTA denotes the LISTA-style amortized encoder baseline adapted to the hierarchical model, and Hybrid uses the same amortized initialization followed by ISTA-style refinement. Hybrid-MFISTA, which replaces the Hybrid refinement stage with MFISTA-style refinement, is not part of the primary comparison; it is treated only as an appendix additional ablation and reported in Table 4. The algorithmic details of these methods are given in the Methods section. ISTA and MFISTA are not intended to be low-latency competitors in a pure accuracy contest. With enough iterations, iterative solvers are expected to approach strong sparse-code solutions, but this comes with substantially higher inference cost. We therefore use them mainly to anchor the high-computation end of the quality–latency curve. The default iteration counts should be read as practical operating points rather than separately tuned accuracy optima for each iterative solver. The central comparison is not whether Hybrid dominates fully iterated solvers in final accuracy, but whether amortized initialization 
+
+> 9/24
+
+Algorithm 1 Hybrid inference for L-layer hierarchical sparse coding 
+
+Require: input batch XXX ∈ RB×n0 , dictionaries {DDDℓ}L 
+
+> ℓ=1
+
+with DDDℓ ∈ Rnℓ−1×nℓ , sparsity weights {λℓ}L
+
+> ℓ=1
+
+, coupling weights {βℓ}L−1 
+
+> ℓ=1
+
+, amortized encoder, LISTA-style shrinkage stages K, refinement steps Tref , scale parameter 
+
+ηscale 
+
+Ensure: latent codes {aaaℓ}L
+
+> ℓ=1
+
+Step 1: amortized bottom-up initialization with shared LISTA blocks 
+
+1: UUU ← XXX
+
+2: for ℓ = 1 to L do 
+
+3: BBBℓ ← UUUW ⊤
+
+> x,ℓ
+
+4: aaaℓ ← Sϑℓ (BBBℓ)
+
+5: for k = 1 to K − 1 do 
+
+6: aaaℓ ← Sϑℓ (BBBℓ + aaaℓW ⊤
+
+> a,ℓ
+
+)
+
+7: end for 
+
+8: UUU ← aaaℓ
+
+9: end for Step 2: layerwise step sizes 
+
+10: for ℓ = 1 to L do 
+
+11: if ℓ = 1 then 
+
+12: L1 ← ∥ DDD1∥2spec 
+
+13: if L > 1 then 
+
+14: L1 ← L1 + β1
+
+15: end if 
+
+16: else if ℓ = L then 
+
+17: LL ← βL−1∥DDDL∥2spec 
+
+18: else 
+
+19: Lℓ ← βℓ−1∥DDDℓ∥2spec + βℓ
+
+20: end if 
+
+21: ηℓ ← ηscale /Lℓ
+
+22: θℓ ← ηℓλℓ
+
+23: end for Step 3: ISTA-style refinement with simultaneous gradient evaluation 
+
+24: for t = 1 to Tref do 
+
+25: for ℓ = 1 to L do 
+
+26: if ℓ = 1 then 
+
+27: XXXrec ← aaa1DDD⊤
+
+> 1
+
+28: gggℓ ← (XXXrec − XXX)DDD1
+
+29: if L > 1 then 
+
+30: PPPupper ← aaa2DDD⊤
+
+> 2
+
+31: gggℓ ← gggℓ + β1(aaa1 − PPPupper )
+
+32: end if 
+
+33: else if ℓ = L then 
+
+34: PPPlower ← aaaLDDD⊤
+
+> L
+
+35: gggℓ ← βL−1(PPPlower − aaaL−1)DDDL
+
+36: else 
+
+37: PPPlower ← aaaℓDDD⊤
+
+> ℓ
+
+38: PPPupper ← aaaℓ+1DDD⊤
+
+> ℓ+1
+
+39: ggglower ← βℓ−1(PPPlower − aaaℓ−1)DDDℓ
+
+40: gggupper ← βℓ(aaaℓ − PPPupper )
+
+41: gggℓ ← ggglower + gggupper 
+
+42: end if 
+
+43: end for 
+
+44: for ℓ = 1 to L do 
+
+45: aaaℓ ← Sθℓ (aaaℓ − ηℓgggℓ)
+
+46: end for 
+
+47: end for 
+
+48: return {aaaℓ}L
+
+> ℓ=1
+
+10/24 Algorithm 2 Training procedure used in the implementation 
+
+Require: training set D, model mode m, dictionaries {DDDℓ}L
+
+> ℓ=1
+
+, optional encoder parameters φ
+
+m ∈ { ista , mfista , lista , hybrid ,
+
+hybrid mfista }
+
+Ensure: trained dictionaries {DDDℓ}L 
+
+> ℓ=1
+
+and, when applicable, encoder parameters φ 
+
+> 1:
+
+initialize dictionaries {DDDℓ} randomly  
+
+> 2:
+
+for ℓ = 1 to L do  
+
+> 3:
+
+normalize columns of DDDℓ 
+
+> 4:
+
+end for  
+
+> 5:
+
+if m uses a LISTA-style encoder then  
+
+> 6:
+
+initialize encoder parameters from current dictionaries  
+
+> 7:
+
+end if  
+
+> 8:
+
+for epoch = 1 to Nepoch do  
+
+> 9:
+
+for mini-batch XXX from D do  
+
+> 10:
+
+flatten input images into row vectors XXX ∈ RB×n0 
+
+> 11:
+
+if DC centering is enabled then  
+
+> 12:
+
+subtract per-sample mean from each row of XXX 
+
+> 13:
+
+end if  
+
+> 14:
+
+˜DDDℓ ← detach (DDDℓ) for all ℓ 
+
+> 15:
+
+infer latent codes {aaaℓ} using the selected inference engine with { ˜DDDℓ} 
+
+> 16:
+
+compute batch-averaged energy with the original, non-detached dictionaries 
+
+L = 1 
+
+> B
+
+∑Bb=1
+
+h 12 ∥xxx(b) − DDD1aaa(b) 
+
+> 1
+
+∥22 + ∑L 
+
+> ℓ=2
+> βℓ−1
+> 2
+
+∥aaa(b) 
+
+> ℓ−1
+
+− DDDℓaaa(b) 
+
+> ℓ
+
+∥22 + ∑L 
+
+> ℓ=1
+
+λℓ∥aaa(b) 
+
+> ℓ
+
+∥1
+
+i 
+
+> 17:
+
+take an Adam step on L to update {DDDℓ}L 
+
+> ℓ=1
+> 18:
+
+if encoder exists then  
+
+> 19:
+
+take an Adam step on L to update φ 
+
+> 20:
+
+end if  
+
+> 21:
+
+for ℓ = 1 to L do  
+
+> 22:
+
+normalize columns of DDDℓ 
+
+> 23:
+
+end for  
+
+> 24:
+
+end for  
+
+> 25:
+
+end for  
+
+> 26:
+
+return {DDDℓ}L 
+
+> ℓ=1
+
+and φ
+
+11/24 plus a small number of corrective steps improves on pure amortization without incurring the cost of full iterative inference. All four primary methods use the same sparse energy, data splits, dictionary architecture, optimizer settings, and evaluation code. The ablation experiments then vary one named factor at a time, such as hierarchy depth (Fig. 4), sparsity strength (Fig. 5), or Hybrid implementation choices (Fig. 6). Throughout the paper, inference budget means the number of method-specific inference steps used to produce a latent code, whereas latency means the measured wall-clock time in ms/sample. For ISTA and MFISTA, this budget is the number of iterative update steps. For LISTA-style amortized inference, it is the number of learned shrinkage stages K inside each layerwise encoder block, not an unrolling depth of the full coupled hierarchical objective. For Hybrid, it is specified by the pair of amortized stages and refinement steps (K, Tref ). In the main quality-versus-budget comparison, the Hybrid amortized depth is fixed at K = 1 and only Tref is varied; Fig. 2 then reports the measured latency of those same K = 1Hybrid settings together with the corresponding ISTA, MFISTA, and LISTA budget points. The separate Hybrid allocation analysis in Section 5.2 varies K and Tref independently. Unless otherwise stated, final test loss and reconstruction error are aggregated over the completed runs from the target seed set {0, 1, 2} and plotted as mean values with standard deviation error bars. Epoch-wise convergence curves are the exception: they plot validation loss and validation reconstruction error during training. When latency is plotted, the value is the median ms/sample from the dedicated latency evaluation matched to the same method and inference-budget setting. The dedicated latency evaluation uses seed 0 , batch size 1, no additional training epochs, 100 warm-up batches, and at most 500 timed test batches. This pass measures latency for the same architectures and inference budgets without running training. Quality metrics come from the corresponding training-based runs. 
+
+4.3 Fixed hyperparameters and ablations 
+
+The default model is a two-layer hierarchy with latent dimensions (256 , 64 ). Thus the first dictionary maps the flattened input to 256 coefficients, and the second maps 256 coefficients to 64 coefficients; the input dimension is dataset dependent (784 for 28 × 28 grayscale images, 1024 for CIFAR-10 Gray, and 256 for 16 × 16 BSDS500 patches). Unless an ablation changes them, the sparsity weights are tied across layers, λℓ = 0.05 , and the inter-layer coupling is β1 = 1.0. Dictionary parameters and, when present, encoder parameters are optimized with Adam using learning rates 10 −3 for both ΘΘΘD and ΘΘΘE . We use 
+
+ηscale = 1.0, batch size 256, 25 training epochs, and no per-sample DC centering. These defaults should be read as balanced working settings identified from preliminary sweeps, not as dataset-specific or method-specific optima. In choosing them, we prioritized a regime that was stable across the tested datasets and methods, computationally feasible for the full method–dataset–ablation grid, and still representative of a nontrivial two-layer sparse hierarchy. The sparsity value in particular is not a reconstruction-optimal value: reducing sparsity pressure can improve reconstruction error at the cost of denser codes. We therefore treat λ = 0.05 as a useful sparse-coding regime rather than as an optimum of a single scalar performance measure. The role of departures from this default is assessed through the plotted depth, sparsity, step-size, and inference-budget sweeps. The depth-scaling experiment uses the following script-defined layer schedules:                                
+
+> L=1(256 )
+> L=2(256 ,64 )
+> L=4(256 ,192 ,128 ,64 )
+> L=6(256 ,224 ,192 ,160 ,128 ,64 )
+> L=8(256 ,240 ,224 ,192 ,160 ,128 ,96 ,64 )
+
+This sweep keeps λℓ = 0.05 and βℓ = 1.0 wherever applicable. The sparsity ablation sweeps tied coef-ficients λ ∈ { 0.02 , 0.05 , 0.10 , 0.20 }, and the step-size ablation sweeps ηscale ∈ { 0.5, 1.0, 1.5}. Separate inference-budget sweeps for ISTA, MFISTA, LISTA, and Hybrid are used for the quality-versus-budget comparison in Fig. 1 and the budget–latency mapping in Fig. 2, so the comparison is not tied only to the single default inference budget in Table 2. For ISTA and MFISTA, each additional inference step also adds computation time; the latency plot therefore shows which quality gains come at the cost of slower inference. For readability, the default operating point used throughout the main comparisons is summarized in Table 2. 
+
+> 12/24
+
+Table 2. Default experimental hyperparameters used in the main comparisons.                                    
+
+> Component Default setting Hierarchy depth L=2Layer dimensions (256 ,64 )
+> Sparsity weights λ1=λ2=0.05 Inter-layer coupling β1=1.0Dictionary optimizer Adam, learning rate 10 −3
+> Encoder optimizer Adam, learning rate 10 −3
+> Step-size scale ηscale =1.0Batch size 256 Training length 25 epochs DC centering off by default ISTA inference budget 50 inference steps MFISTA inference budget 20 inference steps LISTA inference budget K=1 shrinkage stage Hybrid inference budget (K,Tref ) = ( 1,5)
+> Random seeds target core sweeps: {0,1,2}; dedicated latency evaluation: {0}
+
+4.4 Evaluation metrics 
+
+Because all methods optimize or approximate the same sparse generative objective, the primary plotted quantities are two quality metrics and one timing metric. For final method comparisons, the quality metrics are computed on the held-out test split after training. The timing metric is computed separately on test batches by the dedicated latency-only protocol. The first final quality metric, test loss , is the full batch-averaged hierarchical sparse energy in Eq. (6) .It includes the input reconstruction term, the inter-layer consistency terms, and the ℓ1 sparsity penalties. The second final quality metric, reconstruction error , is evaluated on the same test examples but keeps only the input-space term 12 ∥xxx − DDD1aaa1∥22. Thus, test loss and reconstruction error differ in the component of the objective being measured, not in the data split. Both are averaged over the full test split after training. In contrast, the convergence figures use the validation split and plot the same two quantities over epochs. In the sparsity sweep, we additionally plot the mean active fraction on the test split, defined as the fraction of inferred coefficients with magnitude greater than 10 −3.For depth-scaling and ablation experiments, stability is assessed from the plotted loss, reconstruction error, and between-seed variability. We also provide qualitative visualizations of learned first-layer dictio-nary atoms and representative reconstructions as diagnostic checks on the learned sparse representation. 
+
+4.5 Implementation details 
+
+All programs are implemented in Python and PyTorch. The source code and experiment scripts are pub-licly available at https://github.com/KazuhisaFujita/HSC . The accompanying repository provides the core scripts and a demo notebook. Only the dedicated latency evaluation is run under a fixed hardware and execution setting: a single-threaded run on a machine with 64 GB RAM and an AMD Ryzen 9900X CPU, using the same batch-size convention and summary format across methods. The training-based experiments used for final test quality metrics were run with parallel processing on different hardware environments. Therefore, the paper uses the dedicated latency pass for timing comparisons, while quality metrics are taken from the corresponding training-based runs. 
+
+## 5 RESULTS 
+
+We evaluate Hybrid by comparing inference budget, measured latency, budget allocation, depth scaling, sparsity strength, and step-size sensitivity under the fixed protocol described above. 
+
+5.1 Quality versus inference budget and latency 
+
+Figure 1 compares the four inference schemes at a fixed two-layer hierarchy. Columns correspond to datasets, and rows show the two test metrics: full sparse-coding loss and reconstruction error. The horizontal axis is the method-specific inference budget. For ISTA and MFISTA this is the number of iterative updates, for LISTA-style amortized inference it is the number of learned shrinkage stages per 
+
+> 13/24
+
+layerwise encoder block, and for the displayed Hybrid curve it is K + Tref with the amortized depth fixed at K = 1. Each marker is the mean over completed seeds at one inference setting, with error bars showing between-seed variation in quality. The main pattern is that LISTA-style amortized inference gives the lowest-budget solution, but additional layerwise shrinkage stages do not reliably close the quality gap. On Fashion-MNIST and CIFAR-10 Gray in particular, deeper amortized encoder points can have worse test loss or reconstruction error than the shallow K = 1 point. By contrast, the K = 1 Hybrid curve improves on the corresponding amortized baseline with only a few corrective updates. Across MNIST, Fashion-MNIST, and CIFAR-10 Gray, these Hybrid points reduce both test loss and reconstruction error relative to K = 1 LISTA-style inference, and additional refinement usually maintains or slightly improves the gains as Tref increases from 1 to 7. 10 0 10 1 10 2             
+
+> Inference budget
+> 5.4 × 10 0
+> 5.6 × 10 0
+> 5.8 × 10 0
+> 6 × 10 0
+> 6.2 × 10 0
+> 6.4 × 10 0
+> 6.6 × 10 0
+> Test loss
+> MNIST
+> 10 010 110 2
+> Inference budget
+> 10 1
+> Fashion-MNIST
+> 10 010 110 2
+> Inference budget
+> 6 × 10 0
+> 7 × 10 0
+> 8 × 10 0
+> CIFAR-10 Gray
+> 10 010 110 2
+> Inference budget
+> 2 × 10 0
+> 3 × 10 0
+> 4 × 10 0
+> Test reconstruction error  MNIST
+> 10 010 110 2
+> Inference budget
+> 3 × 10 0
+> 4 × 10 0
+> 6 × 10 0
+> Fashion-MNIST
+> 10 010 110 2
+> Inference budget
+> 3 × 10 0
+> 4 × 10 0
+> 6 × 10 0
+> CIFAR-10 Gray
+> ISTA MFISTA LISTA Hybrid
+
+Figure 1. Quality versus inference budget for ISTA, MFISTA, LISTA, and Hybrid at a fixed hierarchical depth. Columns show datasets; rows show test loss and reconstruction error. For Hybrid, the amortized depth is fixed at K = 1 and the curve varies only Tref .Figure 2 then maps these same inference settings to measured latency. The quality gains above are not free, but they are obtained in a much lower-latency region than the fully iterative references. LISTA is the fastest method, with one-stage LISTA around 0.03 ms/sample in the measured setting. Adding Hybrid refinement raises latency to roughly 0.07 – 0.08 ms/sample for one corrective step and about 0.33 – 0.37 ms/sample for seven corrective steps. This is still far below the 100-step ISTA and MFISTA settings, which are several milliseconds per sample on the same plots. Together, Figs. 1 and 2 show that the proposed method is not simply a compromise on an abstract budget axis. In measured wall-clock terms, short Hybrid refinement gives a practical operating point between LISTA and fully iterative inference: it consistently improves over the shallow amortized baseline, while remaining separated from long ISTA/MFISTA runs by a large latency margin. 
+
+5.2 How Hybrid inference budget should be allocated 
+
+The next question is where the Hybrid inference budget should go. Figure 3 separates the two components of Hybrid inference: the number of LISTA-style amortized shrinkage stages K inside the layerwise encoder and the number of corrective refinement steps Tref . The horizontal axis varies Tref , while different curves correspond to different values of K.The main result is that increasing K is not the reliable way to improve Hybrid inference. On Fashion-MNIST and CIFAR-10 Gray, using more amortized shrinkage stages without any refinement ( Tref = 0 )does not reliably improve test loss or reconstruction error, and can be worse than the shallow K = 1
+
+14/24 10 0 10 1 10 2          
+
+> Inference budget
+> 10 1
+> 10 0
+> 10 1
+> Latency (ms/sample)  MNIST
+> 10 010 110 2
+> Inference budget
+> 10 1
+> 10 0
+> 10 1
+> Fashion-MNIST
+> 10 010 110 2
+> Inference budget
+> 10 1
+> 10 0
+> 10 1
+> CIFAR-10 Gray
+> ISTA MFISTA LISTA Hybrid
+
+Figure 2. Measured latency as a function of inference budget for the same fixed-depth settings used in Fig. 1. For Hybrid, the amortized depth is fixed at K = 1 and the budget changes through Tref .initializer. By contrast, K = 1 already provides a useful initialization, and adding iterative refinement consistently improves the code from that starting point. Most of the benefit of refinement appears after only a small number of steps. This indicates that the LISTA initializer is not solving the sparse inference problem by itself, but it places the latent variables close enough that corrective ISTA-style updates can reach a good regime much faster than inference from a generic initialization. In this sense, the effective Hybrid allocation is not a deep amortized encoder followed by heavy recurrence, but a shallow amortized initializer followed by a few refinement steps. 0 1 2 3 5 7 10  
+
+> Refinement steps Tref
+> 5.3 × 10 0
+> 5.4 × 10 0
+> 5.5 × 10 0
+> 5.6 × 10 0
+> 5.7 × 10 0
+> 5.8 × 10 0
+> 5.9 × 10 0
+> 6 × 10 0
+> 6.1 × 10 0
+> Test loss
+
+MNIST        
+
+> 01235710
+> Refinement steps Tref
+> 10 1
+> 6 × 10 0
+> 2 × 10 1
+> 3 × 10 1
+
+Fashion-MNIST        
+
+> 01235710
+> Refinement steps Tref
+> 10 1
+> 10 2
+
+CIFAR-10 Gray        
+
+> 01235710
+> Refinement steps Tref
+> 2.05 × 10 0
+> 2.1 × 10 0
+> 2.15 × 10 0
+> 2.2 × 10 0
+> 2.25 × 10 0
+> 2.3 × 10 0
+> Reconstruction error (x)
+
+MNIST        
+
+> 01235710
+> Refinement steps Tref
+> 3 × 10 0
+> 4 × 10 0
+> 5 × 10 0
+
+Fashion-MNIST        
+
+> 01235710
+> Refinement steps Tref
+> 10 1
+> 10 2
+
+CIFAR-10 Gray      
+
+> LISTA updates K
+> K=1 K=3 K=5 K=7 K=10
+
+Figure 3. Disentangling the Hybrid inference budget across the main datasets. Different points correspond to different combinations of amortized depth K and corrective refinement Tref , showing how allocation choices affect quality rather than holding a single total budget fixed. Table 3 makes this allocation issue explicit on Fashion-MNIST, where the contrast is easy to see. Rows are organized by the actual pair (K, Tref ) rather than only by the total count, and are restricted to settings with matching dedicated latency measurements under the default two-layer hierarchy. This exposes a point that is hidden by a one-dimensional budget axis: increasing amortized depth is not a reliable substitute for refinement. At total count 6 , for example, (1, 5) gives lower test loss and reconstruction error than (5, 1),although (5, 1) has lower latency. The balanced allocation (3, 3) lies between these two in quality, with test loss close to (1, 5) but reconstruction error closer to (5, 1). Thus, even when the total count is fixed, allocating more steps to refinement tends to improve quality, whereas allocating more stages to amortized inference can reduce latency. 
+
+15/24 Table 3. Representative Fashion-MNIST slice of the Hybrid inference-budget allocation sweep, restricted to settings with a matching dedicated latency measurement under the default two-layer hierarchy. Lower is better for test loss, reconstruction error, and latency. 
+
+## K Tref K + Tref Test loss ↓ Recon. error ↓ ms/sample [P25, P75] ↓
+
+## 1 1 2 5.499 ± 0.011 2.754 ± 0.004 0.074 [0 .074, 0 .075] 1 3 4 5.479 ± 0.011 2.731 ± 0.002 0.172 [0 .171, 0 .173] 1 5 6 5.457 ± 0.007 2.711 ± 0.004 0.246 [0 .246, 0 .247] 1 7 8 5.449 ± 0.006 2.706 ± 0.003 0.333 [0 .332, 0 .334] 3 1 4 5.473 ± 0.003 2.751 ± 0.002 0.104 [0 .104, 0 .105] 3 3 6 5.461 ± 0.001 2.742 ± 0.004 0.191 [0 .191, 0 .192] 5 1 6 5.474 ± 0.012 2.769 ± 0.004 0.129 [0 .129, 0 .129] 5 3 8 5.483 ± 0.027 2.777 ± 0.038 0.220 [0 .219, 0 .220] 10 1 11 5.504 ± 0.026 2.837 ± 0.052 0.196 [0 .196, 0 .197] 10 3 13 5.467 ± 0.004 2.767 ± 0.009 0.283 [0 .283, 0 .284] 
+
+5.3 Depth scaling and stability 
+
+We next examine the depth-scaling plot. Figure 4 shows how quality, latency, and between-seed variability change as the hierarchy becomes deeper under the layer schedules specified in the experimental setup. The depth sweep shows that latency grows with depth, but the quality and between-seed variability depend strongly on the inference method. MFISTA serves as a comparatively stable accelerated reference, whereas the ISTA-style baseline shows large loss variance in some regimes, including MNIST at depths 4 and 6. These patterns indicate that increasing hierarchy depth affects not only runtime but also the reliability of the inferred sparse codes. Pure LISTA shows a different failure mode. On Fashion-MNIST, increasing depth beyond the shallow settings does not clearly improve the final metrics, and the between-seed variance is larger at depth 8. On CIFAR-10 Gray, LISTA remains fast but shows a clearer quality gap than on MNIST. This suggests that a single amortized forward pass is less reliable on Fashion-MNIST and CIFAR-10 Gray than on MNIST, making recurrent refinement more useful. Hybrid remains much faster than the iterative solvers and is usually more stable than pure LISTA and the unaccelerated ISTA-style baseline, although it can become variable at some deeper CIFAR-10 Gray settings. Its refinement stage improves over LISTA on Fashion-MNIST and preserves competitive quality on most CIFAR-10 Gray depths, while avoiding the largest failures of the iterative baseline. MNIST generally behaves as an easier regime for the strongest methods: apart from standard ISTA’s increased variance, the depth-induced gap between valid solvers remains smaller than on Fashion-MNIST. This reinforces the interpretation that the main benefit of Hybrid is not merely on the easiest data, but on datasets where pure amortized inference shows a clearer quality or stability gap. Overall, the depth sweep shows that Hybrid is not merely a latency compromise: it often improves stability over pure amortization and is generally more stable than unaccelerated ISTA in the tested settings. 
+
+5.4 Effect of sparsity strength and step-size scaling 
+
+We next ask whether the Hybrid behavior depends on one particular sparsity setting. Figure 5 varies the tied sparsity coefficient λ while keeping the rest of the default setup fixed. As expected, increasing λ
+
+reduces the mean active fraction and generally increases reconstruction error, so this sweep should be read as a change in sparsity regime rather than as a search for the best reconstruction setting. The important point is that the Hybrid comparison does not collapse when the code becomes denser or sparser. Across the plotted λ values, Hybrid remains a low-latency alternative to the iterative solvers while usually improving on pure LISTA in reconstruction error. This supports the interpretation that the benefit of adding short refinement is not specific to the single default value λ = 0.05. Figure 6 then tests whether the refinement result is an artifact of one step-size scale. This is a sensitivity check rather than an exhaustive tuning experiment: the same η-scale is varied for ISTA, MFISTA, and Hybrid, and the resulting reconstruction error is compared. 
+
+> 16/24
+
+1 2 4 6 8
+
+Layers 
+
+10 1
+
+3 × 10 0
+
+4 × 10 0
+
+6 × 10 0
+
+> Test loss
+
+MNIST 
+
+1 2 4 6 8
+
+Layers 
+
+10 1
+
+4 × 10 0
+
+6 × 10 0
+
+Fashion-MNIST 
+
+1 2 4 6 8
+
+Layers 
+
+4 × 10 0
+
+6 × 10 0
+
+CIFAR-10 Gray 
+
+1 2 4 6 8
+
+Layers 
+
+10 0
+
+> Test reconstruction error
+
+MNIST 
+
+1 2 4 6 8
+
+Layers 
+
+2 × 10 0
+
+3 × 10 0
+
+4 × 10 0
+
+6 × 10 0
+
+Fashion-MNIST 
+
+1 2 4 6 8
+
+Layers 
+
+2 × 10 0
+
+3 × 10 0
+
+4 × 10 0
+
+6 × 10 0
+
+CIFAR-10 Gray 
+
+1 2 4 6 8
+
+Layers 
+
+0
+
+2
+
+4
+
+6
+
+8
+
+> Latency (ms/sample)
+
+MNIST 
+
+1 2 4 6 8
+
+Layers 
+
+0
+
+2
+
+4
+
+6
+
+8
+
+Fashion-MNIST 
+
+1 2 4 6 8
+
+Layers 
+
+0
+
+2
+
+4
+
+6
+
+8
+
+CIFAR-10 Gray 
+
+ISTA MFISTA LISTA Hybrid Figure 4. Depth scaling and stability across the main datasets. The panels show how objective quality and runtime change as the hierarchy deepens, making the method-wise trade-offs easier to compare than in a compressed aggregate table. 10 1
+
+2 × 10 0
+
+3 × 10 0
+
+4 × 10 0
+
+> Reconstruction error
+
+MNIST 
+
+10 1
+
+3 × 10 0
+
+4 × 10 0
+
+Fashion-MNIST 
+
+10 1
+
+2 × 10 0
+
+3 × 10 0
+
+4 × 10 0
+
+6 × 10 0
+
+CIFAR-10 Gray 
+
+10 1
+
+0.4 
+
+0.6 
+
+0.8 
+
+> Mean active fraction
+
+MNIST 
+
+10 1
+
+0.4 
+
+0.6 
+
+0.8 
+
+Fashion-MNIST 
+
+10 1
+
+0.4 
+
+0.6 
+
+0.8 
+
+CIFAR-10 Gray 
+
+ISTA MFISTA LISTA Hybrid 
+
+Figure 5. Effect of sparsity strength on reconstruction error and mean active fraction. 
+
+17/24 Hybrid is moderately sensitive to this scale, with ηscale = 1.0 generally giving the cleanest operating point in the plotted settings, but the method is not uniquely dependent on an exact value. Smaller or larger scales can worsen the reconstruction error, yet the Hybrid points remain in the same qualitative regime. In contrast, unaccelerated ISTA is more visibly affected by poor step-size choices, especially when the scale is increased. Thus the ablation suggests that Hybrid benefits from a reasonable refinement step size, but its main behavior is not explained solely by fine tuning that parameter. 0.6 0.8 1.0 1.2 1.4           
+
+> scale
+> 10 0
+> 2 × 10 0
+> 3 × 10 0
+> 4 × 10 0
+> 6 × 10 0
+> Reconstruction error  MNIST
+> 0.6 0.8 1.0 1.2 1.4
+> scale
+> 3 × 10 0
+> 4 × 10 0
+> Fashion-MNIST
+> 0.6 0.8 1.0 1.2 1.4
+> scale
+> 3 × 10 0
+> 4 × 10 0
+> CIFAR-10 Gray
+> ISTA MFISTA Hybrid
+
+Figure 6. Effect of step-size scaling on ISTA, MFISTA, and Hybrid. 
+
+## 6 DISCUSSION 
+
+The experiments show that the main issue is not only how many inference steps are used, but how those steps are organized. Pure amortization gives the lowest latency, but can leave a quality gap on Fashion-MNIST, CIFAR-10 Gray, and deeper hierarchies. Fully iterative inference remains the high-computation reference. In the tested settings, Hybrid is best interpreted as inference-budget reallocation: a shallow amortized pass moves the latent state into a useful region, and a small number of corrective updates recovers quality that pure amortization leaves behind. This interpretation is strongest in the Hybrid budget-allocation experiment. Increasing the number of LISTA-style shrinkage stages inside the layerwise encoder is not a reliable substitute for refinement: in some settings, using more amortized stages without any refinement ( Tref = 0) gives worse test loss or reconstruction error than the shallow K = 1 initializer. By contrast, K = 1 is already a useful initializer, and most of the refinement gain appears after only a few corrective steps. For this model class, the more effective allocation is cheap initialization followed by limited error correction. The shallow LISTA-style encoder is already a useful amortized initializer, because even a single learned shrinkage stage maps the input to a data-dependent sparse code. However, increasing the number of layerwise amortized stages is not equivalent to performing corrective inference under the full hierarchical energy. Additional shared LISTA-style stages repeatedly transform the bottom-up code within each layer, whereas Hybrid refinement explicitly uses reconstruction and inter-layer prediction errors from the coupled objective. This explains why K = 1 can be competitive, while larger K does not reliably replace iterative refinement. The depth, sparsity, and step-size checks clarify the scope of this pattern. Depth scaling shows that Hybrid can improve stability over pure LISTA and the unaccelerated ISTA-style baseline, but it is not uniformly stable at every depth. The sparsity sweep shows that the qualitative behavior is not tied to one value of λ . The step-size ablation shows moderate sensitivity, especially compared with a poorly scaled iterative baseline, but does not suggest that the Hybrid result is explained only by fine tuning a single refinement parameter. The present experiments also leave several limitations that motivate future work. The implementation is not a fully local biological learning rule, and the observed stability of Hybrid inference should not be interpreted as a general convergence guarantee. More importantly, the advantage of Hybrid inference should not be attributed to a single mechanism. Its performance likely reflects the interaction between amortized initialization, sparse iterative refinement, step-size control, thresholding, hierarchical coupling, and dictionary normalization. The present study evaluates a deliberately simple Hybrid instantiation in order to isolate the benefit of combining feed-forward initialization with a small number of refinement steps under a shared sparse-coding objective. 
+
+18/24 Future work should test whether this hybrid principle scales beyond the fully connected static-image setting studied here. One direction is convolutional sparse coding and larger image models, where dictionary structure and spatial weight sharing may change both reconstruction quality and inference cost (Bristow et al., 2013; Boutin et al., 2021). Another direction is to combine the present framework with more advanced components from modern sparse-coding and algorithm-unrolling methods, such as structured amortized encoders, ALISTA-style parameterizations (Liu et al., 2019), adaptive inference budgets, or safeguarded refinement schemes. These extensions may improve the quality–latency trade-off in more demanding domains without changing the central idea of using amortized inference as a fast initializer for sparse iterative correction. Finally, the present results prepare the intended extension to temporal data. Because this paper focuses on static images and reconstruction-oriented sparse inference, it does not establish claims about temporal prediction, belief dynamics, or active inference. Introducing temporal latent dynamics, sequential observations, or video inputs would therefore provide a natural test of whether the proposed hybrid inference principle remains useful when data arrive continuously and latency constraints are tighter. 
+
+## 7 CONCLUSION 
+
+We studied hierarchical sparse predictive coding for static images under a fixed sparse generative objective. Rather than proposing a new energy function, representation family, or biological learning rule, we compared how iterative, amortized, and hybrid inference procedures change the behavior of the same model. Pure iterative methods preserve the sparse generative semantics but are costly, while pure amortized inference is fast but can lose quality or stability. Hybrid provides a practical middle regime by using cheap amortized initialization followed by a small amount of corrective refinement. This work provides a controlled comparison of accelerated hierarchical sparse inference within one energy-based framework. 
+
+## ACKNOWLEDGEMENTS 
+
+The author used coding agents, including Codex and GitHub Copilot, with GPT-5.5, GPT-5.4, Qwen 3.6 27B, and Qwen 3.6 35B to help revise wording, improve clarity, check the consistency of the manuscript, and write and revise program code. The scientific ideas, experimental design, implementation, analysis, interpretation, and final text were reviewed and approved by the author, who takes full responsibility for the content of the paper. 
+
+## REFERENCES 
+
+Abe, Y., Fujita, K., and Kashimori, Y. (2018). Visual and category representations shaped by the interaction between inferior temporal and prefrontal cortices. Cognitive Computation , 10:687 – 702. Aberdam, A., Sulam, J., and Elad, M. (2019). Multi-layer sparse coding: The holistic way. SIAM Journal on Mathematics of Data Science , 1(1):46–77. Ablin, P., Moreau, T., Massias, M., and Gramfort, A. (2019). Learning step sizes for unfolded sparse coding. In Advances in Neural Information Processing Systems 32 (NeurIPS 2019) , pages 13100– 13110. Arbelaez, P., Maire, M., Fowlkes, C., and Malik, J. (2011). Contour detection and hierarchical image segmentation. IEEE Trans. Pattern Anal. Mach. Intell. , 33(5):898–916. Bastos, A., Usrey, W., Adams, R., Mangun, G., Fries, P., and Friston, K. (2012). Canonical microcircuits for predictive coding. Neuron , 76(4):695–711. Beck, A. and Teboulle, M. (2009a). Fast gradient-based algorithms for constrained total variation image denoising and deblurring problems. IEEE Transactions on Image Processing , 18(11):2419–2434. Beck, A. and Teboulle, M. (2009b). A fast iterative shrinkage-thresholding algorithm for linear inverse problems. SIAM Journal on Imaging Sciences , 2(1):183–202. Beck, A. and Tetruashvili, L. (2013). On the convergence of block coordinate descent type methods. 
+
+SIAM Journal on Optimization , 23(4):2037–2060. Boutin, V., Franciosini, A., Chavane, F., Ruffier, F., and Perrinet, L. (2021). Sparse deep predictive coding captures contour integration capabilities of the early visual system. PLOS Computational Biology ,17(1):1–31. 
+
+> 19/24
+
+Bristow, H., Eriksson, A., and Lucey, S. (2013). Fast convolutional sparse coding. In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR) , pages 391–398. Daubechies, I., Defrise, M., and De Mol, C. (2004). An iterative thresholding algorithm for linear inverse problems with a sparsity constraint. Communications on Pure and Applied Mathematics ,57(11):1413–1457. Demmel, J. W. (1997). Applied Numerical Linear Algebra . Society for Industrial and Applied Mathemat-ics. Friston, K. J. (2005). A theory of cortical responses. Philosophical Transactions of the Royal Society B: Biological Sciences , 360:815 – 836. Friston, K. J. and Kiebel, S. J. (2009). Predictive coding under the free-energy principle. Philosophical Transactions of the Royal Society B: Biological Sciences , 364:1211 – 1221. Golub, G. H. and van Loan, C. F. (2013). Matrix Computations . JHU Press, fourth edition. Gregor, K. and LeCun, Y. (2010). Learning fast approximations of sparse coding. In Proceedings of the 27th International Conference on International Conference on Machine Learning , ICML’10, page 399–406, Madison, WI, USA. Omnipress. Kamiyama, A., Fujita, K., and Kashimori, Y. (2016). A neural mechanism of dynamic gating of task-relevant information by top-down influence in primary visual cortex. Biosystems , 150:138–148. Kashimori, Y., Ichinose, Y., and Fujita, K. (2007). A functional role of interaction between it cortex and pf cortex in visual categorization task. Neurocomputing , 70(10):1813–1818. Computational Neuroscience: Trends in Research 2007. Liu, J., Chen, X., Wang, Z., and Yin, W. (2019). Alista: Analytic weights are as good as learned weights in lista. In International Conference on Learning Representations .Mairal, J., Bach, F., Ponce, J., and Sapiro, G. (2010). Online learning for matrix factorization and sparse coding. J. Mach. Learn. Res. , 11:19–60. Nesterov, Y. (2012). Efficiency of coordinate descent methods on huge-scale optimization problems. 
+
+SIAM Journal on Optimization , 22(2):341–362. Olshausen, B. A. and Field, D. J. (1996). Emergence of simple-cell receptive field properties by learning a sparse code for natural images. Nature , 381:607–609. Parikh, N. and Boyd, S. (2014). Proximal algorithms. Found. Trends Optim. , 1(3):127–239. Rao, R. and Ballard, D. (1999). Predictive coding in the visual cortex: a functional interpretation of some extra-classical receptive-field effects. Nature neuroscience , 2:79–87. Richt ´arik, P. and Tak ´a ˘c, M. (2014). Iteration complexity of randomized block-coordinate descent methods for minimizing a composite function. Math. Program. , 144(1–2):1–38. Rosenbaum, R. (2022). On the relationship between predictive coding and backpropagation. PLOS ONE ,17(3):1–27. Rozell, C. J., Johnson, D. H., Baraniuk, R. G., and Olshausen, B. A. (2008). Sparse coding via thresholding and local competition in neural circuits. Neural Comput. , 20(10):2526–2563. Tschantz, A., Millidge, B., Seth, A. K., and Buckley, C. L. (2023). Hybrid predictive coding: Inferring, fast and slow. PLOS Computational Biology , 19(8):1–31. Whittington, J. C. R. and Bogacz, R. (2017). An approximation of the error backpropagation algorithm in a predictive coding network with local hebbian synaptic plasticity. Neural Computation , 29(5):1229– 1262. Xu, Y. (2018). Hybrid jacobian and gauss–seidel proximal block coordinate update methods for linearly constrained convex programming. SIAM Journal on Optimization , 28(1):646–670. 
+
+## A MFISTA-STYLE ACCELERATED BASELINE FOR HIERARCHICAL SPARSE CODING 
+
+MFISTA is included only as an accelerated iterative reference. It uses the same hierarchical sparse energy and the same proximal shrinkage operation as the ISTA-style baseline, but differs in two implementation details. First, the gradient step is taken from an extrapolated latent code rather than from the currently accepted latent code. Second, the resulting joint latent-code candidate is accepted only if it lowers the full energy. This acceptance rule applies to the inferred codes, not to the dictionary parameters. Let ¯aaa(t) = ( ¯aaa(t) 
+
+> 1
+
+, . . . , ¯aaa(t) 
+
+> L
+
+) denote the accepted latent codes at iteration t, let yyy(t) = ( yyy(t) 
+
+> 1
+
+, . . . , yyy(t) 
+
+> L
+
+) denote the extrapolated codes, and let st be the FISTA momentum scalar. We initialize the momentum as s0 = 1
+
+> 20/24
+
+and set the first extrapolated code equal to the initial accepted code, yyy(0) = ¯aaa(0). We first compute the same layerwise ISTA step-size estimates ({ηℓ}L
+
+> ℓ=1
+
+) as in Eq. (18) , using the current dictionaries, coupling weights, and ηscale . For the accelerated baseline, we then collapse these layerwise estimates to a single fixed step size shared across all latent blocks: 
+
+η = min  
+
+> ℓ
+
+ηℓ, θℓ = ηλ ℓ. (40) This choice is conservative relative to the layerwise ISTA updates, although it should not be interpreted as an exact global Lipschitz step-size guarantee for the fully coupled joint latent objective. At each iteration, MFISTA forms the same kind of soft-thresholded proximal candidate as ISTA, but at the extrapolated point: 
+
+zzz(t) 
+
+> ℓ
+
+= Sθℓ
+
+
+
+yyy(t) 
+
+> ℓ
+
+− η∇aaaℓ f (yyy(t))
+
+
+
+, ℓ = 1, . . . , L. (41) Here, ∇aaaℓ f (yyy(t)) denotes the ℓ-th block gradient of the same smooth energy used in ISTA, evaluated at the full extrapolated code yyy(t). Equivalently, it is obtained from the appropriate layerwise expression in Eqs. (7) – (9) , according to whether ℓ = 1 , 1 < ℓ < L, or ℓ = L, after substituting aaa j = yyy(t) 
+
+> j
+
+for all latent blocks. The full candidate vector zzz(t) = ( zzz(t) 
+
+> 1
+
+, . . . , zzz(t) 
+
+> L
+
+) is then compared with the previously accepted joint latent code: ¯aaa(t+1) = arg min  
+
+> uuu∈{ ¯aaa(t),zzz(t)}
+
+E(uuu), (42) so the accepted energy is monotone non-increasing over MFISTA inference iterations. The momentum scalar is updated by 
+
+st+1 = 1 + p1 + 4s2
+
+> t
+
+2 . (43) The next extrapolated latent code is formed layerwise via 
+
+yyy(t+1) 
+
+> ℓ
+
+= ¯aaa(t+1) 
+
+> ℓ
+
++ st
+
+st+1
+
+
+
+zzz(t) 
+
+> ℓ
+
+− ¯aaa(t+1)
+
+> ℓ
+
+
+
++ st − 1
+
+st+1
+
+
+
+¯aaa(t+1) 
+
+> ℓ
+
+− ¯aaa(t)
+
+> ℓ
+
+
+
+, ℓ = 1, . . . , L. (44) This baseline is introduced for empirical comparison, not as a claim that the coupled hierarchical objective inherits the full guarantees of classical convex MFISTA. Its role is to provide an accelerated iterative reference under the same energy and inference-budget protocol. Hybrid instead uses ISTA-style refinement, which aligns more directly with the ISTA-inspired shrinkage structure of the LISTA-style amortized encoder. 
+
+## B SUPPLEMENTARY RESULTS FOR THE MAIN EXPERIMENTS 
+
+This appendix section provides supplementary results for the main experimental scope: method-specific inference-budget sweeps and auxiliary variant analyses. All comparisons below use the same objective, architecture family, and training protocol as the main text. The appendix-only BSDS500 Patch check is displayed in Section C. 
+
+B.1 Training-time convergence in epoch space 
+
+Figure 7 shows the training-time evolution of validation loss and reconstruction error over the 25-epoch schedule used in the main experiments. This check is intended to assess whether the shared schedule is long enough to expose the method-wise differences used in the reported comparisons, rather than to claim full optimization convergence. The curves show that all methods improve rapidly in the early epochs and are comparatively flat by the end of training. Thus, the 25-epoch schedule appears adequate for comparing methods under this fixed protocol. The remaining separation among methods is already visible late in training: LISTA remains the fastest amortized baseline but does not close the quality gap entirely, while Hybrid moves closer to the iterative reference regime after refinement.                                   
+
+> 21/24 0510 15 20 25
+> Epoch
+> 6 × 10 0
+> 7 × 10 0
+> Validation loss
+> MNIST
+> 0510 15 20 25
+> Epoch
+> 6 × 10 0
+> 7 × 10 0
+> 8 × 10 0
+> Fashion-MNIST
+> 0510 15 20 25
+> Epoch
+> 10 1
+> 6 × 10 0
+> 7 × 10 0
+> 8 × 10 0
+> 9 × 10 0
+> CIFAR-10 Gray
+> 0510 15 20 25
+> Epoch
+> 2 × 10 0
+> 3 × 10 0
+> Validation reconstruction error
+> MNIST
+> 0510 15 20 25
+> Epoch
+> 3 × 10 0
+> 4 × 10 0
+> 5 × 10 0
+> Fashion-MNIST
+> 0510 15 20 25
+> Epoch
+> 3 × 10 0
+> 4 × 10 0
+> 6 × 10 0
+> CIFAR-10 Gray
+> ISTA MFISTA LISTA Hybrid Hybrid+MFISTA
+
+Figure 7. Training-time convergence curves across optimization methods. The panels show validation loss and reconstruction error as functions of training epoch under the shared core setting. Validation loss is the full hierarchical sparse energy, whereas reconstruction error denotes only the input-space reconstruction term. 
+
+B.2 Additional ablation: Hybrid-MFISTA refinement 
+
+The proposed Hybrid method uses ISTA-style refinement. As an additional ablation, we also tested Hybrid-MFISTA, which replaces only the refinement stage with the MFISTA procedure in Appendix A. The amortized initialization, encoder-gradient convention, and training protocol are unchanged. In the full set of method-wise epoch curves in Fig. 7, the Hybrid-MFISTA curves track the original Hybrid method closely over training epochs. Table 4 shows that Hybrid-MFISTA is sometimes competitive but does not consistently outperform Hybrid. MFISTA-style refinement adds latency without a clear objective-quality gain. This ablation supports using the simpler ISTA-style refinement rule in the main Hybrid method. 
+
+Table 4. Appendix additional ablation comparing the main Hybrid method with Hybrid-MFISTA refinement. Dataset Method Test loss ↓ Recon. error ↓ ms/sample [P25, P75] ↓
+
+MNIST Hybrid 5.336 ± 0.000 2.039 ± 0.003 0.248 [0 .247, 0 .249] MNIST Hybrid-MFISTA 5.342 ± 0.004 2.042 ± 0.005 0.563 [0 .562, 0 .564] Fashion-MNIST Hybrid 5.457 ± 0.007 2.711 ± 0.004 0.246 [0 .246, 0 .247] Fashion-MNIST Hybrid-MFISTA 5.467 ± 0.010 2.717 ± 0.003 0.577 [0 .576, 0 .578] CIFAR-10 Gray Hybrid 5.694 ± 0.010 2.341 ± 0.011 0.286 [0 .286, 0 .287] CIFAR-10 Gray Hybrid-MFISTA 5.699 ± 0.009 2.346 ± 0.008 0.621 [0 .620, 0 .622] 
+
+## C APPENDIX-ONLY DATASET EXPERIMENTS 
+
+The main text is intentionally limited to three datasets. Here we add BSDS500 Patch as an appendix-only 
+
+natural-image patch check. This experiment broadens scope and connects the comparison to the classical natural-image sparse-coding setting, rather than adding a new core claim. The implementation samples 16 × 16 patches from the official BSDS500 train, validation, and test image directories, using 54000, 6000, and 10000 patches for the three splits, respectively. Figure 8 checks two points. First, the epoch curves rule out an obvious training-schedule mismatch: the methods improve rapidly and flatten within the common 25-epoch schedule. Second, the budget panels 
+
+22/24 0 5 10 15 20 25 
+
+Epoch  
+
+> 10 0
+> 9 × 10 1
+> 1.1 × 10 0
+> 1.2 × 10 0
+> 1.3 × 10 0
+> 1.4 × 10 0
+> 1.5 × 10 0
+> 1.6 × 10 0
+> 1.7 × 10 0
+> Validation loss
+
+Epoch vs loss   
+
+> 10 010 110 2
+
+Inference budget   
+
+> 10 0
+> 9 × 10 1
+> 9.5 × 10 1
+> 1.05 × 10 0
+> 1.1 × 10 0
+> 1.15 × 10 0
+> 1.2 × 10 0
+> 1.25 × 10 0
+> Test loss
+
+Budget vs loss      
+
+> 0510 15 20 25
+
+Epoch    
+
+> 3 × 10 1
+> 4 × 10 1
+> 6 × 10 1
+> Validation reconstruction error
+
+Epoch vs reconstruction error   
+
+> 10 010 110 2
+
+Inference budget    
+
+> 3 × 10 1
+> 4 × 10 1
+> 6 × 10 1
+> Test reconstruction error
+
+Budget vs reconstruction error    
+
+> ISTA MFISTA LISTA Hybrid
+
+Figure 8. BSDS500 Patch appendix check. Left column: validation loss and reconstruction error over training epochs. Right column: test loss and reconstruction error versus inference budget. For Hybrid in the budget panels, the amortized depth is fixed at K = 1, matching the main quality-versus-budget comparison. 
+
+23/24 ask whether the main quality-versus-inference-budget comparison remains recognizable on natural-image patches. The BSDS500 Patch result is more nuanced than the main grayscale benchmarks, but the same broad trade-off remains visible: pure amortization is cheapest, stronger iterative inference can improve final quality, and short Hybrid refinement occupies an intermediate operating regime.
