@@ -6,66 +6,57 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-04
-- 运行时间：2026-07-04 20:20:46 UTC
+- 最新运行日期：2026-07-05
+- 运行时间：2026-07-05 20:47:26 UTC
 - 运行状态：成功
-- 本次总论文数：14
-- 精读区：2
+- 本次总论文数：12
+- 精读区：0
 - 速读区：12
 
 ### 今日简报（AI）
-今日推荐14篇论文，精读聚焦两篇8分佳作：DPPE革新多视角Transformer的位置编码，以及轻量CNN代际对比揭示架构与训练预算的权衡。
-
-最值得关注的方向：DPPE通过重新思考相机姿态编码提升多视图3D感知；轻量CNN研究指出新架构未必更优，初始化与训练预算至关重要。
-
-建议普通读者优先精读DPPE，理解其位置编码改进思路，再速读Flexformer的线性注意力核设计作为补充。
-- 详情：[/202607/04/README](/202607/04/README)
+今日速读12篇论文，聚焦视觉语言模型测试时扩展与FPGA量化剪枝两项7分研究。最值得关注的是《On Test-Time Scaling for Vision-Language Models》探讨推理计算量对多模态任务的影响，以及《RQP》提出的资源导向剪枝方法。建议优先阅读视觉语言模型测试时扩展部分，了解如何通过调整推理计算量提升性能。
+- 详情：[/202607/05/README](/202607/05/README)
 
 ### 精读区论文标签
-1. [DPPE: Rethinking Camera-Based Positional Encoding for Scaling Multi-View Transformers](/202607/04/2606.31585v1-dppe-rethinking-camera-based-positional-encoding-for-scaling-multi-view-transformers)  
-   标签：评分：8.0/10、query:neural-arch
-   evidence：重新思考多视图Transformer的位置编码
-2. [Do Newer Lightweight CNNs Perform Better Under Resource Constraints? A Controlled Multigenerational Study of Architecture, Initialization, Training Budget, and Efficiency](/202607/04/2607.01984v1-do-newer-lightweight-cnns-perform-better-under-resource-constraints-a-controlled-multigenerational-study-of-architecture-initialization-training-budget-and-efficiency)  
-   标签：评分：8.0/10、query:neural-arch
-   evidence：轻量CNN架构的受控多代研究
+- 本次无精读推荐。
 
 ### 速读区论文标签
-1. [Flexformer: Flexible Linear Transformer with Learnable Attention Kernel](/202607/04/2606.27748v2-flexformer-flexible-linear-transformer-with-learnable-attention-kernel)  
+1. [On Test-Time Scaling for Vision-Language Models](/202607/05/2606.28864v1-on-test-time-scaling-for-vision-language-models)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：具有可学习注意力核的灵活线性Transformer
-2. [Quality-Aware Modulation for Diffusion Transformers](/202607/04/2606.30934v1-quality-aware-modulation-for-diffusion-transformers)  
+   evidence：测试时缩放提升性能
+2. [On Test-Time Scaling for Vision-Language Models](/202607/05/2606.28864v2-on-test-time-scaling-for-vision-language-models)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：通过质量感知调制模块改进扩散变压器架构，适用于计算机视觉任务
-3. [ExPLoRe: Expert Patch-Level Loss Routing for Multi-Objective Masked Image Modeling](/202607/04/2606.31201v1-explore-expert-patch-level-loss-routing-for-multi-objective-masked-image-modeling)  
-   标签：评分：7.0/10、query:neural-arch
-   evidence：提出使用专家混合的补丁级损失路由，改进多目标掩码图像建模，是一种计算机视觉架构技术
-4. [Vitality-Aware Compression for Efficient Image-to-Shape Diffusion Transformers](/202607/04/2607.00382v1-vitality-aware-compression-for-efficient-image-to-shape-diffusion-transformers)  
-   标签：评分：7.0/10、query:neural-arch
-   evidence：压缩扩散Transformer减小模型尺寸
-5. [GSRQ: Gain-Shape Residual Quantization for Sub-1-bit KV Cache](/202607/04/2607.01065v1-gsrq-gain-shape-residual-quantization-for-sub-1-bit-kv-cache)  
+   evidence：测试时缩放提升性能
+3. [RQP: Resource-Oriented Quantiser Pruning for Neural Networks on FPGAs](/202607/05/2606.30382v1-rqp-resource-oriented-quantiser-pruning-for-neural-networks-on-fpgas)  
    标签：评分：7.0/10、query:compress
-   evidence：用于亚比特KV缓存的增益形状残差量化
-6. [When Token Compression Breaks: Structural Pruning vs. Token Reduction for Robust ViT Segmentation under High Compression](/202607/04/2607.02237v1-when-token-compression-breaks-structural-pruning-vs-token-reduction-for-robust-vit-segmentation-under-high-compression)  
+   evidence：面向资源的量化器剪枝方法，可直接用于压缩模型中的量化。
+4. [PGE-SAM: Prompt-Guided Feature Enhancement for Interactive Segmentation under Degradation](/202607/05/2606.30477v1-pge-sam-prompt-guided-feature-enhancement-for-interactive-segmentation-under-degradation)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：针对高压缩率下鲁棒ViT分割的token压缩与结构剪枝对比基准
-7. [ScaLe-INR: Scale and Learn Implicit Neural Representations](/202607/04/2606.27862v1-scale-inr-scale-and-learn-implicit-neural-representations)  
+   evidence：提示引导的特征增强以提升SAM在退化图像下的交互分割
+5. [Intrinsically Stable Spiking Neural Networks: Overcoming the Performance Barrier in the Absence of Batch Normalization](/202607/05/2606.31695v1-intrinsically-stable-spiking-neural-networks-overcoming-the-performance-barrier-in-the-absence-of-batch-normalization)  
+   标签：评分：7.0/10、query:neural-arch
+   evidence：无批归一化的内在稳定脉冲神经网络架构
+6. [Nonlinearity-Aware LoRA: Structured Gate Adaptation under Low-Rank Constraints](/202607/05/2606.31717v1-nonlinearity-aware-lora-structured-gate-adaptation-under-low-rank-constraints)  
+   标签：评分：7.0/10、query:neural-arch
+   evidence：低秩微调中的非线性感知适应
+7. [Fractional Stochastic Neural Networks](/202607/05/2606.29438v1-fractional-stochastic-neural-networks)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：提出多分支INR架构克服谱偏差，改进神经网络表示能力
-8. [TextDS: Parameter-Efficient Representation Alignment for Scene Text Detection under Distribution Shifts](/202607/04/2606.28077v2-textds-parameter-efficient-representation-alignment-for-scene-text-detection-under-distribution-shifts)  
+   evidence：提出分数布朗运动驱动的随机神经网络
+8. [Effective Depth in Joint Source-Channel Coding: An Implicit Equilibrium Analysis](/202607/05/2606.29737v2-effective-depth-in-joint-source-channel-coding-an-implicit-equilibrium-analysis)  
+   标签：评分：6.0/10、query:compress
+   evidence：联合源信道编码中自适应的隐式均衡深度框架
+9. [Real-Time Underwater Image Enhancement via Frequency-Guided Dual-Path Attention](/202607/05/2606.30314v1-real-time-underwater-image-enhancement-via-frequency-guided-dual-path-attention)  
+   标签：评分：6.0/10、query:compress
+   evidence：MBRConv-DCT层注入固定DCT先验用于频率引导图像增强
+10. [Zero-Shot Quantization for Object Detectors using Off-the-Shelf Generative Models](/202607/05/2606.31456v1-zero-shot-quantization-for-object-detectors-using-off-the-shelf-generative-models)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：提出逐步LoRA适配用于分布偏移下的参数高效特征适应
-9. [Criticality-Constrained Iterative Pruning for Energy-Efficient Spiking Neural Networks via Combined Importance Scoring](/202607/04/2606.30676v1-criticality-constrained-iterative-pruning-for-energy-efficient-spiking-neural-networks-via-combined-importance-scoring)  
+   evidence：零样本量化用于模型优化
+11. [Rethinking Conditional Generation for Underwater Salient Object Detection](/202607/05/2607.01825v1-rethinking-conditional-generation-for-underwater-salient-object-detection)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：提出脉冲神经网络的临界性约束剪枝方法，一种深度学习模型优化策略
-10. [Segmenting, Fast and Slow: Real-Time Open-Vocabulary Video Instance Segmentation with Dual-Path Processing](/202607/04/2607.00124v1-segmenting-fast-and-slow-real-time-open-vocabulary-video-instance-segmentation-with-dual-path-processing)  
+   evidence：基于退化感知条件生成的水下显著性检测
+12. [Understanding Geometric Representations in Self-Supervised Vision Transformers via Subspace Intervention](/202607/05/2607.01987v1-understanding-geometric-representations-in-self-supervised-vision-transformers-via-subspace-intervention)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：用于实时开放词汇视频实例分割的双流快慢框架
-11. [Towards High-Resolution Visual Perception via Hierarchical Entity Exploration](/202607/04/2607.00816v1-towards-high-resolution-visual-perception-via-hierarchical-entity-exploration)  
-   标签：评分：6.0/10、query:neural-arch
-   evidence：提出无训练的高分辨率视觉感知框架，改进多模态大模型的计算机视觉架构
-12. [Diversity-aware View Partitioning for Scalable VGGT](/202607/04/2607.01885v1-diversity-aware-view-partitioning-for-scalable-vggt)  
-   标签：评分：6.0/10、query:neural-arch
-   evidence：多样性感知的视图划分以扩展VGGT，提高注意力效率
+   evidence：通过子空间干预理解自监督ViT的几何表示
 
 
 <div class="dpr-home-promo-card">
