@@ -6,57 +6,68 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-05
-- 运行时间：2026-07-05 20:47:26 UTC
+- 最新运行日期：2026-07-06
+- 运行时间：2026-07-06 21:57:56 UTC
 - 运行状态：成功
-- 本次总论文数：12
-- 精读区：0
+- 本次总论文数：16
+- 精读区：4
 - 速读区：12
 
 ### 今日简报（AI）
-今日速读12篇论文，聚焦视觉语言模型测试时扩展与FPGA量化剪枝两项7分研究。最值得关注的是《On Test-Time Scaling for Vision-Language Models》探讨推理计算量对多模态任务的影响，以及《RQP》提出的资源导向剪枝方法。建议优先阅读视觉语言模型测试时扩展部分，了解如何通过调整推理计算量提升性能。
-- 详情：[/202607/05/README](/202607/05/README)
+今日共收录16篇论文，其中精读《SpiralFovea》一篇（8分），速读包含图像去模糊、分式随机网络与几何感知KAN等方向。最值得关注的是SpiralFovea提出的输入自适应注视分词，可作为资源自适应推理的第三杠杆。建议优先阅读这篇精读，并拓展关注几何感知KAN与分式随机神经网络。
+- 详情：[/202607/06/README](/202607/06/README)
 
 ### 精读区论文标签
-- 本次无精读推荐。
+1. [SpiralFovea: Input-Adaptive Foveated Tokenization as a Third Lever of Resource-Adaptive Inference](/202607/06/2607.00780v1-spiralfovea-input-adaptive-foveated-tokenization-as-a-third-lever-of-resource-adaptive-inference)  
+   标签：评分：8.0/10、query:neural-arch
+   evidence：视觉Transformer的输入自适应标记化
+2. [SpiralFovea: Input-Adaptive Foveated Tokenization as a Third Lever of Resource-Adaptive Inference](/202607/06/2607.00780v2-spiralfovea-input-adaptive-foveated-tokenization-as-a-third-lever-of-resource-adaptive-inference)  
+   标签：评分：8.0/10、query:neural-arch
+   evidence：视觉Transformer的输入自适应标记化
+3. [Efficient Compression of Structured and Unstructured Volumes via Learned 3D Gaussian Representation](/202607/06/2607.01164v1-efficient-compression-of-structured-and-unstructured-volumes-via-learned-3d-gaussian-representation)  
+   标签：评分：8.0/10、query:compress
+   evidence：基于学习的三维高斯表示进行体数据压缩
+4. [WBMM: Windowed Batch Matrix Multiplication for Efficient Large Receptive Field Convolution](/202607/06/2607.02097v1-wbmm-windowed-batch-matrix-multiplication-for-efficient-large-receptive-field-convolution)  
+   标签：评分：8.0/10、query:neural-arch
+   evidence：窗口化批量矩阵乘法实现高效大核卷积，改善内存访问和吞吐量
 
 ### 速读区论文标签
-1. [On Test-Time Scaling for Vision-Language Models](/202607/05/2606.28864v1-on-test-time-scaling-for-vision-language-models)  
+1. [Fractional Stochastic Neural Networks](/202607/06/2606.29438v1-fractional-stochastic-neural-networks)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：测试时缩放提升性能
-2. [On Test-Time Scaling for Vision-Language Models](/202607/05/2606.28864v2-on-test-time-scaling-for-vision-language-models)  
+   evidence：分数阶随机神经网络与残差动力学
+2. [CogSENet: Blind Image Deblurring with Blur-Conditioned Semantic Routing and Explicit Frequency Fusion](/202607/06/2606.30030v1-cogsenet-blind-image-deblurring-with-blur-conditioned-semantic-routing-and-explicit-frequency-fusion)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：测试时缩放提升性能
-3. [RQP: Resource-Oriented Quantiser Pruning for Neural Networks on FPGAs](/202607/05/2606.30382v1-rqp-resource-oriented-quantiser-pruning-for-neural-networks-on-fpgas)  
-   标签：评分：7.0/10、query:compress
-   evidence：面向资源的量化器剪枝方法，可直接用于压缩模型中的量化。
-4. [PGE-SAM: Prompt-Guided Feature Enhancement for Interactive Segmentation under Degradation](/202607/05/2606.30477v1-pge-sam-prompt-guided-feature-enhancement-for-interactive-segmentation-under-degradation)  
+   evidence：面向盲图像去模糊的CogSENet，使用语义路由和频率融合，一种新型CV架构
+3. [Geometry-Aware R-Structured Kolmogorov-Arnold Networks](/202607/06/2607.01449v1-geometry-aware-r-structured-kolmogorov-arnold-networks)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：提示引导的特征增强以提升SAM在退化图像下的交互分割
-5. [Intrinsically Stable Spiking Neural Networks: Overcoming the Performance Barrier in the Absence of Batch Normalization](/202607/05/2606.31695v1-intrinsically-stable-spiking-neural-networks-overcoming-the-performance-barrier-in-the-absence-of-batch-normalization)  
+   evidence：融合KAN与R函数的混合神经网络架构，创新架构设计
+4. [Efficient PEFT Methods with Adaptive Checkpointing for Vision Models and VLMs on Resource Constrained Consumer-GPUs](/202607/06/2607.02158v1-efficient-peft-methods-with-adaptive-checkpointing-for-vision-models-and-vlms-on-resource-constrained-consumer-gpus)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：无批归一化的内在稳定脉冲神经网络架构
-6. [Nonlinearity-Aware LoRA: Structured Gate Adaptation under Low-Rank Constraints](/202607/05/2606.31717v1-nonlinearity-aware-lora-structured-gate-adaptation-under-low-rank-constraints)  
-   标签：评分：7.0/10、query:neural-arch
-   evidence：低秩微调中的非线性感知适应
-7. [Fractional Stochastic Neural Networks](/202607/05/2606.29438v1-fractional-stochastic-neural-networks)  
-   标签：评分：6.0/10、query:neural-arch
-   evidence：提出分数布朗运动驱动的随机神经网络
-8. [Effective Depth in Joint Source-Channel Coding: An Implicit Equilibrium Analysis](/202607/05/2606.29737v2-effective-depth-in-joint-source-channel-coding-an-implicit-equilibrium-analysis)  
+   evidence：比较多种参数高效微调方法和自适应梯度检查点策略，用于模型优化
+5. [Performance Analysis of Hardware-Accelerated 10-Bit 4:2:2 Encoding with Split-Frame Encoding for High-Fidelity V-PCC Streaming](/202607/06/2606.29179v1-performance-analysis-of-hardware-accelerated-10-bit-422-encoding-with-split-frame-encoding-for-high-fidelity-v-pcc-streaming)  
    标签：评分：6.0/10、query:compress
-   evidence：联合源信道编码中自适应的隐式均衡深度框架
-9. [Real-Time Underwater Image Enhancement via Frequency-Guided Dual-Path Attention](/202607/05/2606.30314v1-real-time-underwater-image-enhancement-via-frequency-guided-dual-path-attention)  
+   evidence：面向点云压缩的硬件加速编码
+6. [Effective Depth in Joint Source-Channel Coding: An Implicit Equilibrium Analysis](/202607/06/2606.29737v1-effective-depth-in-joint-source-channel-coding-an-implicit-equilibrium-analysis)  
    标签：评分：6.0/10、query:compress
-   evidence：MBRConv-DCT层注入固定DCT先验用于频率引导图像增强
-10. [Zero-Shot Quantization for Object Detectors using Off-the-Shelf Generative Models](/202607/05/2606.31456v1-zero-shot-quantization-for-object-detectors-using-off-the-shelf-generative-models)  
+   evidence：隐式均衡框架用于深度联合源信道编码
+7. [Neural Subspace Reallocation: Continual Learning as Retrieval-Based Subspace Memory Management](/202607/06/2606.30067v1-neural-subspace-reallocation-continual-learning-as-retrieval-based-subspace-memory-management)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：零样本量化用于模型优化
-11. [Rethinking Conditional Generation for Underwater Salient Object Detection](/202607/05/2607.01825v1-rethinking-conditional-generation-for-underwater-salient-object-detection)  
+   evidence：提出基于参数子空间的内存管理用于持续学习，通过SVD压缩LoRA模块
+8. [Scalar Representations of Neural Network Training Dynamics](/202607/06/2606.30384v1-scalar-representations-of-neural-network-training-dynamics)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：基于退化感知条件生成的水下显著性检测
-12. [Understanding Geometric Representations in Self-Supervised Vision Transformers via Subspace Intervention](/202607/05/2607.01987v1-understanding-geometric-representations-in-self-supervised-vision-transformers-via-subspace-intervention)  
+   evidence：训练动态的标量嵌入用于模型优化
+9. [Reweighting Framewise Attention in Video Transformers for Facial Expression Understanding](/202607/06/2606.30611v1-reweighting-framewise-attention-in-video-transformers-for-facial-expression-understanding)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：通过子空间干预理解自监督ViT的几何表示
+   evidence：改进视频Transformer中的时空注意力以增强细微面部动态感知
+10. [WarpI2I: Image Warping for Image-to-Image Translation](/202607/06/2606.31018v1-warpi2i-image-warping-for-image-to-image-translation)  
+   标签：评分：6.0/10、query:neural-arch
+   evidence：显著性引导的扭曲-反扭曲用于图像翻译
+11. [Segmenting, Fast and Slow: Real-Time Open-Vocabulary Video Instance Segmentation with Dual-Path Processing](/202607/06/2607.00124v1-segmenting-fast-and-slow-real-time-open-vocabulary-video-instance-segmentation-with-dual-path-processing)  
+   标签：评分：6.0/10、query:neural-arch
+   evidence：双流快慢框架用于高效视频实例分割
+12. [Ghost in the Kernel: In-Context Learning with Efficient Transformers via Domain Generalization](/202607/06/2607.00479v1-ghost-in-the-kernel-in-context-learning-with-efficient-transformers-via-domain-generalization)  
+   标签：评分：6.0/10、query:neural-arch
+   evidence：线性Transformer注意力分析与领域泛化
 
 
 <div class="dpr-home-promo-card">
