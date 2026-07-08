@@ -1,0 +1,897 @@
+Title: Beyond Post-Quantization: Native Hash Learning with a Dedicated HASH Token
+
+URL Source: https://arxiv.org/pdf/2607.03328v1
+
+Published Time: Tue, 07 Jul 2026 01:20:11 GMT
+
+Number of Pages: 13
+
+Markdown Content:
+> 1
+
+# Beyond Post-Quantization: Native Hash Learning with a Dedicated HASH Token 
+
+Xinze Liu, Ding Wang, Hengjie Zhu, and Dayan Wu 
+
+Abstract —Efficient large-scale image retrieval requires com-pact representations that preserve semantic similarity under fast Hamming-space search. Deep hashing provides an appealing solution, but most existing CNN- and ViT-based methods still follow a post-quantization paradigm, where continuous visual features are first learned and binary codes are then produced by a terminal hash projection or binarization operation. This late code generation creates a feature-to-code discrepancy between the continuously optimized representation space and the discrete Hamming space used for retrieval. To address this limitation, we propose HashViT, a Vision Transformer framework for native hash token learning. Instead of treating hashing as a terminal readout, HashViT introduces a dedicated HASH token that serves as a persistent, hash-oriented retrieval state inside the transformer. The HASH token is structurally decomposed into a Hash Register for direct binary code generation and a Semantic Workspace for preserving auxiliary continuous semantics. To en-able effective workspace-to-register interaction, we further design a lightweight Hash Refinement Adapter that progressively refines the Hash Register across transformer layers. As a result, binary-oriented representations are formed through token evolution within the backbone, rather than being abruptly induced by an output-level projection. HashViT is optimized with a unified ob-jective that combines learnable semantic center supervision, class-token similarity distillation, and quantization regularization, en-couraging the HASH token to encode semantically structured and compact binary representations. Extensive experiments on three widely used benchmarks demonstrate that HashViT achieves state-of-the-art or highly competitive retrieval performance while preserving the efficiency of compact Hamming codes. The source code is available at https://github.com/Xinze919/HashViT. 
+
+Index Terms —Deep image hashing, hash token, native hash learning. 
+
+I. I NTRODUCTION 
+
+# THE rapid growth of multimedia data has made efficient and accurate image retrieval a fundamental requirement in large-scale visual applications [1]–[3]. Among existing solutions, deep hashing methods [4]–[13] have attracted sus-tained attention because they represent images with com-pact binary codes, enabling low storage cost and efficient Hamming-distance-based search. Unlike traditional hashing methods based on hand-crafted features or data-independent projections [14]–[16], deep hashing jointly learns visual rep-resentations and hash functions in an end-to-end manner, 
+
+Corresponding author: Dayan Wu. Xinze Liu, Hengjie Zhu, and Dayan Wu are with the Institute of Infor-mation Engineering, CAS, Beijing 100190, China. Xinze Liu and Hengjie Zhu are also with the School of Cyber Security, University of Chinese Academy of Sciences, Beijing 100190, China (e-mail: liuxinze@iie.ac.cn; zhuhengjie@iie.ac.cn; wudayan@iie.ac.cn). Ding Wang is with Department of Applied Mathematics and Statis-tics, Johns Hopkins University, Baltimore, Maryland 21218, USA (e-mail: dwang141@jh.edu). 
+
+Fig. 1. Motivation of HashViT. (a) Conventional post-quantization hashing first learns continuous backbone features and then maps them to polarized hash features through a terminal hash layer, causing an abrupt output-level transition from the continuous feature space to the Hamming space. (b) HashViT maintains a dedicated HASH token inside the transformer, whose Hash Register gradually evolves toward a polarized distribution across layers. 
+
+and has become a widely adopted paradigm for large-scale image retrieval. In particular, most existing methods focus on designing stronger similarity-preserving losses, quantization regularizers, or visual encoders, while leaving the architectural role of the hash code largely unchanged: the binary code is generated only after continuous visual representations have already been formed. This raises a fundamental question for deep hashing: should the hash code remain a terminal output of a generic feature extractor, or can it be modeled as a native retrieval state that evolves inside the network? Here, by native we mean that the binary-oriented state is carried and refined inside the backbone; it does not imply that the final sign operation is removed. Early deep hashing methods, such as HashNet [17] and Deep Cauchy Hashing (DCH) [18], demonstrated that learn-ing hashing-oriented deep representations can significantly improve retrieval performance. Despite these advances, as illustrated in Fig. 1(a), a dominant design in existing CNN-and ViT-based hashing methods remains post-quantization: the backbone first extracts continuous visual representations, and binary hash codes are generated only at the network output through a hash projection layer, a sign function, or an explicit quantization operation [8], [17], [19], [20]. Under 
+
+> arXiv:2607.03328v1 [cs.CV] 3 Jul 2026 2
+
+this paradigm, the hash code is not maintained as an internal representation during feature extraction, but is instead obtained as a terminal readout from an already formed continuous representation. Consequently, hashing is treated as an output-level discretization problem rather than as a representation-learning process that is intrinsically coupled with feature evolution. Such late code generation leads to what we refer to as a feature-to-code discrepancy: a mismatch between the con-tinuously optimized feature space and the discrete Hamming space, which we later operationalize through the layer-wise quantization error in Eq. 22. Intermediate representations are optimized mainly in a continuous feature space, whereas re-trieval is eventually performed in the discrete Hamming space. As a result, the semantic structure learned by the backbone must be compressed into binary codes only at the final stage. Although stronger quantization constraints can partially alle-viate this mismatch, enforcing aggressive binarization directly on general-purpose visual features may impair their semantic expressiveness. This creates an inherent dilemma for deep hashing: late quantization weakens the coupling between rep-resentation learning and code formation, while indiscriminate intermediate quantization may interfere with continuous se-mantic modeling. This dilemma becomes more pronounced in transformer-based hashing. Vision Transformers are built upon progressive token interactions, where semantic information is gradually aggregated and refined across layers. However, exist-ing hashing methods usually exploit this progressive evolution only for continuous representation learning, while binary code formation is still postponed to the final output stage. As a result, the Hamming-space structure required for retrieval is weakly involved in the internal representation dynamics of the backbone. We argue that a key structural reason for this dilemma is the absence of a dedicated internal carrier for binary-oriented retrieval states. In conventional architectures, the same feature stream is expected to preserve rich continuous semantics and satisfy the discrete constraints required by hash codes. This design makes binary code learning largely dependent on the final projection head, and leaves the formation of hash repre-sentations weakly coupled with backbone feature learning. A more principled solution is to decouple the retrieval-specific binary state from the general semantic representation stream, so that continuous semantic modeling and hash code formation can be coordinated inside the network. To this end, we propose HashViT, a native hash token learning framework built upon Vision Transformers. As shown in Fig. 1(b), HashViT introduces a dedicated HASH token into the transformer sequence to serve as a persistent, hash-oriented retrieval state. Unlike conventional post-quantization methods that generate hash codes only at the output, the HASH token participates in self-attention throughout the network and evolves jointly with visual tokens. In this way, binary-oriented representations are formed through token evolution inside the transformer, rather than being induced only by a terminal hash projection. Therefore, the hash representation is no longer a terminal readout of the backbone: the HASH token attends to image tokens from the first layer and is refined after every block, and we empirically observe that its register progressively develops a binary-friendly, bimodal distribution across layers (Fig. 3). Although the HASH token is designed as the internal carrier of hash-related semantics, directly using only its first 
+
+B dimensions for binary code generation would discard the remaining dimensions that may still contain useful continuous semantic information. Meanwhile, enforcing binary constraints on the entire HASH token would be overly restrictive, as it may weaken the token’s ability to preserve auxiliary semantics during transformer-layer evolution. To address this issue, we structurally decompose the HASH token into two complemen-tary subspaces: a Hash Register and a Semantic Workspace. The Hash Register is aligned with the target Hamming space and is directly used for final binary code generation, while the Semantic Workspace preserves auxiliary continuous semantics that are not explicitly binarized. Based on this decomposition, we further introduce a lightweight Hash Refinement Adapter (HRA), which performs workspace-to-register refinement after each transformer block. In this way, the semantic information retained in the workspace can be progressively transferred to the Hash Register, allowing the binary-oriented retrieval state to remain explicit and persistent while still benefiting from continuous semantic modeling. To further enhance semantic discriminability, we formu-late a unified optimization objective for native HASH-token learning. The objective integrates learnable semantic center su-pervision, class-token similarity distillation, and quantization regularization. The learnable semantic centers provide class-level anchors in the hash space, the similarity distillation term preserves instance-level relational topology from the continu-ous class-token representation, and the quantization regularizer stabilizes the final binarization. By jointly optimizing these objectives, HashViT learns semantically structured, compact, and retrieval-effective binary representations inside the visual backbone. Together, the proposed architecture and objective offer a new formulation for deep hashing, in which binary code formation is explicitly represented, progressively refined, and semantically supervised within the ViT backbone, rather than appended as a final projection step. The main contributions of this work are summarized as follows:  
+
+> •
+
+We propose HashViT, a native hash representation learn-ing framework for deep image hashing. Instead of treating hashing as a terminal readout, HashViT introduces a dedicated HASH token that maintains a hash-oriented retrieval state inside the Vision Transformer and evolves jointly with visual tokens throughout the backbone.  
+
+> •
+
+We structurally decompose the HASH token into a Hash Register and a Semantic Workspace. The Hash Register generates the binary code, while the Semantic Workspace preserves auxiliary continuous semantics and refines the register through a lightweight Hash Refinement Adapter (HRA), allowing hash representations to evolve within the backbone without directly quantizing the entire visual feature stream.  
+
+> •
+
+Finally, we train HashViT with a unified semantic super-vision objective that combines learnable text-initialized 3
+
+semantic centers, class-token similarity distillation, and quantization regularization. Experiments on three bench-marks validate the effectiveness of the proposed frame-work. The remainder of this paper is organized as follows. Sec-tion II reviews related work. Section III presents the proposed HashViT framework. Section IV reports experimental results and analyses. Section V concludes the paper. II. R ELATED WORK 
+
+A. Deep Image Hashing under the Post-Quantization 
+
+Large-scale image retrieval aims to return semantically relevant images from a large database given a query image. Early retrieval methods mainly rely on hand-crafted visual descriptors or data-independent hashing functions [14]–[16]. Although these methods are computationally efficient, their representation capacity is limited, making it difficult to capture high-level semantic similarity in complex visual scenarios. Deep hashing has therefore become a widely adopted solution for efficient image retrieval [9]–[12], [21]–[24], as it jointly learns discriminative image representations and compact bi-nary codes in an end-to-end manner. A large body of supervised deep hashing methods has been developed based on convolutional neural networks. DPSH [5] jointly learns image features and hash codes from pairwise semantic similarities in an end-to-end frame-work. HashNet [17] introduces a continuation strategy and a weighted pairwise cross-entropy loss to alleviate the op-timization difficulty caused by the non-differentiable sign function and imbalanced similarity pairs. DCH [18] models pairwise similarity with a Cauchy-distribution-based objective, which imposes stronger penalties on similar image pairs with large Hamming distances. DPN [25] further proposes a polarization loss to encourage continuous outputs to approach binary values. For multi-label image retrieval, recent methods further exploit label correlations and neighborhood structures to improve the discriminability of binary embeddings. For example, Deep Neighbor Discriminant Binary Embedding [26] enhances neighbor-level discrimination for multi-label image retrieval, showing the importance of preserving fine-grained semantic relations in the learned Hamming space. These methods effectively improve the discriminability of learned hash codes, but their binary representations are still mainly optimized at the output stage. With the development of Vision Transformers, Transformer-based architectures have also been introduced into deep hash-ing. TransHash [27] presents a Transformer-based hashing framework and explores multi-granularity feature learning for image retrieval. MSViT [28] extracts multi-scale patch representations to enhance retrieval robustness, while Hybrid-Hash [19] combines CNNs and Transformers to jointly capture local structures and global dependencies. More recently, Mam-baHash [20] introduces visual state space models into deep hashing to improve long-range modeling and representation diversity. These methods demonstrate the advantage of modern visual backbones for hashing retrieval, but their binary codes are still usually produced by a final hash layer or an output-level quantization operation. Despite their architectural differences, most existing CNN-and Transformer-based hashing methods share a common post-quantization paradigm. Specifically, the network first learns continuous visual features, and binary hash codes are gener-ated only at the final stage through a sign function, a hash pro-jection layer, or an output-level quantization constraint. This paradigm creates a discrepancy between the continuous feature space optimized during representation learning and the discrete Hamming space used during retrieval. Strengthening the final quantization constraint can reduce this discrepancy to some extent, but overly aggressive binarization may also damage semantic discrimination. Therefore, existing methods face an inherent tension between continuous semantic representation learning and discrete binary code formation. Different from these methods that mainly optimize the final feature-to-code mapping, our work investigates how binary-oriented representations can be formed as an internal state of the visual backbone. HashViT addresses this problem by introducing a dedicated HASH token into the Vision Trans-former, allowing hash representations to be progressively re-fined across transformer layers before the final sign operation. 
+
+B. Hash Center Learning and Semantic Hash Centers 
+
+Hash center learning has become an important direction in deep hashing because it provides explicit semantic structures in the Hamming space. Instead of only preserving pairwise similarities among samples, center-based methods assign each semantic category one or multiple representative hash centers and encourage image hash codes to be close to their corre-sponding centers. This formulation improves intra-class com-pactness and inter-class separability, and often leads to more stable optimization than purely pairwise objectives. However, most center-based methods still use centers as supervision targets for the final hash features, while the internal feature extraction process remains continuous. Early center-based methods mainly focus on constructing well-separated hash centers in the Hamming space. CSQ [8] introduces central similarity quantization and constructs hash centers with sufficiently large pairwise Hamming distances, typically using Hadamard matrices or random Bernoulli sam-pling. By pulling samples toward their corresponding centers, CSQ transforms supervised hashing into a classification-like learning problem in the Hamming space. OrthoHash [29] further encourages continuous representations to align with class-specific orthogonal hash centers under cosine similarity. CenterHash [30] constructs minimal-distance-separated hash centers by explicitly optimizing pairwise distances among centers, providing stronger separation between different cat-egories. These methods show that well-designed centers can significantly improve the structure of the learned Hamming space, but the centers are usually fixed before training and cannot adapt to the evolving visual representation distribution. To overcome the rigidity of fixed centers, several works have explored learnable or dynamically updated hash centers. Learnable Central Similarity Quantization [31] extends the 4 
+
+> Fig. 2. Overview of HashViT. The CLS token captures continuous visual semantics, while the HASH token learns native hash representations. Text-guided semantic hash centers, similarity distillation, and quantization regularization jointly supervise discriminative and binary-friendly hash learning.
+
+central similarity idea by introducing data-dependent learnable centers for efficient image and video retrieval. Deep Hash-ing with Hash Center Update [32] further studies dynamic hash center updating, allowing the target centers to better match the learned feature distribution. For multi-label retrieval, MCR [33] introduces a multi-central ranking loss with learn-able hash centers and data-to-data similarities, alleviating the conflict caused by assigning complex multi-label samples to overly rigid proxy targets. These methods indicate that learn-able centers are more flexible than fixed handcrafted centers. However, they still primarily improve the target structure of the final hash space, while binary codes are generated through output-level quantization. Another important trend is to incorporate semantic relation-ships into hash center construction. Traditional center-based methods often assume that all different categories should be equally separated in the Hamming space. This assumption is too restrictive for multi-label or fine-grained retrieval, where different classes may have meaningful semantic correlations. Image Retrieval with Well-Separated Semantic Hash Cen-ters [34] attempts to construct centers by considering both semantic relationships and inter-center separation. SHC [35] further emphasizes that semantically related classes should have closer centers, while unrelated classes should remain far apart. More recently, Codebook-Centric Deep Hashing [36] studies the end-to-end joint learning of semantic hash cen-ters and the neural hash function from a codebook-centric perspective, further showing that hash center assignment and representation learning should be optimized in a coordinated manner. These works improve the semantic organization of hash centers, but most of them still supervise the final con-tinuous hash representation rather than changing the internal representation learning process. Although learnable semantic hash centers improve the su-pervision of binary code learning, they do not fully resolve the feature-to-code mismatch caused by post-quantization. Even when the centers are adaptive or semantically structured, the network usually learns continuous features first and then projects them into binary codes at the end. As a result, the semantic center structure and the binary representation formation are still weakly coupled. HashViT complements this line of research by coupling semantic center supervision with a dedicated HASH token that evolves inside the Transformer. In this way, semantic centers not only guide the target structure of the Hamming space, but also supervise the progressive formation of binary-oriented representations inside the visual backbone. III. P ROPOSED METHOD 
+
+A. Problem Formulation 
+
+Let D = {(xi, yi)}Ni=1 denote a training set, where xi ∈
+
+RH×W ×3 is the i-th image and yi ∈ { 0, 1}C is its label vector over C semantic categories. The same notation is used for both single-label and multi-label retrieval: yik = 1 indicates that xi
+
+is associated with the k-th category, and yik = 0 otherwise. Deep image hashing aims to learn a mapping H(·) that encodes each image into a compact binary representation, 
+
+H : xi 7 → bi ∈ {− 1, +1 }B , (1) where B is the code length. In most deep hashing frameworks, a continuous feature fi ∈ RB is first produced by a neural network, and the binary code is then obtained by element-wise binarization 
+
+bi = sgn( fi). (2) 5
+
+Retrieval is performed in the Hamming space induced by the binary codes. For supervised image retrieval, semantic neighborhood re-lationships are derived from label overlap. Specifically, the pairwise semantic affinity between xi and xj is defined as 
+
+sij = I(y⊤ 
+
+> i
+
+yj > 0) , (3) where sij = 1 indicates that the two images share at least one semantic label, and sij = 0 otherwise. The objective is therefore to preserve such semantic affinities in the learned Hamming space, so that semantically related images are as-signed short Hamming distances while unrelated images are separated. A central limitation of the prevalent post-quantization paradigm is that representation learning and code formation are largely decoupled: the backbone is optimized in a contin-uous feature space, whereas retrieval is eventually conducted after a non-differentiable sign operation. This feature-to-code discrepancy becomes particularly undesirable when the binary code is expected to serve as the final retrieval representation. To mitigate this mismatch, we propose to learn hash-oriented representations natively within a Vision Transformer, rather than appending a terminal hashing layer after continuous feature extraction. 
+
+B. Overview of HashViT 
+
+Fig. 2 illustrates the overall architecture of the proposed HashViT. Given an input image xi, we divide it into P non-overlapping patches and project them into d-dimensional patch tokens. In addition to the standard class token, we insert a dedicated hash token into the input sequence: 
+
+Z0 = [ z0cls , t0, z01, . . . , z0 
+
+> P
+
+] + Epos , (4) where Z0 ∈ R(P +2) ×d, z0cls is the class token, t0 is the hash token, {z0
+
+> p
+
+}Pp=1 are patch tokens, and Epos denotes the positional embedding. HashViT follows a dual-token design. The class token main-tains a continuous global representation for semantic model-ing, whereas the hash token is assigned to carry the binary-oriented retrieval representation. After each transformer block, the hash token is refined by a lightweight Hash Refinement Adapter (HRA). The first B dimensions of the hash token are treated as a Hash Register , from which the final binary code is generated, while the remaining d − B dimensions form a Semantic Workspace that supplies auxiliary continuous semantics for register refinement. Formally, for the l-th transformer block, l ∈ { 1, . . . , L }, we first obtain bZl = Fl(Zl−1), (5) where Fl(·) denotes the l-th ViT block and bZl is the token sequence before hash refinement. Let btl ∈ Rd be the corre-sponding hash token. HRA produces the refined hash token as 
+
+tl = HRA( btl), (6) which is then reinserted into the token sequence and passed to the next transformer block. The same HRA parameters are shared across transformer layers, which keeps the refinement module lightweight and enforces a consistent workspace-to-register correction. HRA only updates the Hash Register and keeps the Semantic Workspace unchanged, as detailed in Subsection III-D. Through this layer-wise refinement, the formation of the binary-oriented state is carried inside the transformer: the hash token interacts with visual tokens throughout the network and progressively evolves toward a binary-friendly state, while the final binarization remains a single sign operation at inference. The model is trained with three complementary objectives. A learnable semantic hash center loss provides class-level anchors in the hash space, a similarity distillation loss transfers instance-level relational structure from the continuous class-token representation to the hash representation, and a quan-tization loss encourages each register dimension to approach the binary vertices {− 1, +1 }. During inference, only the final Hash Register is binarized and used for Hamming-distance retrieval. 
+
+C. HASH Token for Native Hash Representation Learning 
+
+Existing deep hashing methods commonly attach a hashing projection to the output feature of a CNN or Transformer backbone. Although convenient, such a design treats binary code generation as a post-processing step, so the backbone is not explicitly encouraged to organize its intermediate represen-tations toward the discrete Hamming space used at retrieval. A straightforward alternative is to impose quantization con-straints on intermediate hidden features. However, this strategy is overly restrictive because the same hidden representation must simultaneously support continuous semantic abstraction and binary code generation. Such a constraint can impair the expressive capacity of visual tokens, especially in a trans-former where token interactions rely on continuous feature geometry. HashViT addresses this issue by introducing a dedicated hash token. Unlike the class token, whose role is to summarize continuous image semantics, the hash token is responsible for learning a retrieval-oriented representation. Since it par-ticipates in self-attention from the first layer, the hash token can aggregate visual evidence and exchange information with patch tokens during the entire forward pass. Binary code learning is thus integrated into the backbone, rather than isolated in an external projection head. Given the intermediate hash token btl produced by the l-th transformer block, we decompose it into two subspaces: 
+
+btl = [ bul; bvl], (7) where bul ∈ RB is the Hash Register, bvl ∈ Rd−B is the Semantic Workspace, and [·; ·] denotes concatenation. The Hash Register is explicitly aligned with the target Hamming space, whereas the Semantic Workspace retains complemen-tary continuous semantics that are useful for refining the register. After the final transformer layer, the binary code of xi is generated solely from the final Hash Register ui,L :
+
+hi = tanh( ui,L ), bi = sgn( hi) ∈ {− 1, +1 }B . (8) 6
+
+The remaining dimensions of the hash token, together with the class and patch tokens, are discarded for retrieval. This structured token design has two important effects. First, it confines binary constraints to the retrieval-specific subspace, allowing the class and patch tokens to preserve continuous semantic modeling ability. Second, it narrows the gap between continuous training representations and discrete retrieval codes by letting the Hash Register be repeatedly updated inside the transformer before the final sign operation, as quantified by the layer-wise quantization error in Sec. IV-E. This design also avoids repeatedly projecting a high-dimensional continuous token into the hash space, keeping the hash state as an explicit part of the token representation. 
+
+D. Hash Refinement Adapter 
+
+Inspired by the observation that additional register-like representations can provide useful workspace for Vision Trans-formers [37], we split the HASH token into two parts: a low-dimensional Hash Register for code generation and a higher-dimensional Semantic Workspace for auxiliary seman-tic modeling. The Hash Register is directly used to produce binary codes, while the Semantic Workspace is not binarized. Therefore, the role of the Hash Refinement Adapter (HRA) is simple: it uses the workspace to provide a semantic correction to the register. Recall from Eq. (7) that the HASH token after the l-th transformer block is decomposed as btl = [ bul; bvl], with Hash Register bul ∈ RB and Semantic Workspace bvl ∈ Rd−B . HRA first maps the workspace to the register dimension: 
+
+ul = bul + MLP HRA (bvl), (9) where MLP HRA : Rd−B → RB is a lightweight shared map-ping applied after each transformer block and is implemented as a single linear layer. The Hash Register is thus updated by a residual correction from the workspace. The refined HASH token is reconstructed as 
+
+tl = [ ul; bvl], (10) and is used as the HASH token input to the next transformer block. This design keeps HRA deliberately lightweight. It does not transform all tokens or the whole HASH token. Instead, it only updates the binary-oriented register using information from the semantic workspace. The residual form preserves the register’s original evolution while injecting complementary semantics from the workspace, providing a simple bridge between continuous semantic mod-eling and binary code learning. 
+
+E. Semantic Supervision for Native Hash Learning 
+
+Before introducing the supervision terms, we define the bounded continuous hash representation as hi = tanh( ui,L ),following Sec. III-C. The hash-side representation involved in the supervision losses is computed on hi before the final sign operation. Since tanh( ·) is monotonic, it bounds the training representation without changing the final binary code. 
+
+a) Learnable semantic hash center loss.: We maintain a set of class-wise learnable semantic centers in the hash space 
+
+C = {ck}Ck=1 , where ck ∈ RB denotes the learnable semantic center of class k in the hash space. Following the idea of center or proxy-based supervision in metric learning and deep hashing [8], [30], [38], [39], we use these centers to provide global semantic targets for hash representation learning. To introduce semantic priors, each center is initialized from a text-guided class prototype. Let ek = Et(πk) ∈ R512 
+
+denote the text embedding of class k, where πk is the class-name prompt and Et(·) is the frozen CLIP text encoder [40]. The initialization function g(·) maps the 512 -dimensional text embedding to the target B-dimensional hash space via a fixed random orthogonal projection followed by ℓ2 normalization: 
+
+c0 
+
+> k
+
+= g(ek) = R⊤ 
+
+> B
+
+ek
+
+∥R⊤ 
+
+> B
+
+ek∥2 + ϵ . (11) The random orthogonal projection provides a parameter-free dimensionality reduction that approximately preserves the an-gular structure of text prototypes in a low-dimensional space. It is used only for center initialization and introduces no trainable parameters. After initialization, the centers are optimized as learnable parameters, while the CLIP text encoder and the projection matrix are not used during inference. For compact notation, we define the normalized image-to-center similarity as 
+
+ρik =
+
+ hi
+
+∥hi∥2 + ϵ , ck
+
+∥ck∥2 + ϵ
+
+
+
+. (12) Here, ϵ is a small constant used to avoid division by zero. For exclusive single-label retrieval, each sample has one positive center and all remaining centers can be regarded as negatives. Let I denote the mini-batch index set with |I| = n.For each class k, we define Pk = {i ∈ I | yik = 1},
+
+Nk = {i ∈ I | yik = 0 }, and K+ = {k | |P k| > 0}.The single-label center loss is defined as 
+
+Lsingle = 1
+
+|K +| + ϵ
+
+X
+
+> k∈K +
+
+log 1 + X
+
+> i∈P k
+
+e−α(ρik −δ)
+
+!
+
++ 1
+
+C
+
+> C
+
+X
+
+> k=1
+
+log 1 + X
+
+> i∈N k
+
+eα(ρik +δ)
+
+!
+
+,
+
+(13) where δ is the margin and α is the scale factor. The first term pulls samples toward their positive centers, while the second term pushes them away from negative centers. For non-exclusive multi-label retrieval, an image may cor-respond to multiple semantic centers. Instead of independently pulling the image toward every positive center, we maximize the probability mass assigned to its positive center set. Let 
+
+Y+ 
+
+> i
+
+= {k | yik = 1 }. The multi-label center loss is 
+
+Lmulti = − 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+log 
+
+P
+
+> k∈Y +
+> i
+
+eγρ ik 
+
+PCk=1 eγρ ik 
+
+, (14) where γ is a scale factor. This positive-set formulation is suitable for multi-label data because it encourages the hash representation to be close to the relevant semantic set as a whole. 7
+
+Finally, the semantic hash center loss is selected according to the label structure: 
+
+Lc =
+
+(
+
+Lsingle , for exclusive single-label data ,
+
+Lmulti , for non-exclusive multi-label data . (15) 
+
+b) Similarity distillation loss.: Class centers provide category-level supervision, but they do not explicitly preserve fine-grained instance relationships within a mini-batch. To complement center learning, we distill the relational structure of continuous class-token features into the hash representa-tions. Let gi ∈ Rd denote the final class-token representation of image xi. The teacher feature is detached when computing this objective. We normalize the teacher and hash representa-tions as 
+
+gi = sg( gi)
+
+∥ sg( gi)∥2 + ϵ , hi = hi
+
+∥hi∥2 + ϵ , (16) where sg( ·) denotes stop-gradient. The teacher-side and hash-side similarity matrices are computed by 
+
+Stij = g⊤ 
+
+> i
+
+gj , Shij = h⊤ 
+
+> i
+
+hj . (17) The similarity distillation loss is the mean squared discrep-ancy between the two matrices: 
+
+Lsd = 1
+
+n2
+
+> n
+
+X
+
+> i=1
+> n
+
+X
+
+> j=1
+
+ Shij − Stij 
+
+2 . (18) This objective encourages the Hash Register to preserve the pairwise topology encoded by the continuous class-token representation, while the stop-gradient operation prevents the hash objective from altering the teacher feature space. 
+
+c) Quantization loss.: Although the HASH token is designed to learn binary-oriented representations natively, we optionally impose a lightweight quantization regularizer on the bounded hash representation: 
+
+Lq = 1
+
+nB 
+
+> n
+
+X
+
+> i=1
+> B
+
+X
+
+> b=1
+
+(|hib | − 1) 2, (19) where hib is the b-th element of hi. This loss encourages each dimension to approach the binary vertices {− 1, +1 } and reduces the discrepancy caused by the final sign operation. It is applied only to the Hash Register and does not constrain the class token, patch tokens, or Semantic Workspace. As shown in the experiments, this term serves mainly as an auxiliary stabilizer rather than the primary source of performance gain. 
+
+F. Overall Objective and Retrieval Inference 
+
+The overall training objective of HashViT is 
+
+L = Lc + λsd Lsd + λq Lq , (20) where λsd and λq control the weights of similarity distillation and quantization regularization, respectively. The semantic center loss Lc provides class-level supervision, Lsd preserves instance-level relational structure, and Lq stabilizes the final binarization. During training, the hash-side representation used in the above losses is the bounded continuous representation hi =tanh( ui,L ), where ui,L is the final Hash Register. During inference, the binary code is obtained as in Eq. (8), and only the final Hash Register is used for retrieval, while the class token, patch tokens, and Semantic Workspace are discarded. Given a query image xq , HashViT produces its binary code 
+
+bq . The binary codes of database images are precomputed and stored. Retrieval is performed by ranking database images according to the Hamming distance 
+
+dH (bq , bi) = 12
+
+ B − b⊤ 
+
+> q
+
+bi
+
+ , (21) where a smaller distance indicates higher retrieval priority. The pretrained text encoder and the random orthogonal projection are used only for semantic center initialization and are not involved in model forward passes after center initialization or inference. Therefore, HashViT preserves the standard efficiency advantage of deep hashing: each image is represented by a compact B-bit code, and retrieval only requires efficient Hamming-distance comparison. IV. E XPERIMENT 
+
+A. Baselines and Datasets 
+
+We compare the proposed HashViT with a broad range of representative deep hashing methods on three widely used benchmarks: CIFAR-10, NUS-WIDE, and IMAGENET, in-cluding DPSH [5], HashNet [17], DCH [18], DPN [25], CSQ [8], TransHash [27], CenterHash [30], MSViT-S [28], FTH-DeiT-S [41], SHC [35], NDBE [26], and CRH [36]. The methods marked with an asterisk (*) denote results reported in the original papers. Results without * are reproduced using the official implementations or our re-implementation under the same data split and evaluation protocol. 
+
+CIFAR-10 is a single-label dataset comprising 60,000 32 ×32 color images evenly distributed over 10 classes. We follow the same setup as the experiment in [20], [27], and randomly sample 5,000 images (500 per class) for training, 1,000 images (100 per class) as queries, and treat the remain-ing 54,000 images as the retrieval database. 
+
+NUS-WIDE is a multi-label web image dataset containing 269,648 images annotated with 81 concept labels. Following the protocol in [20], [27], two images are regarded as seman-tically relevant if they share at least one label. We randomly sample 5,000 images as queries and use the remaining images as the retrieval database. From the database, 10,000 images are further sampled for training. 
+
+IMAGENET is the standard benchmark from the Large-Scale Visual Recognition Challenge (ILSVRC 2015). We follow the experimental setup in [20], [27] by randomly choosing 100 classes. The full training set of these 100 classes (128,503 images) serves as the retrieval database, while 5,000 validation images (50 per class) are used as queries. For training, we randomly sample 130 images per class, yielding 13,000 training images in total. 
+
+B. Implementation Details and Metrics 1) Implementation Details.: All input images are first re-sized to 256 × 256 and then randomly cropped to 224 ×8
+
+> TABLE I PERFORMANCE COMPARISON OF DEEP HASHING METHODS .
+
+Methods Reference Datasets (%) CIFAR-10@54000 NUS-WIDE@5000 IMAGENET@1000 
+
+16bit 32bit 48bit 64bit 16bit 32bit 48bit 64bit 16bit 32bit 48bit 64bit DPSH [5] IJCAI16 72.30 74.70 75.70 75.50 70.46 72.34 73.40 73.80 45.66 44.59 48.54 53.60 HashNet [17] ICCV17 73.21 76.32 78.20 79.12 66.12 69.32 70.88 72.32 53.85 60.12 64.55 67.14 DCH [18] CVPR18 76.56 78.33 77.98 77.33 67.54 68.47 69.38 67.98 53.63 57.52 55.85 54.71 DPN [25] IJCAI20 75.18 76.92 76.24 76.28 66.12 69.48 71.86 71.89 59.82 66.65 68.71 69.36 CSQ [8] CVPR20 80.67 81.98 83.17 84.63 72.91 74.17 74.36 75.02 85.10 86.50 86.90 87.30 TransHash* [27] ICMR22 90.75 91.08 91.41 91.66 72.63 73.93 75.32 74.88 78.52 87.33 89.32 89.21 CenterHash [30] CVPR23 83.25 84.26 84.55 84.93 73.78 78.43 79.85 80.56 84.40 87.36 88.03 88.52 MSViT-S* [28] TMM24 84.29 88.67 89.38 90.00 - - - - 72.34 82.99 86.53 87.91 FTH-DeiT-S [41] ACMMM25 90.43 90.24 91.81 91.93 75.45 77.66 77.90 77.83 81.60 84.19 85.16 85.20 SHC [35] TOIS25 81.43 84.37 82.85 83.14 70.11 71.93 71.74 72.06 77.80 78.85 79.09 78.83 NDBE [26] TMM26 82.64 84.89 84.07 85.41 70.25 72.95 74.04 75.04 38.45 47.30 51.22 53.89 CRH [36] AAAI26 79.37 81.51 84.23 81.89 72.77 75.57 76.29 76.79 74.69 78.33 78.65 79.22 HashViT-T (Ours) 84.94 87.95 88.73 89.05 72.67 76.14 77.38 77.63 73.12 74.77 82.90 83.52 
+
+HashViT-S (Ours) 92.67 93.59 95.68 96.36 75.61 78.96 80.16 81.02 86.85 90.12 90.68 91.06 
+
+224 with random horizontal flipping for data augmentation. HashViT is implemented in PyTorch [42]. All models are trained for 100 epochs with a batch size of 512. We use Adam [43] as the optimizer, with the learning rate and weight decay both set to 1 × 10 −5. All experiments are conducted on a workstation equipped with an Intel Xeon Silver 4214 CPU, 125 GB RAM, and an NVIDIA Tesla A800 GPU. The source code and additional implementation details will be made publicly available. For the loss weights, we use dataset-specific settings se-lected according to the parameter sensitivity analysis. Specif-ically, (λsd , λ q ) is set to (1 , 0) on CIFAR-10, (1 , 0) on NUS-WIDE, and (10 , 1) on IMAGENET. For the semantic hash center loss, the scale and margin parameters in the single-label formulation are fixed as α = 32 and δ = 0 .1,following the common setting of proxy-based metric learning losses [38], [39]. The scale factor in the multi-label positive-set formulation is fixed as γ = 24 , following the use of scaled cosine similarities in center-based hashing objectives [8], [35]. These parameters are kept fixed across the corresponding experiments without dataset-specific tuning. 
+
+2) Evaluation Metrics.: We evaluate retrieval performance using mean Average Precision (mAP) under different hash code lengths, including 16, 32, 48, and 64 bits. Following common practice in related work [19], [20], [27], mAP is computed based on the top 54,000 returned samples for CIFAR-10, the top 5,000 returned samples for NUS-WIDE, and the top 1,000 returned samples for IMAGENET. In addi-tion to mAP, we also report Precision-Recall (PR) curves and Precision@Top-K curves to further analyze retrieval behavior. PR curves evaluate the precision-recall trade-off under dif-ferent retrieval thresholds, while Precision@Top-K measures the proportion of relevant samples among the top-K retrieved results. 
+
+C. Quantitative Comparison 1) Comparison with Representative Hashing Methods: Ta-ble I reports the mAP comparison between HashViT and rep-resentative deep hashing methods on CIFAR-10, NUS-WIDE, and IMAGENET. The compared methods cover pairwise-supervised hashing methods, such as DPSH [5], HashNet [17], DCH [18], and DPN [25]; center-based hashing methods, such as CSQ [8], CenterHash [30], and SHC [35]; and transformer-based hashing methods, such as TransHash [27], MSViT-S [28], and FTH-DeiT-S [41]. The methods marked with an asterisk (*) denote results reported in the original papers. Overall, HashViT-S achieves the best or comparable per-formance across the three datasets, with the largest margins on CIFAR-10 and ImageNet and competitive results on the multi-label NUS-WIDE. Compared with conventional pairwise hashing methods, the advantage mainly comes from replacing local pairwise supervision with more stable semantic hash space organization. Compared with center-based methods such as CSQ, CenterHash, and SHC, HashViT further improves retrieval accuracy by introducing learnable text-guided se-mantic centers, which provide more adaptive and semanti-cally meaningful supervision for hash representation learning. More importantly, compared with transformer-based baselines, HashViT does not rely on a post-quantization hash projec-tion layer. Instead, it learns the hash representation inside 9   
+
+> TABLE II BACKBONE REPLACEMENT ANALYSIS WITH HASH VIT-S. ”M ETHOD +H ASH VIT-S” DENOTES REPLACING THE ORIGINAL VISUAL BACKBONE WITH
+> HASH VIT-S WHILE KEEPING THE CORRESPONDING HASHING OBJECTIVE .
+
+Methods Datasets (%) CIFAR-10@54000 NUS-WIDE@5000 IMAGENET@1000 
+
+16bit 32bit 48bit 64bit 16bit 32bit 48bit 64bit 16bit 32bit 48bit 64bit DPSH [5] 72.30 74.70 75.70 75.50 70.46 72.34 73.40 73.80 45.66 44.59 48.54 53.60 DPSH+HashViT-S 78.96 78.91 79.95 78.79 74.83 75.83 76.17 76.44 74.59 77.31 79.41 78.73 
+
+HashNet [17] 73.21 76.32 78.20 79.12 66.12 69.32 70.88 72.32 53.85 60.12 64.55 67.14 HashNet+HashViT-S 89.18 95.28 95.74 95.27 73.53 74.58 75.89 75.88 78.20 84.89 85.12 86.01 
+
+DCH [18] 76.56 78.33 77.98 77.33 67.54 68.47 69.38 67.98 53.63 57.52 55.85 54.71 DCH+HashViT-S 91.75 92.57 92.48 93.74 74.06 73.50 72.61 74.43 87.34 86.33 85.16 86.37 
+
+DPN [25] 75.18 76.92 76.24 76.28 66.12 69.48 71.86 71.89 59.82 66.65 68.71 69.36 DPN+HashViT-S 94.84 93.74 95.09 93.73 72.72 74.54 75.53 75.91 87.78 89.59 89.25 89.15 
+
+CSQ [8] 80.67 81.98 83.17 84.63 72.91 74.17 74.36 75.02 85.10 86.50 86.90 87.30 CSQ+HashViT-S 93.63 92.16 90.26 93.95 72.94 74.32 74.45 75.96 86.83 89.59 89.91 89.43 
+
+CenterHash [30] 83.25 84.26 84.55 84.93 73.78 78.43 79.85 80.56 84.40 87.36 88.03 88.52 CenterHash+HashViT-S 92.92 93.46 94.06 94.73 74.19 78.55 79.91 80.73 87.04 89.95 89.56 89.69 
+
+the transformer through a dedicated HASH token, moving the formation of the binary-oriented representation into the backbone, while the final binarization remains a single sign operation at inference. The results also show a favorable accuracy-efficiency trade-off. HashViT-T uses only 5.54M parameters but maintains competitive retrieval performance, while HashViT-S achieves stronger results with a compact ViT-Small backbone. In par-ticular, HashViT-S surpasses large transformer-based hashing methods such as TransHash, although these methods use much larger ViT-Large backbones. This suggests that the gain is not solely due to model capacity, but also reflects the proposed design—native in-transformer hash representation learning to-gether with learnable semantic hash centers—although Table II indicates that the strong ViT backbone itself accounts for a substantial portion of the improvement. 
+
+2) Comparison under HashViT-S Backbone: Table II fur-ther studies whether existing hashing objectives can benefit from the HashViT-S backbone. Specifically, several represen-tative hashing methods are re-implemented by replacing their original visual backbone with HashViT-S while keeping their original hashing objectives. This comparison helps separate the contribution of the backbone representation from the contribution of the proposed native hash learning objective. The results indicate that the HashViT-S architecture can substantially improve several existing hashing objectives, sug-gesting that the proposed token-level representation design is broadly useful. However, the relative performance varies across objectives and code lengths. This implies that the backbone design and the training objective are complemen-tary: some conventional losses can benefit from the proposed backbone, while the complete HashViT provides the most consistent overall behavior across datasets, especially in the 64-bit setting. 
+
+D. Ablation Study 
+
+We conduct ablation studies to examine the key components of HashViT, including the dedicated HASH token, the Hash Refinement Adapter (HRA), the training objectives, and the semantic hash center initialization. Unless otherwise specified, all variants are evaluated under the same training protocol, backbone scale, and hash code length unless otherwise speci-fied. The results are reported in terms of mAP on CIFAR-10, NUS-WIDE, and IMAGENET. 
+
+1) Effect of the Dedicated HASH Token: We first verify whether native hash learning benefits from a dedicated hash-oriented token. As shown in Table III, HashViT-S consis-tently outperforms FTH-DeiT-S and HashDeiT-S. FTH-DeiT-S follows the conventional post-quantization hashing paradigm, where binary codes are generated by a terminal hash layer after continuous feature extraction. In contrast, HashViT-S introduces the HASH token into the transformer and learns binary-oriented representations during feature modeling. The clear improvement over FTH-DeiT-S indicates that the gain does not merely come from adopting a DeiT/ViT-style back-bone, but from moving hash representation learning into the transformer. 10                          
+
+> TABLE III ABLATION STUDY ON DIFFERENT LEARNABLE TOKEN METHODS WITH
+> 64-BIT .
+> Method CIFAR-10 NUS-WIDE IMAGENET
+> FTH-DeiT-S [41] 91.93 77.83 85.20 HashDeiT-S 93.54 79.12 90.12 HashViT-S 96.36 81.02 91.06
+> TABLE IV ABLATION STUDY ON THE HASH REFINEMENT ADAPTER WITH 64-BIT .
+> Method CIFAR-10 NUS-WIDE IMAGENET
+> w/o HRA 95.88 80.31 90.47 HashViT-S 96.36 81.02 91.06
+
+HashViT-S also performs better than HashDeiT-S, which reuses the DeiT distillation token as the hash carrier. This comparison further shows that an existing learnable token is not naturally suitable for hash learning. The distillation token in DeiT is originally designed to absorb teacher-guided semantic supervision, while the proposed HASH token is explicitly assigned to binary-oriented representation learning for retrieval. Therefore, the superior performance of HashViT-S comes from the specialized role of the HASH token, rather than from simply adding or reusing a learnable token. 
+
+2) Effect of Hash Refinement Adapter: We then evaluate the contribution of HRA. As reported in Table IV, removing HRA leads to a performance drop compared with the full model. This suggests that directly using the HASH token output is suboptimal, even though the token itself is already designed for hash learning. HRA further refines the Hash Register by incorporating information from the Semantic Workspace, allowing the binary-oriented component to receive semantic compensation without forcing the entire HASH token to satisfy strict quantization constraints. This result confirms that HRA is not a generic MLP add-on, but a refinement module coupled with the structured HASH token design. This indicates that HRA, despite being lightweight, provides a small but con-sistent gain across datasets (Table IV), acting as a refinement module coupled with the structured HASH token design rather than a generic MLP add-on. 
+
+3) Effect of Training Objectives: Table V analyzes the effects of the similarity distillation loss Lsd and the quantiza-tion loss Lq . Removing Lsd decreases retrieval performance, showing that instance-level similarity structures from CLS rep-resentations provide useful guidance for the HASH token. This supervision complements class-level semantic center learning by preserving the relative topology among samples in the continuous semantic space. The effect of Lq is relatively mild. Removing it leads to almost unchanged performance on CIFAR-10 and NUS-WIDE, and only a slight decrease on IMAGENET. This result is consistent with the motivation of HashViT: the HASH to-ken can already evolve toward binary-friendly representations through native in-transformer learning, without relying on a strong quantization penalty. Therefore, Lq is better understood as a lightweight stabilizing regularizer for final binarization,                                  
+
+> TABLE V ABLATION STUDY ON THE LOSS FUNCTION OF HASH VITWITH 64-BIT .
+> LcLsd LqCIFAR-10 NUS-WIDE IMAGENET
+> ✓95.59 80.43 90.21
+> ✓✓96.36 81.02 91.01
+> ✓✓✓96.36 81.02 91.06
+> TABLE VI ABLATION STUDY ON DIFFERENT SEMANTIC HASH CENTER INITIALIZATION STRATEGIES WITH 64-BIT .
+> Initialization CIFAR-10 NUS-WIDE IMAGENET
+> Random 94.20 77.98 87.01 SHC-guided [35] 94.46 78.29 88.47 Text-guided 96.36 81.02 91.06
+
+rather than the main driver of retrieval performance. 
+
+4) Effect of Semantic Hash Center Initialization: Finally, we investigate different initialization strategies for semantic hash centers. As shown in Table VI, random initialization provides only weak semantic organization, while SHC-guided initialization offers limited improvement. In contrast, text-guided initialization achieves the best performance on all three datasets. This demonstrates that language-derived semantic priors provide a more meaningful starting point for organizing semantic centers, and the learnable optimization further adapts these centers to the visual hash space. Overall, the ablation results support the main design choices of HashViT. The dedicated HASH token is more effective than post-hoc projection or reusing an existing distillation token; HRA further improves the structured hash representation; similarity distillation provides useful relational guidance; and quantization regularization mainly stabilizes the final bina-rization. These results verify that the performance gain of HashViT comes primarily from the coherent combination of native hash learning, structured token refinement, and semantic center supervision. 
+
+E. Layer-wise Quantization Analysis 
+
+To verify whether binary-oriented representations are formed inside the Transformer, we analyze the layer-wise evolution of the Hash Register. We compare HashViT with a controlled post-quantization baseline that uses the same ViT backbone and an additional learnable hash token, but generates binary codes only through a terminal hash projec-tion. Since this baseline does not use the register-workspace decomposition or HRA, its hash token remains a continuous representation before the final projection. For quantitative analysis, we compute the layer-wise quan-tization error as 
+
+E(l) 
+
+> q
+
+= 1
+
+nB 
+
+> n
+
+X
+
+> i=1
+> B
+
+X
+
+> b=1
+
+
+
+|h(l) 
+
+> ib
+
+| − 1
+
+2
+
+, (22) where h(l) 
+
+> i
+
+denotes the bounded hash representation obtained from the Hash Register of image xi at the l-th layer, h(l)    
+
+> ib 11
+> Fig. 3. Layer-wise Hash Code Distribution Dynamics under native Hash token learning and post-quantization. Native Hash token learning progressively drives hash-code distributions toward binary states across transformer layers, indicating that binary-friendly representations emerge through intrinsic transformer hash token evolution, whereas post-quantization relies on a final projection after feature extraction. 0.1 110 100
+> Similarity distillation weight λsd
+> 70
+> 75
+> 80
+> 85
+> 90
+> 95
+> 100
+> mAP (%)
+
+Effect of Similarity Distillation Weight on Retrieval Performance     
+
+> CIFAR10
+> NUS-WIDE
+> IMAGENET
+> Fig. 4. Parameter sensitivity analysis of the similarity distillation weight λsd
+> on CIFAR-10, NUS-WIDE, and IMAGENET. The quantization weight λqis fixed to 0 to isolate the effect of similarity distillation.
+
+is its b-th dimension, n is the mini-batch size, and B is the hash code length. For the post-quantization baseline, we apply its trained terminal hash projection to the hash-token feature extracted from each layer only for visualization. As shown in Fig. 3, the Hash Register of HashViT grad-ually evolves from a continuous distribution to a bimodal distribution concentrated around −1 and +1 as the depth increases. In contrast, the post-quantization baseline keeps more continuous intermediate distributions and relies on the final projection for code generation. Note that the baseline’s terminal projection is trained only at the last layer and is applied to intermediate features purely for visualization; under this caveat, the comparison is consistent with binary-friendly representations emerging through the internal evolution of the register in HashViT. 0.01 0.1 1 10 
+
+Quantization weight λq
+
+> 70
+> 75
+> 80
+> 85
+> 90
+> 95
+> mAP (%)
+
+Effect of Quantization Weight on Retrieval Performance      
+
+> CIFAR10
+> NUS-WIDE
+> IMAGENET
+> Fig. 5. Parameter sensitivity analysis of the quantization weight λqon CIFAR-10, NUS-WIDE, and IMAGENET. For each dataset, λsd is fixed to the best setting selected from the sensitivity analysis.
+
+F. Parameter Sensitivity 
+
+We analyze the sensitivity of HashViT to the loss-weight hyperparameters in the overall objective: 
+
+L = Lc + λsd Lsd + λq Lq ,
+
+where Lc denotes the learnable semantic hash center loss, Lq
+
+is the quantization loss, and Lsd is the similarity distillation loss. Since Lc provides the primary semantic supervision, its weight is fixed to 1. We then study the effects of λq and λsd .Specifically, when evaluating λsd , we set λq = 0 to isolate the contribution of similarity distillation. When evaluating λq , we fix λsd to the best setting selected for each dataset. As shown in Fig. 4 and Fig. 5, HashViT exhibits stable performance across a broad range of hyperparameter settings. For λsd , moderate values generally lead to better results, suggesting that instance-level similarity distillation is benefi-cial for preserving the semantic topology of CLS representa-tions. However, overly large weights may introduce excessive 12 0.0 0.2 0.4 0.6 0.8 1.0                                                        
+
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Precision
+> CIFAR-10, 16-bit
+> DPSH
+> HashNet
+> DCH
+> DPN
+> CSQ
+> CenterHash
+> FTH-DeiT-S
+> SHC
+> NDBE
+> CRH
+> HashViT-S
+> HashViT-T
+> 0.0 0.2 0.4 0.6 0.8 1.0
+> CIFAR-10, 32-bit
+> DPSH
+> HashNet
+> DCH
+> DPN
+> CSQ
+> CenterHash
+> FTH-DeiT-S
+> SHC
+> NDBE
+> CRH
+> HashViT-S
+> HashViT-T
+> 0.0 0.2 0.4 0.6 0.8 1.0
+> CIFAR-10, 48-bit
+> DPSH
+> HashNet
+> DCH
+> DPN
+> CSQ
+> CenterHash
+> FTH-DeiT-S
+> SHC
+> NDBE
+> CRH
+> HashViT-S
+> HashViT-T
+> 0.0 0.2 0.4 0.6 0.8 1.0
+> CIFAR-10, 64-bit
+> DPSH
+> HashNet
+> DCH
+> DPN
+> CSQ
+> CenterHash
+> FTH-DeiT-S
+> SHC
+> NDBE
+> CRH
+> HashViT-S
+> HashViT-T
+> 0.0 0.2 0.4 0.6 0.8 1.0
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Precision
+> NUS-WIDE, 16-bit
+> DPSH
+> HashNet
+> DCH
+> DPN
+> CSQ
+> CenterHash
+> FTH-DeiT-S
+> SHC
+> NDBE
+> CRH
+> HashViT-S
+> HashViT-T
+> 0.0 0.2 0.4 0.6 0.8 1.0
+> NUS-WIDE, 32-bit
+> DPSH
+> HashNet
+> DCH
+> DPN
+> CSQ
+> CenterHash
+> FTH-DeiT-S
+> SHC
+> NDBE
+> CRH
+> HashViT-S
+> HashViT-T
+> 0.0 0.2 0.4 0.6 0.8 1.0
+> NUS-WIDE, 48-bit
+> DPSH
+> HashNet
+> DCH
+> DPN
+> CSQ
+> CenterHash
+> FTH-DeiT-S
+> SHC
+> NDBE
+> CRH
+> HashViT-S
+> HashViT-T
+> 0.0 0.2 0.4 0.6 0.8 1.0
+> NUS-WIDE, 64-bit
+> DPSH
+> HashNet
+> DCH
+> DPN
+> CSQ
+> CenterHash
+> FTH-DeiT-S
+> SHC
+> NDBE
+> CRH
+> HashViT-S
+> HashViT-T
+> 0.0 0.2 0.4 0.6 0.8 1.0
+> Recall
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Precision
+> IMAGENET, 16-bit
+> DPSH
+> HashNet
+> DCH
+> DPN
+> CSQ
+> CenterHash
+> FTH-DeiT-S
+> SHC
+> NDBE
+> CRH
+> HashViT-S
+> HashViT-T
+> 0.0 0.2 0.4 0.6 0.8 1.0
+> Recall
+> IMAGENET, 32-bit
+> DPSH
+> HashNet
+> DCH
+> DPN
+> CSQ
+> CenterHash
+> FTH-DeiT-S
+> SHC
+> NDBE
+> CRH
+> HashViT-S
+> HashViT-T
+> 0.0 0.2 0.4 0.6 0.8 1.0
+> Recall
+> IMAGENET, 48-bit
+> DPSH
+> HashNet
+> DCH
+> DPN
+> CSQ
+> CenterHash
+> FTH-DeiT-S
+> SHC
+> NDBE
+> CRH
+> HashViT-S
+> HashViT-T
+> 0.0 0.2 0.4 0.6 0.8 1.0
+> Recall
+> IMAGENET, 64-bit
+> DPSH
+> HashNet
+> DCH
+> DPN
+> CSQ
+> CenterHash
+> FTH-DeiT-S
+> SHC
+> NDBE
+> CRH
+> HashViT-S
+> HashViT-T
+
+Precision-Recall Curves on CIFAR-10, NUS-WIDE, and IMAGENET 
+
+Fig. 6. Precision-Recall curves on three benchmark datasets. HashViT consistently achieves better precision across different recall levels, indicating stronger semantic preservation in the learned Hamming space. 200 400 600 800 1000                                             
+
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Precision
+> CIFAR-10, 16-bit
+> DPSH
+> HashNet
+> DCH
+> DPN
+> CSQ
+> CenterHash
+> FTH-DeiT-S
+> SHC
+> NDBE
+> CRH
+> HashViT-S
+> HashViT-T
+> 200 400 600 800 1000
+> CIFAR-10, 32-bit
+> DPSH
+> HashNet
+> DCH
+> DPN
+> CSQ
+> CenterHash
+> FTH-DeiT-S
+> SHC
+> NDBE
+> CRH
+> HashViT-S
+> HashViT-T
+> 200 400 600 800 1000
+> CIFAR-10, 48-bit
+> DPSH
+> HashNet
+> DCH
+> DPN
+> CSQ
+> CenterHash
+> FTH-DeiT-S
+> SHC
+> NDBE
+> CRH
+> HashViT-S
+> HashViT-T
+> 200 400 600 800 1000
+> CIFAR-10, 64-bit
+> DPSH
+> HashNet
+> DCH
+> DPN
+> CSQ
+> CenterHash
+> FTH-DeiT-S
+> SHC
+> NDBE
+> CRH
+> HashViT-S
+> HashViT-T
+> 200 400 600 800 1000
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Precision
+> NUS-WIDE, 16-bit
+> DPSH
+> HashNet
+> DCH
+> DPN
+> CSQ
+> CenterHash
+> FTH-DeiT-S
+> SHC
+> NDBE
+> CRH
+> HashViT-S
+> HashViT-T
+> 200 400 600 800 1000
+> NUS-WIDE, 32-bit
+> DPSH
+> HashNet
+> DCH
+> DPN
+> CSQ
+> CenterHash
+> FTH-DeiT-S
+> SHC
+> NDBE
+> CRH
+> HashViT-S
+> HashViT-T
+> 200 400 600 800 1000
+> NUS-WIDE, 48-bit
+> DPSH
+> HashNet
+> DCH
+> DPN
+> CSQ
+> CenterHash
+> FTH-DeiT-S
+> SHC
+> NDBE
+> CRH
+> HashViT-S
+> HashViT-T
+> 200 400 600 800 1000
+> NUS-WIDE, 64-bit
+> DPSH
+> HashNet
+> DCH
+> DPN
+> CSQ
+> CenterHash
+> FTH-DeiT-S
+> SHC
+> NDBE
+> CRH
+> HashViT-S
+> HashViT-T
+> 200 400 600 800 1000
+> Number of topk returned images
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Precision
+> IMAGENET, 16-bit
+> DPSH
+> HashNet
+> DCH
+> DPN
+> CSQ
+> CenterHash
+> FTH-DeiT-S
+> SHC
+> NDBE
+> CRH
+> HashViT-S
+> HashViT-T
+> 200 400 600 800 1000
+> Number of topk returned images
+> IMAGENET, 32-bit
+> DPSH
+> HashNet
+> DCH
+> DPN
+> CSQ
+> CenterHash
+> FTH-DeiT-S
+> SHC
+> NDBE
+> CRH
+> HashViT-S
+> HashViT-T
+> 200 400 600 800 1000
+> Number of topk returned images
+> IMAGENET, 48-bit
+> DPSH
+> HashNet
+> DCH
+> DPN
+> CSQ
+> CenterHash
+> FTH-DeiT-S
+> SHC
+> NDBE
+> CRH
+> HashViT-S
+> HashViT-T
+> 200 400 600 800 1000
+> Number of topk returned images
+> IMAGENET, 64-bit
+> DPSH
+> HashNet
+> DCH
+> DPN
+> CSQ
+> CenterHash
+> FTH-DeiT-S
+> SHC
+> NDBE
+> CRH
+> HashViT-S
+> HashViT-T
+
+Precision@Top-K Curves on CIFAR-10, NUS-WIDE, and IMAGENET 
+
+Fig. 7. Precision@Top-K curves on three benchmark datasets. HashViT obtains higher precision among top-ranked retrieval results, demonstrating its effectiveness in practical image retrieval scenarios. 
+
+constraints from the continuous feature space, which is not always aligned with discrete hash code learning. For λq ,the performance variation is relatively small, and the best results on CIFAR-10 and NUS-WIDE are obtained even when 
+
+λq = 0 . This indicates that HashViT does not require a strong explicit quantization penalty to form binary-friendly represen-tations. Instead, the dedicated HASH token and the native in-transformer learning process already provide a structural tendency toward the binary hash space, while Lq mainly acts as an auxiliary regularizer on more challenging datasets such as IMAGENET. Based on the observed trends, we adopt dataset-specific hyperparameter settings in the final experiments. For CIFAR-10 and NUS-WIDE, we set λsd = 1 and λq = 0. For IMAGENET, we set λsd = 10 and λq = 1 . These settings consistently achieve the best or near-best performance on the corresponding datasets, demonstrating that HashViT is robust to loss-weight variations and has relatively low hyperparameter sensitivity. 
+
+G. Precision-Recall and Precision@Top-K Curves 
+
+We further report the Precision-Recall (PR) curves and Precision@Top-K curves in Fig. 6 and Fig. 7, respectively. These curves provide complementary evaluations to mAP by showing the retrieval behavior under different recall levels and among top-ranked results. As shown in the figures, HashViT-S consistently achieves superior or highly competitive perfor-mance compared with representative baselines. The stronger PR and Precision@Top-K results indicate that the learned binary codes preserve semantic relevance more effectively and improve the quality of top-ranked retrieval results. 
+
+H. Efficiency Analysis 
+
+We further analyze the efficiency of HashViT from the perspective of token and parameter overhead. Compared with a standard ViT backbone, HashViT introduces only one addi-tional learnable HASH token. For ViT-Small with 224 × 224 
+
+input resolution, the original sequence contains 196 patch tokens and one class token, i.e., 197 tokens in total. After adding the HASH token, the sequence length becomes 198. Therefore, the number of token pairs in self-attention increases only from 197 2 to 198 2, corresponding to about 1.0% addi-tional attention computation, while the token-wise projection and MLP overhead is about 0.5% . Moreover, HRA is shared across transformer layers and introduces only B(d − B) + B
+
+parameters. For the 64-bit setting of ViT-Small, where d = 384 
+
+and B = 64 , this amounts to only 20 ,544 additional parame-ters, which is negligible compared with the 21.69M parameters of the backbone. Despite this minor overhead, HashViT achieves a favorable accuracy-efficiency trade-off. As shown in Table I, HashViT-S uses only 21.69M parameters, which is much smaller than ViT-Large-based hashing methods such as TransHash with 292.93M parameters, yet it achieves stronger retrieval performance on CIFAR-10 and ImageNet. Compared with DeiT-based hashing methods, HashViT-S is also more compact than FTH-DeiT-S, which contains 43.06M parameters. These results indicate that the improvement of HashViT does not come from using a heavier backbone, but from introducing a lightweight HASH token and native in-transformer hash learn-ing. Therefore, the additional computational and parameter cost is small relative to the retrieval gain, making HashViT practical for efficient large-scale image retrieval. V. C ONCLUSIONS 
+
+In this paper, we present HashViT, a native hash token learning framework for efficient image retrieval. Rather than relying on a terminal hashing layer applied to continuous visual features, HashViT introduces a dedicated HASH to-ken to maintain a hash-oriented retrieval state within the Vision Transformer. By decomposing the HASH token into a Hash Register and a Semantic Workspace, and refining the register through a lightweight Hash Refinement Adapter, HashViT enables hash representations to evolve progressively across transformer layers while preserving auxiliary continu-ous semantics. Extensive experiments on three widely used benchmarks demonstrate that HashViT achieves state-of-the-art or highly competitive retrieval performance with a com-pact backbone. Comprehensive ablation studies and layer-wise analyses further confirm the contribution of the dedicated HASH token, the register-workspace decomposition, the Hash 13 
+
+Refinement Adapter, and the semantic supervision objective to more discriminative and stable hash representations. These results suggest that native hash token learning provides an effective alternative to conventional post-quantization hashing for learning compact and discriminative binary representations. REFERENCES [1] F. Perronnin, Y. Liu, J. S´ anchez, and H. Poirier, “Large-scale image retrieval with compressed fisher vectors,” in Proc. IEEE Conf. Comput. Vis. Pattern Recognit. (CVPR) , 2010. [2] H. Noh, A. Araujo, J. Sim, T. Weyand, and B. Han, “Large-scale image retrieval with attentive deep local features,” in Proc. IEEE Conf. Comput. Vis. Pattern Recognit. (CVPR) , 2017. [3] F. Radenovi´ c, A. Iscen, G. Tolias, Y. Avrithis, and O. Chum, “Revisiting oxford and paris: Large-scale image retrieval benchmarking,” in Proc. IEEE Conf. Comput. Vis. Pattern Recognit. (CVPR) , 2018. [4] R. Xia, Y. Pan, H. Lai, C. Liu, and S. Yan, “Supervised hashing for image retrieval via image representation learning,” in Proc. of the Conf. Artif. Intell. (AAAI) , 2014. [5] W. Li, S. Wang, and W. Kang, “Feature learning based deep supervised hashing with pairwise labels,” in Proc. of the Intl. Conf. on Artificial Intelligence (IJCAI) , 2016. [6] Q. Jiang and W. Li, “Asymmetric deep supervised hashing,” in Proc. of the Conference on Advancements of Artificial Intelligence (AAAI) , 2018. [7] F. Shen, X. Gao, L. Liu, Y. Yang, and H. T. Shen, “Deep asymmetric pairwise hashing,” in Proc. of the ACM International Conference on Multimedia (ACM MM) , 2017. [8] L. Yuan, T. Wang, X. Zhang, F. E. H. Tay, Z. Jie, W. Liu, and J. Feng, “Central similarity quantization for efficient image and video retrieval,” in Proc. IEEE Conf. Comput. Vis. Pattern Recognit. (CVPR) , 2020. [9] D. Wu, Q. Dai, J. Liu, B. Li, and W. Wang, “Deep incremental hashing network for efficient image retrieval,” in Proc. IEEE Conf. Comput. Vis. Pattern Recognit. (CVPR) , 2019. [10] D. Wu, Q. Dai, B. Li, and W. Wang, “Deep uncoupled discrete hashing via similarity matrix decomposition,” ACM Transactions on Multimedia Computing, Communications and Applications (TOMM) , 2023. [11] Q. Su, D. Wu, C. Wu, B. Li, and W. Wang, “From data to optimiza-tion: Data-free deep incremental hashing with data disambiguation and adaptive proxies,” IEEE Transactions on Circuits and Systems for Video Technology (TCSVT) , 2024. [12] D. Wu, Q. Su, B. Li, and W. Wang, “Pairwise-label-based deep incre-mental hashing with simultaneous code expansion,” in Proc. of the Conf. Artif. Intell. (AAAI) , 2024. [13] X. Liu, D. Wu, H. Zhu, C. Wu, and P. Dai, “Discretization is not always better: Rethinking deep quantization for asymmetric image retrieval,” in 
+
+Proc. of the Conf. Artif. Intell. (AAAI) , 2026. [14] Y. Weiss, A. Torralba, and R. Fergus, “Spectral hashing,” in Proc. of the Conference on Neural Information Processing Systems (NeurIPS) ,2008. [15] A. Gionis, P. Indyk, R. Motwani et al. , “Similarity search in high dimensions via hashing,” in Proc. of the International Conference on Very Large Data Bases (VLDB) , 1999. [16] Y. Gong, S. Lazebnik, A. Gordo, and F. Perronnin, “Iterative quan-tization: A procrustean approach to learning binary codes for large-scale image retrieval,” IEEE Trans. on Pattern Analysis and Machine Intelligence (TPAMI) , 2013. [17] Z. Cao, M. Long, J. Wang, and P. S. Yu, “Hashnet: Deep learning to hash by continuation,” in Proc. of the IEEE/CVF Intl. Conf. on Computer Vision (ICCV) , 2017. [18] Y. Cao, M. Long, B. Liu, and J. Wang, “Deep cauchy hashing for hamming space retrieval,” in Proc. IEEE Conf. Comput. Vis. Pattern Recognit. (CVPR) , 2018. [19] C. He and H. Wei, “Hybridhash: Hybrid convolutional and self-attention deep hashing for image retrieval,” in Proc. of international conference on multimedia retrieval (ICMR) , 2024. [20] ——, “Mambahash: Visual state space deep hashing model for large-scale image retrieval,” in Proc. of international conference on multimedia retrieval (ICMR) , 2025. [21] J. Gu, D. Wu, P. Fu, B. Li, and W. Wang, “Deep piecewise hashing for efficient hamming space retrieval,” in IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP) , 2022. [22] D. Yang, D. Wu, W. Zhang, H. Zhang, B. Li, and W. Wang, “Deep semantic-alignment hashing for unsupervised cross-modal retrieval,” in 
+
+Proc. of international conference on multimedia retrieval (ICMR) , 2020. [23] R. Pu, Y. Qin, X. Song, D. Peng, Z. Ren, and Y. Sun, “She: Streaming-media hashing retrieval,” in Proc. of the Int. Conf. on Machine Learning (ICML) , 2025. [24] Q. Su, D. Wu, and B. Li, “Boundary-aware prototype augmentation and dual-level knowledge distillation for non-exemplar class-incremental hashing,” Knowledge-Based Systems (KBS) , 2025. [25] L. Fan, K. W. Ng, C. Ju, T. Zhang, and C. S. Chan, “Deep polarized network for supervised learning of accurate binary hashing codes,” in 
+
+Proc. of the Intl. Conf. on Artificial Intelligence (IJCAI) , 2020. [26] Q. Qin, M. Dou, W. Zhang, L. Huang, and J. Nie, “Deep neighbor discriminant binary embedding for multi-label image retrieval,” IEEE Trans. on Multimedia (TMM) , 2026. [27] Y. Chen, S. Zhang, F. Liu, Z. Chang, M. Ye, and Z. Qi, “Transhash: Transformer-based hamming hashing for efficient image retrieval,” in 
+
+Proc. of international conference on multimedia retrieval (ICMR) , 2022. [28] X. Li, J. Yu, S. Jiang, H. Lu, and Z. Li, “Msvit: training multiscale vision transformers for image retrieval,” IEEE Trans. on Multimedia (TMM) ,2024. [29] J. T. Hoe, K. W. Ng, T. Zhang, C. S. Chan, Y. Song, and T. Xiang, “One loss for all: Deep hashing with a single cosine similarity based learning objective,” in Proc. of the Conference on Neural Information Processing Systems (NeurIPS) , 2021. [30] L. Wang, Y. Pan, C. Liu, H. Lai, J. Yin, and Y. Liu, “Deep hashing with minimal-distance-separated hash centers,” in Proc. IEEE Conf. Comput. Vis. Pattern Recognit. (CVPR) , 2023. [31] L. Yuan, T. Wang, X. Zhang, F. E. H. Tay, Z. Jie, Y. Tian, W. Liu, and J. Feng, “Learnable central similarity quantization for efficient image and video retrieval,” IEEE Transactions on Neural Networks and Learning Systems (TNNLS) , 2024. [32] A. Jose, D. Filbert, C. Rohlfing, and J.-R. Ohm, “Deep hashing with hash center update for efficient image retrieval,” in IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP) , 2022. [33] C. Cui, H. Huo, and T. Fang, “Deep hashing with multi-central ranking loss for multi-label image retrieval,” IEEE Signal Processing Letters (SPL) , 2023. [34] L. Wang, Y. Pan, H. Lai, and J. Yin, “Image retrieval with well-separated semantic hash centers,” in Proc. of the Asi. Conf. Comput. Vis. (ACCV) ,2022. [35] L. Chen, R. Liu, Y. Zhou, X. Ma, Y. Chen, and D. Zhang, “Deep hashing with semantic hash centers for image retrieval,” ACM Transactions on Information Systems (TOIS) , 2025. [36] S. Yin, Z. Yin, Y. Hou, R. Liu, Y. Chen, and D. Zhang, “Codebook-centric deep hashing: End-to-end joint learning of semantic hash centers and neural hash function,” in Proc. of the Conf. Artif. Intell. (AAAI) ,2026. [37] T. Darcet, M. Oquab, J. Mairal, and P. Bojanowski, “Vision transformers need registers,” in Proc. of the Int. Conf. on Learning Representations (ICLR) , 2024. [38] Y. Movshovitz-Attias, A. Toshev, T. K. Leung, S. Ioffe, and S. Singh, “No fuss distance metric learning using proxies,” in Proc. of the IEEE/CVF Intl. Conf. on Computer Vision (ICCV) , 2017. [39] S. Kim, D. Kim, M. Cho, and S. Kwak, “Proxy anchor loss for deep metric learning,” in Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , 2020, pp. 3238–3247. [40] A. Radford, J. W. Kim, C. Hallacy, A. Ramesh, G. Goh, S. Agarwal, G. Sastry, A. Askell, P. Mishkin, J. Clark et al. , “Learning transferable visual models from natural language supervision,” in Proc. of the Int. Conf. on Machine Learning (ICML) , 2021. [41] Y. Huo, Q. Qin, W. Zhang, L. Huang, and J. Nie, “Factorized transformer hashing with adaptive routing for large-scale image retrieval,” in Proc. of the ACM International Conference on Multimedia (ACM MM) , 2025. [42] A. Paszke, S. Gross, F. Massa, A. Lerer, J. Bradbury, G. Chanan, T. Killeen, Z. Lin, N. Gimelshein, L. Antiga, A. Desmaison, A. K¨ opf, E. Z. Yang, Z. DeVito, M. Raison, A. Tejani, S. Chilamkurthy, B. Steiner, L. Fang, J. Bai, and S. Chintala, “Pytorch: An imperative style, high-performance deep learning library,” in Proc. of the Conference on Neural Information Processing Systems (NeurIPS) , 2019. [43] D. P. Kingma and J. Ba, “Adam: A method for stochastic optimization,” in Proc. of the Int. Conf. on Learning Representations (ICLR) , 2015.

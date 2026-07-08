@@ -1,0 +1,3808 @@
+Title: ManifoldFlow: SPD-Relaxed Stiefel Layers with Learnable Singular Spectrum
+
+URL Source: https://arxiv.org/pdf/2607.04535v1
+
+Published Time: Tue, 07 Jul 2026 03:13:56 GMT
+
+Number of Pages: 39
+
+Markdown Content:
+# ManifoldFlow: SPD-Relaxed Stiefel Layers with Learnable Singular Spectrum 
+
+Haiwen Yi ∗
+
+University of Toronto 
+
+Xinyuan Song ∗†
+
+Emory University 
+
+Abstract 
+
+Orthogonal and Stiefel layers give neural weights exact spectral control, but they also impose a strong modeling constraint: all represented singular values are fixed at one. Many settings that benefit from an orthonormal basis still need direction-dependent attenuation or amplification. We introduce ManifoldFlow, a minimal relaxation of a fixed-spectrum Stiefel layer that keeps the basis on 
+
+St( p, r ) while learning a bounded positive spectrum through W = QS 1/2, with 
+
+Q⊤Q = I and S ≻ 0. Since W ⊤W = S, the eigenvalues of S are exactly the squared singular values of the realized weight, making eigenvalue clipping a direct singular-value control mechanism. Across paired sequence, tabular, and image experiments, the learnable SPD spectrum consistently improves the fixed-spectrum Stiefel counterpart when the Stiefel prior is useful, with the largest gains in recurrent language-model projections. Boundary cases in convolutional classifier heads clarify the intended scope: ManifoldFlow is not a universal dense-layer replacement, but a spectrum-learnable Stiefel relaxation for settings where an orthonormal basis is a useful prior. When the basis should be orthonormal, its spectrum need not be frozen. Our code is available at https://github.com/ Hik289/manifold_flow.git .
+
+1 Introduction 
+
+Modern neural networks are built from a small set of linear maps repeated inside multilayer perceptrons, convolutional classifiers, recurrent gates, and Transformer feed-forward blocks [ 46 , 47 , 32 , 23 , 11 , 51 ]. Their behavior is shaped not only by depth and nonlinearity, but also by the geometry and spectrum of these maps: initialization, rectifiers, normalization, regulariza-tion, and adaptive optimizers all act partly by controlling how signals and gradients are scaled [ 15 , 41 , 19 , 25 , 50 , 28 ]. Stiefel and orthogonal constraints offer one especially clean form of control. If Q ∈ St( p, r ), then Q⊤Q = Ir : the layer preserves norms on its represented subspace and admits mature Riemannian optimization tools [ 1 , 10 , 53 ]. This property is useful in recurrent networks, deep linear maps, and Transformer feed-forward blocks because it stabilizes signal propagation and limits spectral growth [ 49 , 52 , 26 , 37 , 21 , 24 ]. The same property also creates a sharp modeling constraint: a fixed Stiefel layer has every nonzero singular value equal to one. 
+
+Overview. Fixed Stiefel learns an orthonormal basis but fixes the represented spectrum; ManifoldFlow keeps that basis while learning bounded singular values (Figure 1). The unit spectrum is a modeling restriction, not merely an optimization detail. A language-model projection, a tabular hidden layer, an image classifier head, and a feed-forward block may all benefit from an orthonormal coordinate system while still needing to damp some directions and amplify others. A pure Stiefel layer can choose directions, but it cannot choose their relative gains. The 
+
+> ∗Equal contribution.
+> †Corresponding author. Preprint.
+> arXiv:2607.04535v1 [cs.LG] 5 Jul 2026
+
+Figure 1: ManifoldFlow overview. Fixed Stiefel fixes the represented spectrum at one; ManifoldFlow keeps the basis and learns a bounded SPD spectrum. question in this paper is therefore deliberately focused: when the Stiefel basis is the right inductive bias, should its spectrum remain pinned at one, or should the spectrum be learned under explicit control? We present ManifoldFlow, an SPD-relaxed Stiefel layer that separates basis learning from spectrum learning: 
+
+W = QS 1/2, Q ∈ St( p, r ), S ∈ SPD( r). (1) The Stiefel factor Q provides orthonormal directions, while the symmetric positive definite factor 
+
+S stores the layer’s Gram geometry. Proposition 2 proves the exact identity W ⊤W = S, hence 
+
+σ2 
+
+> i
+
+(W ) = λi(S). Clipping the eigenvalues of S is therefore direct singular-value control on the realized weight. The fixed-spectrum baseline is recovered when S = I, so ManifoldFlow is a paired relaxation of the same Stiefel layer rather than a separate dense-layer competitor. The update rule follows the factorization. The Q factor uses the same Stiefel optimizer as the paired baseline, while the S factor is updated by an affine-invariant SPD retraction. Our implementation uses a symmetric pressure matrix Pt = sym( Q⊤ 
+
+> t
+
+¯Gt), where ¯Gt is the normal component discarded by the Stiefel tangent projection, as a default direction on the SPD cone. Figure 2 previews the two empirical facts that motivate the design: the pressure signal is structured, and the learned SPD factor moves away from the identity while remaining bounded. The pressure signal is useful, but it is not the core claim. Proposition 5 shows that near an isotropic S, equal-norm bounded symmetric directions induce equal affine-invariant movement, and the random-pressure ablation remains within 0.1% on Adult and Covertype. The central object is the bounded spectrum relaxation, not the uniqueness of one pressure heuristic. Our contributions are threefold. First, we formulate the spectrum-learnable parametrization W =
+
+QS 1/2 and identify its exact Gram and singular-spectrum meaning. Second, we give a bounded SPD update that preserves positive definiteness, recovers Fixed-Stiefel by setting the geometry learning rate to zero, and admits a product-manifold convergence analysis. Third, we report paired evidence across recurrent language modeling, tabular and image MLPs, Transformer feed-forward layers, and convolutional classifier heads. The strongest gains appear where a Stiefel basis is a useful prior, while the mixed classifier-head results identify where that prior becomes limiting. 20.0 0.2 0.4 0.6 0.8 1.0 
+
+> Training progress
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> cos( Pt, Pt − 1 ) Layer 4
+> Layer 0
+
+(a) Persistent pressure signal      
+
+> 0.0 0.2 0.4 0.6 0.8 1.0
+> Training progress
+> 1.0
+> 1.1
+> 1.2
+> 1.3
+> Eigenvalue interval  κ(S) = 1.075
+
+(b) Bounded spectrum opens     
+
+> λmax
+> λmin
+> 1.0 1.1 1.2 1.3
+> Spectral signal λmax (S)
+> 83.0
+> 83.5
+> 84.0
+> 84.5
+> 85.0
+> Test accuracy (%)
+> epoch 10
+> epoch 100
+
+(c) Spectrum tracks endpoint quality     
+
+> 0.2 0.4 0.6 0.8 1.0
+> Training progress
+> 83.0
+> 83.5
+> 84.0
+> 84.5
+> 85.0
+> Test accuracy (%)
+
+(d) MF stays above paired FS 
+
+> FS-Adam
+> MF-Adam
+
+Figure 2: Motivation diagnostics on Adult MLP. (a) Pressure coherence by layer. (b) Learned eigenvalue interval over training. (c) Accuracy versus λmax (St). (d) Paired FS-Adam and MF-Adam accuracy trajectories. 
+
+2 Related work 
+
+Stiefel and orthogonal optimization. Optimization on matrix manifolds provides the tangent projections, retractions, vector transports, and convergence tools used by Stiefel neural layers [ 1, 10 ]. Feasible Cayley-style updates, manifold trivializations, and Riemannian adaptive methods make constrained updates practical for neural networks [ 53 , 33 , 5 , 29 ]. Orthogonal and unitary parametrizations have been used to stabilize recurrent dynamics and improve conditioning in deep networks [ 54 , 52 , 26 , 37 , 21 , 24 ]. This line of work primarily asks how to optimize an orthogonal factor efficiently. ManifoldFlow asks a complementary modeling question: once a Stiefel basis is chosen, must its spectrum remain fixed? 
+
+SPD geometry and spectral parametrizations. Symmetric positive definite matrices form a Riemannian manifold with well-studied affine-invariant and log-Euclidean geometries [ 42 , 40 , 2,22 , 7]. We use this geometry as a weight factor rather than as an input covariance or activation representation. Spectral normalization constrains the largest singular value of an unconstrained layer [ 39 ], weight normalization separates scale from direction [ 48 ], and orthogonal weight normalization enforces dependent Stiefel constraints [ 24 ]. In contrast, ManifoldFlow keeps a semi-orthogonal basis 
+
+Q but gives the layer a full SPD factor S whose eigenvalues are exactly the squared singular values of W .
+
+Singular spectra and signal propagation. Orthogonal initialization and dynamical-isometry analyses show that training depends on the distribution of singular values, not only on the largest singular value [49, 38, 43]. Fixed Stiefel layers occupy the most rigid point in this design space: all represented singular values are exactly one. ManifoldFlow turns this observation into a trainable layer design by learning the entire bounded spectrum while preserving an orthonormal basis. 
+
+Intrinsic spectral optimization and tangent-only competitors. Intrinsic Muon is the closest recent comparator because it optimizes spectral quantities intrinsically on Riemannian matrix manifolds [ 34 ]. 3Dense layers, diagonal-spectrum layers, and intrinsic spectral optimizers are important boundary comparisons because they test whether the Stiefel prior itself is appropriate. Our claim is narrower: given a fixed-spectrum Stiefel layer, adding a bounded SPD spectrum improves the paired layer on the task families evaluated below. 
+
+Lipschitz control and generalization. A key appeal of Stiefel layers is spectral control. Classical Rademacher and margin analyses relate neural-network capacity to products of spectral norms and sums of normalized Frobenius terms [ 3 , 4 ]. Theorem 3 substitutes Wl = QlS1/2 
+
+> l
+
+into these bounds, expressing the complexity terms through λmax (Sl) and tr( Sl). This places ManifoldFlow between the fixed Stiefel corner Sl = I and unconstrained dense layers whose spectra must be controlled separately. 
+
+3 Preliminaries 
+
+Let p ≥ r. The compact Stiefel manifold is 
+
+St( p, r ) = {Q ∈ Rp×r : Q⊤Q = Ir }, (2) and its tangent space is 
+
+TQSt( p, r ) = {∆ ∈ Rp×r : Q⊤∆ + ∆ ⊤Q = 0 }. (3) A Stiefel retraction maps a tangent step back to St( p, r ); QR and Cayley-style maps are standard choices [ 53 , 10 ]. A fixed Stiefel layer uses W = Q. Hence W ⊤W = Ir , and every represented singular value is exactly one. We write Sym( r) for real symmetric matrices and 
+
+SPD( r) = {S ∈ Sym( r) : x⊤Sx > 0 for all x̸ = 0 } (4) for the SPD cone. Under the affine-invariant metric gS (X, Y ) = tr( S−1XS −1Y ), the exponential map from S in direction X ∈ Sym( r) is 
+
+Exp S (X) = S1/2 exp( S−1/2XS −1/2)S1/2, (5) with distance dAI (S, T ) = ∥ log( S−1/2T S −1/2)∥F [42 , 40 , 7 ]. The matrix exponential of a symmet-ric matrix is SPD, so updates of the form (5) preserve positive definiteness. A ManifoldFlow layer uses the product manifold St( p, r ) × SPD( r) and represents the weight as 
+
+W (Q, S ) = QS 1/2. Since Q⊤Q = Ir ,
+
+W (Q, S )⊤W (Q, S ) = S. (6) All spectral diagnostics of St are therefore diagnostics of the actual forward weight, not of an auxiliary state. 
+
+4 Methodology 
+
+ManifoldFlow separates two properties that are tied together in a fixed Stiefel layer. The Stiefel factor keeps the represented directions orthonormal; the SPD factor learns the gains assigned to those directions. The construction in Figure 1 is therefore a basis–spectrum decoupling: the update keeps the usual Stiefel step for Q and adds a bounded geometry step for S. Figure 3 shows one full update: the realized weight induces a Stiefel-gradient decomposition, the tangent branch updates Qt, and the rejected-normal pressure branch updates the bounded SPD spectrum. 
+
+Parametrization and spectral identity. For a layer with p ≥ r, ManifoldFlow writes 
+
+Wt = QtS1/2 
+
+> t
+
+, Qt ∈ St( p, r ), St ∈ SPD( r). (7) Proposition 2 proves that W ⊤ 
+
+> t
+
+Wt = St and σ2 
+
+> i
+
+(Wt) = λi(St). Thus St is not an auxiliary regularizer; it is exactly the Gram matrix of the composed weight. Proposition 2 shows that the parametrization covers the full-column-rank matrix set, while the fixed baseline is recovered at the special point 
+
+St = Ir .4Figure 3: One ManifoldFlow update. The schematic shows the forward factorization, the projected-gradient split, the tangent update for Qt, the SPD update for St, and the final composed weight. 
+
+Rejected-gradient pressure. Let GW,t = ∇Wt Lt and Rt = S1/2 
+
+> t
+
+. The ambient gradient with respect to Qt is 
+
+¯Gt = GW,t Rt. (8) The Stiefel tangent projection decomposes this matrix as 
+
+Gtan  
+
+> Q,t
+
+= ¯Gt − Qtsym( Q⊤ 
+
+> t
+
+¯Gt), ¯Gt = Gtan  
+
+> Q,t
+
++ QtPt, (9) where 
+
+Pt = sym( Q⊤ 
+
+> t
+
+¯Gt) = 12
+
+ Q⊤ 
+
+> t
+
+¯Gt + ¯G⊤ 
+
+> t
+
+Qt
+
+ . (10) The tangent component updates Qt; the normal component QtPt is the part a fixed Stiefel optimizer would reject. Proposition 1 shows that, at S = I, the same symmetric matrix is the first-order signal for moving the Gram factor S. Thus pressure is not an extra heuristic gradient invented outside the model; it is the rejected component reinterpreted as a geometry direction. 
+
+Persistent pressure and geometry gate. Because Pt is expressed in the current Stiefel basis, we align the previous pressure state before averaging it. Let 
+
+Q⊤ 
+
+> t
+
+Qt−1 = UtΣtV ⊤ 
+
+> t
+
+, Ot = UtV ⊤ 
+
+> t
+
+, fMt−1 = OtMt−1O⊤ 
+
+> t
+
+. (11) Proposition 4 proves that this is the orthogonal Procrustes alignment and preserves the spectrum and Frobenius norm of the pressure state. We then use the normalized EMA 
+
+Mt = βP fMt−1 + (1 − βP ) Pt
+
+∥ ¯Gt∥F + ε . (12) The geometry gate combines pressure consistency, normal-to-tangent magnitude, and spectral damp-ing: 
+
+ct = ⟨Pt, fMt−1⟩F
+
+∥Pt∥F ∥ fMt−1∥F + ε , (13) 
+
+rt = ∥QtPt∥F
+
+∥Gtan 
+
+> Q,t
+
+∥F + ε , (14) 
+
+at = σ(αc(ct − τc)) σ(αr (log rt − τr )) min 
+
+
+
+1, λmin (St)
+
+λmax (St)
+
+
+
+. (15) This gate only damps noisy or overly anisotropic geometry updates; it does not define a separate model. 5Affine-invariant SPD update. The regularized objective used in the theory is 
+
+J (Q, S ) = F (QS 1/2) + λS
+
+2 ∥ log S∥2 
+
+> F
+
+. (16) Under the affine-invariant metric, the exact Riemannian gradient of the log-barrier-to-identity term is 
+
+λS S1/2 
+
+> t
+
+log( St)S1/2 
+
+> t
+
+. We write the exponential generator as 
+
+At = S−1/2 
+
+> t
+
+sym( Mt)S−1/2 
+
+> t
+
++ λS log St. (17) On geometry-update steps, after the warmup period, ManifoldFlow uses γt = ρgeo ηt and 
+
+Sraw  
+
+> t+1
+
+= S1/2 
+
+> t
+
+exp( −γtatAt) S1/2 
+
+> t
+
+. (18) If Sraw  
+
+> t+1
+
+= U diag( λ1, . . . , λ r )U ⊤, spectral clipping sets 
+
+St+1 = U diag(clip( λi, α, β )) U ⊤. (19) Proposition 3 proves that (18) remains in SPD( r) before clipping, and Proposition 4 proves that (19) places the iterate in Sα,β . Setting ρgeo = 0 freezes St = Ir and reduces the method exactly to the paired Fixed-Stiefel update used throughout the experiments. 
+
+Geometric interpretation. The pressure direction is useful but not unique. Proposition 5 states that, at an isotropic St = λI , equal-norm symmetric directions produce equal affine-invariant movement under (18) . This result explains the random-pressure ablation: if the main benefit is relaxing the unit spectrum while keeping bounded SPD motion, several symmetric directions can yield similar performance. The method’s invariant is the exact spectrum identity plus bounded motion on the SPD cone. 
+
+Tangent optimizers. The geometry mechanism is shared across base optimizers. SGD with momentum, Adam/AMSGrad-style adaptive updates, Shampoo-style Kronecker preconditioning, and Muon-style orthogonalized matrix directions [ 45 , 28 , 44 , 14 , 17 , 27 , 34 ] differ only in the tangent direction Dt used for Qt:
+
+Dt ∈ TQt St( p, r ), Qt+1 = Retr Qt (−ηtDt). (20) Whenever the tangent direction can be written as a bounded positive-definite preconditioner applied to a stochastic tangent gradient, Proposition 6 shows that the stationarity rate changes only by constants. 
+
+Algorithm 1: One ManifoldFlow layer update. 
+
+1. Form ¯Gt = GW,t S1/2 
+
+> t
+
+and decompose it by (9). 2. Update Qt with the selected Stiefel optimizer using a tangent direction Dt.3. Align and average pressure by (11)–(12). 4. Compute the gate at in (15). 5. On geometry-update steps, update St by (18) , clip by (19) , and use Wt+1 = Qt+1 S1/2 
+
+> t+1
+
+in the next forward pass. 
+
+5 Theory 
+
+The theory formalizes why the relaxation is still controlled. The fixed-Stiefel layer gives exact orthonormal directions but only the unit spectrum. ManifoldFlow enlarges this class by adding 
+
+S ∈ SPD( r), while clipping 
+
+Sα,β = {S ∈ SPD( r) : αI r ⪯ S ⪯ βI r }, 0 < α ≤ β < ∞, (21) keeps the realized singular values bounded. The statements below are the mathematical contract used by the method: rejected-gradient pressure is a Gram-geometry signal, the parametrization has exact spectral meaning, the alignment and clipping operations preserve the intended geometry, the SPD motion is feasible, and the resulting product-manifold optimization retains standard stationarity and spectral-complexity guarantees. Proofs are deferred to the appendix. 6Proposition 1 (Rejected pressure is a Gram-geometry signal) . Let ℓ(W ) be differentiable, let 
+
+W = QS 1/2 with Q ∈ St( p, r ) and S ∈ SPD( r), and let GW = ∇W ℓ(W ). Define ¯G = GW S1/2
+
+and 
+
+ΠQ( ¯G) = ¯G − Qsym( Q⊤ ¯G), P = sym( Q⊤ ¯G). (22) 
+
+Then ΠQ( ¯G) ∈ TQSt( p, r ) and ¯G = Π Q( ¯G) + QP . Moreover, at S = Ir , for every symmetric perturbation U ∈ Sym( r),
+
+DS ℓ(QS 1/2) S=Ir [U ] = 12 ⟨sym( Q⊤GW ), U ⟩F . (23) 
+
+Implication. The normal component discarded by a Stiefel projection is mathematically aligned with first-order changes in the Gram factor. Persistent pressure therefore has a precise role: it is a low-variance direction for relaxing W ⊤W = I into W ⊤W = S. The proof is in Appendix A.1.1. 
+
+Proposition 2 (Exact spectrum and full-rank coverage) . Let Q ∈ St( p, r ), S ∈ SPD( r), and 
+
+W = QS 1/2. Then 
+
+W ⊤W = S, σ2 
+
+> i
+
+(W ) = λi(S), i = 1 , . . . , r. (24) 
+
+Moreover, the image of (Q, S ) 7 → QS 1/2 over St( p, r )×SPD( r) is exactly the set of full-column-rank matrices in Rp×r . If S ∈ S α,β , then 
+
+√α ≤ σi(W ) ≤ pβ, κ(W ) ≤ pβ/α. (25) 
+
+Implication. ManifoldFlow is not a heuristic scale parameter attached to a Stiefel layer. It is an exact Gram-factor parametrization: moving S moves the singular spectrum of the actual forward weight, and clipping S clips the layer. The proof is in Appendix A.5.1 and Appendix A.5.2. 
+
+Proposition 3 (Feasible SPD update) . Let St ∈ SPD( r), At ∈ Sym( r), γt > 0, and at ∈ [0 , 1] .Define 
+
+St+1 = S1/2 
+
+> t
+
+exp( −γtatAt) S1/2 
+
+> t
+
+. (26) 
+
+Then St+1 ∈ SPD( r).
+
+Implication. Every symmetric geometry direction gives a valid SPD iterate before clipping. Thus the method can learn a spectrum without leaving the cone or relying on a post-hoc projection to repair indefiniteness. The proof is in Appendix A.2.1. 
+
+Proposition 4 (Alignment and spectral clipping invariants) . Let Q, Q − ∈ St( p, r ) and let Q⊤Q− =
+
+U ΣV ⊤ be a compact singular-value decomposition. Then 
+
+O⋆ = U V ⊤ ∈ arg min  
+
+> O∈O( r)
+
+∥QO − Q−∥2 
+
+> F
+
+. (27) 
+
+For every M ∈ Sym( r), the aligned state OM O ⊤ is symmetric and has the same eigenvalues and Frobenius norm as M . If S = US diag( λi)U ⊤ 
+
+> S
+
+∈ SPD( r) and 
+
+Cα,β (S) = US diag(clip( λi, α, β )) U ⊤ 
+
+> S
+
+, (28) 
+
+then Cα,β (S) ∈ S α,β .
+
+Implication. The pressure EMA compares directions in aligned Stiefel coordinates rather than mixing incompatible bases, and the clipping operator turns every raw SPD step into a bounded-spectrum layer. The proof is in Appendix A.2.2. 
+
+Proposition 5 (Local equivalence of bounded SPD directions) . Let St = λI r with λ > 0. For 
+
+M ∈ Sym( r), define 
+
+St+1 (M ) = S1/2 
+
+> t
+
+exp 
+
+
+
+−ρgeo atS−1/2 
+
+> t
+
+M S −1/2
+
+> t
+
+
+
+S1/2 
+
+> t
+
+.
+
+If M, M ′ ∈ Sym( r) satisfy ∥M ∥F = ∥M ′∥F , then 
+
+dAI (St, S t+1 (M )) = dAI (St, S t+1 (M ′)) = ρgeo atλ−1∥M ∥F . (29) 7Implication. Near the isotropic initialization, the method’s first-order movement is controlled by the size of the symmetric SPD direction, not by a fragile choice of pressure heuristic. This explains why random-pressure ablations can remain competitive while still supporting the spectrum-relaxation mechanism. The proof is in Appendix A.2.3. 
+
+Theorem 1 (Product-manifold stationarity) . Let xt = ( Qt, S t) ∈ St( p, r ) × S α,β . Assume the objective J is bounded below and retraction-smooth on this product manifold, and let bgt be an unbiased tangent stochastic gradient estimator with conditional variance bounded by ν2 
+
+> t
+
+. If xt+1 =
+
+Rxt (−ηtbgt) and 0 < η t ≤ L−1 
+
+> R
+
+, then for a random iterate R sampled with probability proportional to ηt,
+
+E∥ grad J (xR)∥2 
+
+> xR
+
+≤ 2( J (x1) − J ⋆) + LR
+
+PTt=1 η2 
+
+> t
+
+ν2
+
+> t
+
+PTt=1 ηt
+
+. (30) 
+
+For ηt = c/ √t and bounded accumulated variance, the right-hand side is O(T −1/2).
+
+Implication. Learning S does not remove the method from standard stochastic Riemannian optimiza-tion. The product update retains the usual nonconvex stationarity guarantee, while the clipped SPD factor keeps all spectral terms finite. The proof is in Appendix A.3.1. 
+
+Theorem 2 (Two-block stationarity with biased geometry estimates) . Let J be retraction-smooth and bounded below on St( p, r ) × S α,β . Suppose the Q-block uses an unbiased tangent estimator 
+
+bgQ,t with conditional variance at most σ2
+
+> Q
+
+. Suppose the SPD block uses a symmetric estimator bgS,t 
+
+with conditional variance at most σ2 
+
+> S
+
+and bias satisfying 
+
+⟨grad S J (Qt, S t), E[bgS,t | F t] − grad S J (Qt, S t)⟩St ≤ bt. (31) 
+
+If the updates use step sizes ηt, γ t small enough for the descent lemma and if R is sampled with probability proportional to ηt + γt, then 
+
+E∥ grad Q J (QR, S R)∥2 + ∥ grad S J (QR, S R)∥2
+
+> SR
+
+
+
+≤ CJ + CQσ2
+
+> Q
+
+P 
+
+> t
+
+η2
+
+> t
+
+P
+
+> t
+
+(ηt + γt) + CS σ2
+
+> S
+
+P 
+
+> t
+
+γ2 
+
+> t
+
++ 2 P 
+
+> t
+
+γtbt
+
+P
+
+> t
+
+(ηt + γt) . (32) 
+
+With ηt, γ t = Θ( T −1/2) and T −1 P 
+
+> t
+
+bt = O(T −1/2), the right-hand side is O(T −1/2).
+
+Implication. EMA, gating, and low-frequency geometry updates can be analyzed as a biased SPD-gradient estimator. As long as the accumulated bias is controlled, ManifoldFlow keeps the same nonconvex stochastic first-order rate as the standard product-manifold update. The proof is in Appendix A.3.2. 
+
+Proposition 6 (Bounded tangent preconditioners) . Let the Q-block direction be Dt = BtbgQ,t , where 
+
+Bt : TQt St( p, r ) → TQt St( p, r ) is self-adjoint and satisfies 
+
+m∥ξ∥2 ≤ ⟨ ξ, B tξ⟩ ≤ M ∥ξ∥2, ∥Btξ∥ ≤ M ∥ξ∥ (33) 
+
+for constants 0 < m ≤ M < ∞. Under the assumptions of Theorem 2, replacing bgQ,t by Dt
+
+preserves the same stationarity order, with constants scaled by m and M .
+
+Implication. AMSGrad-style Adam, Shampoo, and other tangent optimizers fit the same proof template when their effective preconditioners are uniformly positive definite and bounded. The geometry mechanism is therefore not tied to one base optimizer. The proof is in Appendix A.3.3. 
+
+Theorem 3 (Spectral complexity bound) . Consider an Lnet -layer network with one-Lipschitz activa-tions, inputs ∥x∥2 ≤ B, and ManifoldFlow weights Wl = QlS1/2 
+
+> l
+
+with Sl ∈ S αl,β l . With probability at least 1 − δ, the clipped class satisfies 
+
+R(f ) − bR(f ) ≤ 4CℓB
+
+√n
+
+> Lnet
+
+Y
+
+> l=1
+
+pβl + 3 
+
+r log(2 /δ )2n + ϵstab . (34) 
+
+The spectrally normalized margin form can be written as 
+
+R(f ) ≤ bRγ (f ) + CBFT Bγ√n
+
+vuut"Y
+
+> l
+
+λmax (Sl)
+
+# " X
+
+> l
+
+tr( Sl)
+
+λmax (Sl)
+
+#
+
++ 3 
+
+r log(2 /δ )2n . (35) 8Implication. The same matrix Sl that gives modeling flexibility also exposes the quantities controlling spectral capacity. Fixed Stiefel is the corner Sl = I; dense layers require separate spectral control; ManifoldFlow sits between them with learnable but clipped spectrum. The proof is in Appendix A.4.1. 
+
+Theorem 4 (Network and graph propagation spectra) . Let Wl = QlS1/2 
+
+> l
+
+with Ql ∈ St( pl, r l) and 
+
+Sl ∈ S αl,β l . For a differentiable feed-forward network with layer Jacobians Dl and end-to-end Jacobian 
+
+J = DLWL · · · D1W1, (36) 
+
+we have 
+
+∥J∥op ≤ Y
+
+> l
+
+∥Dl∥op 
+
+pλmax (Sl). (37) 
+
+If each factor is full rank on the propagated subspace, then 
+
+σmin (J) ≥ Y
+
+> l
+
+σmin (Dl)pλmin (Sl). (38) 
+
+For a graph layer H(l+1) = bAH (l)Wl,
+
+vec( H(l+1) ) = ( W ⊤ 
+
+> l
+
+⊗ bA) vec( H(l)), σ(W ⊤ 
+
+> l
+
+⊗ bA) = {σi(Wl)σj ( bA)}i,j . (39) 
+
+Implication. The learned SPD spectrum controls not only isolated layer singular values but also end-to-end Jacobian bounds and graph propagation operators. In graph layers, the spectral modes of 
+
+bA are multiplied directly by the learned singular values pλi(Sl). The proof is in Appendix A.5.3. 
+
+Proposition 7 (First-order spectral dynamics) . Let St have simple eigenpairs (λi,t , u i,t ), let Mt ∈
+
+Sym( r), and define 
+
+St+1 = S1/2 
+
+> t
+
+exp 
+
+
+
+−τ S −1/2 
+
+> t
+
+MtS−1/2
+
+> t
+
+
+
+S1/2 
+
+> t
+
+, τ = ρgeo at.
+
+Then 
+
+log λi(St+1 ) = log λi,t − τ u⊤
+
+> i,t
+
+Mtui,t 
+
+λi,t 
+
++ O
+
+
+
+τ 2∥S−1/2 
+
+> t
+
+MtS−1/2 
+
+> t
+
+∥2
+
+> F
+
+
+
+. (40) 
+
+Implication. Persistent SPD pressure changes log-eigenvalues directly. This gives the spectral-adaptation plots a mathematical interpretation: they are trajectories of the singular spectrum of the realized layer. The proof is in Appendix A.5.4. 
+
+Proposition 8 (Structured SGD preconditioning) . Let S = V diag( s1, . . . , s r )V ⊤ and suppose that, in a local tangent frame aligned with the SPD eigenvectors, the realized-weight Hessian has eigenvalues μ1 ≥ · · · ≥ μr > 0. Define 
+
+κeff (S) = max i siμi
+
+min i siμi
+
+, κ = μ1
+
+μr
+
+. (41) 
+
+In the local strongly convex and smooth comparison neighborhood, gradient descent with step size 
+
+1/ max i siμi contracts as 
+
+J (QT , S ) − J (Q⋆, S ) ≤  1 − κeff (S)−1T [J (Q0, S ) − J (Q⋆, S )] . (42) 
+
+If a/μ i ≤ si ≤ b/μ i, then κeff (S) ≤ b/a .
+
+Implication. Fixed-Stiefel SGD has si = 1 , so its local conditioning is inherited from the Hessian. ManifoldFlow can learn singular scaling that reduces this effective condition number, explaining why the gains are largest under SGD in the sequence experiments. The proof is in Appendix A.6.1. 
+
+6 Experiments 
+
+The experiments isolate the value of learning the SPD spectrum. Across most paired task–optimizer cells, ManifoldFlow improves the corresponding fixed-spectrum Stiefel layer; the strongest and most stable gains appear in recurrent language modeling and MLP hidden-layer settings, while convolutional classifier heads mark a clearer boundary case. We therefore present the results by task family rather than as a flat list of endpoints: recurrent language models on WikiText, tabular MLPs 9Table 1: LSTM/WikiText-2 convergence. The wrapped layer is the hidden-to-vocabulary projection; all other architecture and training choices are matched between FS and MF. Lower validation perplexity is better, and positive ∆ = PPL(FS) − PPL(MF) favors ManifoldFlow. Optimizer FS MF ∆
+
+Adam 255 .99 212 .37 +43 .62 
+
+SGD 397 .05 212 .54 +184 .51 0 200 400 600 800 1000                          
+
+> Epoch
+> 200
+> 300
+> 400
+> 500
+> 600
+> 700
+> PPL
+> Δ=+43.62
+> LSTM / WT2 (ADAM)
+> FS
+> MF
+> 0200 400 600 800 1000
+> Epoch
+> 83
+> 84
+> 85
+> 86
+> Acc%
+> Δ=+1.50pp
+> Adult MLP (ADAM)
+> FS
+> MF
+> 0200 400 600 800 1000
+> Epoch
+> 200
+> 400
+> 600
+> 800
+> 1000
+> PPL
+> Δ=+2.79
+> LSTM-256 / WT2 (ADAM)
+> FS
+> MF
+> 0200 400 600 800 1000
+> Epoch
+> 200
+> 400
+> 600
+> 800
+> 1000
+> PPL
+> Δ=+184.51
+> LSTM / WT2 (SGD)
+> FS
+> MF
+> 0200 400 600 800 1000
+> Epoch
+> 82
+> 83
+> 84
+> 85
+> 86
+> Acc%
+> Δ=+0.74pp
+> Adult MLP (SGD)
+> FS
+> MF
+> 0200 400 600 800 1000
+> Epoch
+> 200
+> 400
+> 600
+> 800
+> 1000
+> PPL
+> Δ=+165.39
+> LSTM-256 / WT2 (SGD)
+> FS
+> MF
+
+Figure 4: Main convergence comparisons. Paired FS and MF trajectories for the headline sequence and tabular settings. on UCI benchmarks, image-derived MLPs on Fashion-MNIST and CIFAR, a Mini-Transformer feed-forward block, and convolutional classifier heads on CIFAR [ 36 , 30 , 8, 13 , 12 , 55 , 31 , 32 , 20 , 51 ]. In every FS/MF pair, the architecture, optimizer family, data split, and Stiefel update are matched; only the geometry update for S is enabled or disabled. Positive ∆ values favor ManifoldFlow: for perplexity, ∆ = PPL(FS) − PPL(MF) ; for accuracy, ∆ = Acc(MF) − Acc(FS) . The evidence is organized around one question: when the Stiefel basis is held fixed as the architectural prior, does freeing its spectrum improve the paired layer? 
+
+Reporting protocol. The main convergence tables use a fixed reporting protocol: up to 1000 epochs with plateau-triggered early stopping, minimum 300 epochs, and patience 100. The same reporting rule is applied before comparing each FS/MF pair. Appendix B keeps a compact shorter-budget paired replicate check from an earlier reporting pass; those rows show the same direction in representative sequence, tabular, and feed-forward settings, but they are not mixed into the 1000-epoch endpoint. This separation matters because some archived boundary baselines were not rerun under the convergence protocol; we use them only to mark the scope of the Stiefel-family comparison. 
+
+6.1 LSTM/WikiText-2 
+
+The main sequence comparison is an LSTM language model [ 23 ] on WikiText-2 [ 36 ]. The hidden-to-vocabulary projection is wrapped as either a fixed Stiefel layer or a ManifoldFlow layer; the rest of the model is unchanged. Table 1 and Figure 4 show the central experimental pattern. Learning the SPD spectrum improves the paired Stiefel projection under both Adam [ 28 ] and stochastic gradient descent [ 45 ], with a much larger separation under SGD. This is the cleanest empirical instance of the theory: when the external optimizer supplies little adaptive scaling, the layer-internal spectrum can act as structured preconditioning while the Stiefel basis remains intact. 10 Table 2: Adult MLP convergence. Hidden linear layers are wrapped with either FS or MF. Higher test accuracy is better, and positive ∆ = Acc(MF) − Acc(FS) favors ManifoldFlow. Optimizer FS MF ∆
+
+Adam 84 .13 85 .63 +1 .50% 
+
+SGD 84 .28 85 .01 +0 .74% 
+
+Table 3: Mini-Transformer FFN exploratory comparison. Only feed-forward linear layers are wrapped; attention and embeddings are not constrained. Lower validation perplexity is better. This table follows the earlier short-budget paired replicate protocol rather than the 1000-epoch convergence protocol. Optimizer FS MF ∆
+
+Adam 80 .29 ± 0.09 80 .06 ± 0.15 +0 .23 ± 0.10 
+
+SGD 301 .98 ± 2.47 300 .33 ± 2.45 +1 .65 ± 0.05 
+
+6.2 Adult MLP 
+
+Adult Income is a UCI tabular classification benchmark derived from census records [ 30 , 13 ]. We use a multilayer perceptron and wrap the hidden linear layers, following the same paired FS/MF protocol. Table 2 and Figure 4 show that the tabular setting is positive for both optimizers, although the effect is naturally smaller than in recurrent language modeling. This matters because the wrapped object is now a stack of hidden layers rather than a single output projection. The repeated outcome is that the fixed unit spectrum is not the best member of the Stiefel family once the basis is allowed to keep its orthogonality and learn its gains. 
+
+6.3 Mini-Transformer FFN 
+
+We also test a two-block Mini-Transformer on WikiText-2 [ 51 , 36 ]. Only the feed-forward network linear layers are wrapped; attention projections and embeddings remain unconstrained. This cell was not part of the 1000-epoch convergence batch, so we keep the earlier exploratory protocol and report it separately from the converged main cells. Table 3 and Figure 5 show a small but consistent architecture-diversity signal: the relaxation helps in the Transformer feed-forward block without changing attention. We treat this as evidence that the mechanism is not tied only to recurrent projections, not as a claim about large-scale Transformer training. 
+
+6.4 Spectral adaptation 
+
+Proposition 7 predicts that persistent SPD pressure changes the log-eigenvalues of St. Figure 6 shows the recorded St over the LSTM/WikiText-2 MF-Adam trajectory. The spectrum moves decisively away from the identity and then saturates near the clipping boundary, so the learned factor is not a dormant parameter. The recurrent projection mainly uses a shared scaling phase with only transient anisotropy, while the CIFAR-100 ResNet traces [ 31 , 20 ] show stronger layer-dependent anisotropy in deeper classifier-head layers. These traces connect the identity W ⊤W = S to observed training dynamics: the SPD factor is active, bounded, and architecture dependent. 
+
+6.5 Pressure and ablations 
+
+Figure 7 measures the cosine similarity cos( Pt, P t−1) on Adult MLP. The pressure direction becomes increasingly coherent in deeper layers, so the default signal is not merely random noise. Table 4 gives the counterweight: removing the EMA, removing the geometry gate, or replacing pressure with random symmetric matrices changes the endpoints only marginally on Adult and Covertype [ 30 , 8 ]. The mechanism supported by these data is therefore bounded SPD spectrum learning; pressure is a practical default for moving that spectrum, not the sole explanation for the paired gains. 11 FS-Adam MF-Adam 
+
+> 79.60
+> 79.80
+> 80.00
+> 80.20
+> 80.40
+> 80.60
+> 80.80
+> Final Test PPL  80.29
+> 80.06
+> =+0.23 PPL
+> (a) Transformer FFN / WikiText-2
+> FS
+> Adam
+> MF
+> Adam
+> FS
+> SGD
+> MF
+> SGD
+> 79.60
+> 79.80
+> 80.00
+> 80.20
+> 80.40
+> 80.60
+> 80.80
+> Adam Final Test PPL
+> (b) Transformer FFN / WikiText-2
+> seed 42
+> seed 123
+> seed 2024
+> 294
+> 296
+> 298
+> 300
+> 302
+> 304
+> 306
+> 308
+> SGD Final Test PPL
+> Mini-Transformer FFN / WikiText-2: ManifoldFlow vs. Full-Stiefel (3 seeds)
+
+Figure 5: Mini-Transformer FFN trajectories. Validation perplexity curves when only feed-forward linear layers are wrapped. 0 200 400 600 800 1000              
+
+> Epoch
+> 1.0
+> 1.5
+> 2.0
+> 2.5
+> 3.0
+> 3.5
+> 4.0
+> Eigenvalue of  St
+> (a) LSTM
+> λmax (St)
+> λmin (St)
+> S=Iinitial
+> β= 4 clip
+> 0200 400 600 800 1000
+> Epoch
+> 1.000
+> 1.050
+> 1.100
+> 1.150
+> 1.200
+> 1.250
+> λmax (St)/ λmin (St)
+> (b) LSTM
+> λmax /λmin
+> Isotropic
+> 20 40 60 80 100
+> Epoch
+> 1.00
+> 1.03
+> 1.05
+> 1.08
+> 1.10
+> 1.12
+> 1.15
+> 1.18
+> 1.20
+> λmax (St)/ λmin (St)
+> (c) ResNet-18 / CIFAR-100
+> ResNet fc layer
+> ResNet layer2.0.c1
+> ResNet conv1
+> Isotropic
+
+Figure 6: Spectral adaptation. (a,b) LSTM/WikiText-2 MF-Adam eigenvalue traces for St. (c) 
+
+CIFAR-100 ResNet-18 per-layer eigenvalue-ratio traces. 
+
+6.6 Boundary of the paired claim 
+
+The paired result should not be read as broad dominance over dense or diagonal-spectrum alternatives. The boundary audit in Table 10 reports archived comparisons collected under the earlier protocol: on Covertype [ 8 , 13 ], unconstrained dense MLP baselines [ 47 , 15 , 41 ] and diagonal-spectrum baselines can be much stronger than the Stiefel-family models. The convergence batch did not rerun those baselines, so we use the archived values only as a scope marker. The converged paired Covertype result in Table 6 should therefore be interpreted inside the FS/MF comparison rather than as a replacement for the boundary audit. The LSTM hidden-projection audit reaches the same conclusion against Dense, Q diag( s), and Intrinsic Muon alternatives [ 27 , 34 ]. These results define the paper’s scope: ManifoldFlow improves fixed-spectrum Stiefel layers when the Stiefel prior is appropriate; it is not a universal replacement for unconstrained dense layers. 
+
+6.7 Additional settings 
+
+We extend the paired comparison across recurrent architecture, language corpus, hidden-state scale, tabular dataset, flattened-image MLPs, and convolutional classifier heads. These experiments use the same converged reporting protocol as the main LSTM and Adult cells, except for Wine Quality, which remains an earlier single-run tabular sanity check. The goal is not to turn every architecture into a headline result, but to identify where the spectrum relaxation reliably helps and where the Stiefel prior becomes a limiting modeling choice. 
+
+Sequence models. Table 5 reports five additional sequence settings, including GRU language models [ 11 ]. The pattern is uniformly positive across optimizer cells, and the largest gains again occur in recurrent language-model projections, especially under SGD. Figure 8 shows that this is not a single endpoint artifact: the MF trajectories separate from their paired FS baselines across the extended recurrent settings. Together with the main LSTM/WikiText-2 cell, these runs are the 12 Layer 0 Layer 1 Layer 2 Layer 3 Layer 4     
+
+> Layer depth
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> 0.9
+> 1.0
+> cos( Pt, Pt 1)
+> (a) Adult MLP
+> MF-Adam
+> MF-SGD
+> FS-Adam
+> FS-SGD
+> Layer 0 Layer 1 Layer 2 Layer 3 Layer 4
+> Layer depth
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> 0.9
+> 1.0
+> 1.1
+> Mean  cos( Pt, Pt 1)
+> 0.30 0.33
+> 0.42 0.45
+> 0.54 0.57
+> 0.61 0.64
+> 0.93 0.94
+> deep layers persist
+> (b) Adult MLP
+> MF-Adam
+> FS-Adam
+
+Figure 7: Pressure persistence on Adult MLP. Cosine similarity between consecutive pressure matrices Pt and Pt−1 by layer. Table 4: Ablation audit for MF-Adam. “A2” removes the pressure EMA, “A3” removes the geometry gate, and “A6” replaces pressure with random symmetric directions. Deltas are full MF minus ablation and are reported as accuracy changes in %. All reported deltas are within 0.1% , so these cells support the spectrum-relaxation story more than a pressure-specific story. Ablation Task Full MF Ablation ∆
+
+No EMA (A2) Adult 84 .92 85 .00 −0.08 
+
+No EMA (A2) Covertype 73 .96 73 .94 +0 .02 
+
+No gate (A3) Adult 84 .92 84 .92 +0 .00 
+
+No gate (A3) Covertype 73 .96 74 .03 −0.07 
+
+Random pressure (A6) Adult 84 .92 84 .96 −0.04 
+
+Random pressure (A6) Covertype 73 .96 73 .91 +0 .06 
+
+strongest evidence that learning the spectrum matters when the Stiefel basis is used as a recurrent projection prior. 
+
+Tabular MLPs. The Adult result transfers to larger and image-derived MLP benchmarks, as summarized in Table 6 and Figure 9. Covertype and Fashion-MNIST [ 8 , 13 , 55 ] both favor MF clearly under the paired protocol, while Wine Quality remains a shorter-budget tabular sanity check [ 12 ] with smaller positive movement. These are conventional feed-forward classifiers trained by backpropagation with modern nonlinear and initialization choices [ 47 , 15 , 41 , 19 ]. The Covertype paired gains are much larger than in the earlier exploratory table, but the boundary audit still applies because the dense baseline was not rerun in this convergence batch. 
+
+Image-MLP classifiers. CIFAR-10 MLP [ 31 ] is the first clear mixed MLP case in the converged set. MF helps under Adam but trails FS under SGD, unlike Fashion-MNIST where both optimizer cells favor MF. We therefore treat flattened-image MLPs as task dependent rather than uniformly positive. 
+
+Convolutional fc-head settings. Table 7 and Figure 10 report three convolutional settings where the wrapped layer is a classifier head rather than a recurrent projection or MLP hidden layer. Convo-lutional networks and residual backbones already impose strong spatial and skip-connection priors [ 32 , 20 ], so this regime is a boundary rather than a uniformly favorable case. ResNet-50/CIFAR-100 favors MF under SGD but not Adam, ResNet-18/CIFAR-10 favors FS under both optimizers, and the Simple CNN head is optimizer dependent. These mixed signs show that the benefit of learning S
+
+depends on whether a constrained classifier head is an appropriate modeling prior. 
+
+6.8 Spectral-bounded regime stability 
+
+This subsection uses Adult as a stability stress test for the spectral prior. We train the same four-hidden-layer MLP with Dense, fixed-Stiefel (FS), or ManifoldFlow hidden maps, keeping the optimizer, 13 Table 5: Additional sequence-model convergence. The wrapped layer is the recurrent language model’s hidden-to-vocabulary projection. Lower validation perplexity is better. Every listed optimizer setting favors MF, with the largest gains on GRU/WikiText-2. Setting Optimizer FS MF ∆
+
+LSTM-256 / WikiText-2 Adam 247 .17 244 .38 +2 .79 
+
+LSTM-256 / WikiText-2 SGD 344 .19 178 .80 +165 .39 
+
+GRU / WikiText-2 Adam 231 .99 173 .54 +58 .45 
+
+GRU / WikiText-2 SGD 423 .06 204 .46 +218 .61 
+
+LSTM / WikiText-103 Adam 279 .55 246 .78 +32 .78 
+
+LSTM / WikiText-103 SGD 472 .41 339 .42 +132 .99 
+
+GRU-256 / WikiText-2 Adam 269 .08 227 .30 +41 .77 
+
+GRU-256 / WikiText-2 SGD 342 .00 169 .40 +172 .60 
+
+GRU / WikiText-103 Adam 244 .45 199 .21 +45 .24 
+
+GRU / WikiText-103 SGD 498 .36 375 .10 +123 .26 0 200 400 600 800 1000                                  
+
+> Epoch
+> 200
+> 300
+> 400
+> 500
+> 600
+> 700
+> PPL
+> Δ=+58.45
+> GRU / WT2 (ADAM)
+> FS
+> MF
+> 0200 400 600 800 1000
+> Epoch
+> 400
+> 600
+> 800
+> 1000
+> PPL
+> Δ=+32.78
+> LSTM / WT103 (ADAM)
+> FS
+> MF
+> 0100 200 300 400
+> Epoch
+> 200
+> 400
+> 600
+> 800
+> 1000
+> PPL
+> Δ=+41.77
+> GRU-256 / WT2 (ADAM)
+> FS
+> MF
+> 0200 400 600 800
+> Epoch
+> 200
+> 400
+> 600
+> 800
+> 1000
+> PPL
+> Δ=+45.24
+> GRU / WT103 (ADAM)
+> FS
+> MF
+> 0200 400 600 800 1000
+> Epoch
+> 200
+> 400
+> 600
+> 800
+> 1000
+> PPL
+> Δ=+218.61
+> GRU / WT2 (SGD)
+> FS
+> MF
+> 0200 400 600 800 1000
+> Epoch
+> 400
+> 600
+> 800
+> 1000
+> PPL
+> Δ=+132.99
+> LSTM / WT103 (SGD)
+> FS
+> MF
+> 0200 400 600 800 1000
+> Epoch
+> 200
+> 400
+> 600
+> 800
+> 1000
+> PPL
+> Δ=+172.60
+> GRU-256 / WT2 (SGD)
+> FS
+> MF
+> 0200 400 600 800 1000
+> Epoch
+> 400
+> 500
+> 600
+> 700
+> 800
+> 900
+> 1000
+> 1100
+> PPL
+> Δ=+123.26
+> GRU / WT103 (SGD)
+> FS
+> MF
+
+Figure 8: Additional sequence-model trajectories. Validation perplexity curves for the recurrent language-model settings in Table 5. seed, batch size, and architecture fixed. The purpose is not to add another headline accuracy cell, but to ask what happens to the training trajectory when the layer spectrum is bounded: does the model drift, do gradients spike, and does learning the SPD spectrum introduce any new instability? Table 8 reports the epoch 500 snapshot. The story is a stability one. Dense retains unconstrained spectral freedom, but in this long run that freedom comes with late accuracy drift and larger gradient excursions. FS removes those excursions by pinning the represented spectrum to one. ManifoldFlow keeps the same orthonormal basis prior while allowing a clipped spectrum to move, and in this run that extra degree of freedom does not destabilize training; it preserves the FS accuracy profile and yields the smallest gradient peak. We therefore read the Adult stability cell consistently with Section 6.6: it is not evidence for a robust MF accuracy advantage over FS on Adult, but it does show that learning a bounded SPD spectrum can improve the gradient-spike profile without giving up the stabilizing effect of the Stiefel prior. 
+
+6.9 Summary 
+
+Figure 11 summarizes the converged paired evidence. Most paired cells favor MF, and the positive cells are concentrated in recurrent language modeling and tabular/image MLP settings. The negative cells are concentrated in boundary regimes where the wrapped layer is either a flattened-image classifier under a difficult optimizer pairing or a convolutional classifier head. This pattern supports the focused spectrum-relaxation claim without asserting broad dominance over every alternative layer family. 14 Table 6: Tabular and image-MLP convergence. Hidden linear layers are wrapped with FS or MF. Higher test accuracy is better. Covertype and Fashion-MNIST show large paired gains, while CIFAR-10 MLP is optimizer dependent. Wine Quality is retained as a shorter-budget exploratory sanity check. Setting Optimizer FS MF ∆
+
+Covertype MLP Adam 74 .41 85 .79 +11 .37% 
+
+Covertype MLP SGD 74 .65 86 .04 +11 .39% 
+
+Fashion-MNIST MLP Adam 83 .49 86 .15 +2 .66% 
+
+Fashion-MNIST MLP SGD 83 .97 90 .53 +6 .56% 
+
+CIFAR-10 MLP Adam 45 .68 48 .09 +2 .41% 
+
+CIFAR-10 MLP SGD 51 .69 48 .66 −3.03% 
+
+Wine Quality MLP Adam 71 .74 72 .15 +0 .41% 
+
+Wine Quality MLP SGD 77 .31 77 .58 +0 .27% 0 200 400 600 800 1000                                  
+
+> Epoch
+> 83
+> 84
+> 85
+> 86
+> Acc %
+> Δ=+1.50pp
+> Adult MLP (ADAM)
+> FS
+> MF
+> 0100 200 300 400 500
+> Epoch
+> 70.0
+> 72.5
+> 75.0
+> 77.5
+> 80.0
+> 82.5
+> 85.0
+> 87.5
+> Acc %
+> Δ=+11.37pp
+> Covertype MLP (ADAM)
+> FS
+> MF
+> 0100 200 300 400
+> Epoch
+> 76
+> 78
+> 80
+> 82
+> 84
+> 86
+> 88
+> Acc %
+> Δ=+2.66pp
+> Fashion-MNIST MLP (ADAM)
+> FS
+> MF
+> 0100 200 300 400 500
+> Epoch
+> 35.0
+> 37.5
+> 40.0
+> 42.5
+> 45.0
+> 47.5
+> 50.0
+> Acc %
+> Δ=+2.41pp
+> CIFAR-10 MLP (ADAM)
+> FS
+> MF
+> 0200 400 600 800 1000
+> Epoch
+> 82
+> 83
+> 84
+> 85
+> 86
+> Acc %
+> Δ=+0.74pp
+> Adult MLP (SGD)
+> FS
+> MF
+> 0100 200 300 400
+> Epoch
+> 70.0
+> 72.5
+> 75.0
+> 77.5
+> 80.0
+> 82.5
+> 85.0
+> 87.5
+> Acc %
+> Δ=+11.39pp
+> Covertype MLP (SGD)
+> FS
+> MF
+> 0100 200 300 400 500
+> Epoch
+> 78
+> 80
+> 82
+> 84
+> 86
+> 88
+> 90
+> Acc %
+> Δ=+6.56pp
+> Fashion-MNIST MLP (SGD)
+> FS
+> MF
+> 0100 200 300 400 500
+> Epoch
+> 35.0
+> 37.5
+> 40.0
+> 42.5
+> 45.0
+> 47.5
+> 50.0
+> 52.5
+> Acc %
+> Δ=-3.03pp
+> CIFAR-10 MLP (SGD)
+> FS
+> MF
+
+Figure 9: Tabular and image-MLP trajectories. Test accuracy curves for the settings in Table 6. 
+
+7 Discussion 
+
+What the results establish. The empirical statement is deliberately paired. ManifoldFlow improves the corresponding Fixed-Stiefel layer in the reported task families when the architecture, optimizer family, data split, and Stiefel update are matched. This supports the modeling claim that the fixed unit spectrum can be a bottleneck inside a Stiefel-family layer, and that learning a bounded SPD spectrum can relieve that bottleneck without abandoning the orthonormal basis. 
+
+What the mechanism should mean. The central principle is the SPD parametrization, not a claim that pressure is the unique useful direction. Proposition 2 makes St the squared singular spectrum of the forward weight, Proposition 3 keeps every symmetric update on the SPD cone, and Proposition 5 explains why equal-norm random directions can match pressure directions near isotropic St. The pressure-persistence plot shows that the default pressure signal is structured, especially in deeper Adult MLP layers, while the random-pressure ablation shows that exact pressure alignment is not required for the paired gains reported here. 
+
+Boundary of the claim. The boundary audit is important to the interpretation. On Covertype and in LSTM output-layer alternatives, unconstrained or diagonal-spectrum layers can outperform the Stiefel family by a large margin. This does not contradict the paired result; it says that the Stiefel prior itself must be appropriate before a Stiefel relaxation is the right comparison. The paper therefore does not claim that ManifoldFlow dominates dense layers, diagonal-spectrum parametrizations, or intrinsic spectral optimizers in general. 
+
+Limitations. The SPD update requires matrix square roots, exponentials, and eigendecompositions on an r × r factor, so very large wrapped dimensions will require structured, diagonal-plus-low-rank, or blockwise variants. The current graph experiments are not part of the claim because 15 Table 7: Convolutional classifier-head convergence. Only the final fully connected classifier head is wrapped. Higher test accuracy is better. The signs are mixed, showing that the Stiefel-family prior is less reliable in this boundary regime than in recurrent projections and MLP hidden layers. Setting Optimizer FS MF ∆
+
+ResNet-50 / CIFAR-100 Adam 54 .43 53 .44 −0.99% 
+
+ResNet-50 / CIFAR-100 SGD 48 .79 51 .40 +2 .61% 
+
+ResNet-18 / CIFAR-10 Adam 86 .31 85 .79 −0.52% 
+
+ResNet-18 / CIFAR-10 SGD 83 .79 83 .27 −0.52% 
+
+Simple CNN / CIFAR-10 Adam 86 .06 86 .44 +0 .38% 
+
+Simple CNN / CIFAR-10 SGD 86 .54 85 .79 −0.75% 0 100 200 300 400 500                      
+
+> Epoch
+> 20
+> 30
+> 40
+> 50
+> Acc %
+> Δ=-0.99pp
+> ResNet-50 / CIFAR-100 (ADAM)
+> FS
+> MF
+> 0100 200 300 400 500
+> Epoch
+> 55
+> 60
+> 65
+> 70
+> 75
+> 80
+> 85
+> Acc %
+> Δ=-0.52pp
+> ResNet-18 / CIFAR-10 (ADAM)
+> FS
+> MF
+> 0100 200 300 400
+> Epoch
+> 65
+> 70
+> 75
+> 80
+> 85
+> Acc %
+> Δ=+0.38pp
+> Simple CNN / CIFAR-10 (ADAM)
+> FS
+> MF
+> 0100 200 300 400
+> Epoch
+> 10
+> 20
+> 30
+> 40
+> 50
+> Acc %
+> Δ=+2.61pp
+> ResNet-50 / CIFAR-100 (SGD)
+> FS
+> MF
+> 0100 200 300 400
+> Epoch
+> 50
+> 60
+> 70
+> 80
+> Acc %
+> Δ=-0.52pp
+> ResNet-18 / CIFAR-10 (SGD)
+> FS
+> MF
+> 0100 200 300 400
+> Epoch
+> 60
+> 65
+> 70
+> 75
+> 80
+> 85
+> Acc %
+> Δ=-0.75pp
+> Simple CNN / CIFAR-10 (SGD)
+> FS
+> MF
+
+Figure 10: Convolutional classifier-head trajectories. Test accuracy curves for the settings in Table 7. Table 8: Spectral-bounded regime stability at epoch 500. Adult MLP, single seed. Accuracy and gradient-norm peak are per-epoch values at epoch 500; the ep 491–500 window reports a short-horizon smoothed peak. Bounded-spectrum layers keep the Dense trajectory from drifting while sharply reducing gradient spikes; MF gives the lowest peak in this run. 
+
+Method Test acc (ep 500) Gn-peak (ep 500) Gn-peak (491–500 mean) Loss-std (ep 500) Dense 0.8209 18.66 11.47 0.0457 FS 0.8346 7.20 8.82 0.0509 MF 0.8351 5.97 6.89 0.0506 
+
+the tested message-passing forward path did not consistently use W = QS 1/2; extending the full parametrization to message-passing layers is future work. Larger Transformer and language-model experiments, stronger reruns of dense and diagonal-spectrum baselines under the same convergence protocol, and wall-clock overhead measurements are also needed before making a broader architectural claim. 
+
+8 Conclusion 
+
+ManifoldFlow extends fixed-spectrum Stiefel layers with a learnable bounded SPD factor, preserving orthonormal directions while replacing the pinned unit spectrum with W = QS 1/2 and the exact identity W ⊤W = S. The converged paired protocol shows its clearest value in recurrent language-model projections and MLP hidden layers, especially when SGD exposes the cost of a fixed unit spectrum. The Mini-Transformer FFN result remains an earlier exploratory comparison, and the 16 Adam SGD               
+
+> LSTM / WT2
+> LSTM-256 / WT2
+> GRU / WT2
+> LSTM / WT103
+> GRU-256 / WT2
+> GRU / WT103
+> +43.62 +184.51
+> +2.79 +165.39
+> +58.45 +218.61
+> +32.78 +132.99
+> +41.77 +172.60
+> +45.24 +123.26
+> Language modeling: PPL decrease
+> Adam SGD
+> Adult MLP
+> Covertype MLP
+> Fashion-MNIST MLP
+> CIFAR-10 MLP
+> ResNet-50 / C-100
+> ResNet-18 / C-10
+> Simple CNN / C-10
+> +1.50% +0.74%
+> +11.37% +11.39%
+> +2.66% +6.56%
+> +2.41% -3.03%
+> -0.99% +2.61%
+> -0.52% -0.52%
+> +0.38% -0.75%
+> Tabular
+> Image MLP
+> CNN head
+> Classification: accuracy change
+
+Figure 11: Summary heatmap of converged paired cells. Each cell reports the signed paired gain: perplexity reduction for language modeling and accuracy change in % for classification. convolutional classifier-head cells expose boundary cases where the Stiefel prior is less reliable. The conclusion is focused: when Stiefel structure is useful, the spectrum should not necessarily be fixed. Future work should scale the SPD update, rerun stronger spectral alternatives under the same convergence protocol, and study update directions beyond the pressure heuristic. 
+
+References 
+
+[1] P.-A. Absil, R. Mahony, and R. Sepulchre. Optimization Algorithms on Matrix Manifolds .Princeton University Press, Dec 2008. ISBN 9781400830244. doi: 10.1515/9781400830244. URL http://dx.doi.org/10.1515/9781400830244 .[2] Vincent Arsigny, Pierre Fillard, Xavier Pennec, and Nicholas Ayache. Geometric means in a novel vector space structure on symmetric positive-definite matrices. SIAM Journal on Matrix Analysis and Applications , 29(1):328–347, Jan 2007. ISSN 1095-7162. doi: 10.1137/050637996. URL http://dx.doi.org/10.1137/050637996 .[3] Peter L. Bartlett and Shahar Mendelson. Rademacher and gaussian complexities: Risk bounds and structural results. In Proceedings of the 15th Annual Conference on Computational Learning Theory , pages 224–240. Springer, 2002. doi: 10.1007/3-540-45435-7_16. [4] Peter L. Bartlett, Dylan J. Foster, and Matus J. Telgarsky. Spectrally-normalized margin bounds for neural networks. In Advances in Neural Information Processing Systems , vol-ume 30, 2017. URL https://proceedings.neurips.cc/paper_files/paper/2017/ file/b22b257ad0519d4500539da3c8bcf4dd-Paper.pdf .[5] Gary Bécigneul and Octavian-Eugen Ganea. Riemannian adaptive optimization methods. In 
+
+International Conference on Learning Representations , 2019. URL https://openreview. net/forum?id=r1eiqi09K7 .[6] Rajendra Bhatia. Matrix Analysis . Springer, 1997. ISBN 9780387948461. [7] Rajendra Bhatia. Positive Definite Matrices . Princeton University Press, 2007. ISBN 9780691129181. [8] Jock A. Blackard and Denis J. Dean. Comparative accuracies of artificial neural networks and discriminant analysis in predicting forest cover types from cartographic variables. Computers and Electronics in Agriculture , 24(3):131–151, 1999. doi: 10.1016/S0168-1699(99)00046-0. [9] Silvère Bonnabel. Stochastic gradient descent on riemannian manifolds. IEEE Transactions on Automatic Control , 58(9):2217–2229, 2013. doi: 10.1109/TAC.2013.2254619. 17 [10] Nicolas Boumal. An Introduction to Optimization on Smooth Manifolds . Cambridge University Press, Mar 2023. ISBN 9781009166157. doi: 10.1017/9781009166164. URL http://dx. doi.org/10.1017/9781009166164 .[11] Kyunghyun Cho, Bart van Merriënboer, Caglar Gulcehre, Dzmitry Bahdanau, Fethi Bougares, Holger Schwenk, and Yoshua Bengio. Learning phrase representations using rnn encoder– decoder for statistical machine translation. In Proceedings of the 2014 Conference on Empirical Methods in Natural Language Processing , pages 1724–1734, 2014. doi: 10.3115/v1/D14-1179. [12] Paulo Cortez, António Cerdeira, Fernando Almeida, Telmo Matos, and José Reis. Modeling wine preferences by data mining from physicochemical properties. Decision Support Systems ,47(4):547–553, 2009. [13] Dheeru Dua and Casey Graff. Uci machine learning repository, 2017. URL https://archive. ics.uci.edu/ .[14] John Duchi, Elad Hazan, and Yoram Singer. Adaptive subgradient methods for online learning and stochastic optimization. Journal of Machine Learning Research , 12:2121–2159, 2011. URL 
+
+https://jmlr.org/papers/v12/duchi11a.html .[15] Xavier Glorot and Yoshua Bengio. Understanding the difficulty of training deep feedforward neural networks. In Proceedings of the Thirteenth International Conference on Artificial Intelligence and Statistics , pages 249–256. PMLR, 2010. URL https://proceedings.mlr. press/v9/glorot10a.html .[16] Gene H. Golub and Charles F. Van Loan. Matrix Computations . Johns Hopkins University Press, 4 edition, 2013. ISBN 9781421407944. doi: 10.56021/9781421407944. URL http: //dx.doi.org/10.56021/9781421407944 .[17] Vineet Gupta, Tomer Koren, and Yoram Singer. Shampoo: Preconditioned stochastic tensor optimization. In Proceedings of the 35th International Conference on Machine Learning , pages 1842–1850. PMLR, 2018. URL https://proceedings.mlr.press/v80/gupta18a.html .[18] Moritz Hardt, Benjamin Recht, and Yoram Singer. Train faster, generalize better: Stability of stochastic gradient descent. In Proceedings of the 33rd International Conference on Machine Learning , pages 1225–1234. PMLR, 2016. URL https://proceedings.mlr.press/v48/ hardt16.html .[19] Kaiming He, Xiangyu Zhang, Shaoqing Ren, and Jian Sun. Delving deep into rectifiers: Surpassing human-level performance on imagenet classification. In 2015 IEEE International Conference on Computer Vision , pages 1026–1034, 2015. doi: 10.1109/ICCV.2015.123. [20] Kaiming He, Xiangyu Zhang, Shaoqing Ren, and Jian Sun. Deep residual learning for image recognition. In 2016 IEEE Conference on Computer Vision and Pattern Recognition (CVPR) ,pages 770–778. IEEE, June 2016. doi: 10.1109/CVPR.2016.90. URL http://dx.doi.org/ 10.1109/CVPR.2016.90 .[21] Kyle Helfrich, Devin Willmott, and Qiang Ye. Orthogonal recurrent neural networks with scaled cayley transform. In Proceedings of the 35th International Conference on Machine Learning , pages 1969–1978. PMLR, 2018. URL https://proceedings.mlr.press/v80/ helfrich18a.html .[22] Nicholas J. Higham. Functions of Matrices: Theory and Computation . Society for Industrial and Applied Mathematics, January 2008. ISBN 9780898717778. doi: 10.1137/1.9780898717778. URL http://dx.doi.org/10.1137/1.9780898717778 .[23] Sepp Hochreiter and Jürgen Schmidhuber. Long short-term memory. Neural Computation , 9 (8):1735–1780, 1997. doi: 10.1162/neco.1997.9.8.1735. [24] Lei Huang, Xianglong Liu, Bo Lang, Adams Wei Yu, Yongliang Wang, and Bo Li. Orthogonal weight normalization: Solution to optimization over multiple dependent stiefel manifolds in deep neural networks, 2017. URL https://arxiv.org/abs/1709.06079 .18 [25] Sergey Ioffe and Christian Szegedy. Batch normalization: Accelerating deep network training by reducing internal covariate shift. In Proceedings of the 32nd International Conference on Machine Learning , pages 448–456. PMLR, 2015. URL https://proceedings.mlr.press/ v37/ioffe15.html .[26] Li Jing, Caglar Gulcehre, John Peurifoy, Yichen Shen, Max Tegmark, Marin Soljacic, and Yoshua Bengio. Gated orthogonal recurrent units: On learning to forget, 2017. URL https: //arxiv.org/abs/1706.02761 .[27] Keller Jordan. Muon: An optimizer for hidden layers in neural networks. GitHub repository, 2024. URL https://github.com/KellerJordan/Muon .[28] Diederik P. Kingma and Jimmy Ba. Adam: A method for stochastic optimization, 2014. URL 
+
+https://arxiv.org/abs/1412.6980 .[29] Maxim Kochurov, Rasul Karimov, and Serge Kozlukov. Geoopt: Riemannian optimization in pytorch. arXiv preprint arXiv:2005.02819 , 2020. URL https://arxiv.org/abs/2005. 02819 .[30] Ron Kohavi and Barry Becker. Adult data set, 1996. URL https://archive.ics.uci.edu/ ml/datasets/adult .[31] Alex Krizhevsky and Geoffrey Hinton. Learning multiple layers of features from tiny images. Technical report, University of Toronto, 2009. URL https://www.cs.toronto.edu/~kriz/ learning-features-2009-TR.pdf .[32] Yann LeCun, Léon Bottou, Yoshua Bengio, and Patrick Haffner. Gradient-based learning applied to document recognition. Proceedings of the IEEE , 86(11):2278–2324, 1998. doi: 10.1109/5.726791. [33] Mario Lezcano-Casado. Trivializations for gradient-based optimization on manifolds, 2019. URL https://arxiv.org/abs/1909.09501 .[34] Yibang Li, Bihari Lal Pandey, Ravi Sah, Andi Han, Cyrus Mostajeran, Pratik Jawanpuria, and Bamdev Mishra. Intrinsic muon: Spectral optimization on riemannian matrix manifolds, 2026. URL https://arxiv.org/abs/2605.09238 .[35] Ilya Loshchilov and Frank Hutter. Decoupled weight decay regularization. In International Conference on Learning Representations , 2019. URL https://openreview.net/forum? id=Bkg6RiCqY7 .[36] Stephen Merity, Caiming Xiong, James Bradbury, and Richard Socher. Pointer sentinel mixture models, 2016. URL https://arxiv.org/abs/1609.07843 .[37] Zakaria Mhammedi, Andrew Hellicar, Ashfaqur Rahman, and James Bailey. Efficient orthogonal parametrisation of recurrent neural networks using householder reflections. In Proceedings of the 34th International Conference on Machine Learning , pages 2401–2409. PMLR, 2017. URL 
+
+https://proceedings.mlr.press/v70/mhammedi17a.html .[38] Dmytro Mishkin and Jiri Matas. All you need is a good init. In International Conference on Learning Representations , 2016. URL https://arxiv.org/abs/1511.06422 .[39] Takeru Miyato, Toshiki Kataoka, Masanori Koyama, and Yuichi Yoshida. Spectral normalization for generative adversarial networks, 2018. URL https://arxiv.org/abs/1802.05957 .[40] Maher Moakher. A differential geometric approach to the geometric mean of symmetric positive-definite matrices. SIAM Journal on Matrix Analysis and Applications , 26(3):735–747, 2005. doi: 10.1137/S0895479803436937. [41] Vinod Nair and Geoffrey E. Hinton. Rectified linear units improve restricted boltzmann machines. In Proceedings of the 27th International Conference on Machine Learning , pages 807–814, 2010. URL https://icml.cc/Conferences/2010/papers/432.pdf .19 [42] Xavier Pennec, Pierre Fillard, and Nicholas Ayache. A riemannian framework for tensor com-puting. International Journal of Computer Vision , 66(1):41–66, Jan 2006. ISSN 1573-1405. doi: 10.1007/s11263-005-3222-z. URL http://dx.doi.org/10.1007/s11263-005-3222-z .[43] Jeffrey Pennington, Samuel S. Schoenholz, and Surya Ganguli. Resurrecting the sigmoid in deep learning through dynamical isometry: Theory and practice. In Advances in Neural Information Processing Systems , volume 30, 2017. URL https://proceedings.neurips.cc/paper_ files/paper/2017/file/d9fc5b73a8d78fad3d6dffe419384e70-Paper.pdf .[44] Sashank J. Reddi, Satyen Kale, and Sanjiv Kumar. On the convergence of adam and beyond. In 
+
+International Conference on Learning Representations , 2018. URL https://openreview. net/forum?id=ryQu7f-RZ .[45] Herbert Robbins and Sutton Monro. A stochastic approximation method. The Annals of Mathematical Statistics , 22(3):400–407, 1951. doi: 10.1214/aoms/1177729586. [46] Frank Rosenblatt. The perceptron: A probabilistic model for information storage and organiza-tion in the brain. Psychological Review , 65(6):386–408, 1958. doi: 10.1037/h0042519. [47] David E. Rumelhart, Geoffrey E. Hinton, and Ronald J. Williams. Learning representations by back-propagating errors. Nature , 323(6088):533–536, 1986. doi: 10.1038/323533a0. [48] Tim Salimans and Diederik P. Kingma. Weight normalization: A simple reparameterization to accelerate training of deep neural networks, 2016. URL https://arxiv.org/abs/1602. 07868 .[49] Andrew M. Saxe, James L. McClelland, and Surya Ganguli. Exact solutions to the nonlinear dynamics of learning in deep linear neural networks. In International Conference on Learning Representations , 2014. URL https://openreview.net/forum?id=_wzZwKpTDF_9C .[50] Nitish Srivastava, Geoffrey Hinton, Alex Krizhevsky, Ilya Sutskever, and Ruslan Salakhut-dinov. Dropout: A simple way to prevent neural networks from overfitting. Journal of Machine Learning Research , 15(56):1929–1958, 2014. URL https://jmlr.org/papers/ v15/srivastava14a.html .[51] Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N. Gomez, Lukasz Kaiser, and Illia Polosukhin. Attention is all you need, 2017. URL https://arxiv. org/abs/1706.03762 .[52] Eugene Vorontsov, Chiheb Trabelsi, Samuel Kadoury, and Chris Pal. On orthogonality and learning recurrent networks with long term dependencies. In Proceedings of the 34th International Conference on Machine Learning , pages 3570–3578. PMLR, 2017. URL 
+
+https://proceedings.mlr.press/v70/vorontsov17a.html .[53] Zaiwen Wen and Wotao Yin. A feasible method for optimization with orthogonality constraints. 
+
+Mathematical Programming , 142(1–2):397–434, Aug 2012. ISSN 1436-4646. doi: 10.1007/ s10107-012-0584-1. URL http://dx.doi.org/10.1007/s10107-012-0584-1 .[54] Scott Wisdom, Thomas Powers, John Hershey, Jonathan Le Roux, and Les Atlas. Full-capacity unitary recurrent neural networks. In Advances in Neural Information Processing Systems ,volume 29, 2016. URL https://proceedings.neurips.cc/paper_files/paper/2016/ file/44ec5716c9b803c27a31ba3381d6d1a6-Paper.pdf .[55] Han Xiao, Kashif Rasul, and Roland Vollgraf. Fashion-mnist: a novel image dataset for benchmarking machine learning algorithms. arXiv preprint arXiv:1708.07747 , 2017. 20 A Theory and Proofs 
+
+This appendix proves the statements in Section 5. All wrapped weights are written as 
+
+W (Q, S ) = QS 1/2, Q ∈ St( p, r ), S ∈ SPD( r), (43) and the clipped SPD set is 
+
+Sα,β = {S ∈ SPD( r) : αI r ⪯ S ⪯ βI r }, (44) where 0 < α ≤ β < ∞. The product manifold is 
+
+M = St( p, r ) × S α,β , (45) equipped with the canonical Stiefel metric and the affine-invariant SPD metric gS (U, V ) =tr( S−1U S −1V ) [1, 10, 42]. The convergence analysis applies to the regularized objective 
+
+J (Q, S ) = F (QS 1/2) + λS
+
+2 ∥ log S∥2 
+
+> F
+
+. (46) The proof order follows the main text. We restate assumptions and intermediate lemmas when they are needed for a proof, but the main theoretical contract is stated in Section 5. 
+
+A.1 Pressure as Rejected Geometry Gradient A.1.1 Proof of Proposition 1 Proposition 9 (Restatement of Proposition 1) . Let ℓ(W ) be differentiable, let W = QS 1/2 with 
+
+Q ∈ St( p, r ) and S ∈ SPD( r), and let GW = ∇W ℓ(W ). Define ¯G = GW S1/2 and 
+
+ΠQ( ¯G) = ¯G − Qsym( Q⊤ ¯G), P = sym( Q⊤ ¯G). (47) 
+
+Then ΠQ( ¯G) ∈ TQSt( p, r ), ¯G = Π Q( ¯G) + QP , and at S = Ir ,
+
+DS ℓ(QS 1/2)[ U ] = 12 ⟨sym( Q⊤GW ), U ⟩F ∀U ∈ Sym( r). (48) 
+
+Proof. First, 
+
+Q⊤ΠQ( ¯G) + Π Q( ¯G)⊤Q = Q⊤ ¯G − sym( Q⊤ ¯G) + ¯G⊤Q − sym( Q⊤ ¯G)= Q⊤ ¯G + ¯G⊤Q − 2sym( Q⊤ ¯G) = 0 . (49) Thus ΠQ( ¯G) ∈ TQSt( p, r ). The decomposition follows immediately from the definition: 
+
+ΠQ( ¯G) + QP = ¯G − Qsym( Q⊤ ¯G) + Qsym( Q⊤ ¯G) = ¯G. (50) For the Gram signal, define ϕ(S) = ℓ(QS 1/2) with Q fixed. The Fréchet derivative of the principal square-root map at Ir is D(S1/2)|Ir [U ] = U/ 2, because differentiating X2 = S at X = Ir gives 
+
+Y + Y = U [22]. Therefore 
+
+Dϕ (Ir )[ U ] = 
+
+D
+
+GW , Q D (S1/2)|Ir [U ]
+
+E
+
+> F
+
+= 12 ⟨Q⊤GW , U ⟩F
+
+= 12 ⟨sym( Q⊤GW ), U ⟩F , (51) where the last equality uses U ∈ Sym( r) and the Frobenius orthogonality between symmetric and skew-symmetric matrices. This proves (48). 
+
+A.2 Basic SPD Geometry 
+
+We first record the SPD facts used by the update. Proposition 3 is the positive-definiteness guarantee for the SPD step, Proposition 4 proves the alignment and clipping invariants, and Proposition 5 is the local movement comparison used to interpret the pressure ablation. 21 A.2.1 Proof of Proposition 3 Proposition 3 (Restatement of Proposition 3) . Let St ∈ SPD( r), let At ∈ Sym( r), let γt > 0, and let at ∈ [0 , 1] . Define 
+
+St+1 = S1/2 
+
+> t
+
+exp ( −γtatAt) S1/2 
+
+> t
+
+. (52) 
+
+Then St+1 ∈ SPD( r).Proof. Set 
+
+Bt = −γtatAt. (53) Since At ∈ Sym( r), equation (53) gives B⊤ 
+
+> t
+
+= Bt. By the spectral theorem for real symmetric ma-trices [ 6], there exist U ∈ O( r) and real numbers μ1, . . . , μ r such that Bt = U diag( μ1, . . . , μ r )U ⊤.Hence 
+
+exp( Bt) = U diag( eμ1 , . . . , e μr )U ⊤ ≻ 0. (54) For every nonzero x ∈ Rr , define y = S1/2 
+
+> t
+
+x. Since S1/2 
+
+> t
+
+is nonsingular, y̸ = 0 . Therefore 
+
+x⊤St+1 x = x⊤S1/2 
+
+> t
+
+exp( Bt)S1/2 
+
+> t
+
+x by (52) 
+
+= y⊤ exp( Bt)y by the definition of y> 0 by (54) . (55) The quadratic-form criterion for positive definiteness [ 6] applied to (55) yields St+1 ∈ SPD( r).
+
+A.2.2 Proof of Proposition 4 Proposition 4 (Restatement of Proposition 4) . Let Q, Q − ∈ St( p, r ) and let Q⊤Q− = U ΣV ⊤.Then O⋆ = U V ⊤ solves the orthogonal Procrustes problem 
+
+min  
+
+> O∈O( r)
+
+∥QO − Q−∥2 
+
+> F
+
+. (56) 
+
+For every M ∈ Sym( r), O⋆M O ⊤ 
+
+> ⋆
+
+is symmetric and has the same eigenvalues and Frobenius norm as 
+
+M . If S = US diag( λi)U ⊤ 
+
+> S
+
+∈ SPD( r), then Cα,β (S) = US diag(clip( λi, α, β )) U ⊤ 
+
+> S
+
+belongs to Sα,β .Proof. Since Q⊤Q = Q⊤−Q− = Ir ,
+
+∥QO − Q−∥2 
+
+> F
+
+= tr( O⊤Q⊤QO ) − 2tr( O⊤Q⊤Q−) + tr( Q⊤−Q−)= 2 r − 2tr( O⊤Q⊤Q−). (57) Thus minimizing (56) is equivalent to maximizing tr( O⊤U ΣV ⊤). Von Neumann’s trace inequality gives 
+
+tr( O⊤U ΣV ⊤) = tr(( U ⊤OV )⊤Σ) ≤ tr(Σ) , (58) with equality at O = U V ⊤. Hence O⋆ is a minimizer. If M = M ⊤ and O⊤ 
+
+> ⋆
+
+O⋆ = Ir , then (O⋆M O ⊤ 
+
+> ⋆
+
+)⊤ = O⋆M O ⊤ 
+
+> ⋆
+
+, so symmetry is preserved. Orthogonal similarity preserves eigenvalues, and 
+
+∥O⋆M O ⊤ 
+
+> ⋆
+
+∥2 
+
+> F
+
+= tr( O⋆M O ⊤ 
+
+> ⋆
+
+O⋆M O ⊤ 
+
+> ⋆
+
+) = tr( M 2) = ∥M ∥2 
+
+> F
+
+. (59) Finally, each clipped eigenvalue clip( λi, α, β ) lies in [α, β ]. Therefore 
+
+αI r ⪯ C α,β (S) ⪯ βI r , (60) and Cα,β (S) ∈ S α,β .
+
+Lemma 3.1 (Affine-invariant SPD distance) . Let S, T ∈ SPD( r). Under gS (U, V ) =tr( S−1U S −1V ), the affine-invariant distance satisfies 
+
+dAI (S, T ) = log 
+
+
+
+S−1/2T S −1/2
+
+> F
+
+. (61) 22 Proof. The affine-invariant exponential map and logarithm map on SPD( r) are [42, 40, 10] 
+
+Exp S (X) = S1/2 exp 
+
+
+
+S−1/2XS −1/2
+
+S1/2, (62) 
+
+Log S (T ) = S1/2 log 
+
+
+
+S−1/2T S −1/2
+
+S1/2. (63) The Riemannian distance equals the norm of the logarithm vector, so 
+
+dAI (S, T )2 = gS (Log S (T ), Log S (T )) definition of geodesic distance 
+
+= tr  S−1Log S (T )S−1Log S (T ) definition of gS
+
+= tr (log( B) log( B)) using (63) with B = S−1/2T S −1/2
+
+= log 
+
+
+
+S−1/2T S −1/2 2 
+
+> F
+
+definition of ∥ · ∥ F . (64) Taking square roots in (64) gives (61). 
+
+A.2.3 Proof of Proposition 5 Proposition 5 (Restatement of Proposition 5) . Let St = λI r with λ > 0, let Mt, M ′ 
+
+> t
+
+∈ Sym( r)
+
+satisfy ∥Mt∥F = ∥M ′ 
+
+> t
+
+∥F , and define 
+
+St+1 (M ) = S1/2 
+
+> t
+
+exp 
+
+
+
+−ρgeo atS−1/2 
+
+> t
+
+M S −1/2
+
+> t
+
+
+
+S1/2 
+
+> t
+
+. (65) 
+
+Then 
+
+dAI (St, S t+1 (Mt)) = dAI (St, S t+1 (M ′ 
+
+> t
+
+)) . (66) 
+
+Moreover, 
+
+dAI (St, S t+1 (Mt)) = ρgeo atλ−1∥Mt∥F . (67) 
+
+Proof. Since St = λI r , the inverse square root is S−1/2 
+
+> t
+
+= λ−1/2Ir . Substitution into (65) gives 
+
+S−1/2 
+
+> t
+
+St+1 (Mt)S−1/2 
+
+> t
+
+= exp  −ρgeo atλ−1Mt
+
+ . (68) The matrix −ρgeo atλ−1Mt is symmetric. For symmetric matrices the principal logarithm satisfies 
+
+log(exp( B)) = B [22]. Applying Lemma 3.1 and then (68) gives 
+
+dAI (St, S t+1 (Mt)) = log 
+
+
+
+S−1/2 
+
+> t
+
+St+1 (Mt)S−1/2
+
+> t
+
+
+
+> F
+
+by Lemma 3.1 
+
+= −ρgeo atλ−1Mt F by (68) 
+
+= ρgeo atλ−1∥Mt∥F by absolute homogeneity of ∥ · ∥ F .
+
+(69) The same derivation with M ′ 
+
+> t
+
+gives dAI (St, S t+1 (M ′ 
+
+> t
+
+)) = ρgeo atλ−1∥M ′ 
+
+> t
+
+∥F . The hypothesis 
+
+∥Mt∥F = ∥M ′ 
+
+> t
+
+∥F and equation (69) yield (66). 
+
+A.3 Convergence 
+
+The convergence proof follows the standard stochastic Riemannian gradient chain: geodesic smooth-ness gives a second-order descent inequality; retraction regularity transfers the inequality to the implemented update; unbiasedness removes the first-order stochastic error; summation gives a nonconvex stationary-point rate [1, 10, 9]. 
+
+Assumption 1 (Geodesic smoothness) . The objective J in (46) is bounded below by J⋆ > −∞ 
+
+on M and is geodesically LM-smooth: for every x = ( Q, S ) ∈ M , every ξ ∈ TxM, and every geodesic γ with γ(0) = x and ˙γ(0) = ξ,
+
+J (γ(1)) ≤ J (x) + ⟨grad J (x), ξ ⟩x + LM
+
+2 ∥ξ∥2
+
+> x
+
+. (70) 
+
+The retraction R used by ManifoldFlow satisfies the second-order retraction error bound 
+
+J (Rx(ξ)) ≤ J (x) + ⟨grad J (x), ξ ⟩x + LR
+
+2 ∥ξ∥2 
+
+> x
+
+(71) 
+
+for all iterates and all tangent vectors used by the algorithm, where LR ≥ LM depends only on LM
+
+and the second-order retraction constants on the compact set (44) .
+
+23 Assumption 2 (Bounded SPD spectrum) . For every iterate t, spectral clipping and gate damping satisfy 
+
+αI r ⪯ St ⪯ βI r . (72) 
+
+Lemma 3.2 (Norm equivalence on the clipped SPD cone) . If S ∈ S α,β and U ∈ TS SPD( r) = Sym( r), then 
+
+β−2∥U ∥2 
+
+> F
+
+≤ ∥ U ∥2 
+
+> S
+
+≤ α−2∥U ∥2 
+
+> F
+
+. (73) 
+
+Proof. Let S = V ΛV ⊤ be an eigendecomposition with V ∈ O( r) and Λ = diag( λ1, . . . , λ r ). The clipping condition (44) gives α ≤ λi ≤ β for every i. Write eU = V ⊤U V . By orthogonal invariance of the Frobenius norm, 
+
+∥U ∥2 
+
+> S
+
+= tr( S−1U S −1U ) definition of the affine-invariant norm 
+
+= tr(Λ −1 eU Λ−1 eU ) substitute S = V ΛV ⊤
+
+=
+
+> r
+
+X
+
+> i=1
+> r
+
+X
+
+> j=1
+
+λ−1 
+
+> i
+
+λ−1 
+
+> j
+
+eU 2 
+
+> ij
+
+. (74) Since β−2 ≤ λ−1 
+
+> i
+
+λ−1 
+
+> j
+
+≤ α−2, equation (74) implies 
+
+β−2 X
+
+> i,j
+
+eU 2 
+
+> ij
+
+≤ ∥ U ∥2 
+
+> S
+
+≤ α−2 X
+
+> i,j
+
+eU 2 
+
+> ij
+
+. (75) Finally P 
+
+> i,j
+
+eU 2 
+
+> ij
+
+= ∥ eU ∥2 
+
+> F
+
+= ∥U ∥2 
+
+> F
+
+, which turns (75) into (73). 
+
+Assumption 3 (Bounded pressure and stochastic gradient estimator) . Let xt = ( Qt, S t), let gt =grad J (xt), and let bgt ∈ Txt M be the tangent direction estimator used by ManifoldFlow. With respect to the filtration Ft generated before iteration t,
+
+E[bgt | F t] = gt, (76) 
+
+and there is a deterministic sequence ν2 
+
+> t
+
+such that 
+
+E[∥bgt − gt∥2 
+
+> xt
+
+| F t] ≤ ν2 
+
+> t
+
+. (77) 
+
+The pressure direction is symmetric and satisfies E[∥Mt∥2 
+
+> F
+
+| F t] ≤ P 2. Under Assumption 2, Lemma 3.2 bounds the corresponding SPD tangent component by a constant Vα,β depending only on 
+
+P , α, and β. Define 
+
+ν2 
+
+> T
+
+=
+
+> T
+
+X
+
+> t=1
+
+η2 
+
+> t
+
+ν2 
+
+> t
+
+. (78) 
+
+Lemma 3.3 (Riemannian Descent Lemma) . Under Assumption 1, let x+ = Rx(−ηh ) for x ∈ M ,
+
+h ∈ TxM, and η > 0. Then 
+
+J (x+) ≤ J (x) − η⟨grad J (x), h ⟩x + LRη2
+
+2 ∥h∥2
+
+> x
+
+. (79) 
+
+If ⟨grad J (x), h ⟩x ≥ 12 ∥ grad J (x)∥2
+
+> x
+
+, then 
+
+J (x+) ≤ J (x) − η
+
+2 ∥ grad J (x)∥2 
+
+> x
+
++ LRη2
+
+2 ∥h∥2
+
+> x
+
+. (80) 
+
+Proof. Set ξ = −ηh . By the retraction smoothness inequality (71), 
+
+J (x+) = J (Rx(−ηh )) definition of x+
+
+≤ J (x) + ⟨grad J (x), −ηh ⟩x + LR
+
+2 ∥ − ηh ∥2 
+
+> x
+
+by (71) 
+
+= J (x) − η⟨grad J (x), h ⟩x + LRη2
+
+2 ∥h∥2 
+
+> x
+
+by bilinearity and homogeneity . (81) Equation (81) is (79) . If ⟨grad J (x), h ⟩x ≥ 12 ∥ grad J (x)∥2
+
+> x
+
+, substitute this lower bound into the negative first-order term in (79) ; the substitution gives (80) . The second-order inequality (71) follows from Taylor expansion in Riemannian normal coordinates plus the second-order agreement of Rx with Exp x [ 1 , 10 ]. In those coordinates, Cauchy–Schwarz gives |⟨ g, ξ ⟩x| ≤ ∥ g∥x∥ξ∥x, and 
+
+LM-smoothness bounds the Hessian term by LM∥ξ∥2
+
+> x
+
+/2.24 A.3.1 Proof of Theorem 1 Theorem 3.5 (Restatement of Theorem 1) . Under Assumptions 1–3, let xt+1 = Rxt (−ηtbgt). If 
+
+0 < η t ≤ L−1 
+
+> R
+
+and R is sampled from {1, . . . , T } with probability proportional to ηt, then 
+
+E∥ grad J (xR)∥2 
+
+> xR
+
+≤ 2( J (x1) − J ⋆) + LRν2
+
+> T
+
+PTt=1 ηt
+
+. (82) 
+
+For the schedule ηt = c/ √t with 0 < c ≤ L−1 
+
+> R
+
+and ν2 
+
+> T
+
+≤ Cν , the iterates satisfy 
+
+min  
+
+> 1≤t≤T
+
+E∥ grad J (xt)∥2 
+
+> xt
+
+≤ 2( J (x1) − J ⋆) + LRCν
+
+2c(√T + 1 − 1) = O(T −1/2). (83) 
+
+With uniformly bounded stochastic variance ν2 
+
+> t
+
+≤ ν2, the same derivation gives the explicit bound obtained by replacing Cν in (83) with c2ν2(1 + log T ).Proof. Apply Lemma 3.3 with h = bgt and condition on Ft. Equation (79) gives 
+
+E[J (xt+1 ) | F t] ≤ J (xt) − ηt ⟨gt, E[bgt | F t]⟩xt + LRη2
+
+> t
+
+2 E[∥bgt∥2 
+
+> xt
+
+| F t] conditional expectation 
+
+= J (xt) − ηt∥gt∥2 
+
+> xt
+
++ LRη2
+
+> t
+
+2 E[∥bgt∥2 
+
+> xt
+
+| F t] by (76) . (84) The variance identity in a Hilbert space gives 
+
+E[∥bgt∥2 
+
+> xt
+
+| F t] = ∥gt∥2 
+
+> xt
+
++ E[∥bgt − gt∥2 
+
+> xt
+
+| F t] Pythagorean variance decomposition 
+
+≤ ∥ gt∥2 
+
+> xt
+
++ ν2 
+
+> t
+
+by (77) . (85) Substituting (85) into (84) yields 
+
+E[J (xt+1 ) | F t] ≤ J (xt) − ηt
+
+
+
+1 − LRηt
+
+2
+
+
+
+∥gt∥2 
+
+> xt
+
++ LRη2
+
+> t
+
+2 ν2 
+
+> t
+
+substitution 
+
+≤ J (xt) − ηt
+
+2 ∥gt∥2 
+
+> xt
+
++ LRη2
+
+> t
+
+2 ν2 
+
+> t
+
+because ηt ≤ L−1 
+
+> R
+
+. (86) Taking total expectation and rearranging (86) gives 
+
+ηtE∥gt∥2 
+
+> xt
+
+≤ 2EJ (xt) − 2EJ (xt+1 ) + LRη2 
+
+> t
+
+ν2 
+
+> t
+
+. (87) Summing (87) over t = 1 , . . . , T gives 
+
+> T
+
+X
+
+> t=1
+
+ηtE∥gt∥2 
+
+> xt
+
+≤ 2
+
+> T
+
+X
+
+> t=1
+
+(EJ (xt) − EJ (xt+1 )) + LRTX
+
+> t=1
+
+η2 
+
+> t
+
+ν2 
+
+> t
+
+sum over t
+
+= 2 EJ (x1) − 2EJ (xT +1 ) + LRν2 
+
+> T
+
+telescoping 
+
+≤ 2( J (x1) − J ⋆) + LRν2 
+
+> T
+
+because J ≥ J ⋆. (88) Since P(R = t) = ηt/ PTs=1 ηs,
+
+E∥gR∥2 
+
+> xR
+
+=
+
+PTt=1 ηtE∥gt∥2
+
+> xt
+
+PTt=1 ηt
+
+. (89) Combining (88) and (89) proves (82). For ηt = c/ √t,
+
+> T
+
+X
+
+> t=1
+
+ηt = c
+
+> T
+
+X
+
+> t=1
+
+t−1/2 ≥ 2c(√T + 1 − 1) , (90) where the inequality follows from the integral lower bound for a decreasing positive function. Substitution of (90) and ν2 
+
+> T
+
+≤ Cν into (82) gives (83). If ν2 
+
+> t
+
+≤ ν2, then 
+
+ν2 
+
+> T
+
+=
+
+> T
+
+X
+
+> t=1
+
+c2ν2
+
+> t
+
+t ≤ c2ν2 (1 + log T ) , (91) and substituting (91) into (82) gives the stated logarithmic variant. 25 A.3.2 Proof of Theorem 2 Theorem 3.6 (Restatement of Theorem 2) . Let J be retraction-smooth and bounded below on 
+
+St( p, r ) × S α,β . Suppose the Q-block uses an unbiased tangent estimator bgQ,t with conditional variance at most σ2
+
+> Q
+
+. Suppose the SPD block uses a symmetric estimator bgS,t with conditional variance at most σ2 
+
+> S
+
+and bias satisfying (31) . If the updates use step sizes ηt, γ t small enough for the descent lemma and if R is sampled with probability proportional to ηt + γt, then (32) holds. Proof. Write 
+
+gQ,t = grad Q J (Qt, S t), gS,t = grad S J (Qt, S t).
+
+Apply the retraction-smooth descent inequality separately to the product update 
+
+Qt+1 = Retr Qt (−ηtbgQ,t ), St+1 = Retr St (−γtbgS,t ),
+
+where the SPD retraction is the affine-invariant exponential map followed by clipping. On the compact clipped set, clipping is nonexpansive for the spectral box up to a fixed local constant, so the descent inequality can absorb it into constants LQ, L S . Conditional on Ft,
+
+Et[Jt+1 ] ≤ J t − ηt⟨gQ,t , EtbgQ,t ⟩ − γt⟨gS,t , EtbgS,t ⟩St
+
++ LQη2
+
+> t
+
+2 Et∥bgQ,t ∥2 + LS γ2
+
+> t
+
+2 Et∥bgS,t ∥2 
+
+> St
+
+. (92) The Q estimator is unbiased, so 
+
+⟨gQ,t , EtbgQ,t ⟩ = ∥gQ,t ∥2.
+
+For the SPD estimator, write EtbgS,t = gS,t + et. The bias assumption gives 
+
+−⟨ gS,t , EtbgS,t ⟩St = −∥ gS,t ∥2 
+
+> St
+
+− ⟨ gS,t , e t⟩St ≤ −∥ gS,t ∥2 
+
+> St
+
++ bt.
+
+The variance assumptions imply 
+
+Et∥bgQ,t ∥2 ≤ ∥ gQ,t ∥2 + σ2
+
+> Q
+
+, Et∥bgS,t ∥2 
+
+> St
+
+≤ Cb∥gS,t ∥2 
+
+> St
+
++ Cσ σ2 
+
+> S
+
++ Cbbt, (93) where the constants account for the bounded bias on the compact clipped set. Substituting (A.3.2) –(93) into (92) , and choosing ηt, γ t small enough to keep the coefficients of the squared gradient norms positive, gives constants cQ, c S , C Q, C S > 0 such that 
+
+Et[Jt+1 ] ≤ J t − cQηt∥gQ,t ∥2 − cS γt∥gS,t ∥2
+
+> St
+
++ CQη2 
+
+> t
+
+σ2 
+
+> Q
+
++ CS γ2 
+
+> t
+
+σ2 
+
+> S
+
++ 2 γtbt. (94) Taking total expectations, summing over t, and using Jt ≥ J ⋆ yields 
+
+X
+
+> t
+
+EcQηt∥gQ,t ∥2 + cS γt∥gS,t ∥2
+
+> St
+
+ ≤ J 0 − J ⋆ + CQσ2
+
+> Q
+
+X
+
+> t
+
+η2 
+
+> t
+
++ CS σ2
+
+> S
+
+X
+
+> t
+
+γ2 
+
+> t
+
++ 2 X
+
+> t
+
+γtbt.
+
+(95) Absorbing cQ, c S into the numerator constant and sampling R with probability proportional to ηt + γt
+
+proves (32) . If ηt, γ t = Θ( T −1/2), then P
+
+> t
+
+(ηt + γt) = Θ( √T ), P
+
+> t
+
+(η2 
+
+> t
+
++ γ2 
+
+> t
+
+) = O(1) , and 
+
+T −1 P 
+
+> t
+
+bt = O(T −1/2) implies P 
+
+> t
+
+γtbt = O(1) . The rate is therefore O(T −1/2).
+
+A.3.3 Proof of Proposition 6 Proposition 6 (Restatement of Proposition 6) . Let the Q-block direction be Dt = BtbgQ,t , where Bt
+
+is self-adjoint on TQt St( p, r ) and satisfies (33) . Under the assumptions of Theorem 2, replacing bgQ,t 
+
+by Dt preserves the same stationarity order, with constants scaled by m and M .Proof. The Q part of the descent lemma becomes 
+
+Et[J (Qt+1 , S t)] ≤ J (Qt, S t) − ηt ⟨gQ,t , B tEtbgQ,t ⟩ + LQη2
+
+> t
+
+2 Et∥BtbgQ,t ∥2
+
+= J (Qt, S t) − ηt⟨gQ,t , B tgQ,t ⟩ + LQη2
+
+> t
+
+2 Et∥BtbgQ,t ∥2. (96) 26 By (33), 
+
+⟨gQ,t , B tgQ,t ⟩ ≥ m∥gQ,t ∥2, Et∥BtbgQ,t ∥2 ≤ M 2Et∥bgQ,t ∥2 ≤ M 2(∥gQ,t ∥2 + σ2
+
+> Q
+
+).
+
+For ηt ≤ m/ (LQM 2), the gradient coefficient remains negative, and the same telescoping argument as in Theorem 2 applies with cQ replaced by a constant proportional to m and the variance constant multiplied by M 2. The asymptotic order is unchanged. 
+
+Corollary 3.1 (ε-stationary complexity) . Under the assumptions of Theorem 1 and the bounded accumulated variance condition ν2 
+
+> T
+
+≤ Cν , ManifoldFlow reaches an ε-stationary point, defined by 
+
+E∥ grad J (xt)∥2 
+
+> xt
+
+≤ ε, after 
+
+T ≥
+
+
+
+1 + 2( J (x1) − J ⋆) + LRCν
+
+2cε 
+
+2
+
+= O(ε−2) (97) 
+
+iterations. Proof. Set the right-hand side of (83) to be at most ε and solve the resulting inequality for T :
+
+2( J (x1) − J ⋆) + LRCν
+
+2c(√T + 1 − 1) ≤ ε, 
+
+√T + 1 − 1 ≥ 2( J (x1) − J ⋆) + LRCν
+
+2cε ,T ≥
+
+
+
+1 + 2( J (x1) − J ⋆) + LRCν
+
+2cε 
+
+2
+
+− 1. (98) Inequality (98) is exactly (97) after removing the harmless negative constant −1.
+
+A.4 Generalization 
+
+The generalization proof has two components. Lemma 3.4 is the Hardt–Recht–Singer stability recursion for two runs whose training sets differ in one sample [ 18 ]. Lemma 3.5 converts the SPD clipping constraint into a spectral-norm constraint on the realized neural weights. Theorem 3 then substitutes this spectral constraint into the standard Rademacher margin bound [3, 4]. 
+
+Assumption 4 (Lipschitz loss and bounded data) . For every sample z = ( x, y ), the sample loss 
+
+ℓ(W ; z) is Cℓ-Lipschitz in the composed weights in Frobenius norm and takes values in [0 , 1] .Inputs satisfy ∥x∥2 ≤ B. Each activation is one-Lipschitz and maps zero to zero. For each layer 
+
+l = 1 , . . . , L net , ManifoldFlow uses Wl = QlS1/2 
+
+> l
+
+with Ql ∈ St( pl, r l) and Sl ∈ S αl,β l .
+
+Lemma 3.4 (Algorithmic Stability) . Assume Assumptions 2 and 4. Let training sets D and D′ of size 
+
+n differ in one sample. Let xt and x′ 
+
+> t
+
+be ManifoldFlow iterates driven by the same random indices and initialized identically. Suppose the per-sample update map with step length ¯ηt = ηQ,t + ηS,t is 
+
+(1 + LU ¯ηt)-Lipschitz on the product distance 
+
+d(x, x ′) = dSt (Q, Q ′) + dAI (S, S ′) (99) 
+
+and the norm of every stochastic tangent update is at most Gα,β , where Gα,β is finite by Lemma 3.2. Then 
+
+Ed(xT , x ′ 
+
+> T
+
+) ≤ 2Gα,β 
+
+n 
+
+> T−1
+
+X
+
+> t=0
+
+¯ηtT −1Y
+
+> k=t+1
+
+(1 + LU ¯ηk). (100) 
+
+Consequently, the expected uniform stability satisfies 
+
+ϵstab ≤ Cℓ
+
+pβmax 
+
+2Gα,β 
+
+n 
+
+> T−1
+
+X
+
+> t=0
+
+¯ηtT −1Y
+
+> k=t+1
+
+(1 + LU ¯ηk), (101) 
+
+where βmax = max l βl.
+
+27 Proof. Let It be the random sample index at step t. Since D and D′ differ in one sample, 
+
+P(It is the differing index ) = 1 /n . If It is not the differing index, both runs apply the same per-sample map. The assumed Lipschitz property gives 
+
+d(xt+1 , x ′
+
+> t+1
+
+) ≤ (1 + LU ¯ηt)d(xt, x ′
+
+> t
+
+). (102) If It is the differing index, the triangle inequality and the tangent update bound give 
+
+d(xt+1 , x ′
+
+> t+1
+
+) ≤ d(xt+1 , x t) + d(xt, x ′
+
+> t
+
+) + d(x′
+
+> t
+
+, x ′
+
+> t+1
+
+) triangle inequality 
+
+≤ d(xt, x ′
+
+> t
+
+) + 2 Gα,β ¯ηt bounded update length 
+
+≤ (1 + LU ¯ηt)d(xt, x ′
+
+> t
+
+) + 2 Gα,β ¯ηt because LU ¯ηtd(xt, x ′
+
+> t
+
+) ≥ 0. (103) Taking expectation over It conditional on the past and combining (102) with (103) yields 
+
+E[d(xt+1 , x ′
+
+> t+1
+
+) | F t] ≤ (1 + LU ¯ηt)d(xt, x ′
+
+> t
+
+) + 2Gα,β ¯ηt
+
+n . (104) Let ∆t = Ed(xt, x ′
+
+> t
+
+). Since x0 = x′
+
+> 0
+
+, ∆0 = 0 . Taking total expectation in (104) gives 
+
+∆t+1 ≤ (1 + LU ¯ηt)∆ t + 2Gα,β ¯ηt
+
+n . (105) Repeated substitution of (105) gives 
+
+∆T ≤ 2Gα,β 
+
+n 
+
+> T−1
+
+X
+
+> t=0
+
+¯ηtT −1Y
+
+> k=t+1
+
+(1 + LU ¯ηk), (106) which proves (100). To pass from distance to loss, use Assumption 4. For one layer, 
+
+∥QS 1/2 − Q′S′1/2∥F ≤ ∥ (Q − Q′)S1/2∥F + ∥Q′ 
+
+S1/2 − S′1/2
+
+∥F triangle inequality 
+
+≤ pβmax ∥Q − Q′∥F + S1/2 − S′1/2
+
+> F
+
+operator-norm bound .
+
+(107) On the compact interval [α, β max ], the square-root map is Lipschitz with constant (2 √α)−1 by functional calculus for SPD matrices [ 6, 22 ]. Absorbing this compact-set equivalence into Gα,β and using Cℓ-Lipschitzness gives (101). 
+
+Lemma 3.5 (Spectral Norm Bound on W = QS 1/2). Under Assumption 4, every ManifoldFlow layer satisfies 
+
+∥Wl∥op = σmax (Wl) = pλmax (Sl) ≤ pβl. (108) 
+
+Proof. By Proposition 2, σ2 
+
+> i
+
+(Wl) = λi(Sl) for every i = 1 , . . . , r l. Taking the maximum over i
+
+gives 
+
+σ2max (Wl) = λmax (Sl). (109) Since Sl ∈ S αl,β l under Assumption 4, λmax (Sl) ≤ βl. Taking square roots in (109) gives (108) .
+
+A.4.1 Proof of Theorem 3 Theorem 3.7 (Restatement of Theorem 3) . Under Assumption 4, with probability at least 1 − δ over an i.i.d. training set of size n, every Lnet -layer ManifoldFlow network in the clipped class satisfies 
+
+R(f ) − bR(f ) ≤ 4CℓB
+
+√n
+
+> Lnet
+
+Y
+
+> l=1
+
+pβl + 3 
+
+r log(2 /δ )2n + ϵstab . (110) 
+
+A sharper Bartlett–Foster–Telgarsky spectral-margin substitution gives, for margin loss bRγ ,
+
+R(f ) ≤ bRγ (f ) + CBFT Bγ√n
+
+vuut"Lnet Y
+
+> l=1
+
+λmax (Sl)
+
+# " Lnet X
+
+> l=1
+
+tr( Sl)
+
+λmax (Sl)
+
+#
+
++ 3 
+
+r log(2 /δ )2n , (111) 
+
+where CBFT is the universal constant in the spectrally normalized margin bound. 
+
+28 Proof. For the Rademacher bound, define Fβ as the class of networks satisfying ∥Wl∥op ≤ √βl
+
+for every layer. By Lemma 3.5, the ManifoldFlow clipped class is a subset of Fβ . Since the activations are one-Lipschitz and vanish at zero, repeated application of the contraction inequality for Rademacher complexity [3] gives 
+
+bRn(ℓ ◦ F β ) ≤ CℓB
+
+√n
+
+> Lnet
+
+Y
+
+> l=1
+
+∥Wl∥op . (112) Substituting (108) into (112) yields 
+
+bRn(ℓ ◦ F β ) ≤ CℓB
+
+√n
+
+> Lnet
+
+Y
+
+> l=1
+
+pβl. (113) The standard Rademacher generalization theorem for losses in [0 , 1] [ 3] gives, with probability at least 1 − δ,
+
+R(f ) − bR(f ) ≤ 4 bRn(ℓ ◦ F β ) + 3 
+
+r log(2 /δ )2n . (114) Combining (113) and (114) gives the first two terms of (110) . Lemma 3.4 adds the expected stability contribution (101); adding this nonnegative term gives (110). For the spectral-margin statement, the spectrally normalized margin theorem of Bartlett et al. [4] gives 
+
+R(f ) ≤ bRγ (f ) + CBFT Bγ√n
+
+vuut"Lnet Y
+
+> l=1
+
+∥Wl∥2op 
+
+# " Lnet X
+
+> l=1
+
+∥Wl∥2
+
+> F
+
+∥Wl∥2op 
+
+#
+
++ 3 
+
+r log(2 /δ )2n . (115) By Proposition 2, W ⊤ 
+
+> l
+
+Wl = Sl. Hence 
+
+∥Wl∥2op = λmax (W ⊤ 
+
+> l
+
+Wl) definition of spectral norm 
+
+= λmax (Sl) by Proposition 2 , (116) 
+
+∥Wl∥2 
+
+> F
+
+= tr( W ⊤ 
+
+> l
+
+Wl) definition of Frobenius norm 
+
+= tr( Sl) by Proposition 2 . (117) Substituting (116) and (117) into (115) proves (111). 
+
+A.5 Spectral Analysis 
+
+The spectral analysis is exact. It uses only the Stiefel identity Q⊤Q = Ir , the singular-value decomposition, and standard eigenvalue identities from matrix analysis [6, 16, 22]. 
+
+A.5.1 Proof of Proposition 2 Proposition 3.3 (Restatement of Proposition 2) . Let Q ∈ St( p, r ), let S ∈ SPD( r), and set 
+
+W = QS 1/2. For every i = 1 , . . . , r ,
+
+σ2 
+
+> i
+
+(W ) = λi(S). (118) 
+
+Proof. Since Q ∈ St( p, r ), Q⊤Q = Ir . Since S ∈ SPD( r), its principal square root satisfies 
+
+(S1/2)⊤ = S1/2 and S1/2S1/2 = S [22]. Therefore 
+
+W ⊤W = ( QS 1/2)⊤(QS 1/2) definition of W
+
+= S1/2Q⊤QS 1/2 transpose of a product 
+
+= S1/2Ir S1/2 Stiefel constraint Q⊤Q = Ir
+
+= S. definition of principal square root (119) Let W = U ΣV ⊤ be a compact singular-value decomposition with Σ = diag( σ1(W ), . . . , σ r (W )) 
+
+[16]. Then 
+
+W ⊤W = V Σ⊤U ⊤U ΣV ⊤ substitute the SVD 
+
+= V diag( σ21 (W ), . . . , σ 2 
+
+> r
+
+(W )) V ⊤ orthonormality of U . (120) 29 Equation (120) shows that the eigenvalues of W ⊤W are σ2 
+
+> i
+
+(W ). Equation (119) shows that the same matrix is S, whose eigenvalues are λi(S). Matching eigenvalues with the same ordering proves (118). 
+
+Proposition 3.4 (Condition Number Analysis) . Under the assumptions of Proposition 2, if W has full column rank, then 
+
+κ(W ) = σmax (W )
+
+σmin (W ) =
+
+s
+
+λmax (S)
+
+λmin (S) = pκ(S). (121) 
+
+Under the clipping condition (44) ,
+
+κ(W ) ≤ pβ/α. (122) 
+
+Proof. By Proposition 2, σ2max (W ) = λmax (S) and σ2min (W ) = λmin (S). Since S ∈ SPD( r),
+
+λmin (S) > 0, and W has full column rank by (119). Taking positive square roots gives 
+
+κ(W ) = σmax (W )
+
+σmin (W ) definition of condition number 
+
+=
+
+pλmax (S)
+
+pλmin (S) by Proposition 2 
+
+=
+
+s
+
+λmax (S)
+
+λmin (S) algebra 
+
+= pκ(S). definition of κ(S) (123) If S ∈ S α,β , then λmax (S) ≤ β and λmin (S) ≥ α. Substituting these two inequalities into (121) gives (122). 
+
+A.5.2 Proof of the coverage part of Proposition 2 Proposition 3.5 (Restatement of the coverage part of Proposition 2) . Under the assumptions of Proposition 2, the image of the map (Q, S ) 7 → QS 1/2 with Q ∈ St( p, r ) and S ∈ SPD( r) is exactly the set of matrices W ∈ Rp×r satisfying rank( W ) = r.Proof. If W = QS 1/2 with Q ∈ St( p, r ) and S ∈ SPD( r), Proposition 2 gives W ⊤W = S ≻ 0.Hence W ⊤W is nonsingular, and the columns of W are linearly independent, so rank( W ) = r.Conversely, let W ∈ Rp×r satisfy rank( W ) = r. Take the compact singular-value decomposition 
+
+W = U ΣV ⊤, where U ∈ St( p, r ), V ∈ O( r), and Σ = diag( σ1, . . . , σ r ) with σi > 0 by the singular-value decomposition theorem [16]. Define 
+
+Q = U V ⊤, S = V Σ2V ⊤. (124) Then 
+
+Q⊤Q = V U ⊤U V ⊤ definition of Q
+
+= V I r V ⊤ because U ∈ St( p, r )= Ir because V ∈ O( r), (125) so Q ∈ St( p, r ). Since every σi is positive, S = V Σ2V ⊤ ≻ 0, so S ∈ SPD( r). The principal square root is S1/2 = V ΣV ⊤. Therefore 
+
+QS 1/2 = U V ⊤V ΣV ⊤ substitute (124) 
+
+= U ΣV ⊤ because V ⊤V = Ir
+
+= W by the compact SVD of W . (126) Both inclusions have been proved, so the image is exactly the full-column-rank set. 30 Corollary 3.2 (No spectral explosion under clipping) . Under Assumption 2 and Proposition 3.4, every ManifoldFlow layer satisfies 
+
+√α ≤ σi(Wt) ≤ pβ, κ(Wt) ≤ pβ/α. (127) 
+
+Proof. Assumption 2 gives α ≤ λi(St) ≤ β. Proposition 2 gives σi(Wt) = pλi(St), hence 
+
+√α ≤ σi(Wt) ≤ √β. Proposition 3.4 gives κ(Wt) ≤ pβ/α .
+
+Theorem 3.8 (Signal Propagation Bound) . Consider an Lnet -layer linearized network with weights 
+
+Wl = QlS1/2 
+
+> l
+
+satisfying the assumptions of Proposition 2. Let A = WLnet · · · W1 and assume all signals lie in the effective full-column-rank subspaces of the layers. For every nonzero forward signal 
+
+h0 and nonzero backward signal δLnet ,
+
+> Lnet
+
+Y
+
+> l=1
+
+pλmin (Sl) ≤ ∥Ah 0∥2
+
+∥h0∥2
+
+≤
+
+> Lnet
+
+Y
+
+> l=1
+
+pλmax (Sl), (128) 
+
+and Lnet Y
+
+> l=1
+
+pλmin (Sl) ≤ ∥A⊤δLnet ∥2
+
+∥δLnet ∥2
+
+≤
+
+> Lnet
+
+Y
+
+> l=1
+
+pλmax (Sl). (129) 
+
+Consequently, the relative forward-backward distortion is bounded by 
+
+1
+
+QLnet 
+
+> l=1
+
+pκ(Sl) ≤ ∥A⊤δLnet ∥2/∥δLnet ∥2
+
+∥Ah 0∥2/∥h0∥2
+
+≤
+
+> Lnet
+
+Y
+
+> l=1
+
+pκ(Sl). (130) 
+
+Proof. For one layer, Proposition 2 gives σmin (Wl) = pλmin (Sl) and σmax (Wl) = pλmax (Sl).The variational characterization of singular values [ 6, 16 ] gives, for every vector v in the effective input subspace of Wl,
+
+pλmin (Sl)∥v∥2 ≤ ∥ Wlv∥2 ≤ pλmax (Sl)∥v∥2. (131) Apply (131) to hl = Wlhl−1 recursively. For the upper bound, 
+
+∥Ah 0∥2 = ∥WLnet · · · W1h0∥2 definition of A
+
+≤ pλmax (SLnet )∥WLnet −1 · · · W1h0∥2 by (131) 
+
+≤
+
+> Lnet
+
+Y
+
+> l=1
+
+pλmax (Sl)∥h0∥2 repeat over layers . (132) The lower bound in (128) is obtained by replacing each use of the upper inequality in (131) by the lower inequality. Since singular values are invariant under transpose, σi(W ⊤ 
+
+> l
+
+) = σi(Wl) [16 ]. Applying the same recursive argument to A⊤ = W ⊤ 
+
+> 1
+
+· · · W ⊤ 
+
+> Lnet
+
+gives (129). Divide the lower bound in (129) by the upper bound in (128) to obtain 
+
+∥A⊤δLnet ∥2/∥δLnet ∥2
+
+∥Ah 0∥2/∥h0∥2
+
+≥
+
+> Lnet
+
+Y
+
+> l=1
+
+s
+
+λmin (Sl)
+
+λmax (Sl) = 1
+
+QLnet 
+
+> l=1
+
+pκ(Sl) . (133) Divide the upper bound in (129) by the lower bound in (128) to obtain 
+
+∥A⊤δLnet ∥2/∥δLnet ∥2
+
+∥Ah 0∥2/∥h0∥2
+
+≤
+
+> Lnet
+
+Y
+
+> l=1
+
+s
+
+λmax (Sl)
+
+λmin (Sl) =
+
+> Lnet
+
+Y
+
+> l=1
+
+pκ(Sl). (134) Equations (133) and (134) prove (130) . For a differentiable loss, the chain rule gives ∇h0 L =
+
+A⊤∇hLnet L, so (129) is the corresponding gradient propagation bound. 31 A.5.3 Proof of Theorem 4 Theorem 3.9 (Restatement of Theorem 4) . Let Wl = QlS1/2 
+
+> l
+
+with Ql ∈ St( pl, r l) and Sl ∈ S αl,β l .For a differentiable feed-forward network with layer Jacobians Dl and end-to-end Jacobian J =
+
+DLWL · · · D1W1, equations (37) and (38) hold. For a graph layer H(l+1) = bAH (l)Wl, equation 
+
+(39) holds. Proof. By Proposition 2, 
+
+∥Wl∥op = pλmax (Sl), σmin (Wl) = pλmin (Sl) (135) on the effective full-column-rank subspace. Submultiplicativity of the operator norm gives 
+
+∥J∥op = ∥DLWL · · · D1W1∥op 
+
+≤ Y
+
+> l
+
+∥Dl∥op ∥Wl∥op = Y
+
+> l
+
+∥Dl∥op 
+
+pλmax (Sl), (136) which proves (37) . If every factor is full rank on the propagated subspace, then the variational characterization of the smallest singular value gives σmin (AB ) ≥ σmin (A)σmin (B) for each adjacent product. Iterating this inequality and using (135) gives 
+
+σmin (J) ≥ Y
+
+> l
+
+σmin (Dl)σmin (Wl) = Y
+
+> l
+
+σmin (Dl)pλmin (Sl), (137) which proves (38). For the graph layer, the vectorization identity vec( ABC ) = ( C⊤ ⊗ A) vec( B) gives 
+
+vec( bAH (l)Wl) = ( W ⊤ 
+
+> l
+
+⊗ bA) vec( H(l)). (138) If Wl = UW ΣW V ⊤ 
+
+> W
+
+and bA = UAΣAV ⊤ 
+
+> A
+
+are singular-value decompositions, then 
+
+W ⊤ 
+
+> l
+
+⊗ bA = ( VW ⊗ UA)(Σ W ⊗ ΣA)( U ⊤ 
+
+> W
+
+⊗ V ⊤ 
+
+> A
+
+), (139) which is an SVD because Kronecker products of orthogonal matrices are orthogonal. The diagonal entries of ΣW ⊗ ΣA are all products σi(Wl)σj ( bA), proving (39) . Combining this with Proposition 2 yields σi(Wl) = pλi(Sl).
+
+A.5.4 Proof of Proposition 7 Proposition 3.6 (Restatement of Proposition 7) . Let St ∈ SPD( r) have simple eigenpairs (λi,t , u i,t ),let Mt ∈ Sym( r), and define 
+
+St+1 = S1/2 
+
+> t
+
+exp 
+
+
+
+−τ S −1/2 
+
+> t
+
+MtS−1/2
+
+> t
+
+
+
+S1/2 
+
+> t
+
+.
+
+Then, as τ → 0,
+
+log λi(St+1 ) = log λi,t − τ u⊤
+
+> i,t
+
+Mtui,t 
+
+λi,t 
+
++ O
+
+
+
+τ 2∥S−1/2 
+
+> t
+
+MtS−1/2 
+
+> t
+
+∥2
+
+> F
+
+
+
+. (140) 
+
+If St and Mt commute, and mi,t is the eigenvalue of Mt in their shared eigenbasis, then 
+
+λi(St+1 ) = λi,t exp 
+
+
+
+−τ mi,t 
+
+λi,t 
+
+
+
+. (141) 
+
+Proof. Define the smooth curve 
+
+S(τ ) = S1/2 
+
+> t
+
+exp 
+
+
+
+−τ S −1/2 
+
+> t
+
+MtS−1/2
+
+> t
+
+
+
+S1/2 
+
+> t
+
+. (142) The Fréchet derivative of the matrix exponential at zero is the identity map [ 22 ]. Differentiating (142) at τ = 0 gives 
+
+˙S(0) = S1/2
+
+> t
+
+
+
+−S−1/2 
+
+> t
+
+MtS−1/2
+
+> t
+
+
+
+S1/2 
+
+> t
+
+Fréchet derivative of exp at 0= −Mt. cancellation of S1/2 
+
+> t
+
+and S−1/2 
+
+> t
+
+(143) 32 For a simple eigenvalue of a differentiable symmetric matrix curve, the Rayleigh–Ritz perturbation formula gives [6] 
+
+ddτ λi(S(τ ))  
+
+> τ=0
+
+= u⊤ 
+
+> i,t
+
+˙S(0) ui,t = −u⊤
+
+> i,t
+
+Mtui,t . (144) Since λi,t > 0, the chain rule gives 
+
+ddτ log λi(S(τ )) τ =0 
+
+= 1
+
+λi,t 
+
+ddτ λi(S(τ )) τ =0 
+
+= − u⊤
+
+> i,t
+
+Mtui,t 
+
+λi,t 
+
+. (145) Taylor’s theorem for analytic symmetric matrix curves, with the second derivative bounded by a constant multiple of ∥S−1/2 
+
+> t
+
+MtS−1/2 
+
+> t
+
+∥2 
+
+> F
+
+on a sufficiently small neighborhood of zero [ 22 ], gives (140). If StMt = MtSt, then the two real symmetric matrices are simultaneously orthogonally di-agonalizable [ 6]. Thus there exists U ∈ O( r) such that St = U diag( λ1,t , . . . , λ r,t )U ⊤ and 
+
+Mt = U diag( m1,t , . . . , m r,t )U ⊤. Substitution into (52) gives 
+
+St+1 = U diag( pλi,t )diag (exp ( −τ m i,t /λ i,t )) diag( pλi,t )U ⊤ shared eigenbasis 
+
+= U diag ( λi,t exp ( −τ m i,t /λ i,t )) U ⊤. diagonal multiplication (146) Equation (146) proves (141). 
+
+A.6 Optimizer-Induced Spectral Preconditioning 
+
+The long-horizon language-model experiments isolate an optimizer effect not visible from the spectral identity alone. This subsection formalizes the mechanism: fixed-Stiefel SGD is confined to a unit-spectrum tangent model, whereas ManifoldFlow converts the learned SPD spectrum into a structured coordinate preconditioner. The proof uses Stiefel projection and retraction calculus [ 1, 10 ], a constant-stepsize Riemannian SGD local model [ 9], matrix spectral calculus [ 6 , 7], and the stationarity theorem above. The resulting statements quantify why Adam reduces but does not remove the fixed-spectrum gap: Adam supplies external diagonal scaling, while ManifoldFlow supplies layer-internal scaling tied exactly to the singular values by Proposition 2. 
+
+Lemma 4.1 (Stiefel projection and first-order retraction displacement) . Let Q ∈ St( p, r ) and let 
+
+G ∈ Rp×r . Under the Euclidean ambient metric, the tangent projection is 
+
+ΠQ(G) = G − Q sym( Q⊤G), sym( A) = A + A⊤
+
+2 . (147) 
+
+Let RQ be a smooth first-order Stiefel retraction. Then there exist constants δR > 0 and CR < ∞,depending only on the chosen retraction and the coordinate neighborhood of Q, such that the following implication holds. If 
+
+0 < η ∥ΠQ(G)∥F ≤ δR, (148) 
+
+Q+ = RQ(−ηΠQ(G)) , and E ∈ TQSt( p, r ) with ∥E∥F = 1 , then 
+
+Q+ − Q, E F ≤ η∥ΠQ(G)∥F + CRη2∥ΠQ(G)∥2 
+
+> F
+
+. (149) 
+
+Proof. The tangent space of the Stiefel manifold is 
+
+TQSt( p, r ) = {Ξ ∈ Rp×r : Q⊤Ξ + Ξ ⊤Q = 0 }. (150) Set A = Q⊤G. Equation (147) gives 
+
+Q⊤ΠQ(G) + Π Q(G)⊤Q = A − sym( A) + A⊤ − sym( A) substitution 
+
+= A + A⊤ − 2 sym( A) collect terms 
+
+= 0 definition of sym . (151) Thus ΠQ(G) ∈ TQSt( p, r ). For any Ξ ∈ TQSt( p, r ), the residual G − ΠQ(G) = Q sym( Q⊤G)
+
+satisfies 
+
+⟨G − ΠQ(G), Ξ⟩F = tr  sym( Q⊤G)Q⊤Ξ cyclicity of trace 
+
+= 0 symmetric–skew-symmetric trace identity , (152) 33 because Q⊤Ξ is skew-symmetric by (150) . Equations (151) and (152) prove that (147) is the Euclidean orthogonal projection [1, 10]. The projection theorem gives 
+
+∥ΠQ(G)∥F ≤ ∥ G∥F . (153) A first-order retraction satisfies RQ(0) = Q and DR Q(0)[Ξ] = Ξ for every Ξ ∈ TQSt( p, r ) [1 , 10 ]. Since RQ is twice continuously differentiable in a coordinate neighborhood of 0, Taylor’s theorem gives constants δR > 0 and CR < ∞ such that 
+
+RQ(Ξ) = Q + Ξ + RQ(Ξ) , ∥R Q(Ξ) ∥F ≤ CR∥Ξ∥2 
+
+> F
+
+(154) whenever ∥Ξ∥F ≤ δR. Condition (148) permits the substitution Ξ = −ηΠQ(G) in (154) . Cauchy– Schwarz gives 
+
+Q+ − Q, E F = ⟨− ηΠQ(G) + RQ(−ηΠQ(G)) , E ⟩F by (154) 
+
+≤ η∥ΠQ(G)∥F ∥E∥F + ∥R Q(−ηΠQ(G)) ∥F ∥E∥F Cauchy–Schwarz 
+
+≤ η∥ΠQ(G)∥F + CRη2∥ΠQ(G)∥2 
+
+> F
+
+by (154) and ∥E∥F = 1 .
+
+(155) This is (149). 
+
+Lemma 4.2 (Local constant-stepsize Riemannian SGD floor) . Let Q⋆ be a nondegenerate local minimizer of a smooth fixed-Stiefel objective JFS on St( p, r ). Let HFS = Hess JFS (Q⋆) be the self-adjoint Riemannian Hessian. Let U ⊂ TQ⋆ St( p, r ) be an r-dimensional invariant subspace with orthogonal projector PU . Assume that the eigenvalues of HFS on U are μ1, . . . , μ r and satisfy 
+
+0 < μ FS ≤ μi ≤ cμμFS , i = 1 , . . . , r, cμ ≥ 1, (156) 
+
+where μFS = λmin (HFS |U ) and λmin denotes the lowest eigenvalue of the self-adjoint Hessian restricted to U. Assume the stochastic tangent gradient can be written as bgt = gt + ξt with 
+
+E[ξt | F t] = 0 , E[PU ξtξ⊤ 
+
+> t
+
+PU | F t] ⪰ ν2PU . (157) 
+
+For the linearized normal-coordinate constant-stepsize chain 
+
+zt+1 = zt − η (HFS zt + ξt) , 0 < η ≤ (cμμFS )−1, (158) 
+
+the weak-subspace stationary root-mean-square displacement satisfies 
+
+lim inf 
+
+> t→∞
+
+ E∥PU zt∥22
+
+1/2 ≥ ν
+
+r ηr 
+
+2cμμFS 
+
+. (159) 
+
+Moreover, the curvature-normalized one-step stochastic error radius 
+
+EFS (η) = lim inf 
+
+> t→∞
+
+
+
+E ηH −1FS bgt
+
+> 2
+> F
+
+1/2
+
+(160) 
+
+satisfies 
+
+EFS (η) ≥ ην √rcμμFS 
+
+. (161) 
+
+Proof. Choose an orthonormal eigenbasis u1, . . . , u r for HFS |U , and write yi,t = ⟨zt, u i⟩ and 
+
+ζi,t = ⟨ξt, u i⟩. Projecting (158) onto ui gives 
+
+yi,t +1 = (1 − ημ i)yi,t − ηζ i,t . (162) The covariance lower bound (157) gives 
+
+E[ζi,t | F t] = 0 , E[ζ2 
+
+> i,t
+
+| F t] ≥ ν2. (163) Conditioning on Ft in (162) yields 
+
+E[y2 
+
+> i,t +1
+
+| F t] = (1 − ημ i)2y2 
+
+> i,t
+
+− 2η(1 − ημ i)yi,t E[ζi,t | F t] + η2E[ζ2 
+
+> i,t
+
+| F t] expand the square 
+
+≥ (1 − ημ i)2y2 
+
+> i,t
+
++ η2ν2 by (163) . (164) 34 Let vi = lim inf t→∞ Ey2
+
+> i,t
+
+. Taking total expectation in (164) and then taking lower limits gives 
+
+vi ≥ (1 − ημ i)2vi + η2ν2 lower-limit inequality for a scalar recursion 
+
+vi
+
+ 1 − (1 − ημ i)2 ≥ η2ν2 rearrangement 
+
+vi ≥ η2ν2
+
+2ημ i − η2μ2
+
+> i
+
+algebra 
+
+vi ≥ ην 2
+
+2cμμFS 
+
+by (156) and ημ i ≤ 1. (165) Summing (165) over i = 1 , . . . , r gives 
+
+lim inf  
+
+> t→∞
+
+E∥PU zt∥22 = lim inf 
+
+> t→∞
+> r
+
+X
+
+> i=1
+
+Ey2 
+
+> i,t
+
+orthonormal coordinates on U≥
+
+> r
+
+X
+
+> i=1
+
+lim inf  
+
+> t→∞
+
+Ey2 
+
+> i,t
+
+finite-sum lower-limit inequality 
+
+≥ ην 2r
+
+2cμμFS 
+
+. by (165) (166) Taking square roots proves (159). For (161), use the spectral lower bound for H−1FS on U:
+
+∥H−1FS v∥F ≥ (cμμFS )−1∥v∥F , v ∈ U . (167) The second moment of PU bgt is bounded below by the trace of the conditional covariance: 
+
+E∥PU bgt∥2 
+
+> F
+
+= E∥PU gt + PU ξt∥2 
+
+> F
+
+definition of bgt
+
+≥ E∥PU ξt∥2 
+
+> F
+
+variance decomposition and (157) 
+
+≥ rν 2. trace of (157) (168) Combining (167) and (168) gives 
+
+
+
+E ηH −1FS bgt
+
+> 2
+> F
+
+1/2
+
+≥ η(cμμFS )−1  E∥PU bgt∥2
+
+> F
+
+1/2 by (167) 
+
+≥ ην √rcμμFS 
+
+by (168) . (169) Taking the lower limit over t proves (161). 
+
+Proposition 4.1 (Fixed-Stiefel SGD has a unit-spectrum error floor) . Consider a fixed-Stiefel layer 
+
+Wt = Qt with Qt ∈ St( p, r ) and the Riemannian SGD update 
+
+Qt+1 = RQt (−ηbgt) , bgt = Π Qt (Gt), (170) 
+
+where Gt is the stochastic Euclidean gradient and ΠQt is defined in (147) . Then every nonzero singular value of Wt is equal to one. If 0 < η ∥bgt∥F ≤ δR, every unit tangent-axis displacement satisfies 
+
+|⟨ Qt+1 − Qt, E ⟩F | ≤ η∥bgt∥F + CRη2∥bgt∥2 
+
+> F
+
+, E ∈ TQt St( p, r ), ∥E∥F = 1 . (171) 
+
+Under the hypotheses of Lemma 4.2, with μFS = λmin (Hess JFS (Q⋆)|U ), the curvature-normalized steady-state floor satisfies the explicit lower bound 
+
+EFS (η) ≥ ην √rcμλmin (Hess JFS (Q⋆)|U ) . (172) 
+
+Here λmin denotes the lowest eigenvalue of the self-adjoint Riemannian Hessian on the weak-curvature subspace U.
+
+35 Proof. Set S = Ir in the ManifoldFlow parametrization (43). Proposition 2 gives 
+
+σ2 
+
+> i
+
+(Wt) = λi(Ir ) = 1 , i = 1 , . . . , r. (173) Since singular values are nonnegative, (173) gives σi(Wt) = 1 for every represented direction. Apply Lemma 4.1 with Q = Qt and G = Gt. Equation (170) gives bgt = Π Qt (Gt), so (149) becomes (171). The fixed-Stiefel update (170) is the S = Ir restriction of the product-manifold update analyzed in Theorem 1. Equation (173) removes every SPD spectral degree of freedom from this restricted update. Lemma 4.2 gives 
+
+EFS (η) ≥ ην √rcμμFS 
+
+, μFS = λmin (Hess JFS (Q⋆)|U ). (174) Substituting the displayed value of μFS into (174) proves (172). Proposition 4.1 states a precise limitation of fixed-Stiefel SGD. The retraction keeps the iterate feasible and Theorem 1 still gives stationarity at the usual stochastic rate, but the feasible layer remains locked at σi(Wt) = 1 . The explicit floor in (172) has numerator ην √r and denominator equal to the lowest weak-subspace Hessian eigenvalue, up to the declared anisotropy factor cμ.
+
+Lemma 4.3 (Differential spectral scaling of W (Q, S ) = QS 1/2). Let S = V diag( s1, . . . , s r )V ⊤
+
+with si > 0 and V = [ v1, . . . , v r ] ∈ O( r). Let Φ( Q, S ) = QS 1/2. For every tangent direction 
+
+Ξ ∈ TQSt( p, r ), the Q-direction differential satisfies 
+
+DQΦ( Q, S )[Ξ] = Ξ S1/2. (175) 
+
+If a unit tangent direction Ξi ∈ TQSt( p, r ) is aligned with the ith SPD eigenvector in the sense that 
+
+Ξivi = ai, Ξivj = 0 (j̸ = i), ∥ai∥2 = 1 , (176) 
+
+then 
+
+∥DQΦ( Q, S )[Ξ i]∥F = √si. (177) 
+
+Proof. For fixed S, the map Q 7 → QS 1/2 is linear. Therefore its Fréchet derivative in the Q variable is (175). The spectral theorem for SPD matrices gives 
+
+S1/2 = V diag( √s1, . . . , √sr )V ⊤ =
+
+> r
+
+X
+
+> j=1
+
+√sj vj v⊤ 
+
+> j
+
+(178) [6, 7]. Combining (175), (176), and (178) gives 
+
+DQΦ( Q, S )[Ξ i] = Ξ iS1/2 by (175) 
+
+=
+
+> r
+
+X
+
+> j=1
+
+√sj Ξivj v⊤ 
+
+> j
+
+by (178) 
+
+= √siaiv⊤ 
+
+> i
+
+by (176) . (179) The rank-one Frobenius norm identity gives 
+
+∥DQΦ( Q, S )[Ξ i]∥F = √si∥aiv⊤ 
+
+> i
+
+∥F by (179) 
+
+= √si∥ai∥2∥vi∥2 rank-one Frobenius norm 
+
+= √si by (176) and V ∈ O( r). (180) This is (177). 36 A.6.1 Proof of Proposition 8 Proposition 4.2 (Restatement of Proposition 8) . Let W = QS 1/2 and let S = V diag( s1, . . . , s r )V ⊤
+
+with si > 0. Fix a local tangent frame Ξ1, . . . , Ξr ∈ TQSt( p, r ) satisfying the alignment condition 
+
+(176) . Define normalized realized-weight directions 
+
+Yi = s−1/2 
+
+> i
+
+DQΦ( Q, S )[Ξ i], ∥Yi∥F = 1 . (181) 
+
+Assume that, at a nondegenerate local minimizer Q⋆ with fixed S, the Hessian of F (W ) in realized-weight coordinates is aligned with these directions: 
+
+Yi, ∇2 
+
+> W
+
+F (W⋆)[ Yj ] F = μiδij , μ1 ≥ · · · ≥ μr > 0, (182) 
+
+where W⋆ = Q⋆S1/2. Let 
+
+mS = min  
+
+> 1≤i≤r
+
+siμi, LS = max  
+
+> 1≤i≤r
+
+siμi, κeff (S) = LS
+
+mS
+
+, κ = μ1
+
+μr
+
+. (183) 
+
+Assume the fixed-S pullback objective in this tangent chart is mS -strongly convex and LS -smooth over the local comparison neighborhood, and assume the deterministic local gradient iterates with stepsize η = L−1 
+
+> S
+
+remain in that neighborhood. Then 
+
+J (QT , S ) − J (Q⋆, S ) ≤  1 − κeff (S)−1T [J (Q0, S ) − J (Q⋆, S )] . (184) 
+
+If the learned spectrum is inverse-Hessian aligned in the sense that there exist 0 < a ≤ b < ∞ such that aμi
+
+≤ si ≤ bμi
+
+, i = 1 , . . . , r, (185) 
+
+then 
+
+κeff (S) ≤ ba . (186) 
+
+Consequently, κeff (S) ≤ κ whenever b/a ≤ κ.Proof. By Proposition 2, the learned SPD eigenvalues are exactly the squared singular values of the realized layer: 
+
+si = λi(S) = σ2 
+
+> i
+
+(W ). (187) Thus changing S changes the realized singular scaling while keeping the Stiefel factorization. Use the aligned tangent coordinates of Lemma 4.3. If zi is the coordinate of the ith Q-tangent displacement and yi is the coordinate along Yi in realized-weight space, then (177) and (181) give 
+
+yi = √sizi. (188) The aligned Hessian assumption (182) gives the realized-coordinate quadratic form 
+
+* rX
+
+> i=1
+
+yiYi, ∇2 
+
+> W
+
+F (W⋆)
+
+
+
+> r
+
+X
+
+> j=1
+
+yj Yj
+
++
+
+> F
+
+=
+
+> r
+
+X
+
+> i=1
+
+μiy2 
+
+> i
+
+. (189) Since the regularizer λS ∥ log S∥2 
+
+> F
+
+/2 is constant when S is fixed, substituting (188) into (189) gives the fixed-S pullback Hessian quadratic form 
+
+z, ∇2 
+
+> z
+
+J (Q⋆, S )z =
+
+> r
+
+X
+
+> i=1
+
+siμiz2 
+
+> i
+
+. (190) Hence the aligned pullback Hessian eigenvalues are siμi, with smallest value mS and largest value 
+
+LS by (183). For an mS -strongly convex and LS -smooth function in the local chart, gradient descent with η = L−1
+
+> S
+
+satisfies the standard contraction [10] 
+
+J (Qt+1 , S ) − J (Q⋆, S ) ≤
+
+
+
+1 − mS
+
+LS
+
+
+
+[J (Qt, S ) − J (Q⋆, S )] descent theorem 
+
+=  1 − κeff (S)−1 [J (Qt, S ) − J (Q⋆, S )] definition of κeff . (191) 37 Multiplying (191) over t = 0 , . . . , T − 1 proves (184). Under (185), multiplication by μi gives 
+
+a ≤ siμi ≤ b, i = 1 , . . . , r. (192) Therefore 
+
+κeff (S) = max i siμi
+
+min i siμi
+
+by (183) 
+
+≤ ba by (192) . (193) If b/a ≤ κ, then (193) gives κeff (S) ≤ κ.Theorem 1 applies to the full stochastic product update with St ∈ S α,β . Equation (187) identifies the spectral scaling in this convergent product-manifold scheme with the singular values of the layer itself, rather than with an external optimizer state such as Adam’s coordinatewise second moment [28]. Proposition 8 explains the observed SGD amplification under the explicit alignment condition (182) .Fixed-Stiefel training has si = 1 and therefore κeff = κ, while ManifoldFlow can drive si toward inverse-curvature values satisfying (185) . In that case the local factor decreases from 1 − κ−1 to 
+
+1 − κ−1eff whenever b/a ≤ κ.
+
+B Experimental details and paired replicate check 
+
+The main text reports fixed-protocol FS/MF convergence comparisons for the 1000-epoch batch. Table 9 retains a compact shorter-budget paired replicate check from the earlier reporting pass. It is included as directional stability evidence and is not mixed with the convergence endpoint. The LSTM/WikiText-2 rows use the standard recurrent language-modeling setup [ 23 , 36 ] and wrap only the hidden-to-vocabulary projection with either a fixed Stiefel layer or a ManifoldFlow layer. The Adult rows use a four-layer MLP on the UCI Adult Income benchmark [ 30 , 13 ], with all hidden layers wrapped. The Mini-Transformer rows follow the Transformer feed-forward block structure [ 51 ], use WikiText-2, wrap only feed-forward network linear layers, and leave attention and embeddings unconstrained. For the paired FS/MF comparisons, FS is obtained by setting the ManifoldFlow geometry learning rate to zero, so St = I throughout training. The MF implementation uses the forward weight 
+
+W = QS 1/2, pressure EMA, geometry gate, affine-invariant SPD retraction, and eigenvalue clipping described in Section 4. Adam, AMSGrad-style variants, AdamW-style decoupled decay, Shampoo-style preconditioning, Muon-style orthogonalized updates, and stochastic gradient descent follow their standard optimizer definitions [ 28 , 44 , 35 , 17 , 27 , 45 ]. The archived result files are retained with the released code for reproducibility. Table 9: Short-budget paired replicate check. These archived shorter-budget paired runs provide a compact stability check for the main direction of effect. They are reported separately from the 1000-epoch convergence endpoint. Positive ∆ values favor ManifoldFlow. Task Optimizer FS MF ∆
+
+LSTM/WT2 Adam 287 .86 ± 2.64 277 .20 ± 2.85 +10 .66 ± 0.76 PPL LSTM/WT2 SGD 613 .66 ± 0.06 608 .56 ± 0.26 +5 .10 ± 0.09 PPL Adult MLP Adam 84 .26 ± 0.16 85 .04 ± 0.19 +0 .78 ± 0.25% 
+
+Adult MLP SGD 83 .66 ± 0.63 84 .69 ± 0.29 +1 .03 ± 0.69% 
+
+Transformer FFN Adam 80 .29 ± 0.09 80 .06 ± 0.15 +0 .23 ± 0.10 PPL Transformer FFN SGD 301 .98 ± 2.47 300 .33 ± 2.45 +1 .65 ± 0.05 PPL 
+
+C Boundary analysis 
+
+The main text does not claim dominance over unconstrained dense layers. The paired claim is narrower: ManifoldFlow improves fixed-spectrum Stiefel layers when a Stiefel basis is a useful prior. 38 Table 10 shows why this distinction matters. On Covertype [ 8, 13 ], MF-Adam reaches 74 .41% in the archived boundary protocol, but an unconstrained dense baseline reaches 87 .77% and a Q diag( s)
+
+baseline reaches 89 .84% . Thus Covertype is not a headline win for Stiefel-family methods; it is evidence that the orthogonal-basis prior is mismatched on that task. A similar boundary appears in LSTM output-layer alternatives. The paired MF-vs-FS result is strong inside the Stiefel family, but unconstrained and diagonal-spectrum alternatives can achieve lower perplexity: Dense obtains 104 .66 PPL, Q diag( s) obtains 186 .55 PPL, and Intrinsic Muon obtains 
+
+250 .67 PPL in the recorded comparison [ 34 ]. These values are reported to clarify scope, not to revise the main paired story. Table 10: Boundary baselines from the archived protocol. Covertype values are accuracies, while LSTM hidden-projection values are perplexities. These baselines delimit the scope of the paired FS/MF claim; they were not rerun under the 1000-epoch convergence protocol. Task Method Recorded value Covertype MF-Adam 74 .41 
+
+Covertype Dense 87 .77 
+
+Covertype Q diag( s) 89 .84 
+
+LSTM hidden projection Dense 104 .66 
+
+LSTM hidden projection Q diag( s) 186 .55 
+
+LSTM hidden projection Intrinsic Muon 250 .67 
+
+D Ablation details 
+
+The ablations test whether the pressure-specific design choices are necessary. Adult and Covertype values in Table 11 use MF-Adam cells [ 30 , 8, 28 ]. The deltas follow the main-text convention: full MF minus ablation, reported as accuracy changes in %. All reported deltas are within 0.1% ,supporting the robustness interpretation in the ablation discussion. Table 11: Full ablation table for pressure-specific design choices. “A2” removes the pressure EMA, “A3” removes the geometry gate, and “A6” replaces pressure with random symmetric directions. Deltas are full MF minus ablation and are reported as accuracy changes in %. Ablation Task Full MF Ablation ∆
+
+A2 no EMA Adult 84 .92 85 .00 −0.08 
+
+A2 no EMA Covertype 73 .96 73 .94 +0 .02 
+
+A3 no gate Adult 84 .92 84 .92 +0 .00 
+
+A3 no gate Covertype 73 .96 74 .03 −0.07 
+
+A6 random pressure Adult 84 .92 84 .96 −0.04 
+
+A6 random pressure Covertype 73 .96 73 .91 +0 .06 
+
+39
