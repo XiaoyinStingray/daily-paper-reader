@@ -1,0 +1,969 @@
+Pooling-Based Context Modeling for
+Convolution-Free Deep Image Prior
+Gihyun Kim and Jong-Seok Lee
+Yonsei University
+Republic of Korea
+kkh9314@yonsei.ac.kr, jong-seok.lee@yonsei.ac.kr
+Abstract. Convolutional Neural Networks (CNNs) achieve strong de-
+noising performance by exploiting spatial context from neighboring pix-
+els. Deep Image Prior (DIP) leverages this property to restore images
+from a single noisy input without requiring large datasets. However, the
+over-parameterized architecture of DIP often leads to noise fitting dur-
+ing optimization. In this paper, we propose Pool-DIP, a convolution-free
+architecture that incorporates pooling-based contrast modeling to cap-
+ture spatial context efficiently. Pool-DIP improves denoising performance
+while significantly reducing the number of parameters and computational
+complexity compared to convolution-based DIP models. Experimental
+results show that Pool-DIP achieves competitive performance across mul-
+tiple datasets, including a real-world benchmark. Spectral analysis fur-
+ther reveals that Pool-DIP stabilizes the evolution of high-frequency com-
+ponents during optimization and suppresses erroneous high-frequency
+signals. The proposed architecture also generalizes well to other image
+restoration tasks such as super-resolution and inpainting.
+1
+Introduction
+Convolution Neural Networks (CNNs) are widely used in computer vision due to
+their strong performance. A key factor contributing of CNNs is their capability
+to model context, which captures relationships among neighboring pixels. This
+characteristic makes CNNs particularly effective for image restoration tasks, es-
+pecially image denoising [8, 28]. However, as in other areas of computer vision,
+CNNs typically require large training datasets to achieve satisfactory denoising
+performance.
+Deep Image Prior (DIP) [23] reveals that the CNN architecture itself inher-
+ently possesses a powerful prior, allowing it to achieve competitive denoising
+results using only a single noisy image, without the need for extensive datasets.
+In the absence of large training datasets, the architectural design of DIP becomes
+particularly important [2,5,7,9,14], as it strongly influences the effectiveness of
+the resulting prior.
+An early study [23] used convolution architectures that have a large number
+of parameters in order to ensure flexibility in the achievable representation space.
+arXiv:2607.02952v1  [cs.CV]  3 Jul 2026
+
+
+DIP
+DeepDecoder
+ConvDecoder
+Pool-DIP (Ours)
+27.21 / 0.646
+Best
+Final
+28.46 / 0.694
+24.87 / 0.662
+30.85 / 0.812
+26.75 / 0.623
+28.30 / 0.685
+23.60 / 0.593
+31.96 / 0.886
+32.11 / 0.907
+29.80 / 0.831
+32.49 / 0.914
+32.61 / 0.916
+Best
+Final
+31.66 / 0.880
+29.90 / 0.815
+31.35 / 0.862
+32.32 / 0.898
+Fig. 1: Denoising results of DIP, DeepDecoder, ConvDecoder, and our Pool-DIP. The
+best achievable results during training and the results at the end of training are shown.
+PSNR (dB) and SSIM are shown below each image. The images are kodim03 and
+kodim12 of the Set9 dataset [4].
+However, such over-parameterized architectures may lead to fitting noise during
+optimization [9,10].
+DeepDecoder [9] demonstrates that non-convolutional networks can also serve
+as DIP architectures when equipped with upsampling layers that enable inter-
+actions among neighboring pixels. While this approach reduces noise-fitting by
+limiting the number of parameters, it also tends to degrade denoising perfor-
+mance since it relies solely on fixed upsampling operations to capture context
+information, which constrains its expressivity. To address this limitation, Con-
+vDecoder [5] introduces convolution layers into the DeepDecoder architecture.
+Although this modification improves performance compared to DeepDecoder, it
+still does not fully match the denoising performance of convolution-based DIP
+models [23], and the reduced parameter constraint may weaken its robustness
+to noise fitting.
+Due to the limitation of non-convolutional architectures, several existing
+studies have focused on how to optimize the performance of convolutional archi-
+tectures. In particular, it has been attempted to identify optimal network struc-
+tures via Neural Architecture Search (NAS) [1, 3, 11]. However, this approach
+requires significant computational costs. A recent approach [14] simplifies the
+architectural search process by choosing the network depth and width based on
+the image characteristics. However, this approach relies on a trained auxiliary
+model to determine the architecture, introducing additional training overhead
+and dependency on the auxiliary model.
+2
+
+
+We observe that under-parameterized non-convolutional architectures with a
+limited number of learnable parameters can still serve as effective candidates for
+DIP, as they help mitigate noise fitting without requiring expensive architectural
+search processes. This raises the following question: Can a non-convolutional ar-
+chitectural component enable under-parameterization while still capturing suffi-
+cient contextual information for effective denoising? We hypothesize that pool-
+ing, by aggregating regional statistics over local neighborhoods, can implicitly
+capture context information while maintaining an under-parameterized struc-
+ture. It thereby serves as a lightweight contextual mechanism bridging the gap
+between upsampling only and convolution-based approaches. Specifically, we pro-
+pose Pool-DIP, which incorporates pooling operations to enhance contextual
+modeling within the DIP framework. The core of the proposed model is the
+Multi-Scale Local Contrast Pooling (MS-LCP) module, which computes
+the difference between the input features and their pooled representations across
+multiple scales. Through theoretical analysis, we show that the proposed archi-
+tecture constrains noise fitting due to its reduced number of spatial parameters.
+Empirical analysis further reveals that Pool-DIP stabilizes the spectral evolu-
+tion during optimization, limiting the growth of erroneous high-frequency com-
+ponents compared to the original DIP.
+– We propose Pool-DIP, a pooling-based DIP architecture that achieves com-
+petitive denoising performance with under-parameterization. We highlight
+the importance of contextual modeling in image denoising and show that
+the proposed MS-LCP module captures spatial relationships across multiple
+scales.
+– We provide theoretical analysis showing that the proposed architecture con-
+strains noise fitting due to its reduced number of spatial parameters.
+– Through extensive experiments, we demonstrate that Pool-DIP achieves
+competitive performance while using 32% fewer parameters than recent DIP
+architectures across various synthetic datasets and a real-world dataset.
+– We analyze the spectral behavior of DIP during optimization and show that
+Pool-DIP stabilizes the evolution of high-frequency components while sup-
+pressing the growth of erroneous high-frequency signals, providing an expla-
+nation for its improved robustness to noise fitting.
+– Additionally, we show that Pool-DIP can be applied to other image restora-
+tion tasks beyond denoising, including super-resolution and inpainting.
+2
+Related Works
+2.1
+Deep Image Prior
+DIP [23] reveals that neural architectures inherently possess a powerful prior,
+enabling them to produce impressive results for image restoration without train-
+ing data. Given Gaussian noise as input, the DIP model iteratively reconstructs
+a denoised image. This phenomenon is closely related to the spectral bias of
+3
+
+
+neural networks [2, 19, 22], which tend to prioritize processing of low-frequency
+information in the early stages of training.
+Improving the performance of DIP has been explored in various ways. Deep
+RED [17] enhances DIP by integrating an explicit prior. Liu et al. [13] com-
+bine total variation regularization with DIP to reduce noise and preserve edges.
+Deep Random Projector [12] prevents overfitting to noise by making the input
+learnable, while keeping randomly-initialized network frozen. Wang et al. [25] in-
+troduce an early-stopping strategy to capture restored results before overfitting
+to noise occurs. Sun et al. [21] incorporate a plug-and-play prior scheme, enabling
+the inclusion of additional regularization steps within the DIP framework.
+While applying NAS to DIP has been also attempted [1,3,11], this approach
+is computationally intensive and time-consuming. A simpler approach for archi-
+tecture search was proposed in [14]. It shows that the upsampling causes the
+loss of high-frequency content, which could harm the results for fine-grained
+images. Therefore, starting from a base architecture with only two upsampling
+layers, layer dimensions are determined through image-specific searches using
+three trained support vector machines. However, this approach still incurs addi-
+tional computation in addition to the training process of denoising.
+2.2
+Under-Parameterized DIP
+Under-parameterized DIP methods have been proposed to prevent overfitting
+to noise components in the noisy input image. DeepDecoder [9] uses only 1×1
+convolution, reducing the number of parameters. However, its performance is
+rather limited compared to the original DIP. ConvDecoder [5] has a similar ar-
+chitecture to DeepDecoder but uses 3×3 convolution. With an increased number
+of parameters, it performs better than DeepDecoder, but is still outperformed
+by the original DIP, as shown in [14].
+Our method also aims to build an under-parameterized model for DIP, where
+the proposed MS-LCP module enhances contextual modeling by capturing spa-
+tial relationships across multiple scales.
+2.3
+Unsupervised Single Image Denoising
+Unsupervised single-image denoising methods construct synthetic supervision
+from a single noisy image. Self2Self [18] uses dropout-based masking to perform
+self-supervised denoising, while Zero-shot Noise2Noise [16] builds on this idea
+by proposing a new downsampling method and employing a lightweight con-
+volutional network. Pixel2Pixel [15] leverages non-local self-similarity within a
+single noisy image to construct pixel-level pseudo-instances and train a network
+for zero-shot denoising.
+3
+Method
+In this section, we describe the proposed Pool-DIP model. The overall architec-
+ture is illustrated in Fig. 2.
+4
+
+
+3.1
+Capacity-Robustness Trade-off
+Denoising using DIP is an unsupervised learning task, relying solely on the in-
+ductive bias imposed by the structure of CNNs. Consequently, the denoising
+performance of DIP is significantly influenced by the learning capacity of the
+network. To motivate our approach, we discuss this influence through the per-
+spective of the trade-off between network capacity and noise robustness. High-
+capacity architectures provide greater representational flexibility but tend to fit
+noise more easily, whereas under-parameterized models are more robust to noise
+fitting but may suffer from limited expressivity.
+As shown in Fig. 1, the original DIP [23], which uses an over-parameterized
+network having high learning capacity, shows reasonable performance at the
+best moment but easily overfits to noise eventually. DeepDecoder [9] is under-
+parameterized with lower capacity and solely depends on upsampling to consider
+context information, thus it shows higher resistance to noise-fitting but ends up
+with underfitting to image contents. ConvDecoder [5], which lies between DIP
+and DeepDecoder in terms of capacity, improves the representation of image
+structures compared to DeepDecoder but becomes more susceptible to noise
+fitting, which can degrade denoising performance.
+These observations highlight the trade-off between network capacity and
+noise robustness in DIP architectures. Upsampling operations alone provide lim-
+ited ability to capture contextual relationships, while convolution operations
+with learnable parameters offer high flexibility but may increase the risk of fit-
+ting noise. It may be possible to find a network using convolution with a proper
+balance of the trade-off; however, this requires computationally intensive ar-
+chitectural search [1, 3, 11, 14]. We therefore consider pooling as a lightweight
+mechanism for modeling contextual information while maintaining a relatively
+low model capacity that helps mitigate noise fitting.
+3.2
+Model Architecture
+Overall Architecture. Our proposed architecture is a 4-block hourglass net-
+work, as illustrated in Fig. 2. Each encoder block gradually compresses spa-
+tial resolution while enriching channel representations, and each decoder block
+symmetrically reconstructs the image through upsampling. Unlike conventional
+convolution-based DIP architectures, our network models spatial context pri-
+marily through pooling operations. The key component is the Multi-Scale Lo-
+cal Contrast Pooling (MS-LCP) module, which is placed in every encoder
+and decoder block to capture multi-scale spatial relations. The MS-LCP mod-
+ule emphasizes local contrast by comparing input features with their pooled
+representations at multiple spatial scales. Additionally, positional encoding is
+incorporated to accelerate the convergence of high-frequency details and inject
+positional information. Also, we attach a skip path, referred to as the dual-path,
+to the output of MS-LCP to consider inter-channel relationships simultaneously.
+1×1 convolutions are used to model interactions among channels.
+5
+
+
+  
+  
+1x1 Conv
+1x1 Conv
+Batch 
+norm
+1x1 
+Conv
+MS-LCP
+Down
+sample
+Pos
+Enc
+1x1 Conv
+Upsample
+Batch 
+norm
+1x1 Conv
+Encoder block
+Decoder block
+𝒔𝟏×𝒔𝟏
+Average 
+pool
+…
+𝒔𝒏×𝒔𝒏
+Average 
+pool
+1x1 Conv
+MS-LCP
+Encoder block
+Encoder block
+Encoder block
+Decoder block
+Decoder block
+Decoder block
+1x1 
+Conv
++
++
++
++
++
++
+-
+-
+𝜶𝟏
+𝜶𝒏
+𝑿
+Dual path
+Dual path
+×
+×
+Fig. 2: Overview of our Pool-DIP architecture. It consists of four encoder blocks and
+four decoder blocks, each of which contains an MS-LCP module. After each 1×1 con-
+volution, ReLU is applied.
+Local Contrast Pooling (LCP). Let X denote the input. Our LCP performs
+average pooling and subtracts the result from the input X, i.e., X −Pool(X),
+and then aggregates the result with 1 × 1 convolution.
+Pooling aggregates regional statistics over local neighborhoods and there-
+fore provides a lightweight mechanism for modeling spatial relationships among
+neighboring pixels. In addition, since average pooling smooths the input, it acts
+as a low-pass filter. Consequently, X−Pool(X) emphasizes high-frequency com-
+ponents important for recovering edges and fine structures. In MS-LCP, this
+contrast operation is applied at multiple pooling scale. In the decoder, the out-
+put of LCP is added with the input X by a skip connection. This operation
+can be interpreted as emphasizing local contrast of features that may become
+blurred during the upsampling process. As a result, the proposed architecture
+can better preserve fine structural details during reconstruction.
+Multi-scale LCP (MS-LCP). By extending LCP, we propose Multi-Scale
+LCP (MS-LCP), which utilizes multiple pooling window sizes to capture spatial
+relationships at different scales. We observe that employing only two different
+pooling sizes already provides noticeable performance improvements; additional
+experiments are provided in the Supplementary Material. In addition, we intro-
+duce learnable coefficient parameters αk to control the relative contribution of
+each LCP output corresponding to different pooling scales:
+MS-LCP : ChannelMixing(Σn
+k=1αk × (X −Poolsk(X)))
+where ChannelMixing denotes 1×1 convolution, n denotes the number of scales
+in MS-LCP, and sk is the k-th scale of the pooling window.
+Positional Encoding. Positional encoding is widely used in Transformer ar-
+chitectures to encode positional information in self-attention mechanisms [6,24].
+6
+
+
+Previous studies [22] have also shown that positional encoding can accelerate
+the convergence of high-frequency details. In our method, we adopt positional
+encoding to use this characteristic and help restore high-frequency details. This
+additional positional information complements the pooling-based contrast mod-
+eling in MS-LCP.
+Dual-path Embedding. In addition to the MS-LCP path for spatial modeling,
+we introduce a complementary path that captures feature channel interactions.
+This path is implemented using a 1 × 1 convolution. The outputs of the two
+paths are combined through summation in each block, as illustrated in Fig. 2:
+Dual-path : ChannelMixing(X) + MS-LCP(X)
+This design allows the network to simultaneously capture spatial contrast infor-
+mation through MS-LCP and channel interactions through the dual-path.
+3.3
+Mathematical Analysis
+In this section, we provide a theoretical analysis of the proposed architecture.
+Following the analysis framework of [9], we show that the structure of our net-
+work inherently limits its ability to fit noise.
+For clarity of analysis, we consider a simplified network consisting of a single
+decoder block containing one LCP module. Batch normalization is omitted, fol-
+lowing the setting in [9] and we assume that the output vector has one channel
+for simplicity. The output of the network is represented as N(P), i.e.,
+  \l a bel {change
+d_matrix} N(\mathrm {\mathbf {P}})=\text {ReLU} (\mathrm {\mathbf {QUXC}})\mathrm {\mathbf {w}}
+.
+(1)
+Here P = (C, w) denotes the model parameters, where C ∈Rk×k represents a
+weight matrix of 1 × 1 convolution in LCP and w is a k-dimensional vector to
+produce the output. Q ∈Rd1×d1 denotes the subtraction between the identity
+matrix and pooling matrix, U ∈Rd1×d0 denotes the upsampling matrix, and X ∈
+Rd0×k represents the input matrix. Note that the spatial dimension (horizontal
+and vertical) is merged to one dimension (d0 for input and d1 for output). Under
+this formulation, the LCP operation can be interpreted as applying a fixed spatial
+operator that removes locally averaged components from the feature map. Then,
+the following theorem can be established.
+Theorem 1. Let η ∈Rd1 denote zero-mean Gaussian noise with covari-
+ance matrix σI, σ > 0. If k2 log(d0)/d1 ≤1/32, the following inequality
+holds with probability at least 1 −2d−k2
+0
+:
+min
+P ||N(P) −η||2
+2 ≥||η||2
+2
+
+1 −20k2 log(d0)
+d1
+
+7
+
+
+Table 1: Evaluation of the existing and proposed methods on three datasets in terms
+of PSNR (dB), SSIM, the number of parameters, and computational complexity. The
+best and second best methods are marked with bold faces and underlines, respectively.
+Results of other quality metrics can be found in Supplementary Material. ∗Since differ-
+ent networks are used for different images in the case of Devil [14], the average number
+of parameters is reported.
+Dataset
+DIP DeepDecoder (DD) ConvDecoder (CD) Devil
+Ours
+Set9
+PSNR
+30.21
+28.73
+30.03
+30.48
+30.55
+SSIM
+0.890
+0.839
+0.879
+0.890
+0.894
+Set12
+PSNR
+30.78
+29.02
+30.04
+30.48
+31.19
+SSIM
+0.898
+0.859
+0.877
+0.885
+0.900
+CBSD68
+PSNR
+28.77
+27.63
+28.58
+29.03
+29.10
+SSIM
+0.819
+0.609
+0.808
+0.820
+0.827
+# of Parameters
+2.30M
+0.10M
+0.89M
+0.34M∗0.23M
+Computational
+Complexity (GMac)
+7.27
+6.97
+59.10
+34.43
+4.08
+DIP (31.61/0.894)
+DeepDecoder (30.30/0.851)
+ConvDecoder (31.51/0.891)
+Devil (29.61/0.844)
+Ours (31.82/0.900)
+Ground Truth
+Fig. 3: Denoised results for image 0013 of the CBSD68 dataset [20]. PSNR (dB) and
+SSIM are shown. Our method is compared to DIP [23], DeepDecoder [9], ConvDe-
+coder [5], and Devil [14].
+The proof is provided in the Supplementary Material. This theorem suggests
+that a non-convolutional network with LCP has limited ability to approximate
+noise below a certain error bound. This error bound arises because Pool-DIP
+introduces no additional learnable spatial parameters beyond the 1 × 1 convo-
+lutions, which limits the representational capacity of the network. In particular,
+the fixed pooling-based spatial operator constrains the spatial degrees of freedom
+of the network, which contributes to its robustness against noise fitting.
+4
+Experiments
+4.1
+Setup
+We follow the experimental recipe of DIP [23]. For comparison, we consider
+the original DIP [23], DeepDecoder [9], ConvDecoder [5], and Devil [14], which
+selects network configurations based on image characteristics. The evaluation
+is conducted on commonly used datasets, including Set9 [4], Set12 [28], and
+CBSD68 [20]. By default, we use MS-LCP with two pooling scales (3 and 5)
+together with sinusoidal positional encoding. We use the Adam optimizer for
+training our network, where the decay parameter is set to 10−7. The results
+of the existing methods are reproduced using our implementation following the
+8
+
+
+Table 2: Performance comparison under fixed iteration settings. DIP, DD, CD, and
+Devil are evaluated at 3000 iterations, while Pool-DIP is evaluated at 1000 iterations
+due to its faster convergence. Training time denotes the optimization time per image
+measured on a single NVIDIA RTX PRO 6000 Blackwell GPU.
+Dataset
+DIP DeepDecoder (DD) ConvDecoder (CD) Devil Ours
+Set9
+PSNR
+29.59
+27.67
+26.80
+29.97 29.81
+SSIM
+0.863
+0.760
+0.756
+0.872 0.881
+Set12
+PSNR
+30.07
+26.86
+25.78
+29.89 30.80
+SSIM
+0.874
+0.730
+0.714
+0.877 0.890
+CBSD68
+PSNR
+28.20
+26.64
+25.91
+28.70 28.43
+SSIM
+0.793
+0.701
+0.682
+0.804 0.810
+Training Time (sec) 33.36
+14.52
+27.24
+24.86 13.64
+Table 3: Denoising performance for Pois-
+son noise on the Set9 dataset.
+DIP
+DD
+CD Devil Ours
+PSNR (dB) 33.31 33.88 36.95 32.68 37.26
+SSIM
+0.945 0.951 0.971 0.922 0.979
+Table 4: Effect of MS-LCP, evaluated on
+the Set9 dataset.
+PSNR (dB) SSIM
+w/o MS-LCP
+28.25
+0.829
+MS-LCP at encoder
+28.82
+0.850
+MS-LCP at decoder
+30.46
+0.892
+MS-LCP at both
+30.55
+0.894
+settings described in their respective papers. The number of training iterations
+is set to 5000 for all methods, and the best performance during the training
+process is recorded for all architectures to compare their maximum achievable
+performance. More details can be found in Supplementary Material.
+4.2
+Performance Comparison
+Tab. 1 presents quantitative comparisons on the three datasets together with the
+number of parameters and the model complexity, and Fig. 3 shows visual exam-
+ples of the restored images. Our architecture consistently achieves competitive
+denoising performance across all datasets while maintaining fewer parameters
+and low computational complexity.
+Compared to the best existing method, i.e., Devil, our method achieves
+slightly better performance while using 32% fewer parameters and lower compu-
+tational cost. Compared to DIP, our method achieves improved denoising per-
+formance while using 90% fewer parameters. Although DeepDecoder has fewer
+parameters, it exhibits higher computational complexity due to the use of large
+channel sizes in every block. A similar trend is observed for Devil, whose channel
+sizes are adaptively determined based on the frequency characteristics of the in-
+put image; as a result, the selected architecture may still involve relatively large
+channel widths, which increases the computational cost. ConvDecoder shows the
+highest computational complexity because of its convolution operations com-
+bined with large channel sizes similar to those used in DeepDecoder.
+9
+
+
+0
+5000
+10000
+15000
+20000
+Iterations
+15
+20
+25
+30
+PSNR (dB)
+PSNR
+HF Ratio
+HF Error Ratio
+0.1
+0.2
+0.3
+0.4
+Frequency Ratio
+(a) DIP
+0
+5000
+10000
+15000
+20000
+Iterations
+15
+20
+25
+30
+PSNR (dB)
+PSNR
+HF Ratio
+HF Error Ratio
+0.1
+0.2
+0.3
+0.4
+0.5
+Frequency Ratio
+(b) Pool-DIP (Ours)
+Fig. 4: Optimization dynamics of DIP and Pool-DIP for kodim03
+of the Set9
+dataset [4]. PSNR, high-frequency (HF) ratio of the reconstructed image, and HF
+error ratio of the reconstruction error during optimization.
+Tab. 2 further reports the results under fixed iteration settings. DIP, Deep-
+Decoder, ConvDecoder, and Devil are evaluated at 3000 iterations, and Pool-
+DIP is evaluated at only 1000 iterations due to its faster convergence (as shown
+in Fig. 4). Despite using substantially fewer optimization steps, Pool-DIP achieves
+competitive or superior performance across the datasets. In addition, Pool-DIP
+requires the shortest training time per image, demonstrating that the proposed
+architecture not only improves denoising performance but also provides efficient
+optimization behavior.
+These results demonstrate that the proposed non-convolutional architecture
+with MS-LCP achieves a favorable balance between denoising performance and
+computational efficiency.
+Additionally we evaluate the models under Poisson noise in Tab. 3. Pool-
+DIP achieves the best performance among the compared methods under Poisson
+noise.
+4.3
+Optimization Dynamics Analysis
+We examine the optimization behavior by jointly analyzing PSNR, the high-
+frequency (HF) ratio of the reconstructed image, and the high-frequency (HF)
+error ratio of the reconstruction error during training. The HF ratio is com-
+puted from the magnitude spectrum of the reconstructed image obtained via
+the 2D discrete Fourier transform, where the ratio of summed magnitudes in
+the higher half frequency range is measured. As shown in Fig. 4, the original
+DIP continuously increases the HF ratio of the reconstructed image as optimiza-
+tion progresses. However, the HF ratio of the reconstruction error also increases
+in later iterations, suggesting that many of these high-frequency components
+correspond to reconstruction errors rather than meaningful image structures.
+This behavior reflects the well-known noise-fitting phenomenon of DIP during
+prolonged optimization.
+In contrast, the proposed Pool-DIP exhibits a more stable optimization be-
+havior. While the reconstructed image gradually accumulates high-frequency
+10
+
+
+With LCP
+Without LCP
+Fig. 5: (Left) Ratio of the high-frequency com-
+ponents in the restored image during training
+with and without MS-LCP. (Right) Visualization
+of the effect of MS-LCP.
+DIP conv output
+LCP output
+LCP input
+Output without LCP
+Decoder
+Block 3
+Decoder
+Block 4
+Fig. 6: Visualization of activation
+maps of the convolution layer in
+DIP, the input to LCP (X), the
+output of LCP (X −Pool(X)),
+and the output of MS-LCP with-
+out LCP.
+components, the growth of the HF ratio is slower and the HF ratio of the re-
+construction error remains relatively stable throughout optimization. This ob-
+servation suggests that MS-LCP limits the growth of error for high-frequency
+components and results in a more stable spectral evolution during optimization,
+thereby reducing the tendency of DIP to fit noise during later iterations. This
+difference in spectral behavior highlights the role of MS-LCP in controlling the
+generation of high-frequency components during optimization.
+4.4
+Analysis of LCP
+To gain further insight into the role of MS-LCP, we analyze the spectral charac-
+teristics of reconstructed images during training. Fig. 5 (left) shows the evolution
+of HF ratio during optimization. Without MS-LCP, the reconstructed images
+tend to contain smaller high-frequency components, which is associated with
+degraded denoising performance, as reflected in Fig. 5 (right).
+To qualitatively illustrate the effect of MS-LCP, we visualize intermediate
+activation maps from the last two decoder blocks, as shown in Fig. 6. Compared
+with convolutional features in DIP, LCP responses emphasize sharper local struc-
+tures. When LCP is removed, the activations become spatially less coherent and
+lose fine edge structures, indicating the role of LCP in enhancing local contrast.
+We also provide a quantitative comparison in Tab. 4. A non-convolutional
+network without MS-LCP shows a noticeable drop in performance. While MS-
+LCP improves performance when applied in either the encoder or decoder, the
+improvement is more pronounced when it is placed in the decoder. This obser-
+vation suggests that MS-LCP contributes to extracting high-frequency content
+information (e.g., edges) during the upsampling process in the decoder.
+These results indicate that pooling-based contrast modeling helps enhance lo-
+cal contrast and stabilizes the reconstruction process. Without MS-LCP, restor-
+ing high-frequency details becomes more difficult due to the absence of both
+contextual modeling and a mechanism for emphasizing local contrast.
+11
+
+
+Table 5: Denoising performance of our method on the real-world PolyU dataset com-
+pared to DIP [23], Devil [14], and zero-shot single-image denoising methods, including
+Self2Self (S2S) [18], Zero-shot Noise2Noise (ZS-N2N) [16], and Pixel2Pixel (P2P) [15].
+DIP Devil S2S ZS-N2N P2P Ours
+PSNR (dB) 38.34 37.45 37.70
+35.84
+37.34 38.42
+SSIM
+0.973 0.961 0.956
+0.937
+0.960 0.974
+4.5
+Real-world Dataset
+We additionally evaluate our method on the real-world dataset, PolyU [26], which
+has 100 noisy-clean image pairs. In this setting, we also provide comparisons with
+representative zero-shot single-image denoising methods: Self2Self [18], Zero-shot
+Noise2Noise [16], and Pixel2Pixel [15]. All results are reproduced using the pub-
+licly available source codes. Devil [14] determines the channel width for each
+image using a frequency-based classifier. Since this component is not available
+in the public implementation, we instead use its 64-channel variant, which has
+a similar number of parameters to our model. As shown in Tab. 5, Pool-DIP
+achieves the best performance among the compared methods, while several ex-
+isting approaches perform comparably to or worse than DIP in this setting.
+Among the zero-shot denoising methods, Self2Self achieves the highest PSNR
+but requires multiple forward passes, while Pixel2Pixel requires additional pre-
+processing. ZS-N2N provides faster inference but yields lower denoising perfor-
+mance. This result suggests that the proposed architecture generalizes well to
+real-world noise beyond synthetic noise settings.
+4.6
+Ablation Study
+We conduct additional experiments to analyze the impact of key design choices
+in our Pool-DIP architecture. All experiments are conducted on the Set9 dataset.
+Positional Encoding, Dual-path, Coefficient α. Tab. 6 highlights the im-
+pact of positional encoding, Dual-path, and learnable coefficient α. When all
+components are removed, the overall performance is decreased noticeably. Dual-
+path (i.e., the residual connection) improves performance, particularly in SSIM,
+as it enables the network to capture image characteristics through learnable
+channel interactions via 1×1 convolution. Employing α provides the most notice-
+able improvement, as it aggregates the outputs of all LCP scales while weighting
+them according to their relative importance. Concatenation could serve as an
+alternative approach, but it increases the number of parameters.
+Positional encoding further improves performance, as it accelerates the con-
+vergence of high-frequency details (see more details in the next subsection) and
+injects positional information into the network. As shown in Fig. 7 (left), posi-
+tional encoding aids in recovering high-frequency details.
+Fig. 8 shows the average values of α for two representative images from the
+CBSD68 dataset: 0047, which predominantly contains low-frequency content,
+12
+
+
+Table 6: Ablation on positional encod-
+ing (PE), Dual-path, and coefficient α on
+Set9.
+PE Dual-path α PSNR (dB) SSIM
+-
+-
+-
+29.48
+0.874
+-
+-
+✓
+30.28
+0.887
+-
+✓
+-
+29.83
+0.880
+-
+✓
+✓
+30.23
+0.886
+✓
+-
+-
+30.02
+0.885
+✓
+-
+✓
+30.29
+0.888
+✓
+✓
+-
+30.15
+0.890
+✓
+✓
+✓
+30.55
+0.894
+Table 7: Performance depending on the
+location of the positional encoding.
+PSNR (dB) SSIM
+In both
+30.10
+0.884
+In decoder
+29.93
+0.880
+In encoder
+30.55
+0.894
+Without Positional Encoding 
+(31.25 / 0.859) 
+With Positional Encoding 
+(31.39 / 0.827)
+Fig. 7: (Left) Visualization of the effect
+of positional encoding. PSNR (dB) and
+SSIM are also shown. (Right) Impact of
+positional encoding across frequency re-
+gions for kodim12 in the Set9 dataset.
+0047
+𝜶𝟏: 0.38, 𝜶𝟐: 0.62
+0052
+𝜶𝟏: 0.58, 𝜶𝟐: 0.42
+Fig. 8: Learned values of α for images
+containing different frequency character-
+istics.
+and 0052, which exhibits richer high-frequency details. We observe that the
+pooling scale with larger kernel size (5) receives higher weight (α1 < α2) in 0047,
+while the smaller pooling size (3) is more emphasized in 0052. This observation
+suggests that the network tends to emphasize different spatial scales depending
+on the frequency characteristics of the input.
+Frequency Analysis of Positional Encoding. We analyze the impact of
+positional encoding across different frequency bands in the reconstruction er-
+ror. Specifically, we compute the reconstruction error—the difference between
+the ground-truth and denoised images—and decompose it into low, mid, and
+high-frequency components based on the Fourier magnitude spectrum. As shown
+in Fig. 7 (right), including positional encoding noticeably reduces the reconstruc-
+tion error in the high-frequency band. This suggests that positional encoding
+helps the network recover fine image details, which are often lost during denois-
+ing.
+Location of Positional Encoding. We also evaluate the performance when
+positional encoding is applied exclusively to the decoder or simultaneously to
+both encoder and decoder. As shown in Tab. 7, positional encoding is not bene-
+ficial when it is applied only to the decoder. This may occur because introducing
+additional high-frequency components only during the restoration stage encour-
+ages the network to generate high-frequency signals that are not sufficiently con-
+13
+
+
+DIP (40.34 / 0.992)
+DIP (28.83 / 0.948)
+Devil (37.41 / 0.979)
+Devil (29.65 / 0.939)
+Ours (42.09 / 0.993)
+Ours (30.05 / 0.973)
+Fig. 9: Results of image inpainting.
+Table
+8:
+Performance
+of
+super-
+resolution on the Set14 dataset.
+Scale
+DIP Devil Ours
+2× PSNR (dB) 29.04 29.08 29.05
+SSIM
+0.934 0.919 0.938
+4× PSNR (dB) 25.09 25.17 25.19
+SSIM
+0.798 0.803 0.800
+strained by earlier feature representations, making the model more susceptible
+to noise fitting.
+4.7
+Other Restoration Tasks
+To evaluate the applicability of Pool-DIP beyond denoising, we conduct exper-
+iments on two additional image restoration tasks: super-resolution and image
+inpainting. We incorporate an additional pooling scale (7) to capture contex-
+tual information over larger spatial regions, which is particularly useful for these
+restoration tasks. For Devil, we use the 64-channel variant as in Sec. 4.5 for a
+fair comparison.
+Super-resolution. Tab. 8 shows the results of DIP, Devil, and our Pool-DIP on
+the Set14 dataset [27]. Our Pool-DIP achieves competitive performance, showing
+the highest or second-highest performance across both super-resolution scales.
+Devil also shows strong performance; however, its SSIM for 2× upscaling is lower
+than the other methods.
+Image Inpainting. We employ two representative inpainting samples used in
+DIP [23]: kate and vase. As shown in Fig. 9, our Pool-DIP produces high-quality
+reconstructions on both samples by restoring fine structures and edges more
+effectively than the other methods.
+5
+Conclusion
+In this paper, we showed that incorporating multi-scale contextual informa-
+tion via parameter-free pooling operations into non-convolutional architectures
+can provide a robust and efficient alternative to conventional convolutional DIP
+models. Our Pool-DIP achieves competitive or improved performance compared
+to convolution-based architectures. We also provided theoretical analysis sup-
+porting the noise-fitting resistance of the proposed architecture. Our findings
+suggest that non-convolutional architectures equipped with structured pooling
+mechanisms can serve as effective and lightweight alternatives for DIP. Fur-
+thermore, our spectral analysis reveals that Pool-DIP stabilizes the growth of
+14
+
+
+high-frequency components during optimization, which helps mitigate the noise-
+fitting behavior commonly observed in DIP.
+References
+1. Arican, M.E., Kara, O., Bredell, G., Konukoglu, E.: Isnas-dip: Image-specific neu-
+ral architecture search for deep image prior. In: Proceedings of the IEEE/CVF
+Conference on Computer Vision and Pattern Recognition. pp. 1960–1968 (2022)
+2. Chakrabarty, P., Maji, S.: The spectral bias of the deep image prior. In: Bayesian
+Deep Learning Workshop and Advances in Neural Information Processing Systems
+(NeurIPS) (2019)
+3. Chen, Y.C., Gao, C., Robb, E., Huang, J.B.: Nas-dip: Learning deep image prior
+with neural architecture search. In: Proceedings of the European Conference on
+Computer Vision. pp. 442–459 (2020)
+4. Dabov, K., Foi, A., Katkovnik, V., Egiazarian, K.: Image denoising by sparse 3-d
+transform-domain collaborative filtering. IEEE Transactions on Image Processing
+16(8), 2080–2095 (2007)
+5. Darestani, M.Z., Heckel, R.: Accelerated mri with un-trained neural networks.
+IEEE Transactions on Computational Imaging 7, 724–733 (2021)
+6. Dosovitskiy, A., Beyer, L., Kolesnikov, A., Weissenborn, D., Zhai, X., Unterthiner,
+T., Dehghani, M., Minderer, M., Heigold, G., Gelly, S., Uszkoreit, J., Houlsby, N.:
+An image is worth 16x16 words: Transformers for image recognition at scale. In:
+Proceedings of the International Conference on Learning Representations (2021),
+https://openreview.net/forum?id=YicbFdNTTy
+7. Gandelsman, Y., Shocher, A., Irani, M.: “double-dip": unsupervised image decom-
+position via coupled deep-image-priors. In: Proceedings of the IEEE/CVF Confer-
+ence on Computer Vision and Pattern Recognition. pp. 11026–11035 (2019)
+8. Gu, S., Timofte, R., Van Gool, L.: Integrating local and non-local denoiser priors
+for image restoration. In: Proceedings of the International Conference on Pattern
+Recognition. pp. 2923–2928 (2018)
+9. Heckel, R., Hand, P.: Deep decoder: Concise image representations from untrained
+non-convolutional networks. In: Proceedings of the International Conference on
+Learning Representations (2019)
+10. Heckel, R., Soltanolkotabi, M.: Denoising and regularization via exploiting the
+structural bias of convolutional generators. In: Proceedings of the International
+Conference on Learning Representations (2020)
+11. Ho, K., Gilbert, A., Jin, H., Collomosse, J.: Neural architecture search for deep
+image prior. Computers & graphics 98, 188–196 (2021)
+12. Li, T., Wang, H., Zhuang, Z., Sun, J.: Deep random projector: Accelerated deep
+image prior. In: Proceedings of the IEEE/CVF Conference on Computer Vision
+and Pattern Recognition. pp. 18176–18185 (2023)
+13. Liu, J., Sun, Y., Xu, X., Kamilov, U.S.: Image restoration using total variation
+regularized deep image prior. In: Proceedings of the International Conference on
+Acoustics, Speech and Signal Processing. pp. 7715–7719 (2019)
+14. Liu, Y., Li, J., Pang, Y., Nie, D., Yap, P.T.: The devil is in the upsampling: Archi-
+tectural decisions made simpler for denoising with deep image prior. In: Proceed-
+ings of the IEEE/CVF International Conference on Computer Vision. pp. 12408–
+12417 (2023)
+15
+
+
+15. Ma, Q., Jiang, J., Zhou, X., Liang, P., Liu, X., Ma, J.: Pixel2pixel: A pixelwise
+approach for zero-shot single image denoising. IEEE Transactions on Pattern Anal-
+ysis and Machine Intelligence (2025)
+16. Mansour, Y., Heckel, R.: Zero-shot noise2noise: Efficient image denoising without
+any data. In: Proceedings of the IEEE/CVF Conference on Computer Vision and
+Pattern Recognition. pp. 14018–14027 (2023)
+17. Mataev, G., Milanfar, P., Elad, M.: Deepred: Deep image prior powered by red.
+In: Proceedings of the IEEE/CVF International Conference on Computer Vision
+Workshops (2019)
+18. Quan, Y., Chen, M., Pang, T., Ji, H.: Self2self with dropout: Learning self-
+supervised denoising from single image. In: Proceedings of the IEEE/CVF Confer-
+ence on Computer Vision and Pattern Recognition. pp. 1890–1898 (2020)
+19. Rahaman, N., Baratin, A., Arpit, D., Draxler, F., Lin, M., Hamprecht, F., Bengio,
+Y., Courville, A.: On the spectral bias of neural networks. In: Proceedings of the
+International Conference on Machine Learning. pp. 5301–5310 (2019)
+20. Roth, S., Black, M.J.: Fields of experts. International Journal of Computer Vision
+82, 205–229 (2009)
+21. Sun, Z., Latorre, F., Sanchez, T., Cevher, V.: A plug-and-play deep image prior.
+In: Proceedings in IEEE International Conference on Acoustics, Speech and Signal
+Processing. pp. 8103–8107 (2021)
+22. Tancik, M., Srinivasan, P., Mildenhall, B., Fridovich-Keil, S., Raghavan, N., Sing-
+hal, U., Ramamoorthi, R., Barron, J., Ng, R.: Fourier features let networks learn
+high frequency functions in low dimensional domains. Advances in Neural Infor-
+mation Processing Systems 33, 7537–7547 (2020)
+23. Ulyanov, D., Vedaldi, A., Lempitsky, V.: Deep image prior. In: Proceedings of the
+IEEE/CVF Conference on Computer Vision and Pattern Recognition. pp. 9446–
+9454 (2018)
+24. Vaswani, A., Shazeer, N., Parmar, N., Uszkoreit, J., Jones, L., Gomez, A.N., Kaiser,
+L.u., Polosukhin, I.: Attention is all you need. In: Advances in Neural Information
+Processing Systems. vol. 30 (2017)
+25. Wang, H., Li, T., Zhuang, Z., Chen, T., Liang, H., Sun, J.: Early stopping for deep
+image prior. Transactions on Machine Learning Research (2023)
+26. Xu, J., Li, H., Liang, Z., Zhang, D., Zhang, L.: Real-world noisy image denoising:
+A new benchmark. arXiv preprint arXiv:1804.02603 (2018)
+27. Zeyde, R., Elad, M., Protter, M.: On single image scale-up using sparse-
+representations. In: Proceedings of the International Conference on Curves and
+Surfaces. pp. 711–730. Springer (2010)
+28. Zhang, K., Zuo, W., Chen, Y., Meng, D., Zhang, L.: Beyond a gaussian denoiser:
+Residual learning of deep cnn for image denoising. IEEE Transactions on Image
+Processing 26(7), 3142–3155 (2017)
+16

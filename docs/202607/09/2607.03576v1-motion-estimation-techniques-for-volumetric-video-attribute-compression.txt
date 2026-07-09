@@ -1,0 +1,1835 @@
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021
+1
+Motion Estimation Techniques for Volumetric Video
+Attribute Compression
+Haoran Hong, Eduardo Pavez, Antonio Ortega, Ryosuke Watanabe, Keisuke Nonaka
+Abstract—Point cloud compression relies on techniques to
+compress both geometry and attributes. Motion-based approaches
+for dynamic solid point cloud geometry compression within the
+geometry-based point cloud compression (G-PCC) framework
+have achieved significant reductions in geometry rate. However,
+motion-based techniques for attribute compression remain under-
+explored, making it challenging to achieve significant reductions
+in the temporal redundancy of attributes. Firstly, this paper
+proposes a geometry-based inter-coding scheme to compress the
+attributes of dynamic solid point clouds. Secondly, a graph-based
+motion-estimation scheme for point-cloud attribute compression
+is proposed. Thirdly, an interpolation-free fractional-voxel motion
+estimation method is proposed to refine motion accuracy to
+fractional-voxel precision. Our experimental results on the MPEG
+point cloud dataset show that the proposed scheme outperforms
+G-PCC, GeS-TM, and V-PCC in lossless and lossy geometry
+conditions. We achieve average bitrate savings of 55.3%, 42.3%,
+and 16.5% over G-PCC, GeS-TM, and V-PCC, respectively, under
+lossy-geometry conditions.
+Index Terms—Dynamic point clouds, volumetric video, motion
+estimation, inter-prediction
+I.
+INTRODUCTION
+Recent progress in 3D acquisition and reconstruction tech-
+nology enables the capture of 3D scenes, resulting in volu-
+metric videos with high frame rates and resolutions. These
+volumetric videos have been applied across various fields,
+including 3D immersive telepresence, autonomous vehicle
+navigation, gaming, and animation [1], [2]. Point clouds,
+collections of points, each with its position (geometry) and
+associated attributes (e.g., YUV or RGB color), are well-suited
+for volumetric videos since they can represent arbitrary objects
+and scenes in three-dimensional space. Temporally acquired
+point clouds, arranged as an ordered set of frames accord-
+ing to timestamps, are called dynamic point clouds. When
+those points are dense enough to form continuous surfaces,
+dynamic point clouds are called dynamic solid point clouds
+[3] (DSPCs). DSPCs in raw format would require a huge
+amount of bandwidth for transmission. Thus, there has been
+a significant interest in point cloud compression techniques,
+Haoran Hong, Eduardo Pavez and Antonio Ortega are with the University
+of Southern California, 3740 McClintock Ave., Los Angeles, CA 90089-2564,
+USA (e-mail: haoranho@usc.edu; pavezcar@usc.edu; aortega@usc.edu).
+Ryosuke Watanabe and Keisuke Nonaka are with KDDI Research,
+Inc.,
+2-1-15
+Ohara,
+Fujimino,
+Saitama,
+356-8502,
+Japan
+(e-mail:
+ru-
+watanabe@kddi.com; ki-nonaka@kddi.com).
+leading to two MPEG standardization efforts [2], [4]: Video-
+based point cloud compression (V-PCC) and geometry-based
+point cloud compression (G-PCC).
+In V-PCC [4], 3D DSPC are converted into 2D videos,
+which are then compressed using conventional video codecs,
+such as HEVC and VVC. Key benefits of V-PCC include
+its reliance on existing 2D compression techniques to re-
+move temporal redundancies among frames and its ability
+to incorporate future video coding innovations to further
+enhance performance. However, 3D point clouds are usually
+a sampled representation of complex, non-developable sur-
+faces whose geometry cannot be perfectly unfolded into 2D
+without distortion. Converting them into 2D atlases requires
+patch segmentation and projection that locally approximate the
+surface as piecewise planar regions. These segmentation-and-
+projection operations can introduce point loss and temporal
+inconsistencies across frames, making lossless compression
+inefficient when those lost and inconsistent points must be
+preserved. Normal-based segmentation cannot be consistent
+across frames because DSPCs undergo non-rigid deformation,
+self-occlusion, and viewpoint-dependent sampling changes,
+resulting in variations in surface normals and local topology
+over time. As a result, regions that form a single patch in
+one frame may be split into multiple patches in the next,
+or vice versa. This temporal inconsistency disrupts 3D voxel
+correlations and introduces artificial motion discontinuities,
+even when the underlying 3D motion is smooth. The problem
+is further amplified by patch packing during projection, which
+arranges patches in a 2D atlas in a descending order of patch
+size. This may result in two spatially adjacent or motion-
+corresponding regions in 3D being placed at unrelated 2D
+locations in different frames. Consequently, smooth 3D motion
+may appear to exhibit abrupt spatial jumps in 2D video. Such
+discontinuities degrade inter-frame efficiency in HEVC/VVC,
+leading to unnecessary bitrate consumption due to both poorer
+prediction and lossless motion vector encoding of non-smooth
+motion fields.
+In G-PCC, point clouds are directly encoded using 3D
+compression techniques, eliminating the need for a 3D-to-2D
+projection. G-PCC was initially used for static point clouds
+and dynamically acquired LiDAR point clouds, leading to the
+development of several intra-coding approaches for attribute
+data [5–10]. Following the release of the second version of
+G-PCC, an exploration [11], [12] to extend it for attribute
+compression in DSPCs was initiated. This led to the MPEG
+geometry-based solid test model (GeS-TM), in which block-
+based motion estimation (ME) and Region-Adaptive Hierar-
+chical Transform (RAHT)-based motion compensation (MC)
+[13] strategies are proposed for attribute inter-coding, resulting
+arXiv:2607.03576v1  [eess.IV]  3 Jul 2026
+
+
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021
+2
+in significant bitrate savings compared to intra-only G-PCC.
+However, current G-PCC inter-coding techniques have major
+limitations. In some approaches [14], [15], inaccurate color
+compensation may occur because integer-precision motion is
+independently computed for each block based solely on geom-
+etry, i.e., without (i) utilizing color information, (ii) considering
+motion correlation across blocks, or (iii) allowing fractional
+motion displacements. Second, systems that use both color and
+geometry for MC, such as GeS-TM using RAHT [11], [13],
+[16], [17], apply MC only in the top few levels of the octree
+hierarchy, i.e., on a coarsely approximated version of the point
+cloud, which makes it inherently less accurate than MC on the
+original full-resolution point cloud.
+To address these limitations, we propose novel ME and MC
+tools for inter-coding. Our ME scheme achieves accurate fine-
+resolution MC by using a strategy that is essentially equivalent
+to ME after super-resolving the geometry and color. In our
+approach, MVs for all blocks are jointly estimated in a pro-
+gressive manner. First, we define a graph-based integer voxel
+ME (IvME), combining block-wise matching based on both
+color and geometry with a graph-based motion smoothing that
+constrains motion to be smooth across blocks. This is followed
+by a locally refined IvME and interpolation-free fractional
+voxel motion estimation (IF-FvME). With our proposed FvME,
+fractional voxel displacements can be estimated without first
+generating (via interpolation) a higher resolution point cloud.
+Our proposed ME/MC scheme can be combined with existing
+G-PCC transform methods.
+Our work in this paper builds on our preliminary work
+[18], [19], but introduces major improvements. In [18], we
+proposed a block-based ME scheme in which the MV for each
+block is estimated independently. However, this independent
+estimation fails to capture spatial correlations and interactions
+among neighboring blocks. As a result, the estimated MVs lack
+local consistency, leading to visually and structurally undesir-
+able artifacts in the motion-displaced point cloud, including
+tearing, cracking, and shape distortions, particularly at block
+boundaries. In this paper, we propose a graph-based motion
+estimation approach that estimates block motion globally by
+introducing a graph-based penalty term that promotes smooth,
+coherent MVs across neighboring blocks, thereby achieving
+more accurate motion compensation.
+In [19], we introduced an interpolation-based
+FvME
+method, where fractional-voxel motion compensation is per-
+formed by explicitly interpolating reference samples and evalu-
+ating the FvMC error at discrete candidate fractional positions.
+Although effective, this approach requires explicit sub-voxel
+interpolation and exhaustive FvMC error evaluation for all
+candidate fractional displacements, which becomes expensive
+when finer fractional precision is desired. In this paper, we pro-
+pose an interpolation-free (IF) FvME scheme that reformulates
+fractional motion estimation as a global optimization problem
+over interpolation coefficients. Starting from the integer motion
+field obtained by the proposed graph-based IvME, each block
+first collects 27 local integer-voxel MC predictors from the
+neighborhood around its IvMV. The fractional-voxel predictor
+is then generated as a weighted combination of these IvMC
+predictors, where the weights correspond to interpolation coef-
+ficients rather than explicitly interpolated sub-voxel samples.
+Instead of directly searching for fractional displacement for
+each block, IF-FvME optimizes the interpolation coefficients
+by minimizing an MC residual cost. This formulation provides
+fractional-precision MC without the computational overhead
+of explicit sub-voxel interpolation and exhaustive FvMC error
+evaluation. It also enables finer motion precision, e.g.,
+1
+4-
+voxel motion, with significantly lower complexity than [19].
+The proposed IF-FvME can be viewed as a 3D point-cloud
+generalization of interpolation-free fractional motion estima-
+tion in conventional video coding, where the fractional motion
+vector is inferred from a local model of the MC error surface
+rather than by direct fractional interpolation [20]. Furthermore,
+unlike our previous approach [19], which operated on a
+precomputed IvMV database generated by exhaustive search
+[21], the proposed IF-FvME is integrated with our graph-
+based IvME scheme. Together, they form a unified integer-
+to-fractional motion estimation pipeline that jointly exploits
+color-geometry matching, global motion-field optimization,
+and coding-oriented residual regularization.
+Unlike in [18], [19], where we used transform coding based
+on the graph Fourier transform, our proposed IvME and IF-
+FvME schemes are combined with the G-PCC [22] transform
+coding framework and can operate with either lossless or lossy
+geometry coding. The differences between [18], [19] and this
+work are summarized in Table I. Our main contributions are:
+•
+A voxel-domain attribute inter-prediction pipeline in-
+cluding fractional precision ME and MC. This pipeline
+is integrated into the latest G-PCC codec to encode
+attributes on either lossless or lossy coded geome-
+try, demonstrating the potential of geometry-based ap-
+proaches for point cloud attribute coding (Section III).
+•
+IvME: a graph-based motion estimation scheme for
+DSPC attribute compression that promotes motion
+smoothness across blocks (Section IV).
+•
+FvME: an interpolation-free fractional-precision ME
+scheme for DSPC attribute compression that avoids ex-
+plicit point-cloud super-resolution and optimizes block-
+wise FvMVs in a continuous interpolation coefficient do-
+main to improve residual coding efficiency (Section V).
+•
+An experimental setup that isolates the effect of lossy
+geometry coding in attribute compression by comparing
+the proposed methods under different types of geometry
+compression, thus providing a fair comparison with the
+state-of-the-art in attribute coding (Section VI).
+We achieve significant gains over state-of-the-art V-PCC, G-
+PCC, and GeS-TM under lossy and lossless geometry coding
+conditions (Section VI), as well as our earlier work [18], [19].
+II.
+RELATED WORK
+DSPCs represent object surfaces that can be deformed
+and translated over time, so the number of occupied voxels
+and their distribution within a 3D volume can vary. These
+temporal changes and irregular spatial sampling complicate
+the establishment of a simple correspondence between voxels
+across consecutive frames, making the development of ME and
+MC techniques for G-PCC more challenging than for V-PCC.
+
+
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021
+3
+In particular, while conventional video codecs estimate motion
+by comparing color information from blocks of the same size
+(same number of pixels), an ME estimation algorithm for G-
+PCC must compare regions where voxels are sparse in 3D, and
+where their numbers and positions differ across consecutive
+frames due to non-rigid motion. Thus, to successfully achieve
+ME/MC for PCs, both color and geometry matching should
+be considered. Next, we review existing ME and MC schemes
+for 3D point clouds.
+A. Motion Estimation (ME)
+Block matching based ME methods for 3D point clouds [25–
+27] mimic video coding approaches by using 3D block-wise
+comparison. Each predicted block is exhaustively compared
+with all candidate blocks using a color and geometry distance
+criterion. The block with the minimum distance is considered
+the best match, and the corresponding displacement is the
+estimated motion. Since the ME distance criterion depends on
+two distinct point cloud characteristics (color and geometry),
+optimization involves evaluating all candidate displacements
+via exhaustive search. This leads to high computational com-
+plexity, making such methods potentially prohibitive for large
+search ranges. Furthermore, these methods estimate motion
+independently for each block, which can lead to inconsis-
+tent motion vectors across neighboring blocks and blocking
+artifacts, thereby reducing coding efficiency. Our proposed
+approach overcomes the limitations of these methods by uti-
+lizing geometry and color matching in two separate stages to
+reduce complexity, enable practical fractional ME, and produce
+spatially coherent motion across blocks.
+In point registration-based ME, two types of registration
+techniques are considered. In graph matching [28], spectral
+matching is applied between the sampled voxels in the ref-
+erence and predicted frames to establish voxel-wise corre-
+spondence. The motion for the remaining voxels is computed
+based on their positions relative to the globally matched
+sampled voxels, subject to a geometry-smoothness constraint.
+Geometric-ICP applied to each prediction unit [14], [15], [29]
+extracts the nearest point set and estimates rigid motion (e.g.,
+rotation and translation) iteratively. For efficient signaling,
+the rotation matrix is represented as a quaternion. Note that
+both point registration techniques ignore color during ME,
+which may lead to suboptimal motion estimates for color
+prediction. Moreover, these approaches do not guarantee a
+smooth motion field. While these methods rely solely on
+geometry and estimate each block’s motion independently,
+our graph-based motion estimation scheme integrates a color-
+geometry similarity metric and globally optimizes block-wise
+motion field through a regularization term. This yields motion
+vectors that are not only better aligned with color attributes
+but are also spatially coherent, resulting in a more reliable
+initialization for subsequent color-driven refinement.
+Recently, learning-based ME has also been explored for
+point cloud video compression. U-Motion [30] proposes a
+learned point cloud video codec with a U-structured, multiscale
+inter-frame prediction module, in which explicit motion esti-
+mation and compensation are performed in the latent feature
+domain. Although this learned framework improves temporal
+prediction by exploiting multiscale motion features, it relies on
+neural network training, latent-domain motion representations,
+and learned entropy models, which makes it less interpretable
+and less directly controllable than explicit optimization-based
+ME. In addition, the estimated motion is implicitly optimized
+via rate-distortion training rather than by directly enforcing
+block-level color-geometry matching and spatial smoothness
+constraints.
+B. Motion Compensation (MC)
+Transform-domain MC predicts the transform coefficients of
+the current frame from those of motion-compensated frames.
+Since RAHT is the most widely adopted transform in attribute
+coding, e.g., in G-PCC, several transform-domain MC schemes
+[11], [13], [16], [17] have been developed based on RAHT.
+However, due to geometric discrepancies and the exponentially
+increasing signaling overheads, RAHT-domain MC is gener-
+ally restricted to the upper levels of the octree, which limits
+its benefits for coding because coarser compensation results in
+higher residual energy than finer compensation.
+Alternatively,
+in
+voxel-domain
+MC
+methods,
+motion-
+displaced reference point attributes are mapped onto the cur-
+rent frame using nearest neighbor projections. In previous work
+[18], [19], we show that gains over intra-coding are not guaran-
+teed for all blocks undergoing inter-coding. Many blocks may
+suffer from degraded prediction quality, resulting in overall
+rate-distortion loss. Previous work has addressed this issue
+by allowing per-block inter- and intra-mode decisions [31].
+As an alternative, filtering approaches have been proposed to
+improve the quality of the predictors, by averaging attributes
+from multiple nearest neighbor voxels for MC [28] or applying
+the spatial-temporal Gaussian Markov random field (GMRF)
+model of [32] to the nearest neighbor predictors [14]. Both can
+be viewed as techniques using weighted averaging of multiple
+IvMCs. However, the effectiveness of GMRF-based prediction
+strongly depends on how well the underlying color covariance
+structure conforms to the assumed GMRF, which is constructed
+solely from geometric information and may not accurately
+capture attribute variation. In our previous work [19], we
+proposed adaptive weighted averaging of multiple reference
+attributes through fractional voxel interpolation. While this
+improves prediction quality, it comes at the cost of signifi-
+cant computational complexity. Each finer fractional precision
+increases the number of fractional voxels by a factor of eight,
+requiring repeated nearest-neighbor searches through kd-tree
+traversals.
+Our proposed interpolation-free FvME generalizes existing
+techniques for weighted averaging of IvMCs. It uses the fact
+that the unknown color of a fractional voxel is estimated
+through trilinear interpolation from its surrounding integer-
+voxel neighbors, where the interpolation weights depend on the
+fractional motion vector. Rather than performing voxel interpo-
+lation for each candidate fractional motion vector and selecting
+the best match, we directly estimate the optimal real-valued
+interpolation weights on a convex set, then compute the best
+fractional displacement that matches them. This perspective
+
+
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021
+4
+Techniques
+IvME
+FvME
+Residue coding
+[19]
+Database motion [21]
+Interpolation-based
+GFT[23]+RLGR[24]
+[18]
+Block based Color-ICP
+Adaptive graph filtering
+GFT[23]+RLGR[24]
+Proposed
+Graph-based isometric ME
+Interpolation-free
+G-PCC[22]
+TABLE I: Comparison of our proposed approach with our previous approaches in [19] and [18]
+results in lower energy residuals and a more computationally
+efficient FvME, because no explicit interpolation or costly
+spatial searches are required.
+Fig. 1: The pipeline of the motion-based inter-coding scheme. The blue
+boxes represent the proposed inter-prediction techniques. Grey boxes represent
+functions identical to those in G-PCC.
+III.
+PIPELINE OVERVIEW
+We focus on 3D block-based ME/MC for attribute com-
+pression within the G-PCC framework. As in G-PCC and V-
+PCC, the geometry is encoded first, followed by recoloring
+and color compression. Our proposed scheme is compatible
+with both lossless and lossy geometry coding and assumes
+that the decoded geometry is available at the encoder and the
+decoder. When geometry is encoded losslessly, the original
+point-to-color correspondence remains intact, and recoloring
+is unnecessary. However, under lossy geometry coding, both
+the number and spatial distribution of points may change,
+disrupting the original one-to-one mapping between points
+and their associated color attributes. Thus, a recoloring step
+transfers color values from the original point cloud to the new
+point cloud obtained from reconstructed (coded) geometry.
+Next, we provide an overview of our approach (Figure 1).
+1) Block partition: A dynamic point cloud is a sequence of
+T point clouds, each of which is referred to as a frame. The
+frame at time t has Nt points, which can be represented as
+an unordered point set Pt. Each point is p ∈Pt is denoted
+by its Cartesian coordinates p = (x, y, z). Its associated color
+attribute is denoted by c(p) in YUV format. The predicted (or
+current) frame Pt is partitioned into non-overlapping 3D blocks
+(e.g., using an octree). The b-th block currently being predicted
+is denoted by the set Pb ⊆Pt. The reference frame is the
+previously coded frame, denoted by Pt−1. For each block, we
+estimate an isometry-regularized motion, defined as a block-
+level translation that approximates isometry deformation. This
+motion provides a physically plausible alignment that closely
+approximates the underlying motion between Pb and a corre-
+sponding region in Pt−1, and serves as the basis for subsequent
+motion estimation tailored for color prediction.
+2) Graph-based
+integer
+voxel
+motion
+estimation
+(Sec-
+tion IV-C): The first stage is graph-based integer voxel motion
+estimation (IvME), which formulates motion estimation as
+a global optimization problem over all blocks. Specifically,
+IvME performs a color-aware ICP search over a large region
+in the reference frame, while incorporating a graph-based regu-
+larization term to enforce structural consistency. The objective
+function consists of a fidelity term and a regularization term.
+The fidelity term measures geometric and color consistency
+between the current and reference frames, while the regular-
+ization promotes smooth motion across blocks and preserves
+structural consistency during fitting.
+3) Locally-refined integer voxel motion estimation (Sec-
+tion IV-D): In the previous step, block motion is estimated over
+a large candidate region by jointly considering geometry, color,
+and graph-based smoothness. However, while jointly using
+geometry and color is beneficial for recovering a physically
+meaningful and realistic motion field, attribute coding ulti-
+mately benefits from minimizing the color prediction residual
+in the reconstructed reference. Thus, to further improve graph-
+based motion in terms of color prediction, we propose a
+Locally Refined IvME that starts from the estimate from the
+previous step and refines it within a small neighborhood so
+as to be locally optimal for color prediction, while largely
+preserving the geometric consistency and cross-block smooth-
+ness imposed by the previous step. Furthermore, this two-step
+strategy is computationally more efficient than exhaustively
+optimizing a color-only objective over the full search region,
+while still exploiting geometry, color, and cross-block smooth-
+ness to obtain a physically meaningful initialization [14], [25].
+4) Integer voxel motion compensation (Section IV-B): After
+IvME, the predicted block is displaced by m within the recon-
+structed reference frame. MC is then carried out by locating,
+for each voxel in the current frame, the nearest neighbor at
+the displaced position in the coded reference frame and using
+the attributes of the nearest motion-displaced neighbors to
+predict the current block, thereby yielding IvMC. Note that
+the geometry for Pt and Pt−1 is available at the decoder and
+therefore given the motion m for any point in a block in Pt,
+it is possible to search for the nearest points in Pt−1.
+5) Fractional voxel motion estimation and compensation
+(Section V): FvME is an optional refinement tool designed
+to improve the resolution or precision of IvMVs from integer-
+voxel accuracy to fractional-voxel accuracy. Instead of explic-
+itly generating sub-voxel point-cloud samples and evaluating
+the FvMC error at each candidate fractional position, the
+proposed interpolation-free FvME first estimates interpola-
+
+
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021
+5
+tion weights that form a convex combination of the IvMC
+predictors around each integer motion point. These weights
+are independently optimized within blocks by minimizing
+motion-compensation residuals. Next, the estimated weights
+are quantized to the nearest feasible trilinear coefficient vector
+on a predefined fractional-resolution grid. Each grid point cor-
+responds to a specific fractional displacement, i.e., a candidate
+FvMV. The quantized trilinear coefficients associated with
+the selected grid point are used to generate the final FvMC
+through the trilinear interpolation. Note that the interpolation-
+free FvME also improves ME efficiency. An exhaustive search
+over all discrete fractional displacements may outperform our
+interpolation-free approach, but at a significantly higher cost.
+6) Transform and Quantization: After motion compensa-
+tion, the residues are the difference between the original
+color signal and the motion-compensation color signal. These
+residual color attributes are then encoded using the standard
+coding tools in G-PCC [22]: attribute transform, e.g., RAHT,
+and entropy coding, e.g., run-length Golomb-Rice coder.
+IV.
+INTEGER VOXEL MOTION ESTIMATION AND
+COMPENSATION
+Our proposed IvME algorithm consists of two steps. The
+first step, graph-based motion estimation, is summarized in
+Algorithm 1 and described in detail in Section IV-C. Graph-
+based IvME produces a motion vector per block ˜t ∈R3×1.
+These MVs are obtained from color and geometry information
+of both the predicted and reference point clouds and are regu-
+larized using graph-based distance preservation. In the second
+step, since the motion must be used for color compression,
+we introduce a local motion estimation refinement to obtain
+a new motion vector ˆt ∈R3×1 to reduce the energy of the
+color residuals. For this, we first explain how to perform MC
+from the nearest neighbor at the motion-displaced position and
+obtain color residuals (Section IV-B). In the motion refinement
+step (Section IV-D), the IvME of each block ˆt is refined to
+minimize the energy of the MC color residual, resulting in the
+overall integer motion for each block:
+t′ = ˜t + ˆt.
+(1)
+A. Graph Representations for Point Clouds
+We use graphs to connect spatially neighboring points in
+a point cloud, enabling us to apply graph signal processing
+for ME. A graph is defined as G = (V, E), where V is the
+set of N vertices and E ⊆V × V is the set of edges. The
+i-th vertex is denoted vi ∈V and the edge connecting vi and
+vj is denoted as eij ∈E. The weight of an edge is denoted
+as wij. We use the n × n combinatorial Laplacian matrix,
+L = D−W = UΛUT, where the degree matrix D is a n×n
+diagonal matrix with Di,i = di = P
+j wij, and U and Λ
+are the eigenvector and eigenvalue matrices of L, respectively.
+Given a graph signal f ∈Rn, its smoothness is quantified by:
+f ⊤Lf =
+X
+i,j:eij∈E
+wij(f[i] −f[j])2,
+(2)
+which is smaller (i.e., has lower variation) when f is smoother.
+B. Motion-based Inter Coding Overview
+In this subsection, we explain how to obtain the MC color
+residuals from arbitrary block-based motion vectors, such as
+the ones from [18], [21]. In the following subsections, we
+explain our proposed approach for obtaining these motion
+vectors. The voxel coordinates of the current and reference
+frames are represented by the matrices
+Pt = (p1, . . . pNt)⊤∈RNt×3,
+(3)
+Pt−1 = (p′
+1, . . . , p′
+Nt−1)⊤∈RNt−1×3.
+(4)
+We will also denote the voxels as sets Pt = {p1, · · · , pNt}
+and Pt−1 = {p′
+1, · · · , p′
+Nt−1}, respectively. To simplify the
+notation, we replace Nt by N in what follows. To obtain the
+block structure, the voxelized points in Pt are first sorted in
+Morton order so that spatially neighboring voxels within the
+same block are placed contiguously in the ordered sequence.
+An octree representation is then used to partition Pt into B
+non-overlapping blocks [23], [33]. We index these blocks by
+{1, 2, . . . , B}. The block assignment matrix B ∈{0, 1}N×B
+links each point pi in Pt to its block:
+Bib =
+1,
+if pi ∈Pb,
+0,
+otherwise,
+(5)
+where Pb ⊂Pt is the the set of points in the bth block.
+Given a block-wise motion field T = (t1, · · · , tB)⊤, the
+corresponding point-wise motion field D is:
+D(T) = BT = (d1(T), · · · , dN(T))⊤∈RN×3,
+(6)
+where di(T) = tb if pi ∈Pb. The displaced coordinates of
+the current frame are expressed as:
+˜Pt(T) = Pt + D(T) = (˜p1(T), . . . , ˜pN(T))⊤.
+(7)
+Note that, unlike 2D videos, whose pixel values lie on a
+regular 2D grid, 3D DPCs have irregular geometry, so only
+some positions in the regular 3D grid contain information.
+Thus, for motion compensation of voxel pi in the current
+frame, given its point motion di (ith entry of D(T)), we use
+the nearest motion-displaced neighbor in the reference frame
+as pi(T):
+pi(T) = arg min
+p′∈Pt−1
+∥˜pi(T) −p′∥2.
+(8)
+The coordinates of the motion-displaced nearest points in the
+reference frame are given by Q:
+Q(T) = (p1(T), · · · , pN(T))⊤∈RN×3.
+(9)
+Then, to predict the color information in pi we use the color
+of pi(T) from (8):
+˜ci(T) = c(pi(T)), where pi(T) ∈Pt−1.
+(10)
+Since the block motion T is transmitted as overhead and the
+geometries of frames t and t−1 are available, the decoder can
+use (8) to find pi(T) for any point pi in frame t. The target
+colors of the current frame are stacked into the matrix:
+C = (c(p1), · · · , c(pN))⊤∈RN×3,
+(11)
+
+
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021
+6
+whose i-th row is the color of point pi. Likewise, stacking the
+MC of each point into matrix form, we get:
+˜C(T) = [˜c1(T), . . . , ˜cN(T)]⊤∈RN×3,
+(12)
+which is used to compensate C (11) and compute the color
+residue, e.g., C −˜C(T), as in Figure 1.
+This paper applies the computation of color residuals ex-
+plained above using the block-wise motion field given by:
+T′ = (t′
+1, · · · , t′
+B)⊤= ˜T + ˆT ∈RB×3,
+(13)
+using the graph-based block-wise motion field (Section IV-C)
+˜T = (˜t1, · · · , ˜tB)⊤∈RB×3,
+(14)
+and the locally refined block-wise motion field (Section IV-D)
+ˆT = (ˆt1, · · · , ˆtB)⊤∈RB×3.
+(15)
+C. Graph-based Integer voxel Motion Estimation
+IvME aims to optimize T′ in (13) to achieve the best color
+prediction between frames Pt and Pt−1 . First, we propose
+an iterative procedure to find ˜T, starting with ˜T0 = 0, and
+finding ˜Tk for k ≥1 until convergence (Algorithm 1):
+•
+Step 1: The block-wise motion ˜Tk−1 is used to deform
+the point cloud Pt leading to ˜Pt(˜Tk−1) via (7).
+•
+Step 2: A many-to-one nearest neighbor matching is
+performed between ˜Pt(˜Tk−1) and Pt−1, which leads
+to the reference point-wise motion field ˜D(˜Tk−1) (see
+Section IV-C1).
+•
+Step 3: The point-wise motion field ˜D(˜Tk−1) is con-
+verted into a block-wise motion field, ˜Tk, by solving
+the optimization:
+˜Tk = arg min
+T
+D(T) −˜D(˜Tk−1)
+
+2
+F + β, reg(T, R),
+(16)
+where β controls the tradeoff between two terms. The
+first term encourages the point-wise motion derived
+from block-wise vectors D(˜Tk) to match the “noisy”
+unconstrained point-wise motion from nearest-neighbor
+matching ˜D(˜Tk−1). The second term is a graph-based
+regularizer that promotes spatial smoothness and phys-
+ically plausible deformation in D( ˜Tk). The auxiliary
+variable R, to be defined below, helps offset the penalty
+of rotation deformation.
+The above three steps are repeated until convergence to
+produce the graph-based IvME (Algorithm 1). In the following
+subsections, we present the details of the generation of the
+reference motion field ˜D (Step 2) and the formulation of the
+objective function (16) and its solution (Step 3).
+Algorithm 1: Graph-based IvME Algorithm
+Data: Pt−1 and Pt
+Result: ˜T = (˜t1, · · · , ˜tB)⊤
+Initialize ˜T0 = 0;
+while not converged or k ≤kmax do
+Step 1: Calculate the motion-displaced coordinates
+of the current frame ˜Pt via ˜Tk−1 and (7);
+Step 2: Obtain reference dense motion field
+˜D(˜Tk−1) (see Section IV-C1);
+Step 3: Optimize the block motion field in the
+current k-th iteration ˜Tk via (16);
+end
+1) Reference Point-wise Motion Field: Since our goal is
+color compression, we adopt a hybrid distance metric that
+jointly considers geometry and color. The hybrid distance
+between two points pi and pj, given βp ∈[0, 1], is:
+δ(pi, pj) = βp∥pi −pj∥2 + (1 −βp)∥c(pi) −c(pj)∥2.
+(17)
+Define the matrix S ∈RNt×Nt−1, where each entry is the
+distance between a displaced point, ˜pi(˜Tk−1) from (7), in
+the current frame and a candidate point, p′
+j from (4), in the
+reference frame1:
+S(˜Tk−1)ij = δ(˜pi(˜Tk−1), p′
+j),
+˜pi ∈˜Pt, p′
+j ∈Pt−1, (18)
+The set of many-to-one matching matrices is:
+P =
+
+
+X ∈{0, 1}Nt−1×Nt
+
+Nt−1
+X
+i=1
+Xij = 1 ∀j
+
+
+.
+(19)
+The column-sum condition of the above ensures that every
+predicted point is assigned to exactly one reference point.
+Since the row sums are left free, multiple predicted points
+are allowed to match the same reference point, resulting in a
+many-to-one matching when solving:
+M(˜Tk−1) = arg min
+X∈P Tr(S(˜Tk−1)X).
+(20)
+Equivalently, this optimization independently selects the min-
+imum composed distance (17) for each predicted point.
+The coordinates of the matched points in the reference frame
+are given by ˜Q, which is a function of ˜Tk−1:
+˜Q(˜Tk−1) = M(˜Tk−1)
+⊤Pt−1,
+(21)
+allowing us to obtain the reference displacement field ˜D as:
+˜D(˜Tk−1) = ˜Q(˜Tk−1) −Pt.
+(22)
+1We use a kd-tree to find the nearest neighbors for N points, which leads
+to a N ×1 vector of the nearest point indices. The space complexity is O(N)
+and time complexity is O(N log(N)), instead of O(N2)
+
+
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021
+7
+2) Graph-based Regularization: In this section, we first
+express the graph Laplacian smoothness of the point-wise
+motion field as a pairwise local consistency measure. This pair-
+wise measure is aggregated into a block-wise local-consistency
+form, which is then converted into a local distance-consistency
+form by offsetting the relative edge rotations between neigh-
+boring blocks.
+The regularization term in (16) is designed to favor iso-
+metric deformation, that is, the geodesic distances within the
+original shape, given by P, and the new motion-compensated
+shape, given by ˜P, are preserved. Since point clouds are
+discrete surface samples without explicit surface connectivity,
+exact geodesic distances are not directly available. Therefore,
+geodesic distance preservation is approximated via local Eu-
+clidean distance preservation, modeled using a sparse, locally
+connected graph.
+For this, we build a distance-based graph on the point cloud
+Pt with edge weights defined as:
+wij =
+1,
+if ∥pi −pj∥2 ≤τ,
+0,
+otherwise.
+(23)
+We choose τ = 1, rather than τ =
+√
+2 or τ =
+√
+3. For
+voxelized point clouds, this connects each occupied voxel
+only to its face-adjacent neighbors along the principal axes
+of the canonical basis. This design ensures that the block-wise
+connectivity used later in this section remains sparse while
+preserving only the most relevant local interactions between
+directly adjacent blocks that share a face.
+The smoothness of the point displacement field in (6) is
+quantified using the Laplacian quadratic form (2). From (7)
+this can be expressed as the difference in point coordinates
+before (pi) and after (˜pi) deformation:
+Tr(D⊤LD) =
+X
+eij∈E
+∥(˜pi −pi) −(˜pj −pj)∥2 ,
+(24)
+where we used the fact that wij = 1 if eij ∈E. Rearranging
+terms, we have:
+Tr(D⊤LD) =
+X
+eij∈E
+∥(˜pi −˜pj) −(pi −pj)∥2 .
+(25)
+This shows that the regularizer encourages neighboring
+points to preserve their relative positions, providing a local-
+consistency prior for the estimated motion field.
+Since we use block-wise motion, all points within a block
+share the same displacement and for any intra-block edge
+(i, j), ˜pi −˜pj = pi −pj. Thus, the metric in (25) takes
+nonzero values for inter-block edges only. Given a pair of
+blocks (a, b), with point sets Pa and Pb, we define the set
+of edges connecting them as:
+Eab = {(i, j) | (i, j) ∈E, pi ∈Pa, pj ∈Pb, a̸ = b},
+(26)
+allowing us to define the set of all inter-block edges as:
+Einter =
+[
+1≤a<b≤B
+Eab.
+(27)
+Thus, (25) can be simplified to:
+Tr(D⊤LD) = Tr(D⊤LinterD)
+=
+X
+eij∈Einter
+∥(˜pi −˜pj) −(pi −pj)∥2 ,
+(28)
+where Linter is the Laplacian of the graph of inter-block edges.
+Note that different translations assigned to two neighboring
+blocks can change the orientation of their inter-block edges. In
+this case, the deformed edge vector ˜pi−˜pj may not be parallel
+to the original edge vector pi −pj, even when their lengths
+are the same. Such orientation changes can be unnecessarily
+penalized by (28), which measures the norm of the difference
+between edge vectors rather than the difference in their lengths.
+To eliminate this penalty, we compute a local rotation matrix
+Rab that represents the optimal rotation from original to
+deformed edges for edges connecting blocks a and b. Next,
+a rotation matrix R = (R1, · · · , RNinter)⊤∈R3Ninter×3 is
+formed by concatenating all inter-block edge rotation matrices,
+where Ninter is the number of block pairs (a, b) for which Eab
+is not empty. This leads to our final choice of regularization
+for (16), where, to avoid the rotation penalty of (28), we use:
+reg(T, R) =
+B
+X
+a=1
+B
+X
+b=a+1
+X
+eij∈Eab
+∥(˜pi −˜pj) −Rab(pi −pj)∥2 .
+(29)
+By compensating for the local orientation change across each
+block boundary, Rab rotates pi −pj to be as close as parallel
+to ˜pi −˜pj as possible. (29) reduces the effect of rotation
+and mainly penalizes non-isometric motion that stretches and
+compresses inter-block edge length [34]. Thus, the inter-block
+edges serve as elastic connections that promote isometry-
+preserving, coherent block motion during fitting.
+3) Explicit Form of the Objective Function (16): Combining
+(6) and (22), the first term in (16) can be expressed as:
+D(T) −˜D
+
+2
+F =
+BT −˜D
+
+2
+F
+= Tr(T⊤B⊤BT −2 ˜D⊤BT + ˜D⊤˜D).
+(30)
+We then define a sparse matrix K ∈RN×3Ninter containing
+all the edge vectors. For each edge (i, j) ∈Eab, letting m =
+m(a, b) ≤Ninter be the index of the corresponding block pair,
+the corresponding entries of K are:
+Ki,3m−2:3m += (pi −pj)⊤,
+Kj,3m−2:3m += −(pi −pj)⊤,
+(31)
+where + = denotes accumulation. If multiple inter-block edges
+associated with the same block-pair index m are incident to the
+same point, their edge-vector contributions are summed into
+the same row segment of K. Then KR ∈RN×3 contains the
+locally rotated original inter-block edge vectors for all points.
+From (29), the second term in (16) can be written as:
+reg(T, R) = 2 Tr(T⊤B⊤LinterBT)
++ 2 Tr(T⊤B⊤(2LinterPt −KR)) −2 Tr(P⊤
+t KR).
+(32)
+
+
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021
+8
+After combining (30) and (32) and removing the constant
+term that is not related to T and R, (16) is equivalent to
+solving the matrix optimization problem:
+min
+T,R Tr
+ T⊤B⊤(I + 2βLinter)BT
+
+−2 Tr(βP⊤KR)
++ 2 Tr
+
+T⊤B⊤
+2βLinterPt −βKR −˜D
+
+.
+(33)
+4) Optimization: To minimize the objective function (33),
+we adopt the alternating block coordinate descent that alter-
+nates between finding the optimal rotations ˜R and finding the
+optimal block-wise motion field ˜T. We define the inter-block
+edge covariance matrix of blocks a and b as:
+Ωab =
+X
+eij∈Eab
+(pi −pj)(˜pi −˜pj)⊤= UabΣabV⊤
+ab,
+(34)
+where UabΣabV⊤
+ab is the SVD of Ωab.
+For fixed T = ˜T, minimizing (33) with respect to R is
+a linear optimization problem. The optimal solution of R in
+each iteration can be written in closed form as:
+˜Rab = arg max
+Rab∈SO(3)
+⟨Rab, Ωab⟩
+= Uab
+
+
+1
+0
+0
+0
+1
+0
+0
+0
+det(UabV⊤
+ab)
+
+V⊤
+ab.
+(35)
+where SO(3) denotes the rotation group in R3.
+For fixed R = ˜R, (33) turns into a quadratic optimization
+problem with respect to T:
+˜T = arg min
+T
+Tr
+ T⊤B⊤(I + 2βLinter)BT
+
++ 2 Tr
+
+T⊤B⊤
+2βLinterPt −βKR −˜D
+
+,
+(36)
+so the optimal motion field can be written in closed form as:
+˜T =
+ B⊤(I + 2βLinter) B
+−1 B⊤( ˜D + β(K ˜R −2LinterPt)).
+(37)
+To further improve motion-compensated shape fitting in the
+reference frame, we can alternately update ˜T and ˜R for lmax
+inner iterations within each outer iteration k. Specifically, at the
+beginning of the k-th iteration, we initialize ˜Rk,0 = ˜R(˜Tk−1)
+via (35) and then ˜Tk,0 =
+˜T( ˜Rk,0) via (37). For the l-
+th inner iteration, where 0 < l ≤lmax, we first update
+˜Rk,l = ˜R(˜Tk,l−1) via (35), and then update ˜Tk,l = ˜T( ˜Rk,l)
+via (37). After lmax inner iterations, the final estimates for the
+k-th iteration are given by ˜Rk = ˜Rk,lmax = ˜R(˜Tk,lmax−1)
+and ˜Tk = ˜Tk,lmax = ˜T( ˜Rk).
+D. Locally Refined Integer voxel Motion Estimation
+The previous IvME stage is designed to recover a geo-
+metrically meaningful and realistic motion field, rather than
+to directly minimize the final color-prediction residual on the
+reconstructed reference. To reduce the energy in this residual,
+for each block b, we take (37) as the initial motion ˆtb from the
+previous stage and apply an exhaustive search within a small
+neighborhood to adapt it to the color-prediction objective. Each
+coordinate of a locally refined motion vector is restricted to
+be an integer in [−1, 1]. Therefore, the candidate set for the
+local refinement of a single block is
+M =
+
+t = (tx, ty, tz) ∈Z3  −1 ≤tx, ty, tz ≤1
+	
+=
+
+t(1), . . . , t(27)
+	
+,
+(38)
+which contains 27 candidate MVs and t(1), . . . , t(27) are a
+fixed enumeration of the 27 integer offsets. For block b,
+the refined local offset ˜tb is selected from M. Stacking the
+selected offsets of all B blocks yields the refined block-wise
+motion field ˜T, i.e., ˜T = (˜t1, . . . ,˜tB)⊤with ˜tb ∈M for all
+b. Equivalently, ˜T is searched over
+MT =
+
+T = (t1, . . . , tB)⊤ tb ∈M, ∀b
+	
+.
+The refined motion field is then chosen to minimize the color
+prediction error of the MC predictor in (10):
+ˆT = arg min
+T∈MT
+C −˜C(˜T + T)
+
+2
+F .
+(39)
+V.
+FRACTIONAL VOXEL MOTION ESTIMATION AND
+COMPENSATION
+The concept of ME with fractional-precision MVs, widely
+used in video coding [20], can be extended to point
+clouds. When an MV has sub-voxel components, the motion-
+compensated predictor must be evaluated at fractional loca-
+tions, where no reference voxels exist, and the attribute values
+at these locations are obtained as linear combinations of the
+attributes of nearby integer voxels. In conventional video,
+interpolation-free fractional ME exploits the regular pixel grid.
+The fractional displacement is inferred directly on the image
+plane from a local model of the MC error surface. Point
+clouds lack such a regular structure, so this approach does
+not apply directly. Instead, our method estimates the fractional
+displacement in the interpolation-coefficient domain.
+Weighted combinations of integer-voxel predictors have
+already proven effective for point cloud MC, e.g., by averaging
+the attributes of multiple nearest neighbors [28] or by applying
+model-based filtering to nearest-neighbor predictors [14]. Since
+all of these methods compute weighted averages of multiple
+IvMC predictors, they can be interpreted as implicit forms
+of fractional-voxel MC. However, their averaging weights are
+either fixed [28] in advance or derived from a predefined
+graph model constructed solely from geometry [14]. The
+FvME proposed in this section generalizes these approaches
+by directly optimizing averaging weight coefficients for each
+block. The philosophy is that, since the FvMVs are explicitly
+optimized for each block and each FvMV corresponds to a
+unique set of combination weights, FvMC can be viewed as
+an adaptive averaging operation tuned to the local attribute
+statistics.
+The proposed FvME can also be viewed as an interpolation-
+free scheme. In our previous interpolation-based FvME [19],
+for each candidate fractional motion displacement, voxels at
+fractional positions were first explicitly generated by interpo-
+lating the geometry and color of neighboring integer voxels.
+
+
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021
+9
+Then, the MC error was evaluated at each candidate frac-
+tional displacement using interpolated values, so complexity
+increased with the number of candidate fractional motions.
+In contrast, the proposed method does not generate voxels at
+all fractional-displacement positions. Instead, we express the
+FvMC predictor as a trilinear combination of IvMC predic-
+tors (Section V-A), optimize the combination weights over a
+convex relaxation of the feasible set, and map the optimized
+weights back to trilinear weights and therefore a valid FvMV
+(Section V-B). FvMCs are only computed after this final
+step, resulting in a significant reduction in computational
+complexity.
+A. FvMC modeling
+The integer MV computed in Section IV-D for block b is
+denoted by t′
+b (see (13)). Figure 2a depicts the integer vector
+t′
+b (in red) surrounded by eight unit cubes whose vertices lie on
+the integer grid. The integer neighborhood of t′
+b is comprised
+of 27 integer positions. A fractional refinement of t′
+b is a sub-
+voxel offset tb = (tx, ty, tz) ∈[−1, 1]3 selected within one of
+these unit cubes. We refer to tb as the FvMV of block b, so
+that the overall motion of the block becomes t′
+b + tb.
+To limit the signaling overhead, FvMVs are restricted to
+have a finite resolution. Given a resolution step size r selected
+from a finite set:
+r ∈
+1
+2, 1
+4, . . . , 1
+2L
+
+,
+L ∈Z+,
+(40)
+the set of admissible FvMVs of a single block is
+N = {t = (tx, ty, tz) | tx, ty, tz ∈{0, ±r, ±2r, . . . , ±1}} ,
+(41)
+which uniformly samples [−1, 1]3 with step size r along each
+axis. The corresponding block-wise fractional motion field
+belongs to
+NT =
+
+T = (t1, . . . , tB)⊤∈RB×3  tb ∈N, ∀b
+	
+.
+The original colors (11) and the integer motion compensated
+colors (12) can be organized per block as follows:
+C =
+
+C⊤
+1 , · · · , C⊤
+B
+⊤∈RN×3,
+(42)
+˜C(T) = [ ˜C1(t′
+1)⊤, . . . , ˜CB(t′
+B)⊤]⊤∈RN×3,
+(43)
+where Cb and ˜Cb(t′
+b) ∈RNb×3.
+Since the reference frame contains no attribute samples
+at fractional positions, we define the FvMC predictor at a
+fractional displacement as a linear combination of the IvMC
+predictors over the local 3 × 3 × 3 neighborhood. With
+t(1), . . . , t(27) in M defined in (38), the IvMCs at the 27
+integer positions surrounding its motion position are collected
+to form FvMC predictors of b-th block ˆCb,27 ∈R3Nb×27:
+ˆCb,27 =
+ vec( ˜Cb(t′
+b +t(1))), . . . , vec( ˜Cb(t′
+b +t(27)))
+
+, (44)
+whose i-th column is the vectorized IvMC obtained by dis-
+placing block b to t′
+b + t(i).
+To map a FvMV to a FvMC, we attach to each admissible
+fractional displacement a sparse trilinear coefficient vector
+x(t) ∈R27, whose entries depend on t ∈N, and collect
+the block-wise coefficients into
+X =
+
+X(T) = (x(t1), . . . , x(tB)) ∈R27×B  T ∈NT
+	
+.
+(45)
+The FvMC predictor ˆCb(t) ∈RNb×3 associated with a
+fractional displacement t ∈N is then the corresponding
+combination of the IvMC candidates:
+vec( ˆCb(t)) = ˆCb,27 x(t).
+(46)
+FvME selects the fractional motion field that minimizes the
+energy of the MC residual, accumulated over all points and all
+three color channels, as a proxy for its coding rate:
+ˆTF =
+arg min
+T=(t1,...,tB)⊤∈NT
+B
+X
+b=1
+Cb −ˆCb(tb)
+
+2
+F ,
+(47)
+which is the fractional-precision counterpart of the integer-
+voxel criterion (39). Since the predictor of every point depends
+only on the FvMV of its own block, the objective in (47)
+separates across blocks, and the search decouples into B in-
+dependent problems with (2/r + 1)3 candidate displacements
+each. Exhaustive enumeration is feasible at coarse resolutions,
+but its cost grows cubically in 1/r as the precision is refined,
+e.g., from 729 candidates per block at r = 1/4 to 4,913
+at r = 1/8. Moreover, (47) can be recast as a quadratic
+program over the coefficient matrices, i.e., over X and its
+continuous counterpart. However, neither the finite set X nor
+its continuous counterpart is convex, so the problem cannot
+be handled directly with standard convex optimization tools.
+Based on these observations, we propose a two-stage strategy
+in which a continuous solution is first found (independent of
+r) and then quantized to resolution r.
+B. FvME modeling
+1) Convex relaxation: Expanding the squared error in (47)
+and discarding the term PB
+b=1 ∥vec(Cb)∥2
+2 that does not
+depend on X, the objective becomes a quadratic on the
+interpolation coefficients:
+F(X) =
+B
+X
+b=1
+Fb(xb),
+(48)
+where Fb(xb)
+=
+x⊤
+b Qb, Qb
+=
+ˆC⊤
+b,27 ˆCb,27 and qb
+=
+ˆC⊤
+b,27vec(Cb). The optimization in (47) is equivalent to min-
+imizing F(X) over the set X of (45):
+ˆXF =
+arg min
+X=(x1,...,xB)∈X
+B
+X
+b=1
+Fb(xb).
+(49)
+Each Qb is positive semi-definite, so every Fb, and therefore
+F, is convex. The difficulty in solving (49) is not the objective
+but the feasible set, X, which is discrete. We relax this problem
+by optimizing over the set
+D =
+
+X = (x1, . . . , xB) ∈R27×B  xb ∈E, ∀b
+	
+,
+(50)
+
+
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021
+10
+where E = {x ∈R27 | x ≥0, 1⊤x = 1} is the 27-
+dimensional probability simplex. Since every trilinear coeffi-
+cient vector x(t) is a convex combination of the 27 vertices
+with at most eight nonzero entries, X ⊂D. Replacing X by
+D in (49) yields the relaxed problem
+ˆX∗=
+arg min
+X=(x1,...,xB)∈D
+B
+X
+b=1
+Fb(xb),
+(51)
+which is a convex quadratic program that can be solved to
+global optimality with standard techniques. Moreover, since
+the objective is separable, (51) decouples into B independent
+27-dimensional subproblems.
+2) Frank-Wolfe optimization: We adopt the Frank-Wolfe
+algorithm [35], applied to each block independently, which
+is particularly well-suited for simplex-constrained problems: it
+is projection-free, its linear subproblem amounts to locating
+the smallest entry in a 27-dimensional gradient, and the line
+search admits a closed-form expression for quadratic objec-
+tives. These lightweight iterations are the main source of the
+computational efficiency of the proposed FvME.
+The 27 IvMC candidates of a block form a 3 × 3 × 3 grid
+in which eight unit cubes meet at the center offset t(14) =
+(0, 0, 0) (Figure 2). Every admissible FvMV lies in exactly
+one of these cubes, so its trilinear coefficient vector x(t) is
+supported on that cube’s eight corners. We exploit this structure
+by initializing the iteration at the center vertex, which is shared
+by all eight cubes,
+xb,0 = e(14) ∈E,
+(52)
+where e(14) is the one-hot vector selecting the IvMC at t(14)
+in (44), and by progressively confining the search to a single
+cube, once it is identified (see Cube locking below). For block
+b, each k-th iteration consists of three steps:
+1)
+Gradient
+computation. Given the current iterate
+xb,k−1, the gradient of the bth quadratic objective is
+∇Fb(xb,k−1) = 2 (Qb xb,k−1 −qb) ∈R27.
+(53)
+2)
+Linear minimization. The Frank–Wolfe vertex is se-
+lected from the current active vertex set Ab,k
+⊆
+{1, . . . , 27} (defined under Cube locking):
+x′
+b,k =
+arg min
+x∈conv{ei: i∈Ab,k}
+⟨∇Fb(xb,k−1), x⟩.
+(54)
+A linear objective over this simplex face attains its
+minimum at a vertex, so x′
+b,k
+= ei∗with i∗
+=
+arg mini∈Ab,k[∇Fb(xb,k−1)]i, i.e., the index of the
+smallest gradient entry among the active vertices.
+3)
+Line search. With db,k = x′
+b,k −xb,k−1, and step size
+γ∗
+b,k = arg min
+γ∈[0,1]
+Fb
+ (1 −γ) xb,k−1 + γ x′
+b,k
+
+(55)
+can be written in closed form since Fb is quadratic, so
+the update is
+xb,k = (1 −γ∗
+b,k) xb,k−1 + γ∗
+b,k x′
+b,k.
+(56)
+Fig. 2: Steps of the proposed FvME for one block. (a) Geometric view: the
+integer MV t′
+b (red) sits at the center of its 3×3×3 neighborhood, whose 27
+IvMC candidates form eight unit cubes. (b)–(f) Frank–Wolfe on the convex
+hull of IvMCs of these displacement candidates (iterate marked by a red open
+circle): starting from the center vertex, linear minimization successively selects
+vertices 14 →6 →3 that belong to the vertices of the bottom right cube. (b)
+linear minimization; (c) line search; (d) cube locking restricts the active set to
+a subset of original 27 IvMCs; (e) further iterations refine the iterate within
+that the subset; (f) cube locking finally restrict IvMCs of eight displacement
+of the right bottom cube, after which the relaxed solution (the red open circle)
+is associated to the final FvMV.
+Cube locking. Since FW starts at the shared center vertex
+t(14) and refines the predictor by repeatedly selecting one
+of the 27 vertices, each selected vertex reveals the corner
+direction, and hence the cube, toward which the fractional
+motion is heading. We use this to shrink the active set Ab,k:
+initially Ab,0 = {1, . . . , 27}, and once the selected vertices
+have determined the sign along all three axes, the enclosing
+cube is fixed and Ab,k is reduced to the corresponding eight
+corners, used for the remaining iterations (see Figure 2).
+Each block runs its iterations until γ∗
+b,k < ϵγ, at which point
+the block is considered converged and locked to its current
+iterate x∗
+b. All blocks terminate after at most fmax iterations.
+3) From relaxed weights to the FvMV: Geometrically, the
+relaxation enlarges the feasible set of predictors from trilinear
+interpolations to arbitrary convex combinations of the 27 IvMC
+candidates of each point, i.e., the predicted color of each point
+is allowed to lie anywhere within the convex hull of its 27
+IvMC candidates in R3. The relaxed solution X∗generally
+does not coincide with any valid trilinear coefficient matrix,
+i.e., X∗
+/∈X in general. It is therefore quantized to the
+nearest matrix in X, and the FvMV ˆTF is the grid motion
+field associated with the quantized coefficients:
+ˆTF = arg min
+T∈NT
+B
+X
+b=1
+x∗
+b −x(tb)
+2
+2,
+(57)
+where x∗
+b is the bth column of X∗. Due to the cube locking
+update during linear minimization, x∗
+b is confined to a single
+cube. Rounding x∗
+b to (41) efficiently produces a valid trilinear
+coefficient vector for a given resolution r.
+
+
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021
+11
+The selected FvMV ˆTF is entropy coded and transmitted to
+the decoder as motion overhead. Since the trilinear mapping
+X(·) of (45) is known at both the encoder and the decoder,
+the interpolation coefficients X( ˆTF) are recovered from ˆTF
+without any additional signaling, and the FvMC predictor is
+synchronously constructed at the decoder end as (46).
+VI.
+EXPERIMENTS
+A. Dataset and parameter settings
+We evaluate the proposed motion-based inter-coding scheme
+for the compression of color attributes on the MPEG
+point cloud sequences longdress, redandblack, loot,
+soldier, and queen, at a depth resolution of 10. We use
+all frames from each sequence for the full test. There are 250
+frames for queen and 300 frames for the others.
+We implement our proposed DPC attribute inter-coding sys-
+tem in a low-delay P configuration, using previously decoded
+frames as references. In a group of frames (GoF), containing 32
+frames, the first frame is coded in intra mode via RAHT from
+G-PCC [6], while all blocks in the remaining frames are coded
+in inter mode using our proposed scheme. MC residues are also
+transformed by RAHT. The quantized RAHT coefficients and
+overheads are entropy-coded by the arithmetic coder. To avoid
+high overheads, we use block sizes of 16, 32, and 64 for the
+high-, mid-, and low-rate regions, respectively. For each rate
+point, the block size is uniform within and across frames. For
+graph-based IvME, we choose βp = 0.3 in (17), β = 10 in
+(16), kmax = 15 and lmax = 1 for optimization Section IV-C4.
+For FvME, we choose fmax = 4 for Frank-Wolfe iterations and
+r = 1
+4 motion precision for FvMV quantization.
+Since HEVC encodes projected images in YUV420 format,
+when comparing with V-PCC, decoded quality is measured in
+the RGB domain to account for chroma sampling. For a single
+frame, the PRSN is
+−10 log10
+∥Rt −R′
+t∥2
+2 + ∥Gt −G′
+t∥2
+2 + ∥Bt −B′
+t∥2
+2
+3 × 2552 × Nt
+
+.
+(58)
+The PSNR of a point cloud sequence is the average of frame
+PSNRs. Rate is measured in bits per input point (bpip),
+bpip =
+PT
+t=1 bt
+PT
+t=1 Nt
+,
+bt is the total bitrate required to encode YUV components and
+motion overhead (when necessary) of the t-th frame. Nt is the
+total number of input voxels in the t-th frame. bt does not
+include geometry or occupancy bitrate.
+B. Lossless Geometry and Lossy Attribute Case
+Test Schemes
+GOF
+Lossless geometry
+Recolor
+Lossy attribute
+Proposed
+32
+Octree
+N/A
+Proposed + RAHT
+V-PCCv24
+32
+HEVC-LD
+N/A
+HEVC-LD
+GeS-TMv3
+32
+Octree
+N/A
+InterRAHT
+G-PCCv23
+1
+Octree
+N/A
+RAHT
+TABLE II: Settings summary of our proposed approach and anchor coding
+solutions in the experiments on lossless geometry condition. Since geometry
+is lossless, color transfer is not needed.
+We apply the lossless geometry coding setting to G-PCCv23
+[22], GeS-TMv3 [11], and V-PCCv24 [36]. For G-PCC and
+GeS-TM, we use octree-based lossless geometry coding. For
+V-PCC, both raw and EOM patches are enabled to achieve
+lossless geometry encoding. Results are shown in Figure 3.
+The proposed method achieves BD-rate reductions of −51.3%,
+−31.7%, and −146.4% compared to G-PCC, GeS-TM, and V-
+PCC, respectively.
+Compared with GeS-TM, our proposed scheme adopts a
+more advanced ME scheme tailored to color, using color dis-
+tance, motion coherence, and higher motion precision during
+search, resulting in more accurate predictors. The proposed
+scheme outperforms G-PCC by further reducing temporal
+redundancy, while G-PCC can only remove spatial redundancy.
+Our proposed scheme achieves significant coding gain at all
+rates compared to V-PCC. V-PCC cannot remove the high-
+frequency redundancy among the sequentially placed voxels in
+the raw and EOM texture patches, which appear as noise-like
+patterns, resulting in the worst performance under the lossless-
+geometry coding setting.
+Point Clouds
+BD-BR (%)
+Proposed
+GeS-TMv3
+V-PCCv24
+Longdress
+-30.3
+-11.4
+56.1
+Soldier
+-74.7
+-51.9
+192.3
+Redandblack
+-30.7
+-20.5
+151.6
+Loot
+-46.5
+-28.4
+243.4
+Queen
+-74.4
+-46.5
+88.9
+Average
+-51.3
+-31.7
+146.4
+TABLE III: Attribute BD-BR of our proposed approach compared to state-of-
+the-art baselines on the Table II settings
+C. Lossy Geometry and Lossy Attribute Case
+Test Schemes
+GOF
+Lossy geometry
+Recolor
+Lossy attribute
+Proposed
+32
+HEVC-LD
+V-PCC
+Proposed
++
+RAHT
+V-PCCv24
+32
+HEVC-LD
+V-PCC
+HEVC-LD
+GeS-TMv3
+32
+HEVC-LD
+V-PCC
+InterRAHT
+G-PCCv23
+1
+HEVC-LD
+V-PCC
+RAHT
+TABLE IV: Settings summary of our proposed approach and attribute coding
+anchors on lossy geometry condition
+We now compare attribute coding schemes using a com-
+mon lossy-coded geometry, obtained via lossy reconstruction
+from V-PCC under the low-delay configuration, onto which
+the original color attributes are transferred using the V-PCC
+recolor function. All attribute codecs use the same geometry
+and recolored attributes, so the comparison isolates attribute-
+coding efficiency from the geometry coding.
+V-PCC’s attribute coding performs much better with lossy
+geometry than with lossless geometry, because the points as-
+signed to raw patches that are expensive to encode are pruned.
+Also, the empty pixels between patches are filled with smooth
+color to avoid drastic color changes across patch boundaries
+and to reduce high-frequency transform coefficients. As a
+result, V-PCC’s coding efficiency increases significantly and
+approaches that of our scheme.
+
+
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021
+12
+Fig. 3: Comparison with the baselines on the Table II settings
+Fig. 4: Comparison with the anchors on the Table IV settings
+Our scheme outperforms V-PCC, achieving 16.5% BD-
+BR savings on average (Table V), suggesting that working
+directly in 3D is beneficial. In V-PCC, the generated 2D
+patches cannot be guaranteed to remain temporally consistent,
+making accurate motion estimation more difficult and resulting
+in higher energy in the MC residuals. Additionally, because
+segmentation for projection breaks the original 3D correlation,
+more MV signaling is typically needed.
+Point Clouds
+BD-BR (%)
+Proposed
+GeS-TMv3
+V-PCCv24
+Longdress
+-34.7
+-8.1
+-34.5
+Soldier
+-74.1
+-39.5
+-66.4
+Redandblack
+-38.2
+-14.7 1
+-22.2
+Queen
+-63.1
+-20.9
+-56.2
+Loot
+-66.2
+-38.2
+-55.4
+Average
+-55.2
+-24.27
+-46.9
+TABLE V: Attribute BD-BR of our proposed approach compared to state-of-
+the-art anchors on the Table IV settings
+D. Complexity Analysis
+PCs
+Time Complexity (seconds)
+Encoder
+Decoder
+V-PCC
+GeS-TM
+Proposed
+V-PCC
+GeS-TM
+Proposed
+Seq1
+2766.4
+95.6
+603.2
+42.8
+24.9
+70.2
+Seq2
+3923.9
+85.9
+553.4
+43.1
+22.2
+62.4
+Seq3
+3413.1
+126.6
+868.7
+52.1
+32.4
+110.7
+Seq4
+3192.8
+113.1
+760.2
+58.4
+27.9
+92.7
+Seq5
+4255.6
+95.6
+668.4
+39.4
+24.5
+78.1
+Average
+3550.4
+103.4
+690.8
+47.2
+26.4
+82.8
+Ratio
+34.5:1:6.7
+1.8:1:3.1
+TABLE VI: Encoding and decoding time of a single GoF including 1 I-
+frame and 31 P-frames. Seq1-Seq5 are Loot, Soldier, Redandblack, Queen,
+and Longdress.
+The algorithm runtime reported in Table VI includes the
+encoding/decoding of both geometry and attributes. GeS-TM
+and V-PCC are fully implemented in C++. Our proposed
+ME is implemented in MATLAB, while we still rely on
+the C++ implementation GPCC for RAHT, quantization and
+entropy coding. On average, the proposed scheme is slightly
+slower than GeS-TM but more efficient than V-PCC. In our
+scheme, the most time-consuming parts are the nearest-point
+search in motion estimation and motion compensation. Though
+our scheme is more complex than GeS-TM due to more
+complicated motion estimation and compensation, it remains in
+the same order of magnitude because it is also geometry-based
+and 3D-native, and it avoids the computational inefficiencies
+of 2D-to-3D conversion and highly complex 2D video coding.
+VII.
+CONCLUSION
+We proposed a novel geometry-based motion estimation
+scheme for dynamic solid point cloud attributes. The whole
+coding scheme is implemented on top of the state-of-the-
+art codec G-PCC. The coding results demonstrate that our
+proposed method outperforms the widely used G-PCC, GeS-
+TM, and V-PCC. While the proposed ME scheme success-
+fully captures the dominant motion patterns in dynamic point
+clouds, certain sequences exhibit complex, highly non-rigid
+motion—such as hair dynamics, garment fluttering, and vis-
+coelastic deformation of soft tissues. As translation motion
+cannot accurately describe most of these motions, residual
+energy remains high after motion compensation. Addressing
+this problem is left for future work.
+
+
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021
+13
+REFERENCES
+[1]
+Q. Jin, Y. Liu, P. Zhou, B. Han, S. Yarosh, and F. Qian, “Volumivive:
+An authoring system for adding interactivity to volumetric video,” in
+2023 IEEE Conf. on Virtual Reality and 3D User Interfaces Abstracts
+and Workshops (VRW), pp. 569–570, 2023.
+[2]
+S. Schwarz, M. Preda, V. Baroncini, M. Budagavi, P. Cesar, P. A.
+Chou, R. A. Cohen, M. Krivoku´ca, S. Lasserre, Z. Li, J. Llach,
+K. Mammou, R. Mekuria, O. Nakagami, E. Siahaan, A. Tabatabai,
+A. M. Tourapis, and V. Zakharchenko, “Emerging MPEG standards
+for point cloud compression,” IEEE Journal on Emerging and Selected
+Topics in Circuits and Systems, vol. 9, no. 1, pp. 133–148, 2019.
+[3]
+D. G. Alexandre Zaghetto and A. T. (Sony), “Objective point cloud clas-
+sification according to density distribution.” WG7, MPEG 3D Graphics
+Coding and Haptics, ISO/IEC JTC 1/SC 29/WG 7 m62063 Online -
+January 2023.
+[4]
+D. Graziosi, O. Nakagami, S. Kuma, A. Zaghetto, T. Suzuki, and
+A. Tabatabai, “An overview of ongoing point cloud compression stan-
+dardization activities: video-based (V-PCC) and geometry-based (G-
+PCC),” APSIPA Trans. on Signal and Information Proc., vol. 9, p. e13,
+2020.
+[5]
+R. L. de Queiroz and P. A. Chou, “Compression of 3D point clouds
+using a region-adaptive hierarchical transform,” IEEE Trans. on Image
+Processing, vol. 25, no. 8, pp. 3947–3956, 2016.
+[6]
+S.
+Lasserre
+and
+D.
+Flynn,
+“On
+an
+improvement
+of
+raht
+to
+exploit
+attribute
+correlation.”
+input
+document
+m47378,
+ISO/IEC
+JTC1/SC29/WG11 MPEG, 2019.
+[7]
+E. Pavez, B. Girault, A. Ortega, and P. A. Chou, “Region adaptive
+graph Fourier transform for 3D point clouds,” in 2020 IEEE Intl. Conf.
+on Image Proc. (ICIP), pp. 2726–2730, 2020.
+[8]
+W. Wang, Y. Xu, K. Zhang, and L. Zhang, “Peer upsampled transform
+domain prediction for g-pcc,” in 2023 IEEE Intl. Conf. on Multimedia
+and Expo (ICME), pp. 708–713, 2023.
+[9]
+S. N. Sridhara, E. Pavez, and A. Ortega, “Cylindrical coordinates for
+lidar point cloud compression,” in 2021 IEEE Intl. Conf. on Image Proc.
+(ICIP), pp. 3083–3087, 2021.
+[10]
+S. N. Sridhara, E. Pavez, A. Ortega, R. Watanabe, and K. Nonaka, “Point
+cloud attribute compression via chroma subsampling,” in ICASSP 2022 -
+2022 IEEE Intl. Conf. on Acoustics, Speech and Signal Proc. (ICASSP),
+pp. 2579–2583, 2022.
+[11]
+G. Sandri, F. Thudor, M. Krivoku´ca, and B. Chupeau, “A motion-
+compensated inter-frame attribute coding scheme for dynamic dense
+point clouds,” in 2023 IEEE 25th Intl. Workshop on Multimedia Signal
+Proc. (MMSP), pp. 1–6, 2023.
+[12]
+M. D. G. C. WG7 and Haptics, “Ges-tm v9: User manual of test model
+v9 for geometry-based solid point cloud coding,” ISO/IEC JTC 1/SC
+29/WG 7 N01102 Geneva, January 2025.
+[13]
+B. Vishwanath, K. Zhang, and L. Zhang, “Advances in predictive raht
+for geometric point cloud compression,” IEEE Trans. on Image Proc.,
+vol. 34, pp. 2926–2938, 2025.
+[14]
+Y. Xu, W. Hu, S. Wang, X. Zhang, S. Wang, S. Ma, Z. Guo, and
+W. Gao, “Predictive generalized graph Fourier transform for attribute
+compression of dynamic point clouds,” IEEE Trans. on Circuits and
+Systems for Video Technology, vol. 31, no. 5, pp. 1968–1982, 2021.
+[15]
+C. Santos, M. Gonc¸alves, G. Corrˆea, and M. Porto, “Block-based inter-
+frame prediction for dynamic point cloud compression,” in 2021 IEEE
+Intl. Conf. on Image Proc. (ICIP), pp. 3388–3392, 2021.
+[16]
+A. L. Souto, R. L. De Queiroz, and C. Dorea, “Motion-compensated
+predictive raht for dynamic point clouds,” IEEE Trans. on Image Proc.,
+vol. 32, pp. 2428–2437, 2023.
+[17]
+B. Vishwanath, Y. Xu, W. Wang, K. Zhang, and L. Zhang, “Temporal
+filtering for region adaptive hierarchical transform in geometric point
+cloud compression,” in 2023 IEEE Intl. Conf. on Visual Communica-
+tions and Image Proc. (VCIP), pp. 1–5, 2023.
+[18]
+H. Hong, E. Pavez, A. Ortega, R. Watanabe, and K. Nonaka, “Motion
+estimation and filtered prediction for dynamic point cloud attribute
+compression,” in 2022 Picture Coding Symposium (PCS), pp. 139–143,
+2022.
+[19]
+H. Hong, E. Pavez, A. Ortega, R. Watanabe, and K. Nonaka, “Frac-
+tional motion estimation for point cloud compression,” in 2022 Data
+Compression Conf. (DCC), pp. 369–378, 2022.
+[20]
+Y. Zhang, C. Zhang, R. Fan, S. Ma, Z. Chen, and C.-C. J. Kuo,
+“Recent advances on hevc inter-frame coding: From optimization to
+implementation and beyond,” IEEE Trans. on Circuits and Systems for
+Video Technology, vol. 30, no. 11, pp. 4321–4339, 2020.
+[21]
+A. L. Souto, R. L. de Queiroz, and C. Dorea, “A 3D motion vector
+database for dynamic point clouds,” 2020.
+[22]
+“G-PCC
+reference
+software”.”
+https://github.com/MPEGGroup/
+mpeg-pcc-tmc13. Accessed on: May. 20, 2024.
+[23]
+C. Zhang, D. Florencio, and C. Loop, “Point cloud attribute compression
+with graph transform,” in 2014 IEEE Intl. Conf. on Image Proc. (ICIP),
+pp. 2066–2070, IEEE, 2014.
+[24]
+H. Malvar, “Adaptive run-length/Golomb-Rice encoding of quantized
+generalized gaussian sources with unknown statistics,” in Data Com-
+pression Conf. (DCC’06), pp. 23–32, 2006.
+[25]
+R. L. de Queiroz and P. A. Chou, “Motion-compensated compression of
+dynamic voxelized point clouds,” IEEE Trans. on Image Proc., vol. 26,
+no. 8, pp. 3886–3895, 2017.
+[26]
+C. Dorea and R. L. de Queiroz, “Block-based motion estimation
+speedup for dynamic voxelized point clouds,” in 2018 25th IEEE Intl.
+Conf. on Image Proc. (ICIP), pp. 2964–2968, 2018.
+[27]
+C. Dorea, E. M. Hung, and R. L. de Queiroz, “Local texture and
+geometry descriptors for fast block-based motion estimation of dynamic
+voxelized point clouds,” in 2019 IEEE Intl. Conf. on Image Proc. (ICIP),
+pp. 3721–3725, 2019.
+[28]
+D. Thanou, P. A. Chou, and P. Frossard, “Graph-based compression
+of dynamic 3D point cloud sequences,” IEEE Trans. on Image Proc.,
+vol. 25, no. 4, pp. 1765–1778, 2016.
+[29]
+R. Mekuria, K. Blom, and P. Cesar, “Design, implementation, and
+evaluation of a point cloud codec for tele-immersive video,” IEEE Trans.
+on Circuits and Systems for Video Technology, vol. 27, no. 4, pp. 828–
+842, 2017.
+[30]
+T. Fan, Y. Hu, R. Gong, and Y. Wang, “U-motion: Learned point cloud
+video compression with u-structured temporal context generation,”
+2024.
+[31]
+A. L. Souto and R. L. de Queiroz, “On predictive RAHT for dynamic
+point cloud coding,” in 2020 IEEE Intl. Conf. on Image Proc. (ICIP),
+pp. 2701–2705, 2020.
+[32]
+C. Zhang, D. Florˆencio, and P. A. Chou, “Graph signal processing-a
+probabilistic framework,” Microsoft Res., Redmond, WA, USA, Tech.
+Rep. MSR-TR-2015-31, 2015.
+[33]
+R. Schnabel and R. Klein, “Octree-based point-cloud compression.,”
+PBG@ SIGGRAPH, vol. 3, no. 3, 2006.
+[34]
+O. Sorkine and M. Alexa, “As-rigid-as-possible surface modeling,”
+in Proceedings of EUROGRAPHICS/ACM SIGGRAPH Symposium on
+Geometry Processing, pp. 109–116, 2007.
+[35]
+M. Frank and P. Wolfe, “An algorithm for quadratic programming,”
+Naval Research Logistics Quarterly, vol. 3, no. 1-2, pp. 95–110, 1956.
+[36]
+“V-PCC
+reference
+software”.”
+https://github.com/MPEGGroup/
+mpeg-pcc-tmc2. Accessed on: May. 20, 2024.

@@ -1,0 +1,2102 @@
+Do All Visual Tokens Matter Equally?
+Object-Evidence Preserving Token Merging for Vision-Language Retrieval
+Suhyeong Park1,3, Junha Jung2,3, Jungwoo Park2,3, Jaewoo Kang2,3∗
+1The Catholic University of Korea
+2Korea University
+3AIGEN Sciences Inc.
+pshpulip22@catholic.ac.kr
+{goodjungjun,jungwoo-park,kangj}@korea.ac.kr
+Abstract
+Multi-vector vision-language retrieval preserves fine-grained
+visual evidence through maximum-similarity late interaction,
+but dense image-side tokens make storage and scoring expen-
+sive. Existing token compression methods reduce this cost,
+yet they can remove or collapse object- and region-level evi-
+dence that future query tokens may need to select. We propose
+SaMer, an object-aware token merging framework that com-
+presses image-side post-projector tokens into K representa-
+tive centroids while preserving the original late-interaction
+interface. SaMer uses object annotations only during training
+as a merge prior to discourage cross-instance mixing, requires
+no ground-truth bounding boxes or detectors at inference time,
+and adapts only the shared projection layer with frozen vision
+and language backbones. With K = 64, SaMer removes more
+than 93% of image-side tokens and reduces ColPali storage by
+16.09×, while improving R@1 on Flickr30K and MSCOCO.
+These gains arise because object-aware merging preserves
+query-selectable object evidence that pruning or feature-only
+pooling can remove or collapse. SaMer also outperforms com-
+pression baselines and shows stronger phrase-level grounding,
+suggesting that efficient multi-vector retrieval depends not
+only on reducing token count, but on preserving the evidence
+future query tokens need to select.
+Code — https://github.com/dmis-lab/SaMer
+1
+Introduction
+Efficient multi-vector vision-language retrieval requires pre-
+serving the object-, attribute-, and relation-level evidence
+that query tokens can select under late interaction. Multi-
+vector retrieval has been widely adopted in text retrieval
+since ColBERT (Khattab and Zaharia 2020; Santhanam et al.
+2022b), which performs maximum-similarity (MaxSim)
+matching between contextualized query and document to-
+ken embeddings. Recent vision-language retrievers such as
+ColPali (Faysse et al. 2024) extend this paradigm to visual
+inputs by storing image-side patch embeddings and com-
+paring them with query tokens through MaxSim. Similarly,
+ColQwen2 (Faysse et al. 2024) builds on Qwen2-VL (Wang
+et al. 2024), whose visual tokenization supports flexible im-
+age representation. These models use MaxSim to compare
+each query token with all image-side tokens and select the
+∗Corresponding author.
+most similar visual token as evidence, making retrieval sensi-
+tive to objects, attributes, and relations rather than only global
+image-text similarity (Li et al. 2019; Diao et al. 2021).
+However, preserving token-level image representations
+makes retrieval expensive in both storage and scoring. A
+multi-vector retriever stores hundreds to over a thousand
+image-side token embeddings per image, and retrieval re-
+quires MaxSim comparisons between query tokens and all
+stored image tokens. As the index grows, both memory foot-
+print and scoring latency increase rapidly, limiting large-
+scale image search and retrieval-augmented visual question
+answering. The issue is especially pronounced in patch-based
+visual representations, where each image produces many lo-
+cal tokens that must be stored and compared during MaxSim
+scoring, making patch-level embeddings a major bottleneck
+for multi-vector VLM retrievers (Dosovitskiy et al. 2021;
+Tang et al. 2022; Ma et al. 2025a).
+One strategy is to compress visual tokens through prun-
+ing or merging (Ryoo et al. 2021; Rao et al. 2021; Liang
+et al. 2022; Marin et al. 2023; Bolya et al. 2023). Recent
+multimodal acceleration methods reduce visual tokens for
+large vision-language models (Cao, Paranjape, and Hajishirzi
+2023; Shang et al. 2025). Yet retrieval compression differs
+from token reduction because patch importance is query-
+dependent. For the same image, one query may depend on a
+small object, another on an attribute, and a third on a rela-
+tion. If compression removes or incorrectly merges phrase-
+relevant evidence, late interaction can no longer recover the
+token that should support the match. This risk is acute under
+feature-based merging, where similar patches from different
+instances of the same category can collapse into the same
+representation and lose the distinction on which a query de-
+pends (Lee and Hong 2024; Huang et al. 2025). For multi-
+vector retrieval, the goal is not simply to reduce redundant
+tokens, but to preserve object- and region-level evidence in a
+form that remains selectable under future MaxSim queries.
+To this end, we propose Semantic-aware Merging
+(SaMer), an object-aware token merging framework that
+preserves object- and region-level semantic evidence for
+future MaxSim queries. SaMer compresses post-projector
+visual tokens into K merged tokens using feature-spatial
+soft assignment, forming each representative as a normal-
+ized weighted centroid while preserving the original late-
+interaction interface. During training, object annotations
+arXiv:2607.04605v1  [cs.IR]  6 Jul 2026
+
+
+serve not as an auxiliary grounding loss, but as a merge
+prior that guides which visual tokens should be grouped
+together. This discourages cross-instance merging, helping
+compressed representatives retain object-level evidence for
+later MaxSim retrieval. At inference, SaMer requires no
+ground-truth bounding boxes (bbox) or object detector and
+performs annotation-free feature-spatial merging while re-
+maining pluggable into existing multi-vector retrievers. Fi-
+nally, SaMer uses projection-only adaptation, freezing the
+vision encoder and language backbone while training only
+the shared projection layer to keep merged tokens compatible
+with MaxSim scoring.
+Because SaMer is designed to preserve object-level struc-
+ture under compression, retrieval accuracy alone may not
+reveal whether compressed tokens retain the phrase-level
+evidence used by late interaction. We therefore comple-
+ment retrieval evaluation with grounding-oriented metrics
+that measure whether query-token relevance remains con-
+centrated inside annotated phrase regions. With K = 64,
+SaMer removes more than 93% of image-side tokens, re-
+duces ColPali image-side storage by 16.09×, and improves
+R@1 from 77.0 to 82.4 on Flickr30K and from 47.4 to 51.6
+on MSCOCO. Grounding results further show that SaMer
+better preserves phrase-level visual evidence than pruning-
+and pooling-based compression baselines at the same token
+budget. These results support our view that the effectiveness
+of retrieval compression depends on whether object evidence
+remains accessible to query tokens after compression. Our
+contributions are:
+• We frame visual-token compression for late-interaction
+retrieval as an evidence-preservation problem and iden-
+tify object-instance collapse as a key failure mode of
+feature-based merging.
+• We propose SaMer, an object-aware token merging
+method that uses training-time object annotations as a
+merge prior to discourage cross-instance merging, with-
+out requiring annotations at inference time.
+• We show that SaMer at K = 64 removes over 93% of
+visual tokens and reduces ColPali storage by 16.09×,
+while outperforming pruning- and pooling-based com-
+pression baselines under matched budget and adaptation
+with stronger phrase-level grounding.
+2
+Related Works
+2.1
+Vision-language retrieval and late interaction
+Vision-language retrieval has been widely studied through
+contrastive image-text representation learning and multi-
+modal pretraining, including ALIGN (Jia et al. 2021), AL-
+BEF (Li et al. 2021), BLIP (Li et al. 2022), and BLIP-
+2 (Li et al. 2023). While these models provide strong image-
+text representations, they can underrepresent local evidence
+when retrieval depends on fine-grained objects, attributes,
+or regions. Late-interaction retrieval addresses this limita-
+tion by preserving token-level matching, as in COIL (Gao,
+Dai, and Callan 2021), SPLADE (Formal, Piwowarski, and
+Clinchant 2021; Formal et al. 2021), PLAID (Santhanam
+et al. 2022a), WARP (Scheerer et al. 2025), and multi-vector
+vision-language retrievers such as ColPali and ColQwen2.
+However, storing and scoring many visual token embeddings
+per candidate introduces storage and scoring costs.
+2.2
+Visual token reduction and retrieval-side
+compression
+Visual token reduction has been explored through pruning
+and merging methods such as LLaVA-PruMerge (Shang et al.
+2025), LVPruning (Sun et al. 2025), VisionZip (Yang et al.
+2025), ZipVL (He et al. 2024), LiteLVLM (Lee and Choi
+2026), and ToMe (Bolya et al. 2023). These methods mainly
+reduce transformer computation inside generative LVLMs or
+vision encoders, whereas SaMer compresses post-projector
+retrieval embeddings stored in the multi-vector index and
+used by late-interaction scoring. Recent work has studied
+retrieval-side compression for multi-vector vision-language
+retrievers. Prior work compares pruning and merging strate-
+gies for ColPali and ColQwen2 (Ma et al. 2025b), while
+HPC-ColPali (Bach 2025) combines quantization, attention-
+guided pruning, and binary encoding. SAP (Liu et al. 2026)
+prunes structural anchor patches, and H-Pool (Qin et al. 2026)
+performs modality-agnostic fixed-budget pooling for multi-
+vector indexes. Unlike these methods, SaMer uses object
+annotations during adaptation to shape the merge assign-
+ment and discourage cross-instance mixing, while requiring
+no detector at inference time.
+3
+Preliminaries
+3.1
+Multi-vector Late Interaction
+Multi-vector vision-language retrieval represents images and
+text queries as sets of token embeddings and computes re-
+trieval scores through late interaction. Given an image I, the
+vision encoder and projection layer produce N visual tokens,
+denoted as V (I) = {vi}N
+i=1, where vi ∈RD. Similarly, a text
+query q is represented as M query tokens Q(q) = {qj}M
+j=1,
+where qj ∈RD. Both image and text tokens are projected
+into the same D-dimensional retrieval space.
+The retrieval score is defined by MaxSim late interaction.
+Each query token is matched to the most similar visual token,
+and the query-image score is computed as
+S(q, I) = 1
+M
+M
+X
+j=1
+max
+i∈[N] q⊤
+j vi.
+(1)
+This scoring allows query tokens to match objects, at-
+tributes, or regions in the image, making multi-vector re-
+trieval effective for fine-grained visual evidence. However,
+since every query token should be compared with every
+visual token, the number of visual tokens N becomes the
+bottleneck for both storage and computation.
+3.2
+Post-projector Token Compression
+In multi-vector vision-language retrieval, each image is rep-
+resented by N post-projector visual tokens V = {vi}N
+i=1,
+where each token has been mapped into the shared image-
+text retrieval space. These tokens are stored in the retrieval
+index and used by MaxSim scoring. Therefore, full-token re-
+trieval requires O(ND) storage per image for D-dimensional
+
+
+Image I
+"People standing in a long line"
+Text query q
+Vision 
+Encoder
+Text 
+Encoder
+M query
+tokens
+Shared
+Projection
+Layer
+People
+standing
+in
+a
+long
+line
+...
+...
+N → K tokens (K < N)
+Token Merging
+(Semantic Clustering)
+...
+...
+...
+...
+...
+Late Interaction
+(MaxSim)
+Merged Visual Tokens (K)
+Image Score &
+Ranked
+Image hidden states
+Text hidden states
+Post-projection
+Visual Tokens
+Post-projection
+Text Tokens
+M tokens
+1. Encode
+Vision & Text Encoders
+4. Retrieve
+Late Interaction (MaxSim)
+2. Projection
+Shared Projection Layer
+3. Merge
+Semantic & Spatial
+Clustering 
+Frozen
+Trainable
+Query Tokens (M)
+N tokens
+Figure 1: Overview of SaMer. Frozen vision and language encoders produce hidden states, a shared trainable projection layer
+maps both modalities into the retrieval space, and image-side post-projector tokens are compressed from N to K representative
+tokens before MaxSim scoring. During training, object-aware merging and projection-only adaptation encourage the compressed
+tokens to preserve object- and region-level evidence; at inference time, SaMer keeps the same late-interaction interface without
+requiring bbox or detectors.
+tokens and computes MN query-image token similarities
+per image, corresponding to O(MND) dot-product cost for
+a query with M tokens. Reducing the number of image-
+side post-projector tokens can directly lower both index stor-
+age and scoring cost while preserving the encoder and late-
+interaction retrieval interface. Unlike token pruning, which
+discards visual evidence before future queries are known,
+token merging aims to aggregate the token set into a smaller
+set of representative tokens.
+4
+Methods
+Our framework has three steps, all designed to keep the orig-
+inal late-interaction interface while replacing the image side
+with compressed representatives. First, SaMer compresses
+the image-side post-projector tokens into K representative
+tokens using feature-spatial soft assignment. Second, during
+training only, object annotations guide which tokens may
+be merged by penalizing assignments that mix different ob-
+ject instances. Third, SaMer adapts only the shared projec-
+tion layer so that the compressed tokens remain compatible
+with MaxSim scoring, while the vision encoder and language
+backbone stay frozen. Figure 1 illustrates the overall process.
+4.1
+Post-projector Visual Token Merging
+SaMer reduces the number of visual tokens while keeping
+the late-interaction interface unchanged. Given the full post-
+projector visual token set V
+= {vi}N
+i=1, SaMer assigns
+these tokens to K representatives, where K ≪N, and
+constructs one merged token for each representative. These
+post-projector embeddings are the vectors stored in the re-
+trieval index and compared with query tokens by MaxSim.
+Therefore, compressing them directly reduces index storage
+and query-time similarity computation without modifying
+the vision encoder or the retrieval scoring function.
+We construct the compressed representation with feature-
+spatial centroid merging. Each visual token vi is associated
+with a spatial coordinate pi ∈[0, 1]2, and each representa-
+tive k maintains a feature centroid µk and a spatial centroid
+sk initialized from K uniformly spaced seed tokens in the
+flattened image-token grid. SaMer assigns tokens to repre-
+sentatives using a distance that combines feature similarity
+and spatial coherence:
+d(i, k) =
+ 1 −v⊤
+i µk
+
+|
+{z
+}
+feature similarity
++γ ∥pi −sk∥2
+2
+|
+{z
+}
+spatial coherence
+,
+(2)
+where γ controls the strength of the spatial term. The feature
+term groups semantically similar tokens, while the spatial
+term discourages visually similar but spatially distant regions
+from being merged too aggressively.
+SaMer converts this distance d(i, k) into soft assignment
+weights ai,k and forms each representative as the correspond-
+ing weighted centroid with ℓ2 normalization:
+ai,k = softmaxk
+
+−d(i, k)
+τs
+
+,
+rk = normalize2
+ PN
+i=1 ai,kvi
+PN
+i=1 ai,k
+!
+.
+(3)
+Here, ai,k is the assignment weight from token i to represen-
+tative k, and τs is the soft-assignment temperature. Unlike
+pruning, the centroid construction in Eq. 3 does not discard
+visual tokens; instead, it aggregates them into compact repre-
+sentatives. The compressed representation R(I) = {rk}K
+k=1
+is scored with the same late-interaction rule as Eq. 1, except
+that MaxSim is taken over merged tokens:
+SK(q, I) = 1
+M
+M
+X
+j=1
+max
+k∈[K] q⊤
+j rk.
+(4)
+
+
+Thus, in the training-free setting, SaMer acts as a cache-
+time compression method where the query encoder, image
+encoder, projection layer, and scoring rule remain unchanged,
+and only the stored image-side representation is replaced with
+K merged tokens.
+4.2
+Object-aware Merge Prior
+When object-level annotations are available during training,
+SaMer uses them as a weak merge prior rather than as an
+auxiliary grounding loss. The goal is to make merged rep-
+resentatives more object-consistent, since visually similar
+regions may correspond to different object instances and a
+purely feature-based assignment may collapse them into the
+same representative. For each visual token vi, we assign a
+bbox label bi using its spatial coordinate pi: tokens out-
+side all bboxes receive a background label, tokens inside a
+bbox receive the corresponding object instance label, and to-
+kens inside multiple boxes are assigned to the smallest bbox.
+These labels are used only during training to define the merge
+prior; background and context tokens are not removed from
+the compressed representation.
+To build the object-aware prior, we first estimate which
+bbox labels dominate each representative. We do this with
+a stop-gradient hard assignment ci = arg mink∈[K] d(i, k),
+computed from the feature-spatial distance before applying
+the object-aware penalty. This hard assignment is not used
+to form the final merged token; it is used only to estimate the
+bbox-label distribution of each representative, so gradients
+do not backpropagate through ci:
+Pk(b) =
+PN
+i=1 1[ci = k]1[bi = b]
+PN
+i=1 1[ci = k] + ϵ
+,
+Pinst(i, k) = 1 −Pk(bi).
+(5)
+This penalty is small when token i shares the bbox label with
+most tokens in representative k, and large when assigning i
+would mix evidence from different object instances.
+After estimating this prior, SaMer returns to soft assign-
+ment to construct the actual training-time merged tokens. The
+object-aware penalty is added to the feature-spatial distance,
+so cross-instance assignments receive lower weight:
+ai,k = softmaxk
+
+−d(i, k) + Pinst(i, k)
+τs
+
+,
+rsoft
+k
+= normalize2
+ PN
+i=1 ai,kvi
+PN
+i=1 ai,k
+!
+.
+(6)
+where the softmax is taken over representatives k
+=
+1, . . . , K for each token i. During training, SaMer uses cen-
+troids rsoft
+k
+in Eq. 6 for compressed MaxSim scoring. The
+penalty reshapes the soft assignment weights, through which
+gradients flow to the projected embeddings and merged cen-
+troids. At inference time, SaMer does not use bboxes or ob-
+ject labels. Instead, it performs bbox-free feature-spatial soft
+assignment, while the object-aware prior is reflected in the
+adapted projection space. We use soft assignment because it
+performs best empirically among centroid construction vari-
+ants, which are compared in the Appendix.
+4.3
+Compression-Aware Projection-Only
+Adaptation
+Training-free SaMer can be directly applied to an existing
+multi-vector retriever, but small-K compression creates a
+mismatch between the representation used by the original
+retriever and the compressed representation used by SaMer.
+The projection layer is trained assuming that all N visual
+tokens are available for late-interaction scoring, whereas
+SaMer scores only K merged tokens. We therefore adapt
+only the image-text shared projection layer using the com-
+pressed score SK, while keeping the vision encoder and
+language backbone frozen. This aligns the retrieval space
+with compressed tokens without changing the backbone rep-
+resentations or introducing a new retrieval architecture.
+During
+adaptation,
+token
+merging
+remains
+non-
+parametric: it introduces no learnable merge parameters.
+However, because the merged centroids are computed from
+projected visual embeddings through soft assignment and
+weighted averaging, gradients from the compressed MaxSim
+score still update the projection layer. Thus, the projection is
+learned to produce features that remain effective after merg-
+ing. When object annotations are available, the object-aware
+prior shapes the soft assignments without adding an auxil-
+iary loss, and SaMer is optimized only with a multi-positive
+InfoNCE retrieval loss (Oord, Li, and Vinyals 2018) over
+compressed MaxSim scores:
+Lret = −log
+P
+I+∈P(q) exp(SK(q, I+)/τ)
+P
+I∈B exp(SK(q, I)/τ)
+.
+(7)
+Here, P(q) is the set of positive images for query q, B is the
+batch candidate set, and τ is the temperature. At inference
+time, K merged visual tokens are cached, and retrieval uses
+the same late-interaction scoring rule over the compressed
+image representation.
+5
+Experiments
+5.1
+Datasets
+We evaluate SaMer with retriever-only evaluation on
+Flickr30K, MSCOCO, ImageCoDe, and DocVQA (Mathew,
+Karatzas, and Jawahar 2021). Flickr30K and MSCOCO eval-
+uate natural-image text-to-image retrieval, where queries
+often refer to objects, attributes, and relations in natural
+scenes. Since SaMer is adapted only on the Flickr30K-
+Entities (Plummer et al. 2015) training split, we treat
+Flickr30K as the in-domain benchmark and MSCOCO as
+a cross-dataset benchmark. ImageCoDe (Krojer et al. 2022)
+evaluates compositional retrieval over visually similar im-
+ages, where small object, attribute, or relation differences can
+determine the correct image. This makes ImageCoDe use-
+ful for testing whether compression preserves subtle query-
+dependent evidence among near-miss candidates. DocVQA
+provides a document-domain reference, where retrieval of-
+ten depends on sparse OCR tokens and layout cues rather
+than natural-object evidence. It therefore serves as a bound-
+ary case for object-centric compression in a domain that
+requires broad textual and spatial coverage. We report Re-
+call@1 (R@1), Recall@5 (R@5), and nDCG@10.
+
+
+Method
+Flickr30K
+MSCOCO
+ImageCoDe
+DocVQA
+R@1
+R@5
+nDCG@10
+R@1
+R@5
+nDCG@10
+R@1
+R@5
+nDCG@10
+R@1
+R@5
+nDCG@10
+Single-vector
+CLIP
+58.2
+82.9
+73.7
+30.8
+56.0
+47.7
+1.4
+7.0
+5.7
+6.7
+13.8
+11.8
+OpenCLIP
+76.5
+93.5
+87.0
+48.5
+73.2
+64.4
+2.2
+9.1
+7.3
+15.3
+26.8
+23.1
+MetaCLIP
+62.8
+85.8
+77.2
+35.7
+61.7
+52.8
+2.1
+7.6
+6.3
+5.4
+14.4
+11.5
+EVA-CLIP
+79.9
+94.7
+89.2
+51.0
+74.6
+66.1
+2.5
+8.8
+7.5
+12.9
+25.1
+19.8
+DFN-CLIP
+79.6
+94.9
+89.0
+53.4
+77.8
+69.0
+1.9
+9.8
+7.7
+12.4
+27.7
+21.8
+SigLIP2
+79.8
+94.2
+88.8
+52.1
+75.2
+66.9
+2.6
+9.4
+7.5
+15.5
+29.1
+24.3
+VLM-based
+VLM2Vec-v2
+41.7
+68.8
+59.0
+20.2
+44.1
+36.5
+1.0
+5.1
+4.4
+4.0
+10.4
+8.5
+GME
+74.6
+91.8
+85.2
+47.3
+71.1
+62.7
+2.3
+9.1
+7.7
+41.5
+60.3
+53.3
+VisRAG
+69.6
+90.0
+82.2
+42.5
+67.5
+58.9
+1.7
+7.0
+6.0
+34.8
+51.2
+45.6
+Multi-vector
+ColPali
+77.0
+92.9
+86.9
+47.4
+71.7
+63.3
+5.4
+16.0
+13.2
+51.0
+66.5
+60.7
+HPC
+54.0
+77.8
+69.0
+30.6
+52.5
+45.4
+3.6
+11.3
+9.0
+26.4
+39.7
+34.9
+H-Pool
+73.7
+91.4
+84.7
+44.9
+69.6
+60.9
+5.6
+15.6
+12.9
+45.0
+61.9
+55.5
+SAP
+68.3
+88.6
+80.8
+39.6
+63.7
+55.4
+3.8
+12.5
+10.1
+40.4
+55.2
+50.2
+SaMer (w/o FT)
+73.5
+91.1
+84.5
+45.1
+69.7
+61.1
+5.2
+17.0
+14.1
+44.6
+62.1
+55.6
+SaMer (w/ FT)
+82.4
+96.3
+90.9
+51.6
+75.5
+67.1
+5.9
+17.0
+14.4
+45.7
+60.5
+55.6
+ColQwen2
+73.6
+91.3
+84.7
+43.3
+68.0
+59.5
+4.7
+14.6
+12.2
+53.2
+67.9
+63.0
+HPC
+67.1
+88.7
+80.4
+40.1
+64.8
+56.5
+4.4
+13.9
+11.6
+39.9
+55.2
+49.6
+H-Pool
+71.8
+90.8
+83.6
+42.2
+67.2
+58.6
+4.7
+14.2
+12.3
+50.1
+64.8
+59.3
+SAP
+69.3
+89.9
+82.2
+40.7
+65.8
+57.2
+4.8
+13.7
+11.8
+45.5
+59.4
+54.7
+SaMer (w/o FT)
+71.3
+90.4
+83.3
+42.1
+67.0
+58.4
+4.8
+15.6
+13.0
+47.2
+63.9
+57.3
+SaMer (w/ FT)
+79.3
+94.7
+88.7
+47.5
+72.3
+63.5
+5.1
+16.2
+12.9
+48.8
+62.5
+58.1
+Table 1: Retriever-only results across four benchmarks. SaMer compresses the image-side representation to K = 64 tokens and
+is compared with compression baselines applied to the same backbone when available. Shaded rows indicate SaMer variants.
+Bold and underline indicate the best and second-best results within each method group or backbone family, respectively.
+5.2
+Baselines
+We compare against single-vector, VLM-based, multi-vector,
+and retrieval-side compression baselines. Single-vector base-
+lines include CLIP (Radford et al. 2021), OpenCLIP (Cherti
+etal. 2023), MetaCLIP(Xuetal.2024),EVA-CLIP(Sunetal.
+2023), DFN-CLIP (Fang et al. 2023), and SigLIP2 (Tschan-
+nen et al. 2025), which use global image-query embeddings.
+VLM-based baselines include VLM2Vec-v2 (Meng et al.
+2026), GME (Zhang et al. 2024), and VisRAG (Yu et al.
+2025), which use stronger multimodal backbones. Multi-
+vector baselines include ColPali and ColQwen2. Retrieval-
+side compression baselines include H-Pool, HPC, and SAP,
+which reduce image-side retrieval embeddings through pool-
+ing, attention-based pruning, or structural anchor pruning.
+We apply SaMer to the multi-vector retrievers in training-
+free and adapted settings. For controlled comparisons, com-
+pression baselines use the same backbones and K = 64 vi-
+sual tokens when applicable, following their method-specific
+settings. Unless otherwise stated, SaMer uses K = 64,
+adapts the shared projection layer for 3 epochs on Flickr30K-
+Entities, and keeps the backbones frozen. Optimization de-
+tails are in the Appendix.
+5.3
+Results
+Table 1 presents retriever-only performance across natural-
+image, compositional-image, and document-image bench-
+marks. SaMer is most effective on natural-image retrieval,
+where redundant visual tokens coexist with query-specific
+object and region evidence. On Flickr30K, SaMer improves
+ColPali R@1 from 77.0 to 82.4 and ColQwen2 R@1 from
+73.6 to 79.3, suggesting that compact object-aware represen-
+tatives can improve retrieval under aggressive token reduc-
+tion. It also outperforms H-Pool, the strongest external com-
+pression baseline, whose R@1 is 73.7 with ColPali and 71.8
+with ColQwen2. The same trend holds on MSCOCO, where
+SaMer improves ColPali R@1 from 47.4 to 51.6 and out-
+performs H-Pool, SAP, and HPC. These results suggest that
+feature-similarity pooling alone may be less effective than
+object-aware merging with projection-only adaptation for
+preserving object evidence under MaxSim retrieval. Merging
+also tends to preserve retrieval evidence better than random
+or spatial pruning, as reported in the Appendix.
+SaMer performs strongly on ImageCoDe, where visually
+similar images must be distinguished using subtle object,
+attribute, and relation cues. With ColPali, SaMer improves
+R@1 from 5.4 to 5.9 and nDCG@10 from 13.2 to 14.4, sup-
+porting our view that efficient compression should preserve
+query-selectable object evidence rather than only retain glob-
+ally salient or visually similar patches. DocVQA serves as
+a boundary case beyond the object-centric retrieval setting
+targeted by SaMer: document images require broad OCR
+and layout coverage, so aggressive token compression can
+remove sparse textual evidence rather than redundant visual
+patches. SaMer is therefore not optimized for this setting,
+but remains competitive with compressed baselines using a
+compact image-side representation.
+
+
+Method
+Flickr30K
+MSCOCO
+ImageCoDe
+R@1 nDCG@10 R@1 nDCG@10 R@1 nDCG@10
+ColPali
+H-Pool
+79.2
+88.7
+49.7
+65.3
+5.9
+13.8
+HPC
+67.7
+81.1
+37.8
+53.4
+4.7
+11.8
+SAP
+80.2
+89.5
+47.3
+62.9
+4.6
+12.6
+SaMer
+82.4
+90.9
+51.6
+67.1
+5.9
+14.4
+ColQwen2
+H-Pool
+77.0
+87.0
+46.1
+62.1
+5.0
+12.9
+HPC
+77.9
+87.8
+45.3
+61.7
+4.9
+12.7
+SAP
+78.2
+88.2
+46.4
+62.5
+5.0
+12.4
+SaMer
+79.3
+88.7
+47.5
+63.5
+5.1
+12.9
+Table 2: Adapted compression results at K = 64 under
+projection-only adaptation. Shaded rows indicate SaMer;
+bold and underline denote the best and second-best results.
+6
+Analysis of SaMer
+6.1
+Ablation Study
+Is the Gain Only from Adaptation?
+One possible ex-
+planation for SaMer’s gains is that projection-only adapta-
+tion alone improves the compressed retrieval space. To sep-
+arate adaptation from the merge design, Table 2 compares
+SaMer with other compression methods trained under the
+same adaptation setting. All methods use the same frozen
+backbone, the same projection-only update, and the same
+K = 64 visual token budget.
+SaMer achieves the best R@1 and nDCG@10 on natural-
+image and compositional retrieval metrics for ColPali and
+ColQwen2. This suggests that the improvement is not a fine-
+tuning effect. If projection-only adaptation were the sole
+explanation, we would expect the gap between SaMer and
+the other adapted compression variants to be smaller un-
+der the same training setup. Instead, the results suggest that
+SaMer remains stronger because its merge rule better controls
+which visual evidence survives compression. By discourag-
+ing tokens from different object instances from being mixed,
+SaMer preserves object- and region-level evidence more ef-
+fectively than pruning, pooling, or ratio-based compression.
+Compression Budget Analysis.
+Table 3 reports retrieval
+performance as the token budget K varies, and Figure 2 visu-
+alizes the trade-off between token budget and R@5. Retrieval
+performance improves as K increases from 32 to 64, but the
+gain becomes small beyond that point. On Flickr30K, R@5
+rises from 95.8 at K = 32 to 96.3 at K = 64, and then in-
+creases only to 96.8 at K = 512. MSCOCO shows the same
+pattern, increasing from 75.0 at K = 32 to 75.5 at K = 64,
+and reaching 76.1 at K = 512. This suggests that a small
+set of merged tokens is sufficient to preserve most retrieval
+performance on these benchmarks.
+Figure 2 compares SaMer with competing compression
+methods at the same K = 64 budget. Under this controlled
+setting, SaMer lies above H-Pool, SAP, and HPC on both
+Flickr30K and MSCOCO, indicating a better quality-budget
+trade-off at the same token budget. Taken together, these re-
+sults make K = 64 a favorable operating point, balancing
+K
+variant
+Comp.
+ratio (%)
+Flickr30K
+MSCOCO
+R@1 R@5 nDCG@10 R@1 R@5 nDCG@10
+512
+50.29
+83.7
+96.8
+91.7
+52.2
+76.1
+67.5
+256
+75.15
+83.5
+96.7
+91.6
+52.4
+76.2
+67.7
+128
+87.57
+83.1
+96.5
+91.3
+52.3
+76.0
+67.6
+64 (ours)
+93.79
+82.4
+96.3
+90.9
+51.6
+75.5
+67.1
+32
+96.89
+81.3
+95.8
+90.3
+51.3
+75.0
+66.4
+Table 3: Compression budget analysis on Flickr30K and
+MSCOCO as K varies. K = 64 provides a favorable trade-
+off between retrieval quality and image-side compression.
+32
+64
+128
+256
+512
+Token budget K
+88
+89
+90
+91
+92
+93
+94
+95
+96
+97
+Flickr30k R@5
+F30k
+COCO
+H-Pool
+SAP
+HPC
+60
+62
+64
+66
+68
+70
+72
+74
+76
+MSCOCO R@5
+Figure 2: Token budget and R@5 trade-off. Solid lines show
+SaMer across token budgets, with baselines marked at K =
+64. SaMer shows diminishing returns beyond K = 64 and
+outperforms baselines under the same budget.
+strong retrieval quality with substantial image-side compres-
+sion. We use K = 64 throughout the main experiments.
+Merge Component Study.
+Table 4 analyzes the contribu-
+tion of each merge component. Feature-only merging groups
+visually similar tokens, but adding spatial coherence alone
+provides little benefit. Flickr30K R@1 changes from 80.7 to
+80.4, and MSCOCO R@1 remains nearly unchanged. This
+suggests that local smoothness is not enough for retrieval-
+oriented compression because query-relevant evidence can
+depend on object identity rather than spatial proximity alone.
+In other words, spatial coherence helps organize nearby to-
+kens, but it does not by itself make the merged representation
+object-aware.
+The object-aware merge prior provides the main gain. It
+raises Flickr30K R@1 to 82.4 and MSCOCO R@1 to 51.6,
+while also improving grounding quality. This suggests that
+the gain comes not only from projection adaptation, but also
+from constraining feature-spatial merging to respect object-
+instance structure. We evaluate grounding with BoxMass,
+RegionHit, and CoverageIoU, which measure whether phrase
+relevance remains aligned with annotated object regions. The
+metric definitions are provided in the Appendix. BoxMass
+increases from 47.8 to 54.2 and CoverageIoU from 13.1 to
+16.4, indicating that the object-aware prior improves retrieval
+by preserving phrase-level visual evidence inside the correct
+object regions. Full merge-component metrics are reported
+in the Appendix.
+
+
+Variant
+Components
+Retrieval
+Grounding
+Feat. Spat. Obj.
+Flickr30K
+R@1
+MSCOCO
+R@1
+BoxMass CovIoU
+(A)
+✓
+✗
+✗
+80.7
+49.8
+47.6
+13.0
+(B)
+✓
+✓
+✗
+80.4
+49.8
+47.8
+13.1
+SaMer
+✓
+✓
+✓
+82.4
+51.6
+54.2
+16.4
+Table 4: SaMer combines feature, spatial, and object-aware
+components.
+BoxMass
+Region Hit
+Coverage IoU
+0
+10
+20
+30
+40
+50
+60
+70
+BoxMass / Region Hit
+51.8
+10.5
+30.3
+2.7
+39.9
+7.4
+41.4
+62.5
+41.3
+62.8
+54.2
+68.3
+Full
+HPC
+SAP
+H-Pool
+SaMer w/o FT
+SaMer
+0.0
+2.5
+5.0
+7.5
+10.0
+12.5
+15.0
+17.5
+Coverage IoU
+2.1
+0.7
+1.5
+11.711.7
+16.4
+Figure 3: Grounding comparison between full ColPali, com-
+pression baselines, and SaMer variants. BoxMass and Re-
+gionHit use the left axis, while CoverageIoU uses the right
+axis. SaMer improves localization and evidence concentra-
+tion under compression.
+6.2
+Grounding Comparison
+Figure 3 evaluates whether compressed representations pre-
+serve phrase-level visual evidence. Compared with the full
+ColPali representation, compression baselines show mixed
+behavior: some improve weak localization, but their rele-
+vance can remain spread across nearby objects or background
+regions. This suggests that reducing visual tokens can still
+leave enough signal to reach the general target area, but does
+not necessarily preserve object-specific evidence for precise
+phrase grounding. SaMer shows a more consistent pattern.
+Training-free SaMer improves RegionHit from 10.5 to 62.8
+and CoverageIoU from 2.1 to 11.7, indicating that feature-
+spatial merging alone helps the compressed representation
+retain spatial access to the correct phrase region even with-
+out projection adaptation.
+Object-aware projection-only adaptation further improves
+relevance concentration. SaMer raises BoxMass from 41.3
+to 54.2, surpassing the full-token baseline of 51.8, while im-
+proving RegionHit to 68.3 and CoverageIoU to 16.4. This
+distinction matters because a method may reach the tar-
+get region while still assigning substantial relevance to sur-
+rounding context, nearby objects, or visually similar back-
+ground patches. The BoxMass gain shows that SaMer does
+not merely make the relevance map overlap with the target
+bbox; it concentrates more phrase-specific evidence inside
+the annotated object region. With the improvements in Re-
+gionHit and CoverageIoU, this suggests that the object-aware
+prior helps merged tokens preserve both localization and ev-
+idence concentration under aggressive compression. Quali-
+tative grounding examples are provided in the Appendix.
+Variant
+Flickr30K
+MSCOCO
+Storage/
+1M (GB)
+MaxSim
+Ops (1012)
+QPS
+Storage/
+1M (GB)
+MaxSim
+Ops (1012)
+QPS
+ColPali
+Full
+263.7
+36.87
+625.5
+263.7
+845.51
+154.2
+SaMer
+16.4 (16.09×) 2.29 (16.1×) 2716.3 (4.3×) 16.4 (16.09×) 52.54 (16.1×) 1406.7 (9.1×)
+ColQwen2
+Full
+61.0
+8.01
+1381.6
+32.6
+97.50
+314.7
+SaMer
+16.4 (3.73×)
+2.15 (3.7×)
+2674.7 (1.9×)
+16.4 (1.99×)
+48.99 (2.0×)
+969.7 (3.1×)
+Table 5: SaMer reduces image-side storage and MaxSim
+operations while improving query throughput under the same
+late-interaction interface. Parentheses indicate improvement
+over the corresponding full multi-vector retriever.
+6.3
+Efficiency Analysis
+Table 5 summarizes the storage and scoring efficiency gains
+of SaMer under the same late-interaction retrieval interface.
+Since SaMer compresses only the cached image-side rep-
+resentation, storage is reported per one million cached im-
+ages, while MaxSim comparisons and QPS are measured
+by scoring all queries against all candidate images in each
+evaluation dataset. For ColPali, which stores 1,030 visual
+tokens per image before compression, SaMer reduces stor-
+age by 16.09× and MaxSim comparisons by 16.1× on both
+Flickr30K and MSCOCO. This reduction translates into
+substantial throughput gains, increasing QPS by 4.3× on
+Flickr30K and 9.1× on MSCOCO.
+For ColQwen2, the full representation contains fewer vi-
+sual tokens, so the gains are smaller but still meaningful.
+SaMer reduces storage by 3.73× on Flickr30K and 1.99×
+on MSCOCO, reduces MaxSim comparisons by 3.7× and
+2.0×, and improves QPS by 1.9× and 3.1×, respectively.
+Throughput gains are affected by memory movement and
+batching, so they do not scale one-to-one with comparison
+reduction, but the improvements remain substantial. These
+results show that SaMer reduces both storage and retrieval
+latency, lowering scoring cost without changing the query
+encoder or MaxSim scoring rule. Storage and latency details
+appear in the Appendix.
+7
+Conclusion
+In this work, we introduced SaMer, an object-aware to-
+ken merging framework for efficient multi-vector vision-
+language retrieval. Motivated by the view that image-
+side compression should preserve query-selectable evidence
+rather than merely reduce token count, SaMer compresses
+post-projector image tokens into K representative centroids.
+By using object annotations only during training, SaMer dis-
+courages cross-instance merging while requiring no bboxes
+or object detectors at inference time. With projection-only
+adaptation, SaMer aligns compressed visual representations
+with the existing retrieval space while keeping the vision and
+language backbones frozen. Experiments show that K = 64
+merged tokens substantially reduce storage and MaxSim
+scoring cost while maintaining strong retrieval performance
+and phrase-level grounding. Overall, our results suggest that
+efficient late-interaction retrieval depends not only on token
+count, but also on preserving query-selectable evidence.
+
+
+Acknowledgments
+We thank Taewhoo Lee, Hyeon Hwang, and Yein Park for
+their insightful feedback and discussions. This research was
+supported by the National Research Foundation of Korea
+(NRF-2023R1A2C3004176), the Ministry of Health & Wel-
+fare, Republic of Korea (HR20C002103), the Ministry of
+Science and ICT through Seoul National University Hos-
+pital (RS-2023-00262002), the National Research Founda-
+tion of Korea (NRF) grant funded by the Korea government
+(MSIT and MOE) (No. RS-2025-16652968), the ICT Cre-
+ative Consilience Program through the Institute of Informa-
+tion & Communications Technology Planning & Evaluation
+(IITP) grant funded by the Korea government (MSIT) (IITP-
+2026-RS-2020-II201819), the Ministry of Science and ICT
+(MSIT) and National IT Industry Promotion Agency (NIPA)
+through the Hyperscale AI Healthcare Service Support Pro-
+gram (H0701-25-1003), and grants of the Korea Health
+Technology R&D Project through the Korea Health Industry
+Development Institute (KHIDI), funded by the Ministry of
+Health & Welfare, Republic of Korea (RS-2025-25462758
+and RS-2022-KH129295).
+References
+Bach, D. 2025. Hierarchical Patch Compression for ColPali:
+Efficient Multi-Vector Document Retrieval with Dynamic
+Pruning and Quantization. arXiv preprint arXiv:2506.21601.
+Bolya, D.; Fu, C.-Y.; Dai, X.; Zhang, P.; Feichtenhofer, C.;
+and Hoffman, J. 2023. Token Merging: Your ViT But Faster.
+In The Eleventh International Conference on Learning Rep-
+resentations.
+Cao, Q.; Paranjape, B.; and Hajishirzi, H. 2023. PuMer:
+Pruning and Merging Tokens for Efficient Vision Language
+Models. In Proceedings of the 61st Annual Meeting of the
+Association for Computational Linguistics, 12890–12903.
+Cherti, M.; Beaumont, R.; Wightman, R.; Wortsman, M.;
+Ilharco, G.; Gordon, C.; Schuhmann, C.; Schmidt, L.; and
+Jitsev, J. 2023. Reproducible Scaling Laws for Contrastive
+Language-Image Learning. In Proceedings of the IEEE/CVF
+Conference on Computer Vision and Pattern Recognition
+(CVPR), 2818–2829.
+Diao, H.; Zhang, Y.; Ma, L.; and Lu, H. 2021. Similarity
+Reasoning and Filtration for Image-Text Matching. In Pro-
+ceedings of the AAAI Conference on Artificial Intelligence,
+volume 35, 1218–1226.
+Dosovitskiy, A.; Beyer, L.; Kolesnikov, A.; Weissenborn,
+D.; Zhai, X.; Unterthiner, T.; Dehghani, M.; Minderer, M.;
+Heigold, G.; Gelly, S.; Uszkoreit, J.; and Houlsby, N. 2021.
+An Image is Worth 16x16 Words: Transformers for Image
+Recognition at Scale. In International Conference on Learn-
+ing Representations.
+Fang, A.; Jose, A. M.; Jain, A.; Schmidt, L.; Toshev, A.; and
+Shankar, V. 2023. Data Filtering Networks. arXiv preprint
+arXiv:2309.17425.
+Faysse, M.; Sibille, H.; Wu, T.; Omrani, B.; Viaud, G.; Hude-
+lot, C.; and Colombo, P. 2024. ColPali: Efficient Document
+Retrieval with Vision Language Models.
+arXiv preprint
+arXiv:2407.01449.
+Formal, T.; Lassance, C.; Piwowarski, B.; and Clinchant, S.
+2021. SPLADE v2: Sparse lexical and expansion model for
+information retrieval. arXiv preprint arXiv:2109.10086.
+Formal, T.; Piwowarski, B.; and Clinchant, S. 2021. Splade:
+Sparse lexical and expansion model for first stage ranking. In
+Proceedings of the 44th International ACM SIGIR Confer-
+ence on Research and Development in Information Retrieval,
+2288–2292.
+Gao, L.; Dai, Z.; and Callan, J. 2021. COIL: Revisit exact
+lexical match in information retrieval with contextualized in-
+verted list. In Proceedings of the 2021 Conference of the
+North American Chapter of the Association for Computa-
+tional Linguistics: Human Language Technologies, 3030–
+3042.
+He, Y.; Chen, F.; Liu, J.; Shao, W.; Zhou, H.; Zhang, K.;
+and Zhuang, B. 2024. Zipvl: Efficient large vision-language
+models with dynamic token sparsification. arXiv preprint
+arXiv:2410.08584.
+Huang, H.-W.; Chai, W.; Chen, K.-M.; Yang, C.-Y.; and
+Hwang, J.-N. 2025. Tosa: Token merging with spatial aware-
+ness. In 2025 IEEE/RSJ International Conference on Intel-
+ligent Robots and Systems (IROS), 9654–9660. IEEE.
+Jia, C.; Yang, Y.; Xia, Y.; Chen, Y.-T.; Parekh, Z.; Pham, H.;
+Le, Q.; Sung, Y.-H.; Li, Z.; and Duerig, T. 2021. Scaling
+up visual and vision-language representation learning with
+noisy text supervision. In International conference on ma-
+chine learning, 4904–4916. PMLR.
+Khattab, O.; and Zaharia, M. 2020. ColBERT: Efficient and
+Effective Passage Search via Contextualized Late Interac-
+tion over BERT. In Proceedings of the 43rd International
+ACM SIGIR Conference on Research and Development in
+Information Retrieval, 39–48.
+Krojer, B.; Adlakha, V.; Vineet, V.; Goyal, Y.; Ponti, E.; and
+Reddy, S. 2022. Image Retrieval from Contextual Descrip-
+tions. arXiv preprint arXiv:2203.15867.
+Lee, D. H.; and Hong, S. 2024. Learning to merge tokens
+via decoupled embedding for efficient vision transformers.
+Advances in Neural Information Processing Systems, 37:
+54079–54104.
+Lee, S.; and Choi, Y. 2026. CLIP Tricks You: Training-free
+Token Pruning for Efficient Pixel Grounding in Large VIsion-
+Language Models. arXiv preprint arXiv:2605.13178.
+Li, J.; Li, D.; Savarese, S.; and Hoi, S. 2023. Blip-2: Boot-
+strapping language-image pre-training with frozen image en-
+coders and large language models. In International confer-
+ence on machine learning, 19730–19742. PMLR.
+Li, J.; Li, D.; Xiong, C.; and Hoi, S. 2022. Blip: Bootstrap-
+ping language-image pre-training for unified vision-language
+understanding and generation. In International conference
+on machine learning, 12888–12900. PMLR.
+Li, J.; Selvaraju, R.; Gotmare, A.; Joty, S.; Xiong, C.; and Hoi,
+S. C. H. 2021. Align before fuse: Vision and language rep-
+resentation learning with momentum distillation. Advances
+in neural information processing systems, 34: 9694–9705.
+
+
+Li, K.; Zhang, Y.; Li, K.; Li, Y.; and Fu, Y. 2019. Visual
+Semantic Reasoning for Image-Text Matching. In Proceed-
+ings of the IEEE/CVF International Conference on Computer
+Vision, 4654–4662.
+Liang, Y.; Ge, C.; Tong, Z.; Song, Y.; Wang, J.; and Xie, P.
+2022. Not All Patches are What You Need: Expediting Vision
+Transformers via Token Reorganizations. In International
+Conference on Learning Representations.
+Liu, C.; Mao, J.; Sha, F.; and Yuille, A. 2017. Attention
+correctness in neural image captioning. In Proceedings of
+the AAAI conference on artificial intelligence, volume 31.
+Liu, Z.; Hu, Z.; Zhang, Y.; and Xiao, Y. 2026. Structural
+Anchor Pruning: Training-Free Multi-Vector Compression
+for Visual Document Retrieval. arXiv:2601.20107.
+Ma, Y.; Li, J.; Zang, Y.; Wu, X.; Dong, X.; Zhang, P.; Cao,
+Y.; Duan, H.; Wang, J.; Cao, Y.; and Sun, A. 2025a. Towards
+Storage-Efficient Visual Document Retrieval: An Empirical
+Study on Reducing Patch-Level Embeddings. arXiv preprint
+arXiv:2506.04997.
+Ma, Y.; Li, J.; Zang, Y.; Wu, X.; Dong, X.; Zhang, P.; Cao,
+Y.; Duan, H.; Wang, J.; Cao, Y.; and Sun, A. 2025b. Towards
+Storage-Efficient Visual Document Retrieval: An Empirical
+Study on Reducing Patch-Level Embeddings. In Che, W.;
+Nabende, J.; Shutova, E.; and Pilehvar, M. T., eds., Find-
+ings of the Association for Computational Linguistics: ACL
+2025, 19568–19580. Vienna, Austria: Association for Com-
+putational Linguistics. ISBN 979-8-89176-256-5.
+Marin, D.; Chang, J.-H. R.; Ranjan, A.; Prabhu, A.; Raste-
+gari, M.; and Tuzel, O. 2023.
+Token Pooling in Vision
+Transformers for Image Classification. In Proceedings of
+the IEEE/CVF Winter Conference on Applications of Com-
+puter Vision.
+Mathew, M.; Karatzas, D.; and Jawahar, C. V. 2021.
+DocVQA: A Dataset for VQA on Document Images. In
+Proceedings of the IEEE/CVF Winter Conference on Appli-
+cations of Computer Vision.
+Meng, R.; Jiang, Z.; Liu, Y.; Su, M.; Yang, X.; Fu, Y.; Qin,
+C.; Thirukovalluru, R.; Zhang, X.; Chen, Z.; Xu, R.; Xiong,
+C.; Zhou, Y.; Chen, W.; and Yavuz, S. 2026. VLM2Vec-
+V2: Advancing Multimodal Embedding for Videos, Images,
+and Visual Documents. Transactions on Machine Learning
+Research.
+Oord, A. v. d.; Li, Y.; and Vinyals, O. 2018. Representation
+learning with contrastive predictive coding. arXiv preprint
+arXiv:1807.03748.
+Plummer, B. A.; Wang, L.; Cervantes, C. M.; Caicedo,
+J. C.; Hockenmaier, J.; and Lazebnik, S. 2015. Flickr30k
+Entities:
+Collecting
+Region-to-Phrase
+Correspondences
+for Richer Image-to-Sentence Models.
+arXiv preprint
+arXiv:1505.04870.
+Qin, H.; Martin, A.; Jha, R.; Zuo, C.; Kriz, R.; and
+Van Durme, B. 2026. Multi-Vector Index Compression in
+Any Modality. arXiv preprint arXiv:2602.21202.
+Radford, A.; Kim, J. W.; Hallacy, C.; Ramesh, A.; Goh,
+G.; Agarwal, S.; Sastry, G.; Askell, A.; Mishkin, P.; Clark,
+J.; et al. 2021. Learning transferable visual models from
+natural language supervision. In International conference
+on machine learning, 8748–8763. PmLR.
+Rajabi, N.; and Kosecka, J. 2024. Q-GroundCAM: Quanti-
+fying Grounding in Vision Language Models via GradCAM.
+arXiv preprint arXiv:2404.19128.
+Rao, Y.; Zhao, W.; Liu, B.; Lu, J.; Zhou, J.; and Hsieh, C.-
+J. 2021. DynamicViT: Efficient Vision Transformers with
+Dynamic Token Sparsification. In Advances in Neural Infor-
+mation Processing Systems, volume 34, 13937–13949.
+Rohrbach, A.; Rohrbach, M.; Hu, R.; Darrell, T.; and Schiele,
+B. 2016. Grounding of textual phrases in images by recon-
+struction.
+In European Conference on Computer Vision,
+817–834. Springer.
+Ryoo, M. S.; Piergiovanni, A.; Arnab, A.; Dehghani, M.;
+and Angelova, A. 2021. TokenLearner: What Can 8 Learned
+Tokens Do for Images and Videos? In Advances in Neural
+Information Processing Systems.
+Santhanam, K.; Khattab, O.; Potts, C.; and Zaharia, M.
+2022a. PLAID: an efficient engine for late interaction re-
+trieval. In Proceedings of the 31st ACM International Con-
+ference on Information & Knowledge Management, 1747–
+1756.
+Santhanam, K.; Khattab, O.; Saad-Falcon, J.; Potts, C.; and
+Zaharia, M. 2022b. ColBERTv2: Effective and Efficient Re-
+trieval via Lightweight Late Interaction.
+In Proceedings
+of the 2022 Conference of the North American Chapter of
+the Association for Computational Linguistics: Human Lan-
+guage Technologies, 3715–3734.
+Scheerer, J. L.; Zaharia, M.; Potts, C.; Alonso, G.; and Khat-
+tab, O. 2025. WARP: An efficient engine for multi-vector
+retrieval. In Proceedings of the 48th international ACM SI-
+GIR conference on research and development in information
+retrieval, 2504–2512.
+Selvaraju, R. R.; Cogswell, M.; Das, A.; Vedantam, R.;
+Parikh, D.; and Batra, D. 2020. Grad-CAM: visual expla-
+nations from deep networks via gradient-based localization.
+International journal of computer vision, 128(2): 336–359.
+Shang, Y.; Cai, M.; Xu, B.; Lee, Y. J.; and Yan, Y. 2025.
+Llava-prumerge: Adaptive token reduction for efficient large
+multimodal models. In Proceedings of the IEEE/CVF Inter-
+national Conference on Computer Vision, 22857–22867.
+Sun, Q.; Fang, Y.; Wu, L.; Wang, X.; and Cao, Y. 2023.
+EVA-CLIP: Improved Training Techniques for CLIP at Scale.
+arXiv preprint arXiv:2303.15389.
+Sun, Y.; Xin, Y.; Li, H.; Sun, J.; Lin, C.; and Batista-Navarro,
+R. T. 2025. Lvpruning: An effective yet simple language-
+guided vision token pruning approach for multi-modal large
+language models. In Findings of the Association for Compu-
+tational Linguistics: NAACL 2025, 4299–4308.
+Tang, Y.; Han, K.; Wang, Y.; Xu, C.; Guo, J.; Xu, C.; and Tao,
+D. 2022. Patch Slimming for Efficient Vision Transformers.
+In Proceedings of the IEEE/CVF Conference on Computer
+Vision and Pattern Recognition, 12165–12174.
+Tschannen, M.; Gritsenko, A.; Wang, X.; Naeem, M. F.;
+Alabdulmohsin, I.; Parthasarathy, N.; Evans, T.; Beyer, L.;
+Xia, Y.; Mustafa, B.; Hénaff, O.; Harmsen, J.; Steiner, A.;
+
+
+and Zhai, X. 2025. SigLIP 2: Multilingual Vision-Language
+Encoders with Improved Semantic Understanding, Localiza-
+tion, and Dense Features. arXiv preprint arXiv:2502.14786.
+Wang, P.; Bai, S.; Tan, S.; Wang, S.; Fan, Z.; Bai, J.; Chen,
+K.; Liu, X.; Wang, J.; Ge, W.; Fan, Y.; Dang, K.; Du, M.;
+Ren, X.; Men, R.; Liu, D.; Zhou, C.; Zhou, J.; and Lin,
+J. 2024. Qwen2-VL: Enhancing Vision-Language Model’s
+Perception of the World at Any Resolution. arXiv preprint
+arXiv:2409.12191.
+Xu, H.; Xie, S.; Tan, X.; Huang, P.-Y.; Howes, R.; Sharma, V.;
+Li, S.-W.; Ghosh, G.; Zettlemoyer, L.; and Feichtenhofer, C.
+2024. Demystifying CLIP Data. In The Twelfth International
+Conference on Learning Representations.
+Yang, S.; Chen, Y.; Tian, Z.; Wang, C.; Li, J.; Yu, B.; and
+Jia, J. 2025. Visionzip: Longer is better but not necessary in
+vision language models. In Proceedings of the IEEE/CVF
+Conference on Computer Vision and Pattern Recognition,
+19792–19802.
+Yu, S.; Tang, C.; Xu, B.; Cui, J.; Ran, J.; Yan, Y.; Liu, Z.;
+Wang, S.; Han, X.; Liu, Z.; and Sun, M. 2025. VisRAG:
+Vision-based Retrieval-augmented Generation on Multi-
+modality Documents. In The Thirteenth International Con-
+ference on Learning Representations.
+Zhang, J.; Bargal, S. A.; Lin, Z.; Brandt, J.; Shen, X.; and
+Sclaroff, S. 2018.
+Top-down neural attention by excita-
+tion backprop. International Journal of Computer Vision,
+126(10): 1084–1102.
+Zhang, X.; Zhang, Y.; Xie, W.; Li, M.; Dai, Z.; Long, D.;
+Xie, P.; Zhang, M.; Li, W.; and Zhang, M. 2024. GME:
+Improving Universal Multimodal Retrieval by Multimodal
+LLMs. arXiv preprint arXiv:2412.16855.
+Zhou, B.; Khosla, A.; Lapedriza, A.; Oliva, A.; and Torralba,
+A. 2016. Learning deep features for discriminative localiza-
+tion. In Proceedings of the IEEE conference on computer
+vision and pattern recognition, 2921–2929.
+
+
+Centroid variant
+Flickr30K
+MSCOCO
+R@1 R@5 nDCG@10 R@1 R@5 nDCG@10
+Mean
+80.3
+95.4
+89.7
+49.3
+73.9
+65.3
+Normalized
+82.3
+96.1
+90.7
+51.5
+75.5
+67.0
+Medoid
+80.6
+95.6
+89.9
+50.1
+74.6
+65.9
+Object weighted
+82.2
+96.1
+90.7
+51.6
+75.4
+67.0
+Soft assignment (ours)
+82.4
+96.3
+90.9
+51.6
+75.5
+67.1
+Table 6: Centroid construction ablation on Flickr30K and
+MSCOCO. Soft assignment, used by SaMer, achieves the
+best performance across all metrics, showing that differen-
+tiable soft assignment centroids better preserve retrieval ev-
+idence than mean, normalized, medoid, or object-weighted
+alternatives.
+A
+Centroid Construction Variants
+Table 6 compares different ways of constructing merged
+representative tokens. The mean variant averages assigned
+tokens without additional normalization, while the normal-
+ized variant applies normalization after centroid construc-
+tion. The medoid variant selects the token closest to the
+cluster center, preserving an existing token rather than form-
+ing an averaged representative. The object-weighted variant
+gives higher weight to tokens associated with object regions
+during centroid construction.
+Soft assignment, used by SaMer, performs best across all
+metrics on both Flickr30K and MSCOCO. Compared with
+hard mean or medoid-style representatives, soft assignment
+centroids better preserve retrieval-relevant evidence by al-
+lowing tokens to contribute to clusters according to assign-
+ment confidence. The gain over the object-weighted vari-
+ant further suggests that object information is most effec-
+tive when used to shape the merge assignment itself, rather
+than only reweighting tokens after clusters have already been
+formed.
+B
+Implementation Details
+We implement SaMer on top of existing multi-vector vision-
+language retrievers by modifying only the image-side post-
+projector representation. Unless otherwise stated, we use
+K = 64 merged image tokens for all main experiments.
+During compression-aware adaptation, the vision encoder
+and language backbone are frozen, and only the shared pro-
+jection layer is updated. We train for 1,746 optimization steps
+using a learning rate of 2 × 10−4, weight decay of 1 × 10−5,
+and a cosine learning-rate scheduler with a warmup ratio of
+0.1. All adaptation experiments are conducted on 4 NVIDIA
+A100 80GB GPUs.
+Object annotations are used only during training to con-
+struct the object-aware merge prior. Each image token is
+assigned a label according to its spatial coordinate: tokens
+outside all bboxes are treated as background, tokens inside
+a single box receive the corresponding object instance la-
+bel, and tokens inside multiple boxes are assigned to the
+smallest box. These labels are used to compute the instance
+inconsistency penalty in Eq. 5; they are not used as an aux-
+iliary supervision signal. At inference time, SaMer discards
+all object labels and bboxes and performs annotation-free
+feature-spatial soft assignment.
+C
+Grounding Metrics
+We define grounding metrics to test whether compressed
+tokens retain phrase-level visual evidence. Given a query
+phrase, we compute a normalized relevance map ˆS(x) ∈
+[0, 1] over image/grid locations x, and compare it with the
+ground-truth phrase box mask G(x) ∈{0, 1}. Since SaMer
+aims to preserve object- and region-level evidence under
+compression, the metrics evaluate relevance concentration,
+weak localization, and spatial coverage.
+BoxMass.
+BoxMass is our primary grounding metric. It
+measures whether phrase relevance is concentrated inside
+the annotated object region, following attention correctness
+and activation-based grounding evaluations (Liu et al. 2017;
+Rajabi and Kosecka 2024):
+BoxMass =
+P
+x ˆS(x)G(x)
+P
+x ˆS(x) + ϵ
+.
+(8)
+A higher BoxMass means that more phrase-specific evidence
+falls inside the correct object region, directly testing whether
+merging preserves the queried visual evidence.
+RegionHit.
+RegionHit measures whether the model local-
+izes the target phrase at all, following hit-based grounding
+and pointing-style protocols (Rohrbach et al. 2016; Zhang
+et al. 2018). Let T = {0.1, 0.2, . . . , 0.9} and Mt(x) =
+1[ ˆS(x) ≥t] denote the thresholded high-relevance region.
+We define
+RegionHit = 1
+|T|
+X
+t∈T
+1 [IoU(Mt, G) ≥0.05] .
+(9)
+We use a low IoU threshold because the goal is weak phrase-
+region localization rather than segmentation-quality predic-
+tion.
+CoverageIoU.
+CoverageIoU measures how well the high-
+relevance region covers the target box, following activation-
+map localization analyses (Zhou et al. 2016; Selvaraju et al.
+2020):
+CoverageIoU = 1
+|T|
+X
+t∈T
+IoU(Mt, G).
+(10)
+Unlike RegionHit, CoverageIoU measures the degree of spa-
+tial agreement rather than only whether the relevance map
+reaches the target. All three metrics are higher-is-better and
+together evaluate whether SaMer preserves phrase-level evi-
+dence after aggressive visual token compression.
+D
+Merge Component Study
+Table 10 reports the merge component study. The compact
+table in the main paper reports representative retrieval and
+grounding metrics, while this table includes all retrieval met-
+rics on Flickr30K and MSCOCO and all object-consistency
+metrics. The full results show the same trend as the main
+paper: the spatial term alone does not substantially improve
+over feature-only merging, whereas the object-aware penalty
+consistently improves retrieval and grounding.
+
+
+Variant
+Flickr30K
+MSCOCO
+R@1
+R@5
+nDCG@10
+R@1
+R@5
+nDCG@10
+ColPali
+76.7
+92.8
+86.7
+47.5
+71.7
+63.3
+w/o FT
+Random pruning
+68.6
+88.5
+80.9
+40.5
+65.3
+56.7
+Spatial pruning
+68.8
+88.6
+81.3
+41.1
+65.8
+57.3
+SaMer
+73.6
+91.4
+84.6
+45.2
+69.7
+61.2
+w/ FT
+Random pruning
+79.9
+94.9
+89.0
+48.1
+72.7
+64.0
+Spatial pruning
+79.5
+94.9
+89.0
+49.0
+73.2
+64.7
+SaMer
+82.4
+96.3
+90.9
+51.6
+75.5
+67.1
+Table 7: Merging vs. pruning on Flickr30K and MSCOCO
+under training-free and adapted settings. SaMer consistently
+outperforms pruning baselines.
+E
+Merging vs. Pruning Comparison
+Table 7 shows that merging is more effective than prun-
+ing for multi-vector retrieval. In the training-free setting,
+SaMer incurs a smaller drop than random and spatial prun-
+ing, improving Flickr30K R@1 from 68.6 and 68.8 to 73.6,
+and MSCOCO R@1 from 40.5 and 41.1 to 45.2. This gap
+reflects a key difference between the two strategies: prun-
+ing removes visual evidence before the query is known,
+whereas merging keeps itin aggregatedrepresentatives. After
+projection-only adaptation, SaMer remains strongest across
+all metrics, reaching 82.4 R@1 on Flickr30K and 51.6 on
+MSCOCO. These results show that representative centroids
+preserve retrieval-relevant visual evidence better than dis-
+carding tokens, and that the advantage persists after adapting
+the projection space.
+F
+Qualitative Grounding Examples
+Figure 4 provides qualitative grounding examples. Figure 4a
+compares single-vector baselines, full multi-vector retriev-
+ers, and SaMer variants, while Figure 4b compares com-
+pression methods applied to multi-vector retrievers. The
+compression comparison shows that baseline methods of-
+ten recover part of the target region but can spread rele-
+vance to nearby objects or background regions, such as sur-
+rounding clothing, road areas, or non-target people. SaMer
+more consistently concentrates relevance inside the anno-
+tated phrase region after compression, supporting the quan-
+titative grounding results in Section 6.2.
+G
+Efficiency Measurements
+Table 8 reports the raw storage estimates used to compute
+the storage reduction ratios in the main paper. Storage is
+estimated for one million images under FP16 storage with
+embedding dimension D = 128. Table 9 reports the cor-
+responding scoring measurements, including total MaxSim
+operations, latency, and query throughput. These detailed
+measurements support the efficiency summary in the main
+paper and show that reducing visual tokens lowers both the
+theoretical MaxSim comparison count and the measured re-
+trieval latency.
+Variant
+Flickr30K
+MSCOCO
+Tokens/img Storage/1M Reduction Tokens/img Storage/1M Reduction
+ColPali
+Full
+1030.0
+263.7 GB
+1.00×
+1030.0
+263.7 GB
+1.00×
+SaMer
+64.0
+16.4 GB
+16.09×
+64.0
+16.4 GB
+16.09×
+ColQwen2
+Full
+238.4
+61.0 GB
+1.00×
+127.4
+32.6 GB
+1.00×
+SaMer
+64.0
+16.4 GB
+3.73×
+64.0
+16.4 GB
+1.99×
+Table 8: Detailed image-side embedding storage for one mil-
+lion images under FP16 storage with embedding dimension
+D = 128.
+Variant
+Flickr30K
+MSCOCO
+MaxSim
+Ops (1012)
+Latency(s)
+QPS
+MaxSim
+Ops (1012)
+Latency(s)
+QPS
+ColPali
+Full
+36.87
+7.994
+625.5
+845.51
+160.879
+154.2
+SaMer
+2.29 (16.1×) 1.841 (4.3×) 2716.3 (4.3×) 52.54 (16.1×) 17.636 (9.1×) 1406.7 (9.1×)
+ColQwen2
+Full
+8.01
+3.619
+1381.6
+97.50
+78.837
+314.7
+SaMer
+2.15 (3.7×) 1.869 (1.9×) 2674.7 (1.9×) 48.99 (2.0×) 25.585 (3.1×)
+969.7 (3.1×)
+Table 9: Detailed retrieval efficiency comparison. MaxSim
+Ops denotes total token-level similarity comparisons; paren-
+theses indicate improvement over the corresponding full
+multi-vector retriever.
+H
+SaMer Algorithm
+Algorithm 1 summarizes the compression-aware adaptation
+procedure of SaMer. The key difference between training
+and inference is the object-aware prior. During training, box
+labels define an instance inconsistency penalty inside the soft
+assignment. During inference, the object prior is discarded
+and the image-side representation is constructed using bbox-
+free feature-spatial soft assignment.
+
+
+Variant
+Merge Components
+Flickr30K
+MSCOCO
+Object Consistency
+Feature
+Spatial
+Obj. prior
+R@1
+R@5
+nDCG@10
+R@1
+R@5
+nDCG@10
+BoxMass
+RegionHit
+Coverage IoU
+(A)
+✓
+✗
+✗
+80.7
+95.6
+89.8
+49.8
+73.7
+65.4
+47.6
+67.9
+13.0
+(B)
+✓
+✓
+✗
+80.4
+95.5
+89.7
+49.8
+73.9
+65.5
+47.8
+68.0
+13.1
+SaMer
+✓
+✓
+✓
+82.4
+96.3
+90.9
+51.6
+75.5
+67.1
+54.2
+68.3
+16.4
+Table 10: The object-aware merge prior improves both retrieval performance and object consistency across all reported metrics.
+Algorithm 1: Compression-aware Adaptation and Inference with SaMer
+Require: Training batch B, token budget K, retrieval temperature τ, soft-assignment temperature τs
+Require: Frozen vision encoder fv, frozen language backbone ft, trainable shared projection layer gθ
+1: Training: compression-aware projection-only adaptation
+2: for each image-text pair (I, q) ∈B do
+3:
+Extract hidden states HI = fv(I) and Hq = ft(q)
+4:
+Project image and query tokens into the retrieval space:
+V = {vi}N
+i=1 = gθ(HI),
+Q = {qj}M
+j=1 = gθ(Hq)
+5:
+Initialize K representatives with feature centroids µk and spatial centroids sk
+6:
+Assign each image token a training-time box label bi using its spatial coordinate pi
+7:
+Compute the feature-spatial distance:
+d(i, k) =
+ 1 −v⊤
+i µk
+
++ γ∥pi −sk∥2
+2
+8:
+Compute stop-gradient hard representative assignment:
+ci = arg min
+k∈[K] d(i, k)
+9:
+Compute hard-assignment label distribution Pk(b) and instance penalty:
+Pinst(i, k) = 1 −Pk(bi)
+10:
+Compute object-aware soft assignment:
+aobj
+i,k = softmaxk
+
+−d(i, k) + Pinst(i, k)
+τs
+
+11:
+Construct merged image tokens:
+rk = normalize2
+ P
+i aobj
+i,k vi
+P
+i aobj
+i,k
+!
+12:
+Compute compressed late-interaction score:
+SK(q, I) = 1
+M
+M
+X
+j=1
+max
+k∈[K] q⊤
+j rk
+13: end for
+14: Update only gθ using the multi-positive retrieval loss in Eq. 7
+15: Inference: annotation-free retrieval
+16: Extract and project visual tokens V = {vi}N
+i=1
+17: Compress V into K merged tokens R(I) = {rk}K
+k=1 using bbox-free feature-spatial soft assignment
+18: Cache R(I) in the retrieval index
+19: Extract and project query tokens Q(q) = {qj}M
+j=1
+20: Score each query-image pair using compressed late interaction:
+SK(q, I) = 1
+M
+M
+X
+j=1
+max
+k∈[K] q⊤
+j rk
+21: return Retrieval score SK(q, I)
+
+
+Original
+DFN-CLIP
+SigLIP2
+ColPali
+ColPaliSaMer w/o FT
+ColPaliSaMer
+ColQwen2
+ColQwen2SaMer w/o FT
+ColQwen2SaMer
+(a) query: A baby boy in overalls is crying .
+(b) query: two dancers each wearing black outfits with battons in midair
+(c) query: A man standing in front of a car is holding up his hands .
+(d) query: man jumping over a small stone wall in front of a group of people
+(e) query: A night street scene with a line of people waiting for something in a dome .
+(a) Comparison with single-vector baselines, full multi-vector retrievers, and SaMer variants.
+Original
+SAP
+H-Pool
+HPC
+SaMer w/o FT
+SaMer
+(a) query: A baby boy in overalls is crying .
+(b) query: two dancers each wearing black outfits with battons in midair
+(c) query: A man standing in front of a car is holding up his hands .
+(d) query: man jumping over a small stone wall in front of a group of people
+(e) query: A night street scene with a line of people waiting for something in a dome .
+(b) Comparison with compression methods applied to multi-vector retrievers.
+Figure 4: Qualitative grounding examples. Red denotes the phrase-relevance map and green denotes the ground-truth box for
+the highlighted phrase. (a) compares SaMer with single-vector baselines and full multi-vector retrievers. (b) compares SaMer
+with compression methods applied to multi-vector retrievers. Across both settings, SaMer better concentrates phrase relevance
+inside the annotated region, while compression baselines often spread relevance to nearby objects or background regions.
