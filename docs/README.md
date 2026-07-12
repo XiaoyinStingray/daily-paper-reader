@@ -6,59 +6,59 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-11
-- 运行时间：2026-07-11 20:20:31 UTC
+- 最新运行日期：2026-07-12
+- 运行时间：2026-07-12 20:23:50 UTC
 - 运行状态：成功
 - 本次总论文数：13
 - 精读区：1
 - 速读区：12
 
 ### 今日简报（AI）
-今日精读1篇高分全动态全息树压缩论文，速读12篇涵盖差分隐私压缩、3D重建与图像取证。重点关注全动态全息树的高效压缩方法，以及差分隐私与随机编码的结合。建议进一步探索动态数据结构的实时应用。
-- 详情：[/202607/11/README](/202607/11/README)
+今天精读1篇关于小型VLM量化的硬件感知部署研究，速读12篇覆盖无透镜重建、扩散模型定制及视觉预训练等方向。最值得关注的是VLM量化分析（8.0分）与集成正反网络重建方法（7.0分），以及扩散模型的分层独立LoRA定制技术LILAC（7.0分）。建议优先精读量化文章掌握边缘部署优化思路，再速读LILAC了解多概念定制技巧。
+- 详情：[/202607/12/README](/202607/12/README)
 
 ### 精读区论文标签
-1. [Towards Fully Dynamic Omnitrees: Moment-Conserving Anisotropic Compression With Wavelets](/202607/11/2607.04881v1-towards-fully-dynamic-omnitrees-moment-conserving-anisotropic-compression-with-wavelets)  
-   标签：评分：9.0/10、query:compress
-   evidence：基于小波的各向异性压缩（omnitree），与图像压缩中的变换编码相关
+1. [Rethinking Small VLM Quantization: From Component-Wise Analysis to Hardware-Aware Edge Deployment](/202607/12/2607.08029v1-rethinking-small-vlm-quantization-from-component-wise-analysis-to-hardware-aware-edge-deployment)  
+   标签：评分：8.0/10、query:neural-arch
+   evidence：针对小视觉语言模型的分组件量化分析
 
 ### 速读区论文标签
-1. [Scalable Differentially Private Data Compression via Diffusion and Stochastic Codes](/202607/11/2607.03392v1-scalable-differentially-private-data-compression-via-diffusion-and-stochastic-codes)  
+1. [Integrated Forward-Inverse Network for Lensless Image Reconstruction](/202607/12/2607.04608v1-integrated-forward-inverse-network-for-lensless-image-reconstruction)  
+   标签：评分：7.0/10、query:neural-arch
+   evidence：提出一种交织前向与反向更新的物理引导架构用于图像重建
+2. [LILAC: Layer-Wise Independent LoRAs and Cascaded Conditioning for Multi-Concept Customization of Diffusion Models](/202607/12/2607.04801v1-lilac-layer-wise-independent-loras-and-cascaded-conditioning-for-multi-concept-customization-of-diffusion-models)  
+   标签：评分：7.0/10、query:neural-arch
+   evidence：基于LoRA的概念定制是扩散模型的优化策略
+3. [Vision Pretraining for Dense Spatial Perception](/202607/12/2607.05247v1-vision-pretraining-for-dense-spatial-perception)  
+   标签：评分：7.0/10、query:neural-arch
+   evidence：通过掩码边界建模的视觉预训练用于密集空间感知
+4. [Deep Neural Variation Spaces: A Unifying Perspective on Depth and Complexity](/202607/12/2607.05546v1-deep-neural-variation-spaces-a-unifying-perspective-on-depth-and-complexity)  
+   标签：评分：7.0/10、query:neural-arch
+   evidence：深度神经网络的统一函数空间理论，连接深度与复杂度
+5. [MSA-DCNN: A Data-Efficient Multi-Scale Deformable CNN for Medical Image Classification](/202607/12/2607.06083v1-msa-dcnn-a-data-efficient-multi-scale-deformable-cnn-for-medical-image-classification)  
+   标签：评分：7.0/10、query:neural-arch
+   evidence：多尺度可变形CNN用于高效视觉架构设计
+6. [Towards Robust Semantic Video Transmission over Block Erasure Channels](/202607/12/2607.07823v1-towards-robust-semantic-video-transmission-over-block-erasure-channels)  
    标签：评分：7.0/10、query:compress
-   evidence：结合随机码和扩散模型的压缩管线
-2. [SAF3R: Dynamic Sparse Attention for Feed-Forward 3D Reconstruction Transformers](/202607/11/2607.03612v1-saf3r-dynamic-sparse-attention-for-feed-forward-3d-reconstruction-transformers)  
-   标签：评分：7.0/10、query:neural-arch
-   evidence：用于高效视觉Transformer的动态稀疏注意力
-3. [Format-Controlled Multi-Scale JPEG Compression Response Analysis for Image-Level Forgery Screening](/202607/11/2607.06615v1-format-controlled-multi-scale-jpeg-compression-response-analysis-for-image-level-forgery-screening)  
-   标签：评分：7.0/10、query:compress
-   evidence：多尺度JPEG压缩分析及DCT块效应特征
-4. [Hardware-aware Graph Neural Networks prunning for embedded event-based vision](/202607/11/2607.06739v1-hardware-aware-graph-neural-networks-prunning-for-embedded-event-based-vision)  
-   标签：评分：7.0/10、query:neural-arch
-   evidence：面向FPGA的硬件感知GNN剪枝与量化
-5. [Efficient Long-Horizon Learning for Learned Optimization](/202607/11/2607.06772v2-efficient-long-horizon-learning-for-learned-optimization)  
-   标签：评分：7.0/10、query:neural-arch
-   evidence：用于学习优化器高效长视野训练的元学习算法
-6. [Smart Scissor: Coupling Spatial Redundancy Reduction and CNN Compression for Embedded Hardware](/202607/11/2607.06915v1-smart-scissor-coupling-spatial-redundancy-reduction-and-cnn-compression-for-embedded-hardware)  
-   标签：评分：7.0/10、query:neural-arch
-   evidence：面向嵌入式硬件的空间冗余缩减与CNN压缩
-7. [MambaLIE: Scene Light Intensity-Boosted Low-Light Image Enhancement with State Space Model](/202607/11/2607.03013v1-mambalie-scene-light-intensity-boosted-low-light-image-enhancement-with-state-space-model)  
+   evidence：具有语义感知的神经视频压缩联合源信道编码
+7. [DICT: Data Injection and Contrastive Trajectory Refinement for Conditional Image Generation with Diffusion Models](/202607/12/2607.03899v1-dict-data-injection-and-contrastive-trajectory-refinement-for-conditional-image-generation-with-diffusion-models)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：将状态空间模型应用于低光图像增强这一计算机视觉任务
-8. [MambaLIE: Scene Light Intensity-Boosted Low-Light Image Enhancement with State Space Model](/202607/11/2607.03013v2-mambalie-scene-light-intensity-boosted-low-light-image-enhancement-with-state-space-model)  
+   evidence：无训练的推理方法用于条件图像生成
+8. [Lyapunov-Guided Training for Hardware-Safe Neural Networks Under Fixed-Point Arithmetic](/202607/12/2607.04531v1-lyapunov-guided-training-for-hardware-safe-neural-networks-under-fixed-point-arithmetic)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：状态空间模型用于低光照图像增强，新型视觉架构
-9. [InfraNet: Quality-Aware RGB Guidance for Efficient Infrared Object Detection](/202607/11/2607.03795v1-infranet-quality-aware-rgb-guidance-for-efficient-infrared-object-detection)  
+   evidence：提出基于李雅普诺夫稳定性的量化训练框架，是重要的模型优化方法
+9. [Efficient Perception in Automotive Detection and Tracking Using Neuromorphic Computing](/202607/12/2607.04921v1-efficient-perception-in-automotive-detection-and-tracking-using-neuromorphic-computing)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：质量感知的不对称架构用于红外目标检测
-10. [WildSplat: Feedforward Gaussian Splatting from Unposed In-the-Wild Images](/202607/11/2607.05347v1-wildsplat-feedforward-gaussian-splatting-from-unposed-in-the-wild-images)  
+   evidence：脉冲神经网络用于节能汽车感知
+10. [ReCal3R: Reliability-Calibrated Learning Rates for Streaming 3D Reconstruction](/202607/12/2607.05356v1-recal3r-reliability-calibrated-learning-rates-for-streaming-3d-reconstruction)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：提出外观条件新视角合成的双分支架构，改进计算机视觉架构
-11. [Deep Neural Variation Spaces: A Unifying Perspective on Depth and Complexity](/202607/11/2607.05546v1-deep-neural-variation-spaces-a-unifying-perspective-on-depth-and-complexity)  
+   evidence：提出基于可靠性的学习率校准方法，属于深度学习模型优化策略
+11. [BitFair: A 12nm Bit-Serial CNN Accelerator with Learnable Early Termination and Adaptive Bit Ordering for Ultra-Low-Power XR Vision](/202607/12/2607.05445v1-bitfair-a-12nm-bit-serial-cnn-accelerator-with-learnable-early-termination-and-adaptive-bit-ordering-for-ultra-low-power-xr-vision)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：深度网络复杂性和激活函数的统一理论
-12. [Efficient Long-Horizon Learning for Learned Optimization](/202607/11/2607.06772v1-efficient-long-horizon-learning-for-learned-optimization)  
+   evidence：可学习早期终止和自适应比特排序提升神经网络效率
+12. [EeveeDark: A Binary Neural Framework for Low-Light Video Enhancement via Event-Guided Sensor-Level Fusion](/202607/12/2607.06217v1-eeveedark-a-binary-neural-framework-for-low-light-video-enhancement-via-event-guided-sensor-level-fusion)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：高效元训练算法用于学习优化器，改进模型训练优化
+   evidence：二值神经网络用于性能提升
 
 
 <div class="dpr-home-promo-card">
