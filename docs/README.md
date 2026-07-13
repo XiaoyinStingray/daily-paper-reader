@@ -6,59 +6,72 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-12
-- 运行时间：2026-07-12 20:23:50 UTC
+- 最新运行日期：2026-07-13
+- 运行时间：2026-07-13 21:32:07 UTC
 - 运行状态：成功
-- 本次总论文数：13
-- 精读区：1
-- 速读区：12
+- 本次总论文数：16
+- 精读区：6
+- 速读区：10
 
 ### 今日简报（AI）
-今天精读1篇关于小型VLM量化的硬件感知部署研究，速读12篇覆盖无透镜重建、扩散模型定制及视觉预训练等方向。最值得关注的是VLM量化分析（8.0分）与集成正反网络重建方法（7.0分），以及扩散模型的分层独立LoRA定制技术LILAC（7.0分）。建议优先精读量化文章掌握边缘部署优化思路，再速读LILAC了解多概念定制技巧。
-- 详情：[/202607/12/README](/202607/12/README)
+今日共荐16篇论文，重点精读2篇高分研究，速读3篇实用方向。
+
+最值得关注：高评分论文《高斯二次率失真函数》与《OmniOpt优化器基准测试》分别深化了信息论与优化理论。
+
+普通读者可优先浏览ZipDepth轻量级深度估计、鲁棒语义视频传输及细粒度识别子词ViT的工程创新。
+- 详情：[/202607/13/README](/202607/13/README)
 
 ### 精读区论文标签
-1. [Rethinking Small VLM Quantization: From Component-Wise Analysis to Hardware-Aware Edge Deployment](/202607/12/2607.08029v1-rethinking-small-vlm-quantization-from-component-wise-analysis-to-hardware-aware-edge-deployment)  
+1. [On the Gaussian-Quadratic Rate-Distortion Function for Vector Sources with Individual Distortion Constraints](/202607/13/2607.09545v1-on-the-gaussian-quadratic-rate-distortion-function-for-vector-sources-with-individual-distortion-constraints)  
+   标签：评分：9.0/10、query:compress
+   evidence：具有个体约束的高斯二次损失压缩的率失真函数
+2. [OmniOpt: Taxonomy, Geometry, and Benchmarking of Modern Optimizers](/202607/13/2607.04033v1-omniopt-taxonomy-geometry-and-benchmarking-of-modern-optimizers)  
    标签：评分：8.0/10、query:neural-arch
-   evidence：针对小视觉语言模型的分组件量化分析
+   evidence：深度学习优化器的统一综述与基准，直接相关模型优化策略
+3. [A Theory of Contrastive Learning with Natural Images](/202607/13/2607.07470v1-a-theory-of-contrastive-learning-with-natural-images)  
+   标签：评分：8.0/10、query:neural-arch
+   evidence：自然图像对比学习的理论分析，指导架构设计
+4. [Continual Test-Time Adaptation in Computer Vision: Methods, Benchmarks, and Future Directions](/202607/13/2607.08164v1-continual-test-time-adaptation-in-computer-vision-methods-benchmarks-and-future-directions)  
+   标签：评分：8.0/10、query:neural-arch
+   evidence：计算机视觉中持续测试时自适应方法的全面综述
+5. [MOSAIC: Adaptive Inter-layer Composition for Efficient Heterogeneous Vision-Language Models](/202607/13/2607.09029v1-mosaic-adaptive-inter-layer-composition-for-efficient-heterogeneous-vision-language-models)  
+   标签：评分：8.0/10、query:neural-arch
+   evidence：硬件感知搜索用于异构视觉语言模型架构设计
+6. [Foveation-Guided Dynamic Token Selection for Robust and Efficient Vision Transformers](/202607/13/2607.09480v1-foveation-guided-dynamic-token-selection-for-robust-and-efficient-vision-transformers)  
+   标签：评分：8.0/10、query:neural-arch
+   evidence：注视引导的动态令牌选择，提升视觉变换器效率
 
 ### 速读区论文标签
-1. [Integrated Forward-Inverse Network for Lensless Image Reconstruction](/202607/12/2607.04608v1-integrated-forward-inverse-network-for-lensless-image-reconstruction)  
-   标签：评分：7.0/10、query:neural-arch
-   evidence：提出一种交织前向与反向更新的物理引导架构用于图像重建
-2. [LILAC: Layer-Wise Independent LoRAs and Cascaded Conditioning for Multi-Concept Customization of Diffusion Models](/202607/12/2607.04801v1-lilac-layer-wise-independent-loras-and-cascaded-conditioning-for-multi-concept-customization-of-diffusion-models)  
-   标签：评分：7.0/10、query:neural-arch
-   evidence：基于LoRA的概念定制是扩散模型的优化策略
-3. [Vision Pretraining for Dense Spatial Perception](/202607/12/2607.05247v1-vision-pretraining-for-dense-spatial-perception)  
-   标签：评分：7.0/10、query:neural-arch
-   evidence：通过掩码边界建模的视觉预训练用于密集空间感知
-4. [Deep Neural Variation Spaces: A Unifying Perspective on Depth and Complexity](/202607/12/2607.05546v1-deep-neural-variation-spaces-a-unifying-perspective-on-depth-and-complexity)  
-   标签：评分：7.0/10、query:neural-arch
-   evidence：深度神经网络的统一函数空间理论，连接深度与复杂度
-5. [MSA-DCNN: A Data-Efficient Multi-Scale Deformable CNN for Medical Image Classification](/202607/12/2607.06083v1-msa-dcnn-a-data-efficient-multi-scale-deformable-cnn-for-medical-image-classification)  
-   标签：评分：7.0/10、query:neural-arch
-   evidence：多尺度可变形CNN用于高效视觉架构设计
-6. [Towards Robust Semantic Video Transmission over Block Erasure Channels](/202607/12/2607.07823v1-towards-robust-semantic-video-transmission-over-block-erasure-channels)  
+1. [Towards Robust Semantic Video Transmission over Block Erasure Channels](/202607/13/2607.07823v1-towards-robust-semantic-video-transmission-over-block-erasure-channels)  
    标签：评分：7.0/10、query:compress
-   evidence：具有语义感知的神经视频压缩联合源信道编码
-7. [DICT: Data Injection and Contrastive Trajectory Refinement for Conditional Image Generation with Diffusion Models](/202607/12/2607.03899v1-dict-data-injection-and-contrastive-trajectory-refinement-for-conditional-image-generation-with-diffusion-models)  
+   evidence：用于鲁棒视频传输的神经联合源信道编码，内含率失真优化
+2. [ZipDepth: Bringing Lightweight Zero-Shot Monocular Depth Anywhere, on Any Device](/202607/13/2607.08771v1-zipdepth-bringing-lightweight-zero-shot-monocular-depth-anywhere-on-any-device)  
+   标签：评分：7.0/10、query:neural-arch
+   evidence：轻量级单目深度网络结合高效架构和知识蒸馏
+3. [Subtoken Vision Transformer for Fine-grained Recognition](/202607/13/2607.09086v1-subtoken-vision-transformer-for-fine-grained-recognition)  
+   标签：评分：7.0/10、query:neural-arch
+   evidence：改进视觉Transformer架构用于细粒度识别
+4. [Fully Trainable Deep Differentiable Logic Gate Networks and Lookup Table Networks](/202607/13/2607.09399v1-fully-trainable-deep-differentiable-logic-gate-networks-and-lookup-table-networks)  
+   标签：评分：7.0/10、query:neural-arch
+   evidence：用于图像分类任务的新型神经网络架构
+5. [KVpop -- Key-Value Cache Compression with Predictive Online Pruning](/202607/13/2607.05061v2-kvpop----key-value-cache-compression-with-predictive-online-pruning)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：无训练的推理方法用于条件图像生成
-8. [Lyapunov-Guided Training for Hardware-Safe Neural Networks Under Fixed-Point Arithmetic](/202607/12/2607.04531v1-lyapunov-guided-training-for-hardware-safe-neural-networks-under-fixed-point-arithmetic)  
+   evidence：基于学习的KV缓存驱逐策略，用于高效自回归解码，是深度学习模型优化策略
+6. [From RGB Generation to Dense Field Readout: Pixel-Space Dense Prediction with Text-to-Image Models](/202607/13/2607.06553v1-from-rgb-generation-to-dense-field-readout-pixel-space-dense-prediction-with-text-to-image-models)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：提出基于李雅普诺夫稳定性的量化训练框架，是重要的模型优化方法
-9. [Efficient Perception in Automotive Detection and Tracking Using Neuromorphic Computing](/202607/12/2607.04921v1-efficient-perception-in-automotive-detection-and-tracking-using-neuromorphic-computing)  
+   evidence：利用文本到图像模型进行像素空间密集预测
+7. [Prototype-Anchored Generalized Manifold Regression for Unknown-Domain Object Detection](/202607/13/2607.07192v1-prototype-anchored-generalized-manifold-regression-for-unknown-domain-object-detection)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：脉冲神经网络用于节能汽车感知
-10. [ReCal3R: Reliability-Calibrated Learning Rates for Streaming 3D Reconstruction](/202607/12/2607.05356v1-recal3r-reliability-calibrated-learning-rates-for-streaming-3d-reconstruction)  
+   evidence：基于流形回归的目标检测域泛化方法
+8. [Texture Representations in Deep Vision Models: Comparing CNNs, Vision Transformers, and Human Perception](/202607/13/2607.08321v1-texture-representations-in-deep-vision-models-comparing-cnns-vision-transformers-and-human-perception)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：提出基于可靠性的学习率校准方法，属于深度学习模型优化策略
-11. [BitFair: A 12nm Bit-Serial CNN Accelerator with Learnable Early Termination and Adaptive Bit Ordering for Ultra-Low-Power XR Vision](/202607/12/2607.05445v1-bitfair-a-12nm-bit-serial-cnn-accelerator-with-learnable-early-termination-and-adaptive-bit-ordering-for-ultra-low-power-xr-vision)  
+   evidence：比较CNN、ViT和人类在纹理上的表征，对理解前沿架构有启发
+9. [Integrating Large Language Models and Graph Convolutional Networks for Semi-Supervised Image Classification](/202607/13/2607.09104v1-integrating-large-language-models-and-graph-convolutional-networks-for-semi-supervised-image-classification)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：可学习早期终止和自适应比特排序提升神经网络效率
-12. [EeveeDark: A Binary Neural Framework for Low-Light Video Enhancement via Event-Guided Sensor-Level Fusion](/202607/12/2607.06217v1-eeveedark-a-binary-neural-framework-for-low-light-video-enhancement-via-event-guided-sensor-level-fusion)  
+   evidence：集成大语言模型和图卷积网络进行半监督图像分类
+10. [SigLIP-HD by Fine-to-Coarse Supervision](/202607/13/2607.09488v1-siglip-hd-by-fine-to-coarse-supervision)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：二值神经网络用于性能提升
+   evidence：粗细监督提升视觉感知，属于计算机视觉架构改进技术
 
 
 <div class="dpr-home-promo-card">
