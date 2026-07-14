@@ -1,0 +1,267 @@
+Title: AutoNorm: Understanding Adaptive Normalization in Transformers through Differentiable Gating
+
+URL Source: https://arxiv.org/pdf/2607.10593v1
+
+Published Time: Tue, 14 Jul 2026 01:31:13 GMT
+
+Number of Pages: 7
+
+Markdown Content:
+# AutoNorm: Understanding Adaptive Normalization in Transformers through Differentiable Gating 
+
+Piyush Kaushik Bhattacharyya Divyanshu Rai 
+
+piyushbhattacharyya@gmail.com raidivyanshu3232@gmail.com 
+
+Swastik Singh Kumar Aakash 
+
+singhswastik1103@gmail.com akashkumar221ank@gmail.com 
+
+Ayush Ranjan Krutika Verma 
+
+ranjanayush881@gmail.com krutika.vermafcs@kiit.ac.in 
+
+Abstract —Normalization is a critical component for stabilizing Transformer training, yet the choice between static strategies such as Layer Normalization (LN) and adaptive alternatives remains largely task-dependent. In this paper, we investigate a key optimization challenge in differentiable normalization gating. Our experiments show that, on relatively stationary vision tasks, the high gradient variance introduced by Gumbel–Softmax gating can hinder convergence of the routing mechanism, causing learned gates to underperform simple random selection. In contrast, on non-stationary language modeling and classification tasks, sustained gating diversity enables the model to learn more effective layer-wise normalization policies. Motivated by these observations, we propose AutoNorm-S (Stabilized), a training strategy that mitigates optimization instability through a gate-freezing schedule. AutoNorm-S achieves competitive or improved performance across multiple benchmarks, outperforming adap-tive normalization baselines on NLP datasets, including PTB and SST-2, while remaining competitive on standard vision benchmarks. These results suggest that decoupling normaliza-tion selection from optimization noise provides a practical and principled approach for adaptive normalization in Transformer architectures. 
+
+Index Terms —Dynamic normalization, Transformers, Gumbel-Softmax, differentiable gating, training dynamics. 
+
+I. I NTRODUCTION 
+
+Normalization techniques have become fundamental to the stability and convergence of modern deep learning archi-tectures. By normalizing feature statistics within each layer, techniques such as Batch Normalization (BN) [1] and Layer Normalization (LN) [2] mitigate internal covariate shift and stabilize gradient flow. In the era of Transformers [3], Layer Normalization has emerged as the de facto standard for stable self-attention training across large model depths. However, conventional normalization layers are funda-mentally static, applying identical transformations regard-less of task context or input distribution. This one-size-fits-all approach is increasingly suboptimal as models en-counter severe distribution shifts and diverse data modali-ties. Prior works exploring adaptive normalization—such as FiLM [31], Switchable Normalization [34], and conditional Meta-Normalization—typically rely on external metadata con-ditioning or expensive architectural searches, lacking a self-sufficient mechanism for on-the-fly adaptation. Recently, Zhu et al. [30] demonstrated that replacing normalization entirely with a learnable tanh-based transformation (Dynamic Tanh; DyT) can match or exceed LN in standard Transformers, raising a natural question: can a model learn, at training time, which normalization strategy is optimal per layer and per task? 
+
+When we initially attempted to answer this using differ-entiable Gumbel-Softmax gating—a framework we call Au-toNorm —we encountered a surprising and counter-intuitive phenomenon: while the learned mechanism worked effec-tively for linguistic sequences, it consistently failed on vision benchmarks, where a simple Random Selector often outper-formed the learned policy. This unexpected failure highlighted a deeper issue in how architectural selection interacts with optimization dynamics. In this work, we investigate this failure and identify it as a stabilization bottleneck specific to stationary input distributions. High gradient variance in the early stages of differentiable gating prevents the selector from specializing before the backbone features have matured. We introduce 
+
+AutoNorm-S (Stabilized) , which resolves this through a gate-freezing schedule (Section III-D), and demonstrate that the re-sulting mechanism not only restores competitive performance in vision but provides a significant inductive bias for NLP. Our contributions progress from a specific architectural failure mode to a general principle governing when and how adaptive normalization should be deployed in Transformers. For a given input tensor X, AutoNorm computes: AutoNorm (X) = wDyT (X) · DyT (X) + wLN (X) · LN (X) (1) where wDyT (X) and wLN (X) are adaptive weights predicted by the NormSelector (Section III-B), satisfying wDyT (X) + 
+
+wLN (X) = 1. These weights are obtained through alightweight gating network that uses a differentiable Gumbel– Softmax reparameterization [4], allowing gradient-based opti-mization of the discrete normalization selection. arXiv:2607.10593v1 [cs.LG] 12 Jul 2026 II. L ITERATURE REVIEW 
+
+A. Normalization Techniques in Deep Learning 
+
+Normalization is fundamental to training deep neural net-works, mitigating vanishing and exploding gradients and in-ternal covariate shift [1], [2], [13], [14]. 
+
+1) Batch Normalization (BN): Introduced by Ioffe and Szegedy [1], BN normalizes activations across the mini-batch dimension and applies learnable scale and offset. BN enables higher learning rates and acts as a regularizer in CNNs but degrades with small batch sizes [14] and is unsuitable for variable-length sequences. 
+
+2) Layer Normalization (LN): Ba et al. [2] proposed LN, which normalizes across the feature dimension within each sample, independent of batch size. LN is highly effective in Transformers but may underperform BN in standard CNNs. 
+
+3) Instance and Group Normalization: Instance Normal-ization [13] normalizes per channel over spatial dimensions, excelling at style transfer. Group Normalization [14] divides channels into groups, maintaining stable performance across batch sizes at the cost of careful group-count selection. 
+
+4) Adaptive Batch Normalization (AdaBN): Li et al. [15] proposed AdaBN for domain adaptation by modulating batch-normalized statistics between source and target domains— an early demonstration of adaptive normalization under non-stationary distributions. AutoNorm extends this idea to differ-entiable gated selection in Transformers. 
+
+5) DeepNorm: Wang et al. [16] introduced DeepNorm, enabling Transformers to scale to 1,000 layers by stabilizing residual variance. AutoNorm complements such scaling meth-ods by providing feature-dependent adaptability rather than static stability alone. 
+
+6) Dynamic Tanh (DyT): Zhu et al. [30] proposed replacing normalization entirely with: DyT (x) = γ ⊙ tanh( αx ) + β (2) where α ∈ R is a learnable scalar controlling input saturation, and γ, β ∈ RC are learnable channel-wise scale and shift pa-rameters. DyT matches or exceeds LN on several Transformer benchmarks without computing feature statistics at runtime. AutoNorm treats DyT and LN as complementary candidates in a differentiable mixture, rather than substitutes. 
+
+7) Switchable Normalization: Luo et al. [34] proposed Switchable Normalization (SwitchNorm), which learns dif-ferentiable importance weights over BN, LN, and IN. While SwitchNorm blends statistics computed simultaneously from all three methods, AutoNorm uses Gumbel-Softmax gating to route between fully computed normalization outputs and, critically, identifies the optimization dynamics that determine whether learned switching is beneficial—a mechanism not studied by SwitchNorm. AutoNorm shares conceptual roots with FiLM [31] and other conditional normalization methods. However, its Gumbel-Softmax formulation enables fully differentiable au-tonomous selection between LN and DyT without external metadata or task-specific conditioning. 
+
+B. Dynamic and Adaptive Mechanisms in Neural Networks 
+
+Adaptive mechanisms increase network flexibility during training and inference [17]–[21]. Key examples include adap-tive activation functions—PReLU [17], Swish [18], Meta-Acon [19]—and per-parameter adaptive optimizers: Ada-Grad [22], Adam [5], AdaBelief [23]. 
+
+C. Transformer Architectures and Normalization Strategies 
+
+Transformers [3] rely on self-attention with normalization, primarily LN. Pre-LN and Post-LN variants affect training stability and scalability [7], [16], [25]. Alternatives include RMSNorm [24] and DeepNorm [16]. The interaction between normalization strategy and optimization dynamics—the central focus of this work—has received limited systematic study. III. M ETHODOLOGY 
+
+A. Differentiable Gating and Stabilization 
+
+We define input distribution non-stationarity in terms of the variability of feature statistics across training batches. Specifically, datasets exhibiting high variance in activation statistics or slow entropy collapse of the gating distribution are considered non-stationary, whereas datasets with stable feature distributions and rapid entropy collapse (e.g., MNIST) are considered stationary. This definitional grounding is essential for the design of the gate-freezing mechanism. 
+
+B. Design of the NormSelector Module 
+
+The core component of AutoNorm is the NormSelector 
+
+(Figure 1), which dynamically routes between normalization strategies at each Transformer layer. We focus on a binary selection between LN and Dynamic Tanh (DyT) [30] as a controlled study of differentiable normalization gating. DyT is defined in Eq. (2); it replaces the mean-variance statistics of LN with a learnable channel-wise tanh scaling, enabling gradient-preserving feature compression. The NormSelector is implemented as a lightweight two-layer MLP that takes the input representation x and predicts weights w0 and w1 via Gumbel-Softmax [4]. The blended output (Eq. (1)) is: Output = w0 · DyT (x) + w1 · LN (x), w0 + w1 = 1 (3) Two control modes provide diagnostic baselines:  
+
+> •
+
+Disable Selector (FrozenLN): Only LN is used; estab-lishes the static normalization ceiling.  
+
+> •
+
+Random Selector: Weights are sampled uniformly each step; this baseline is essential for diagnosing the stabiliza-tion bottleneck—if learned gating underperforms random blending, the bottleneck is active. 
+
+C. Transformer Configuration 
+
+We utilize a standardized Transformer based on the ViT-Lite design [32]. Vision variants (MNIST, CIFAR) use 8 layers, 4 attention heads, an embedding dimension of 128, and a patch size of 4 × 4. NLP and Tabular variants use a 12-layer configuration with 128 hidden dimensions and 8 attention heads. All models use GELU activations, stochastic depth [35] (rate 0.1), and LayerScale initialization [36] ( λ = 10 −4). TABLE I PERFORMANCE COMPARISON ACROSS VISION CLASSIFICATION DATASETS .
+
+Method Val Acc ± std Precision Recall F1-Score Latency (s) FLOPs Rot. Acc †
+
+MNIST 
+
+AutoNorm-S 99.18 ± 0.10 99.20 99.18 99.19 0.0053 79,391,488 10.10 
+
+FrozenLN 98.82 ± 0.13 98.80 98.81 98.80 0.0055 79,391,488 8.13 AdaNorm 98.95 ± 0.12 98.92 98.94 98.93 0.0054 79,391,488 9.21 Teacher (MLP) 97.98 ± 0.22 97.90 97.95 97.92 0.00007 102,144 –
+
+CIFAR-10 
+
+AutoNorm-S 86.35 ± 0.22 86.40 86.32 86.36 0.0053 103,178,368 70.12 
+
+FrozenLN 82.97 ± 0.35 82.90 82.92 82.91 0.0053 103,178,368 67.19 AdaNorm 84.20 ± 0.30 84.15 84.22 84.18 0.0054 103,178,368 68.50 Teacher (MLP) 57.02 ± 0.52 56.90 57.10 57.00 0.00009 395,008 49.30 
+
+Fashion-MNIST 
+
+AutoNorm-S 92.95 ± 0.15 92.98 92.94 92.96 0.0057 79,391,488 11.10 FrozenLN 93.12 ± 0.16 93.10 93.12 93.11 0.0054 79,391,488 10.06 AdaNorm 92.48 ± 0.18 92.45 92.50 92.47 0.0055 79,391,488 10.42 Teacher (MLP) 89.82 ± 0.25 89.80 89.85 89.82 0.00009 102,144 –
+
+SVHN 
+
+AutoNorm-S 89.38 ± 0.20 89.40 89.35 89.37 0.0053 103,178,368 9.21 FrozenLN 90.37 ± 0.22 90.35 90.38 90.36 0.0055 103,178,368 9.30 AdaNorm 91.10 ± 0.19 91.12 91.08 91.10 0.0062 103,178,368 9.87 
+
+Teacher (MLP) 78.37 ± 0.30 78.30 78.40 78.35 0.00009 395,008 9.18 
+
+CIFAR-100 
+
+AutoNorm-S 67.15 ± 0.32 67.20 67.12 67.16 0.0053 103,178,368 53.12 
+
+FrozenLN 64.82 ± 0.38 64.80 64.85 64.82 0.0054 103,178,368 51.15 Teacher (MLP) 41.02 ± 0.65 40.90 41.10 41.00 0.00010 395,008 9.82        
+
+> †Rot. Acc denotes test-time accuracy under 90 ◦rotation without rotation augmentation during training.
+> Fig. 1. NormSelector Architecture: a two-layer MLP processes the block input and produces Gumbel-Softmax weights w0and w1, which blend the outputs of DyT and LN into a weighted normalized representation passed to the residual pathway.
+
+This controlled design ensures that observed differences are attributable to the normalization strategy rather than capacity variations. The TransformerWithAutoNorm architecture (Figure 2) integrates the NormSelector directly into residual pathways, adaptively blending LN and DyT based on input activations at each layer. 
+
+D. Gate-Freezing Schedule 
+
+A key contribution of AutoNorm-S is its gate-freezing schedule, which resolves the stabilization bottleneck identi-fied empirically in Section IV-A. During an initial warm-up phase (epochs 1 through Tfreeze ), the NormSelector is trained  
+
+> Fig. 2. AutoNorm integrated into a Transformer Block. The NormSelector replaces the static LN in each residual sub-layer, producing a weighted combination of DyT and LN outputs.
+
+normally while gating entropy H (Eq. (4)) is monitored. If 
+
+H has not fallen below a threshold ϵH by epoch Tfreeze , the TABLE II REGRESSION PERFORMANCE COMPARISON ON TABULAR DATASETS .                                              
+
+> Method V-RMSE V-MAE Latency (s) FLOPs Energy Efficiency
+> AutoNorm-S 22.75 ±0.10 20.50 0.0039 1,687,680 AdaNorm 22.78 ±0.12 20.52 0.0040 1,687,680 FiLM 22.82 ±0.15 20.55 0.0038 1,679,104
+> Teacher (MLP) 22.90 ±0.20 20.68 0.00005 2,816 California Housing
+> AutoNorm-S 0.4892 ±0.05 0.3450 0.0039 1,687,680 FrozenLN 0.4905 ±0.06 0.3510 0.0041 1,687,680 Teacher (MLP) 0.6850 ±0.12 0.5012 0.00006 2,816
+
+selector weights are frozen for the remainder of training; the Transformer backbone continues to update normally. In all vision experiments reported here, we use Tfreeze = 10 and 
+
+ϵH = 0 .1. This single dataset-class-level hyperparameter—not tuned per dataset—applies uniformly to MNIST, CIFAR-10, Fashion-MNIST, SVHN, and CIFAR-100. On NLP datasets (PTB, SST-2), entropy collapses naturally within 30 epochs, so no freezing is applied. The freeze gate experiment in Section IV-F validates this choice empirically. 
+
+E. Computational Overhead 
+
+The NormSelector introduces a lightweight two-layer MLP per block, resulting in an increase of approximately ¡1% in parameter count and less than 0.1% additional FLOPs per forward pass. During inference, the selector can be optionally frozen, making the overhead negligible relative to standard Layer Normalization. 
+
+F. Experimental Setup 1) Datasets: AutoNorm is evaluated across multiple learn-ing paradigms:  
+
+> •
+
+Image Classification: MNIST, CIFAR-10, FashionM-NIST, SVHN, and CIFAR-100 assess visual recognition under different normalization strategies.  
+
+> •
+
+Corruption Robustness: CIFAR-10-C [8] evaluates ro-bustness at severity level 3 across Gaussian noise, motion blur, and brightness perturbations. Rotation Accuracy 
+
+(Rot. Acc) in Table I denotes test-time accuracy under 90 ◦
+
+rotation with no rotation augmentation during training, quantifying out-of-distribution geometric robustness.  
+
+> •
+
+Regression: Energy Efficiency and California Housing datasets evaluate AutoNorm on continuous-valued tabular targets.  
+
+> •
+
+NLP: Penn TreeBank (PTB) [33] POS tagging and SST-2 sentiment classification evaluate sequence-level perfor-mance. Perplexity on PTB is computed over POS tag sequences and is not comparable to language modeling perplexity (see Section IV-C). 
+
+2) Training Setup and Hyperparameters:  
+
+> •
+
+Optimization: AdamW [6] with a cosine learning rate schedule and a warm-up phase.  
+
+> •
+
+Data Augmentation: MixUp [26] and CutMix [27] for vision tasks. Dropout (0.1) and Label Smoothing (0.1) are applied globally.  
+
+> •
+
+Distillation Ablation: Experiments include training with and without a Teacher MLP [28]; dynamic distillation contributed a marginal 0.4%–0.8% improvement in vali-dation stability on vision tasks.  
+
+> •
+
+Evaluation: All reported metrics represent the mean and standard deviation over 5 independent random seeds. Paired t-tests are conducted for all primary comparisons. IV. R ESULTS 
+
+This section presents experimental findings across classi-fication, regression, and NLP tasks. All experiments were conducted under consistent training conditions; values are the mean over five independent trials. Paired t-tests between AutoNorm-S and the strongest static baseline were statistically significant ( p < 0.01 ) for PTB perplexity and ( p < 0.05 )for CIFAR-10-C mean accuracy. On clean vision benchmarks, differences between AutoNorm-S and the best static base-line frequently fall within the 95% confidence interval on stationary datasets—a result that is predicted by our theory 
+
+(Section IV-A) and discussed explicitly below. 
+
+A. Classification Results 
+
+Classification results reveal a clear relationship between input distribution stationarity and the utility of adaptive gating, fully consistent with the stabilization bottleneck hypothesis. On the most stationary benchmarks—MNIST and Fashion-MNIST—FrozenLN is highly competitive: on MNIST, AutoNorm-S leads by 0.36% (99.18% vs. 98.82%) within the 95% CI; on Fashion-MNIST, FrozenLN leads by 0.17% (93.12% vs. 92.95%). These results are expected: when in-put statistics are stable and gate entropy collapses rapidly (Section IV-F), the gate-freezing benefit of AutoNorm-S is least pronounced. Likewise, on SVHN, AdaNorm achieves the top result (91.10%), with AutoNorm-S at 89.38%. SVHN’s digit statistics are highly constrained in style and color range, making it another stationary domain where simpler normal-ization suffices. These cases are not failures —they are theory-consistent: the principle predicts that AutoNorm-S yields the smallest gain precisely where it should, on low-variance sta-tionary distributions. A clearer advantage emerges on CIFAR-10 and CIFAR-100, where richer visual diversity creates the non-stationarity that activates AutoNorm’s gating mechanism. On CIFAR-10, TABLE III PERFORMANCE ON PENN TREE BANK (PTB) POS T AGGING AND SST-2 S ENTIMENT CLASSIFICATION . PTB P ERPLEXITY IS COMPUTED ON POS TAG SEQUENCES AND IS NOT COMPARABLE TO LANGUAGE MODELING PERPLEXITY (SEE SECTION IV-C). 
+
+Method PTB Acc PTB Perplexity SST-2 Acc F1-Score Latency (s) FLOPs 
+
+AutoNorm-S 97.42 ± 0.12 38.6 ± 0.5 91.25 ± 0.18 91.30 0.0041 1,687,680 FrozenLN 96.80 ± 0.15 41.9 ± 0.4 89.42 ± 0.22 89.45 0.0042 1,687,680 AdaNorm 97.15 ± 0.14 40.1 ± 0.6 90.15 ± 0.20 90.22 0.0040 1,687,680 FiLM 96.72 ± 0.18 42.5 ± 0.7 88.95 ± 0.25 89.01 0.0039 1,679,104 
+
+Teacher (MLP) 94.02 ± 0.45 58.3 ± 1.2 82.50 ± 0.55 82.55 0.00008 3,102                           
+
+> TABLE IV CIFAR-10-C C ORRUPTION ROBUSTNESS (S EVERITY LEVEL 3). M EAN ACC IS AVERAGED ACROSS ALL EVALUATED CORRUPTION TYPES .IMPROVEMENT OVER FROZEN LN IS STATISTICALLY SIGNIFICANT (p < 0.05 , 5 SEEDS ).
+> Method Gaus. Noise (%) Mot. Blur (%) Bright. (%) Mean Acc (%)
+> AutoNorm-S 58.2 76.1 84.2 72.8
+> FrozenLN 52.1 71.0 81.5 68.2 AdaNorm 55.4 74.2 83.0 70.8
+
+unfrozen AutoNorm was outperformed by the RandomSelec-tor (85.48%)—the stabilization bottleneck in action—while AutoNorm-S achieves 86.35%, recovering the learned routing advantage. On CIFAR-100, AutoNorm-S leads FrozenLN by 2.33% (67.15% vs. 64.82%), the largest vision margin, consis-tent with the greater distributional diversity of 100-class data. Robustness to extreme corruptions remains challenging across all methods, with rotation accuracies on MNIST ap-proaching chance levels ( ∼10%). This highlights that normal-ization selection alone is insufficient for out-of-distribution geometric robustness, which requires dedicated augmentation strategies. 
+
+B. Regression Results 
+
+Dynamic normalization provides minimal gains on tabular regression, which is consistent with our hypothesis: low-dimensional tabular data exhibits relatively stationary feature distributions, limiting the benefit of adaptive normalization mechanisms. On Energy Efficiency, all Transformer variants converge to ≈22.7 RMSE; on California Housing, AutoNorm-S leads by 0.0013 RMSE (not statistically significant, p > 
+
+0.05 ). This is expected: low-dimensional tabular feature inter-actions do not generate the non-stationary feature distributions that activate AutoNorm’s gating advantage. The primary value of AutoNorm lies in high-dimensional, hierarchically evolving data streams. 
+
+C. NLP Results 
+
+Results on PTB POS tagging and SST-2 (Table III) pro-vide the strongest evidence for the proposed mechanism. AutoNorm-S outperforms all baselines on every metric: 97.42% POS accuracy ( p < 0.01 vs. FrozenLN’s 96.80%), and PTB perplexity of 38.6 vs. 41.9 for FrozenLN. Note that PTB perplexity here is computed over POS tag sequences; it is not directly comparable to perplexity scores from language modeling benchmarks (e.g., Transformer-XL achieves 18.3 on the PTB language modeling task [37]), though the relative improvement over the same-setup baseline is meaningful. On SST-2, AutoNorm-S achieves 91.25%, outperforming FrozenLN by 1.83%. The adaptive gating mechanism responds to the varied syntactic and semantic contexts in NLP by dynamically adjusting normalization statistics at each layer, better preserving long-range dependencies critical for accurate sequence-level prediction. 
+
+D. Ablation Study and Sensitivity Analysis 
+
+Gumbel-Softmax Temperature (τ ): High temperatures (τ > 1.0) yield uniform soft-blending; low temperatures (τ → 0) collapse to hard discrete selection. A fixed τ = 0 .5
+
+provides the optimal balance of exploration and exploitation across all tasks and blocks. 
+
+Selector Capacity: Reducing the NormSelector MLP from two layers to a single linear transformation drops PTB POS accuracy by 1.2%, confirming that non-linear meta-decisions are necessary for adapting to complex linguistic contexts. 
+
+Soft vs. Hard Selection: Switching to hard-categorical gating during training causes significantly slower convergence, especially on CIFAR-100 and PTB, confirming that smooth gradient flow from the Gumbel-Softmax relaxation is essential for effective learning. 
+
+E. Mechanistic Analysis of Learned Gating 
+
+Figure 3 visualizes the average gating weight wDyT across layers, revealing distinct task-dependent specialization that explains the observed performance patterns.  
+
+> •
+
+Vision Specialization: On MNIST, the selector converges to LN ( wLN > 0.85 ) across all layers within 5 epochs, explaining why FrozenLN remains highly competitive.  
+
+> •
+
+Linguistic Adaptation: On PTB, earlier layers (1–4) maintain a DyT-LN balance, while deeper layers (8– 12) strongly prefer DyT ( wDyT > 0.72 ). This layer-wise transition suggests dynamic normalization is particularly Fig. 3. Layer-wise wDyT weights across domains. Vision tasks (MNIST, CIFAR) rapidly collapse to standard LN, whereas PTB (NLP) maintains mixed gating with increasing DyT preference in deeper layers for hierarchical abstraction. 
+
+valuable for capturing high-level semantic abstractions that emerge in deeper Transformer layers.  
+
+> •
+
+Robustness under Shift: AutoNorm-S achieves 72.8% mean accuracy on CIFAR-10-C vs. 68.2% for FrozenLN (p < 0.05 , Table IV). Adaptive flexibility compensates for distribution shifts that destabilize the fixed statistics of LN, consistent with the non-stationarity principle. 
+
+F. Training Dynamics and Gating Entropy 
+
+We quantify the selector’s routing certainty via gating entropy: 
+
+H = − X
+
+> i
+
+wi log wi (4) On MNIST, H → 0 within the first 5 epochs as the selector rapidly specializes to LN. On PTB, entropy remains elevated (H ≈ 0.45 ) for longer, indicating a sustained exploration phase that eventually settles into the layer-wise switching pattern visible in Figure 3. This prolonged exploration avoids premature commitment to suboptimal static strategies, explain-ing AutoNorm’s NLP advantage (Figure 4). To confirm that early-stage Gumbel estimator variance causes the vision performance gap, we conducted the freeze-gate experiment described in Section III-D: freezing the Norm-Selector after 10 epochs on CIFAR-10 improved final accuracy by 1.1% relative to the unfrozen baseline. The gating MLP adds less than 0.1% per-epoch overhead relative to a standard Transformer, making AutoNorm viable at scale. 
+
+G. When Does Dynamic Normalization Help? 
+
+Our empirical and mechanistic findings yield the following 
+
+design principle : adaptive architectural selection is beneficial only when feature distributions remain non-stationary during training; otherwise, early stochastic optimization noise dom-inates the learning signal and must be constrained through stabilization mechanisms such as gating freezing. 
+
+1) Hierarchical Abstraction: Dynamic normalization is most beneficial when the task requires transitioning be-tween markedly different feature representations across layers (e.g., from local syntactic to global semantic  
+
+> Fig. 4. Validation Accuracy vs. Gating Entropy during training. AutoNorm-S (blue) sustains a high-entropy exploration phase before specializing and surpassing the RandomSelector (red dashed) as entropy collapses.
+
+patterns in NLP). DyT’s non-linear saturation captures layer-specific activation statistics that LN cannot. 2) Non-Stationary Input Distributions: When input statistics fluctuate—unlike the stable centroids of MNIST or Fashion-MNIST—dynamic re-scaling main-tains training stability and improves generalization under distribution shift. Preliminary experiments with a 3-way gating mixture (LN, RMSNorm, and DyT) on PTB yielded comparable gains, suggesting that the principle of differentiable gating remains robust as the normalization search space expands. V. C ONCLUSION 
+
+We presented AutoNorm, a differentiable normalization gating framework that dynamically selects between Layer Normalization and Dynamic Tanh at each Transformer layer via Gumbel-Softmax routing. Our central finding is a stabi-lization bottleneck : on stationary vision benchmarks, high gradient variance in early Gumbel-Softmax training prevents the selector from converging, causing random selectors to outperform learned policies. On non-stationary linguistic tasks, sustained gating entropy enables the selector to specialize into a layer-wise switching pattern that improves perplexity and downstream accuracy. AutoNorm-S resolves this bottleneck through a simple gate-freezing schedule applied after a brief warm-up phase, restor-ing competitive vision performance while preserving the NLP inductive bias. Mechanistic analysis via gating entropy and layer-wise weight visualization confirms that the mechanism is interpretable and theory-consistent. Our findings yield a general design principle for adaptive mechanisms in Transformers: gating should be stabilized dur-ing early training when input distributions are stationary, and permitted to explore freely when features evolve hierarchically. This principle is architecture-agnostic and extends naturally beyond normalization. Future work will investigate its transfer-ability to attention routing, mixture-of-experts selection [29], and cross-modal distribution shift adaptation. REFERENCES [1] S. Ioffe and C. Szegedy, “Batch normalization: Accelerating deep network training by reducing internal covariate shift,” in Proc. ICML ,2015. [2] J. L. Ba, J. R. Kiros, and G. E. Hinton, “Layer normalization,” arXiv preprint arXiv:1607.06450 , 2016. [3] A. Vaswani et al., “Attention is all you need,” in Proc. NeurIPS , 2017. [4] E. Jang, S. Gu, and B. Poole, “Categorical reparameterization with Gumbel-Softmax,” in Proc. ICLR , 2017. [5] D. P. Kingma and J. Ba, “Adam: A method for stochastic optimization,” in Proc. ICLR , 2015. [6] I. Loshchilov and F. Hutter, “Decoupled weight decay regularization,” in Proc. ICLR , 2019. [7] R. Xiong et al., “On layer normalization in the transformer architecture,” in Proc. ICML , 2020. [8] D. Hendrycks and T. Dietterich, “Benchmarking neural network robust-ness to common corruptions and perturbations,” in Proc. ICLR , 2019. [9] H. Zhang et al., “Fixup initialization: Residual learning without normal-ization,” in Proc. ICLR , 2019. [10] I. Gulrajani and D. Lopez-Paz, “In search of lost domain generalization,” in Proc. ICLR , 2021. [11] H. Liu, K. Simonyan, and Y. Yang, “DARTS: Differentiable architecture search,” in Proc. ICLR , 2019. [12] B. Zoph and Q. V. Le, “Neural architecture search with reinforcement learning,” in Proc. ICLR , 2017. [13] D. Ulyanov, A. Vedaldi, and V. Lempitsky, “Instance normalization: The missing ingredient for fast stylization,” arXiv preprint arXiv:1607.08022 ,2016. [14] Y. Wu and K. He, “Group normalization,” in Proc. ECCV , 2018. [15] Y. Li et al., “Adaptive batch normalization for practical domain adapta-tion,” Pattern Recognition , vol. 80, pp. 106–116, 2018. [16] H. Wang et al., “DeepNet: Scaling transformers to 1,000 layers,” arXiv preprint arXiv:2203.00555 , 2022. [17] K. He et al., “Delving deep into rectifiers: Surpassing human-level performance on ImageNet classification,” in Proc. ICCV , 2015. [18] P. Ramachandran, B. Zoph, and Q. V. Le, “Searching for activation functions,” arXiv preprint arXiv:1710.05941 , 2017. [19] N. Ma et al., “Activate or not: Learning customized activation,” in Proc. CVPR , 2021. [20] J. Hu, L. Shen, and G. Sun, “Squeeze-and-excitation networks,” in Proc. CVPR , 2018. [21] Y. Chen et al., “Dynamic convolution: Attention over convolution kernels,” in Proc. CVPR , 2020. [22] J. Duchi, E. Hazan, and Y. Singer, “Adaptive subgradient methods for online learning and stochastic optimization,” JMLR , vol. 12, pp. 2121– 2159, 2011. [23] J. Zhuang et al., “AdaBelief optimizer: Adapting stepsizes by the belief in observed gradients,” in Proc. NeurIPS , 2020. [24] B. Zhang and R. Sennrich, “Root mean square layer normalization,” in 
+
+Proc. NeurIPS , 2019. [25] T. Bachlechner et al., “ReZero is all you need: Fast convergence at large depth,” in Proc. UAI , 2021. [26] H. Zhang et al., “Mixup: Beyond empirical risk minimization,” in Proc. ICLR , 2018. [27] S. Yun et al., “CutMix: Regularization strategy to train strong classifiers with localizable features,” in Proc. ICCV , 2019. [28] G. Hinton, O. Vinyals, and J. Dean, “Distilling the knowledge in a neural network,” arXiv preprint arXiv:1503.02531 , 2015. [29] N. Shazeer et al., “Outrageously large neural networks: The mixture-of-experts layer,” in Proc. ICLR , 2017. [30] L. Zhu et al., “Transformers without normalization,” in Proc. CVPR ,2025. [31] E. Perez et al., “FiLM: Visual reasoning with a general conditioning layer,” in Proc. AAAI , 2018. [32] A. Hassani et al., “Escaping the big data paradigm with compact transformers,” arXiv preprint arXiv:2104.05704 , 2021. [33] M. P. Marcus, M. A. Marcinkiewicz, and B. Santorini, “Building a large annotated corpus of English: The Penn Treebank,” Computational Linguistics , vol. 19, no. 2, pp. 313–330, 1993. [34] P. Luo, J. Ren, Z. Peng, R. Zhang, and J. Li, “Differentiable learning-to-normalize via switchable normalization,” in Proc. ICLR , 2019. [35] G. Huang, Y. Sun, Z. Liu, D. Sedra, and K. Q. Weinberger, “Deep networks with stochastic depth,” in Proc. ECCV , 2016. [36] H. Touvron, M. Cord, A. Sablayrolles, G. Synnaeve, and H. J´ egou, “Going deeper with image transformers,” in Proc. ICCV , 2021. [37] Z. Dai et al., “Transformer-XL: Attentive language models beyond a fixed-length context,” in Proc. ACL , 2019.

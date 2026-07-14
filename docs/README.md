@@ -6,72 +6,59 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-13
-- 运行时间：2026-07-13 21:32:07 UTC
+- 最新运行日期：2026-07-14
+- 运行时间：2026-07-14 21:34:45 UTC
 - 运行状态：成功
-- 本次总论文数：16
-- 精读区：6
+- 本次总论文数：13
+- 精读区：3
 - 速读区：10
 
 ### 今日简报（AI）
-今日共荐16篇论文，重点精读2篇高分研究，速读3篇实用方向。
-
-最值得关注：高评分论文《高斯二次率失真函数》与《OmniOpt优化器基准测试》分别深化了信息论与优化理论。
-
-普通读者可优先浏览ZipDepth轻量级深度估计、鲁棒语义视频传输及细粒度识别子词ViT的工程创新。
-- 详情：[/202607/13/README](/202607/13/README)
+今天筛选13篇论文，精读2篇，速读3篇，聚焦视频编码与模型压缩。最值得关注的是H.264自适应量化控制的可微代理学习，以及面向嵌入式硬件的CNN多维剪枝。建议优先精读这两篇，再按兴趣选读视觉Transformer内的表征融合或LiDAR预训练。
+- 详情：[/202607/14/README](/202607/14/README)
 
 ### 精读区论文标签
-1. [On the Gaussian-Quadratic Rate-Distortion Function for Vector Sources with Individual Distortion Constraints](/202607/13/2607.09545v1-on-the-gaussian-quadratic-rate-distortion-function-for-vector-sources-with-individual-distortion-constraints)  
+1. [Differentiable Proxy Learning for Adaptive Quantization Control in H.264 Video Coding](/202607/14/2607.10478v1-differentiable-proxy-learning-for-adaptive-quantization-control-in-h264-video-coding)  
    标签：评分：9.0/10、query:compress
-   evidence：具有个体约束的高斯二次损失压缩的率失真函数
-2. [OmniOpt: Taxonomy, Geometry, and Benchmarking of Modern Optimizers](/202607/13/2607.04033v1-omniopt-taxonomy-geometry-and-benchmarking-of-modern-optimizers)  
+   evidence：通过可微代理实现H.264编码中的自适应量化控制，直接涉及图像/视频压缩中的量化策略
+2. [Towards Efficient Convolutional Neural Network for Embedded Hardware via Multi-Dimensional Pruning](/202607/14/2607.11473v1-towards-efficient-convolutional-neural-network-for-embedded-hardware-via-multi-dimensional-pruning)  
    标签：评分：8.0/10、query:neural-arch
-   evidence：深度学习优化器的统一综述与基准，直接相关模型优化策略
-3. [A Theory of Contrastive Learning with Natural Images](/202607/13/2607.07470v1-a-theory-of-contrastive-learning-with-natural-images)  
+   evidence：用于嵌入式硬件的高效CNN多维剪枝框架
+3. [Requential Coding: Pushing the Limits of Model Compression with Self-Generated Training Data](/202607/14/2607.11883v1-requential-coding-pushing-the-limits-of-model-compression-with-self-generated-training-data)  
    标签：评分：8.0/10、query:neural-arch
-   evidence：自然图像对比学习的理论分析，指导架构设计
-4. [Continual Test-Time Adaptation in Computer Vision: Methods, Benchmarks, and Future Directions](/202607/13/2607.08164v1-continual-test-time-adaptation-in-computer-vision-methods-benchmarks-and-future-directions)  
-   标签：评分：8.0/10、query:neural-arch
-   evidence：计算机视觉中持续测试时自适应方法的全面综述
-5. [MOSAIC: Adaptive Inter-layer Composition for Efficient Heterogeneous Vision-Language Models](/202607/13/2607.09029v1-mosaic-adaptive-inter-layer-composition-for-efficient-heterogeneous-vision-language-models)  
-   标签：评分：8.0/10、query:neural-arch
-   evidence：硬件感知搜索用于异构视觉语言模型架构设计
-6. [Foveation-Guided Dynamic Token Selection for Robust and Efficient Vision Transformers](/202607/13/2607.09480v1-foveation-guided-dynamic-token-selection-for-robust-and-efficient-vision-transformers)  
-   标签：评分：8.0/10、query:neural-arch
-   evidence：注视引导的动态令牌选择，提升视觉变换器效率
+   evidence：通过requential编码进行模型压缩
 
 ### 速读区论文标签
-1. [Towards Robust Semantic Video Transmission over Block Erasure Channels](/202607/13/2607.07823v1-towards-robust-semantic-video-transmission-over-block-erasure-channels)  
+1. [Vertical Fusion: Condensing Internal Representations for Robust ViT Classification](/202607/14/2607.10391v1-vertical-fusion-condensing-internal-representations-for-robust-vit-classification)  
+   标签：评分：7.0/10、query:neural-arch
+   evidence：垂直融合内部表示以增强ViT分类鲁棒性
+2. [TOLiD: Bridging the Architecture Gap in Vision Foundation Model to LiDAR Pretraining via Token Lifting for Distillation](/202607/14/2607.10762v1-tolid-bridging-the-architecture-gap-in-vision-foundation-model-to-lidar-pretraining-via-token-lifting-for-distillation)  
+   标签：评分：7.0/10、query:neural-arch
+   evidence：通过token提升蒸馏弥合Vision Transformer与LiDAR骨干间的架构差距
+3. [Efficient Tuning Before Low-Bit Post-Training Quantization for Stochastic Gradient Descent-optimized Models](/202607/14/2607.11359v1-efficient-tuning-before-low-bit-post-training-quantization-for-stochastic-gradient-descent-optimized-models)  
    标签：评分：7.0/10、query:compress
-   evidence：用于鲁棒视频传输的神经联合源信道编码，内含率失真优化
-2. [ZipDepth: Bringing Lightweight Zero-Shot Monocular Depth Anywhere, on Any Device](/202607/13/2607.08771v1-zipdepth-bringing-lightweight-zero-shot-monocular-depth-anywhere-on-any-device)  
+   evidence：低比特后训练量化策略
+4. [Similarity-Guided Curriculum Fine-Tuning of LLMs for Neural Architecture Synthesis](/202607/14/2607.11591v1-similarity-guided-curriculum-fine-tuning-of-llms-for-neural-architecture-synthesis)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：轻量级单目深度网络结合高效架构和知识蒸馏
-3. [Subtoken Vision Transformer for Fine-grained Recognition](/202607/13/2607.09086v1-subtoken-vision-transformer-for-fine-grained-recognition)  
-   标签：评分：7.0/10、query:neural-arch
-   evidence：改进视觉Transformer架构用于细粒度识别
-4. [Fully Trainable Deep Differentiable Logic Gate Networks and Lookup Table Networks](/202607/13/2607.09399v1-fully-trainable-deep-differentiable-logic-gate-networks-and-lookup-table-networks)  
-   标签：评分：7.0/10、query:neural-arch
-   evidence：用于图像分类任务的新型神经网络架构
-5. [KVpop -- Key-Value Cache Compression with Predictive Online Pruning](/202607/13/2607.05061v2-kvpop----key-value-cache-compression-with-predictive-online-pruning)  
+   evidence：使用大语言模型进行图像分类的神经架构合成
+5. [Efficient Long-Horizon Learning for Learned Optimization](/202607/14/2607.06772v3-efficient-long-horizon-learning-for-learned-optimization)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：基于学习的KV缓存驱逐策略，用于高效自回归解码，是深度学习模型优化策略
-6. [From RGB Generation to Dense Field Readout: Pixel-Space Dense Prediction with Text-to-Image Models](/202607/13/2607.06553v1-from-rgb-generation-to-dense-field-readout-pixel-space-dense-prediction-with-text-to-image-models)  
+   evidence：长视野元学习优化器用于模型优化
+6. [Optimal Learning Rate Scaling Depends on Data in Deep Scalar Linear Networks](/202607/14/2607.07884v1-optimal-learning-rate-scaling-depends-on-data-in-deep-scalar-linear-networks)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：利用文本到图像模型进行像素空间密集预测
-7. [Prototype-Anchored Generalized Manifold Regression for Unknown-Domain Object Detection](/202607/13/2607.07192v1-prototype-anchored-generalized-manifold-regression-for-unknown-domain-object-detection)  
+   evidence：深度标量线性网络中最优学习率缩放依赖于数据的研究
+7. [BOCCHI: A More Realistic and Challenging Benchmark for Local Motion Blur Detection with MSDCT-UNet](/202607/14/2607.10427v1-bocchi-a-more-realistic-and-challenging-benchmark-for-local-motion-blur-detection-with-msdct-unet)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：基于流形回归的目标检测域泛化方法
-8. [Texture Representations in Deep Vision Models: Comparing CNNs, Vision Transformers, and Human Perception](/202607/13/2607.08321v1-texture-representations-in-deep-vision-models-comparing-cnns-vision-transformers-and-human-perception)  
+   evidence：MSDCT-UNet使用多尺度DCT注意力进行运动模糊检测，属于架构改进技术
+8. [AutoNorm: Understanding Adaptive Normalization in Transformers through Differentiable Gating](/202607/14/2607.10593v1-autonorm-understanding-adaptive-normalization-in-transformers-through-differentiable-gating)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：比较CNN、ViT和人类在纹理上的表征，对理解前沿架构有启发
-9. [Integrating Large Language Models and Graph Convolutional Networks for Semi-Supervised Image Classification](/202607/13/2607.09104v1-integrating-large-language-models-and-graph-convolutional-networks-for-semi-supervised-image-classification)  
+   evidence：Transformer自适应归一化门控分析
+9. [DDR-Net: Haze-Aware Dual-Domain Refinement for Single-Image Dehazing](/202607/14/2607.11071v1-ddr-net-haze-aware-dual-domain-refinement-for-single-image-dehazing)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：集成大语言模型和图卷积网络进行半监督图像分类
-10. [SigLIP-HD by Fine-to-Coarse Supervision](/202607/13/2607.09488v1-siglip-hd-by-fine-to-coarse-supervision)  
+   evidence：编码器-解码器架构结合双域精细化用于图像恢复
+10. [CUST: Clustered Unit-level Similarity Transformer for Lightweight Image Super-Resolution](/202607/14/2607.11088v1-cust-clustered-unit-level-similarity-transformer-for-lightweight-image-super-resolution)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：粗细监督提升视觉感知，属于计算机视觉架构改进技术
+   evidence：用于轻量级超分辨率的高效Transformer架构
 
 
 <div class="dpr-home-promo-card">
