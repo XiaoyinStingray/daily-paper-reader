@@ -6,53 +6,61 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-15
-- 运行时间：2026-07-15 20:30:26 UTC
+- 最新运行日期：2026-07-16
+- 运行时间：2026-07-16 21:35:03 UTC
 - 运行状态：成功
-- 本次总论文数：11
-- 精读区：4
-- 速读区：7
+- 本次总论文数：13
+- 精读区：3
+- 速读区：10
 
 ### 今日简报（AI）
-今日共读11篇论文，精读4篇，重点聚焦图像压缩与视频增强两大方向。最值得关注的成果是《Spatially-Aligned Chroma from Luma Prediction》在无损JPEG XS原始图像压缩中提出创新预测方法（满分推荐），以及《DiffCVE》通过扩散模型实现压缩视频增强（8分）。建议普通读者优先从精读列表中的高分论文入手，结合实际应用场景评估技术价值。
-- 详情：[/202607/15/README](/202607/15/README)
+今日精读两篇9分高分论文，涵盖神经图像压缩的快速编码与轻量解码平衡，以及筛查机制在视觉识别中的有效性验证。  
+最值得关注《N-O Cool-chic》提出的编码加速方案和《Screening Is Effective》揭示的视觉识别提升路径。  
+建议优先深入精读这两篇，并速读自监督联合训练及令牌缩减技术，以拓展交叉应用灵感。
+- 详情：[/202607/16/README](/202607/16/README)
 
 ### 精读区论文标签
-1. [Spatially-Aligned Chroma from Luma Prediction for Lossless JPEG XS Raw Image Compression](/202607/15/2607.12636v1-spatially-aligned-chroma-from-luma-prediction-for-lossless-jpeg-xs-raw-image-compression)  
-   标签：评分：10.0/10、query:compress
-   evidence：提出CfL增强的Star-Tetrix变换用于JPEG XS原始图像压缩，直接涉及变换编码
-2. [DiffCVE: Diffusion-based Compressed Video Enhancement](/202607/15/2607.07195v1-diffcve-diffusion-based-compressed-video-enhancement)  
-   标签：评分：8.0/10、query:compress
-   evidence：利用扩散模型和编码先验增强压缩视频，直接涉及压缩质量提升
-3. [Difference-Driven Gating: Adaptive Feature Fusion for U-Net Decoder](/202607/15/2607.11096v1-difference-driven-gating-adaptive-feature-fusion-for-u-net-decoder)  
+1. [N-O Cool-chic: reconcile fast encoding with lightweight decoding for neural image compression](/202607/16/2607.13723v1-n-o-cool-chic-reconcile-fast-encoding-with-lightweight-decoding-for-neural-image-compression)  
+   标签：评分：9.0/10、query:compress
+   evidence：非过拟合神经图像编解码，降低编码复杂度。
+2. [Screening Is Effective for Visual Recognition](/202607/16/2607.13983v1-screening-is-effective-for-visual-recognition)  
+   标签：评分：9.0/10、query:neural-arch
+   evidence：ViT中的显式令牌筛选用于视觉识别
+3. [Transforming Rank: How Architecture Navigates the Spectral Pathologies of Depth](/202607/16/2607.14018v1-transforming-rank-how-architecture-navigates-the-spectral-pathologies-of-depth)  
    标签：评分：8.0/10、query:neural-arch
-   evidence：基于差异的门控自适应特征融合改进U-Net解码器
-4. [Let RGB Be the Language of Vision](/202607/15/2607.12450v1-let-rgb-be-the-language-of-vision)  
-   标签：评分：8.0/10、query:neural-arch
-   evidence：将所有视觉任务统一为RGB到RGB编辑的视觉模型
+   evidence：分析Transformer架构设计以保持秩，提供最佳实践
 
 ### 速读区论文标签
-1. [Simon-SR: Spatially Adaptive Modulation and Visual Prompt Adaptation for Text-Reinforced Super-Resolution](/202607/15/2607.09351v1-simon-sr-spatially-adaptive-modulation-and-visual-prompt-adaptation-for-text-reinforced-super-resolution)  
+1. [Self-Supervised Visual Representation Learning: Pretrain-Finetuning or Joint Training?](/202607/16/2607.13192v1-self-supervised-visual-representation-learning-pretrain-finetuning-or-joint-training)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：Simon-SR框架通过空间自适应调制提升超分辨率，属于计算机视觉架构改进
-2. [CoSAG: Compact Semantic Anchor Gaussians via Training-Free Rate-Distortion Coding](/202607/15/2607.10237v1-cosag-compact-semantic-anchor-gaussians-via-training-free-rate-distortion-coding)  
+   evidence：比较自监督学习中的预训练微调与联合训练，属于模型优化策略
+2. [Attention-Free and Lightweight Token Reduction for Efficient Vision-Language Models](/202607/16/2607.13500v1-attention-free-and-lightweight-token-reduction-for-efficient-vision-language-models)  
+   标签：评分：7.0/10、query:neural-arch
+   evidence：高效的视觉语言模型令牌减少架构设计技巧
+3. [Constraint-Driven Model Optimization: An Industry Framework for Selecting Compression and Acceleration Techniques in Modern Machine Learning Systems](/202607/16/2607.13735v1-constraint-driven-model-optimization-an-industry-framework-for-selecting-compression-and-acceleration-techniques-in-modern-machine-learning-systems)  
    标签：评分：7.0/10、query:compress
-   evidence：免训练的率失真编码用于3D场景压缩
-3. [Do You Remember? Toward Memory-Centric Multimodal AI](/202607/15/2607.11919v1-do-you-remember-toward-memory-centric-multimodal-ai)  
-   标签：评分：7.0/10、query:compress
-   evidence：使用VQ-VAE将图像压缩为离散token，属于基于自编码器的图像压缩
-4. [DeGuNet: Depth-Guided Ultra-Compact Backbones for Efficient LiDAR-Camera 3D Detection](/202607/15/2607.12419v1-degunet-depth-guided-ultra-compact-backbones-for-efficient-lidar-camera-3d-detection)  
+   evidence：模型优化框架，包含量化等压缩技术
+4. [Thresholded Cross-Attention for Reliable Intensity-Chromaticity Fusion in Low-Light Image Enhancement](/202607/16/2607.13925v1-thresholded-cross-attention-for-reliable-intensity-chromaticity-fusion-in-low-light-image-enhancement)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：用于3D检测的超紧凑图像骨干网络
-5. [Realizable N:M Sparse Transformer Inference via Search-Kernel Co-Design](/202607/15/2607.12505v1-realizable-nm-sparse-transformer-inference-via-search-kernel-co-design)  
-   标签：评分：7.0/10、query:neural-arch
-   evidence：N:M稀疏ViT推理的软硬件协同设计
-6. [Partial-Reference IQA Based on Hermite-Gauss Structural Prediction and Texture Deviation](/202607/15/2607.08563v1-partial-reference-iqa-based-on-hermite-gauss-structural-prediction-and-texture-deviation)  
+   evidence：低光增强中用于可靠特征融合的阈值交叉注意力
+5. [DiffCVE: Diffusion-based Compressed Video Enhancement](/202607/16/2607.07195v1-diffcve-diffusion-based-compressed-video-enhancement)  
    标签：评分：6.0/10、query:compress
-   evidence：提出了一种部分参考图像质量评估框架，可用于评估图像压缩中的压缩伪影
-7. [REBASE: Reference-Background Subspace Elimination for Training-Free In-Context Segmentation](/202607/15/2607.09082v1-rebase-reference-background-subspace-elimination-for-training-free-in-context-segmentation)  
+   evidence：基于扩散模型利用编码先验增强压缩视频
+6. [Weaving Light and Time: Unified Harmonic-Geometric Representation Learning for Dense RGB-Event Parsing](/202607/16/2607.09143v1-weaving-light-and-time-unified-harmonic-geometric-representation-learning-for-dense-rgb-event-parsing)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：提出训练自由的上下文分割框架，利用视觉基础模型，属于计算机视觉通用方法
+   evidence：提出用于RGB-事件解析的统一骨干，与视觉架构改进相关
+7. [Decoupling Language Guidance from Backbones for Text-Guided Medical Segmentation](/202607/16/2607.09481v1-decoupling-language-guidance-from-backbones-for-text-guided-medical-segmentation)  
+   标签：评分：6.0/10、query:neural-arch
+   evidence：用于语言引导的主干可转移层次适配器
+8. [GNet: A scalable and flexible Gaussian process network with nonparametric neurons](/202607/16/2607.10735v1-gnet-a-scalable-and-flexible-gaussian-process-network-with-nonparametric-neurons)  
+   标签：评分：6.0/10、query:neural-arch
+   evidence：高斯过程网络与非参数神经元
+9. [Contrastive-Collapsed Loss for Flexible and Geometrically Optimal Embeddings and Faster Convergence](/202607/16/2607.12916v1-contrastive-collapsed-loss-for-flexible-and-geometrically-optimal-embeddings-and-faster-convergence)  
+   标签：评分：6.0/10、query:neural-arch
+   evidence：新对比压缩损失提升嵌入质量和收敛速度
+10. [Local Redundancy: An Information-Theoretic Measure of Plasticity from Synthetic Memorization](/202607/16/2607.13432v1-local-redundancy-an-information-theoretic-measure-of-plasticity-from-synthetic-memorization)  
+   标签：评分：6.0/10、query:neural-arch
+   evidence：提出局部冗余度作为衡量神经网络可塑性的指标，用于模型优化
 
 
 <div class="dpr-home-promo-card">
