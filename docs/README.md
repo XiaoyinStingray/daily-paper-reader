@@ -6,68 +6,50 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-17
-- 运行时间：2026-07-17 20:23:03 UTC
+- 最新运行日期：2026-07-18
+- 运行时间：2026-07-18 21:27:37 UTC
 - 运行状态：成功
-- 本次总论文数：16
-- 精读区：5
-- 速读区：11
+- 本次总论文数：10
+- 精读区：2
+- 速读区：8
 
 ### 今日简报（AI）
-今日推荐16篇论文，精读2篇高分图像压缩研究；重点看Mixture of Experts的可变率压缩与Cool-chic的快速编码轻量解码；建议关注高效编解码技术以平衡速度与性能。
-- 详情：[/202607/17/README](/202607/17/README)
+今日推荐10篇论文，精读聚焦于学习率冷却机制的噪声与优化器协同影响，以及基于状态空间模型的B帧视频压缩前沿进展。最值得关注的方向是：学习率冷却策略与噪声结构的交互机制、神经视频编解码中的状态空间建模。建议普通读者优先从这两篇精读入手，深入理解训练稳定性与压缩效率的优化突破口。
+- 详情：[/202607/18/README](/202607/18/README)
 
 ### 精读区论文标签
-1. [MixCompress: Mixture of Experts for Variable Rate Learned Image Compression](/202607/17/2607.14334v1-mixcompress-mixture-of-experts-for-variable-rate-learned-image-compression)  
-   标签：评分：10.0/10、query:compress
-   evidence：混合专家用于可变速率学习图像压缩
-2. [N-O Cool-chic: reconcile fast encoding with lightweight decoding for neural image compression](/202607/17/2607.13723v1-n-o-cool-chic-reconcile-fast-encoding-with-lightweight-decoding-for-neural-image-compression)  
+1. [Same Loss, Same Noise, Opposite Schedules: Noise Structure and Optimizer Normalization Jointly Determine Whether Learning-Rate Cooldown Helps](/202607/18/2607.12360v1-same-loss-same-noise-opposite-schedules-noise-structure-and-optimizer-normalization-jointly-determine-whether-learning-rate-cooldown-helps)  
+   标签：评分：9.0/10、query:neural-arch
+   evidence：理论分析学习率冷却何时有效，基于梯度噪声结构和优化器归一化
+2. [DCVC-MB: Neural B-Frame Video Compression using State Space Models](/202607/18/2607.14305v1-dcvc-mb-neural-b-frame-video-compression-using-state-space-models)  
    标签：评分：9.0/10、query:compress
-   evidence：用于端到端有损图像压缩的神经网络架构
-3. [Lossy compression of weighted graph adjacency matrices by transform coding](/202607/17/2607.14834v1-lossy-compression-of-weighted-graph-adjacency-matrices-by-transform-coding)  
-   标签：评分：9.0/10、query:compress
-   evidence：将变换编码和量化用于有损压缩
-4. [URVC: A Unified Real-Time Neural Video Coding Model with Temporal, Spatial, and Perceptual Adaptivity](/202607/17/2607.15033v1-urvc-a-unified-real-time-neural-video-coding-model-with-temporal-spatial-and-perceptual-adaptivity)  
-   标签：评分：9.0/10、query:compress
-   evidence：用于端到端有损图像/视频压缩的神经网络架构
-5. [DCVC-MB: Neural B-Frame Video Compression using State Space Models](/202607/17/2607.14305v1-dcvc-mb-neural-b-frame-video-compression-using-state-space-models)  
-   标签：评分：8.0/10、query:compress
    evidence：使用状态空间模型的神经B帧视频压缩
 
 ### 速读区论文标签
-1. [CASA-SDF: Curriculum-Aware Spatial Adaptation with Curvature-Guided Density for Neural Implicit Surface Reconstruction](/202607/17/2607.13492v1-casa-sdf-curriculum-aware-spatial-adaptation-with-curvature-guided-density-for-neural-implicit-surface-reconstruction)  
+1. [Benchmarking Edge Inference Strategies for Deep Learning Models in Industrial Machine Vision](/202607/18/2607.11356v1-benchmarking-edge-inference-strategies-for-deep-learning-models-in-industrial-machine-vision)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：神经隐式曲面重建中的课程感知空间自适应
-2. [VideoSEMA: a scalable and efficient Mamba-like attention for video understanding](/202607/17/2607.14711v1-videosema-a-scalable-and-efficient-mamba-like-attention-for-video-understanding)  
+   evidence：对深度学习模型边缘推理策略进行基准测试
+2. [Backbone-Agnostic Perturbation-Induced Uncertainty Learning for End-to-End Real-World Image Dehazing](/202607/18/2607.11623v1-backbone-agnostic-perturbation-induced-uncertainty-learning-for-end-to-end-real-world-image-dehazing)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：提出一种用于视频理解的新型高效注意力架构，与视觉架构前沿相关
-3. [U-shaped Multi-granularity Learning for Vision-Language Models](/202607/17/2607.14966v1-u-shaped-multi-granularity-learning-for-vision-language-models)  
+   evidence：提出即插即用且与骨干无关的不确定性学习框架用于图像去雾
+3. [Symbiosis-Inspired Knowledge Distillation for Incremental Object Detection](/202607/18/2607.13452v1-symbiosis-inspired-knowledge-distillation-for-incremental-object-detection)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：U形多粒度提示学习用于视觉语言模型
-4. [Partial-Reference IQA Based on Hermite-Gauss Structural Prediction and Texture Deviation](/202607/17/2607.08563v2-partial-reference-iqa-based-on-hermite-gauss-structural-prediction-and-texture-deviation)  
-   标签：评分：6.0/10、query:compress
-   evidence：部分参考图像质量评估方法，涉及结构和纹理评估，与压缩管道的质量测量相关
-5. [Probing Diffusion Denoising Dynamics for Contrastive Representation Learning](/202607/17/2607.09067v1-probing-diffusion-denoising-dynamics-for-contrastive-representation-learning)  
+   evidence：利用对象共生关系的知识蒸馏方法用于增量检测
+4. [GlobalForge: Towards Robust AI-Generated Image Detection](/202607/18/2607.14684v1-globalforge-towards-robust-ai-generated-image-detection)  
+   标签：评分：7.0/10、query:neural-arch
+   evidence：提出局部信息瓶颈和全局结构推理模块，提升检测鲁棒性
+5. [A Strong Balanced-Softmax Classifier-Retraining Baseline for Long-Tailed Recognition](/202607/18/2607.09832v1-a-strong-balanced-softmax-classifier-retraining-baseline-for-long-tailed-recognition)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：扩散去噪动力学用于对比学习，属于计算机视觉通用方法
-6. [Error Aware Distribution Prediction for Lightweight Implicit Neural Representations](/202607/17/2607.10068v1-error-aware-distribution-prediction-for-lightweight-implicit-neural-representations)  
+   evidence：长尾识别的分类器重训练
+6. [Geometry-aware Gaussian Prior and Axial Attention for Cervical Cytology Image Classification](/202607/18/2607.10278v1-geometry-aware-gaussian-prior-and-axial-attention-for-cervical-cytology-image-classification)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：轻量级隐式神经表示的误差感知分布预测
-7. [Energy-guided Recursive Model](/202607/17/2607.10128v1-energy-guided-recursive-model)  
+   evidence：几何感知高斯先验和轴向注意力用于宫颈细胞学分类
+7. [Gradient-Skipping Relevance Propagation for Efficient Explainability of Vision Transformers](/202607/18/2607.10365v1-gradient-skipping-relevance-propagation-for-efficient-explainability-of-vision-transformers)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：基于能量引导的递归模型与内在选择原则
-8. [PnP-IPA: A Provably Convergent Plug-and-Play Inexact Proximal Algorithm for Nonconvex Imaging Problems](/202607/17/2607.10223v1-pnp-ipa-a-provably-convergent-plug-and-play-inexact-proximal-algorithm-for-nonconvex-imaging-problems)  
+   evidence：视觉Transformer的可解释性方法
+8. [Full-Pipeline Inference Optimization for MiMo-V2.5 Series: Pushing Hybrid SWA Efficiency to the Limit](/202607/18/2607.13095v1-full-pipeline-inference-optimization-for-mimo-v25-series-pushing-hybrid-swa-efficiency-to-the-limit)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：非凸成像问题的可证收敛即插即用算法
-9. [AVQ-Attention: Adaptive Vector-Quantized Attention](/202607/17/2607.12789v1-avq-attention-adaptive-vector-quantized-attention)  
-   标签：评分：6.0/10、query:neural-arch
-   evidence：自适应向量量化注意力提升Transformer效率
-10. [AspectCLIP: Optimizing CLIP Representation Space via Aspect-Guided Consistency Regularization](/202607/17/2607.13805v2-aspectclip-optimizing-clip-representation-space-via-aspect-guided-consistency-regularization)  
-   标签：评分：6.0/10、query:neural-arch
-   evidence：面向CLIP的方面引导一致性正则化
-11. [NIFA: Nonlinear IMC enhanced FPGA for efficient ML inference](/202607/17/2607.15123v1-nifa-nonlinear-imc-enhanced-fpga-for-efficient-ml-inference)  
-   标签：评分：6.0/10、query:neural-arch
-   evidence：非线性IMC增强FPGA用于高效机器学习推理
+   evidence：混合SWA和MoE模型的推理优化
 
 
 <div class="dpr-home-promo-card">
