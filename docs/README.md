@@ -6,50 +6,49 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-18
-- 运行时间：2026-07-18 21:27:37 UTC
+- 最新运行日期：2026-07-19
+- 运行时间：2026-07-19 20:56:10 UTC
 - 运行状态：成功
-- 本次总论文数：10
-- 精读区：2
+- 本次总论文数：9
+- 精读区：1
 - 速读区：8
 
 ### 今日简报（AI）
-今日推荐10篇论文，精读聚焦于学习率冷却机制的噪声与优化器协同影响，以及基于状态空间模型的B帧视频压缩前沿进展。最值得关注的方向是：学习率冷却策略与噪声结构的交互机制、神经视频编解码中的状态空间建模。建议普通读者优先从这两篇精读入手，深入理解训练稳定性与压缩效率的优化突破口。
-- 详情：[/202607/18/README](/202607/18/README)
+1) 今日9篇论文中，精读重点探讨交错噪声注入提升模型鲁棒性，速读覆盖权重反馈局部计算、自适应模型压缩及视觉语言模型中的令牌压缩。
+2) 最值得关注的方向：精读论文显示交错噪声注入可同时提升干净、损坏和OOD性能；速读中权重反馈方法首次实现前向网络局部雅可比转置计算。
+3) 建议优先精读噪声注入论文掌握核心技巧，再结合自适应压缩方法优化低功耗部署，最后可尝试将光谱热流方法应用于你的视觉语言模型中。
+- 详情：[/202607/19/README](/202607/19/README)
 
 ### 精读区论文标签
-1. [Same Loss, Same Noise, Opposite Schedules: Noise Structure and Optimizer Normalization Jointly Determine Whether Learning-Rate Cooldown Helps](/202607/18/2607.12360v1-same-loss-same-noise-opposite-schedules-noise-structure-and-optimizer-normalization-jointly-determine-whether-learning-rate-cooldown-helps)  
-   标签：评分：9.0/10、query:neural-arch
-   evidence：理论分析学习率冷却何时有效，基于梯度噪声结构和优化器归一化
-2. [DCVC-MB: Neural B-Frame Video Compression using State Space Models](/202607/18/2607.14305v1-dcvc-mb-neural-b-frame-video-compression-using-state-space-models)  
-   标签：评分：9.0/10、query:compress
-   evidence：使用状态空间模型的神经B帧视频压缩
+1. [Interleaved Noise Injection Improves Clean, Corrupted, and OOD Performance](/202607/19/2607.14466v1-interleaved-noise-injection-improves-clean-corrupted-and-ood-performance)  
+   标签：评分：8.0/10、query:neural-arch
+   evidence：交错噪声注入改善优化和泛化
 
 ### 速读区论文标签
-1. [Benchmarking Edge Inference Strategies for Deep Learning Models in Industrial Machine Vision](/202607/18/2607.11356v1-benchmarking-edge-inference-strategies-for-deep-learning-models-in-industrial-machine-vision)  
+1. [Weight Feedback Computes the Jacobian Transpose Locally in Modern Deep Networks](/202607/19/2607.13380v1-weight-feedback-computes-the-jacobian-transpose-locally-in-modern-deep-networks)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：对深度学习模型边缘推理策略进行基准测试
-2. [Backbone-Agnostic Perturbation-Induced Uncertainty Learning for End-to-End Real-World Image Dehazing](/202607/18/2607.11623v1-backbone-agnostic-perturbation-induced-uncertainty-learning-for-end-to-end-real-world-image-dehazing)  
-   标签：评分：7.0/10、query:neural-arch
-   evidence：提出即插即用且与骨干无关的不确定性学习框架用于图像去雾
-3. [Symbiosis-Inspired Knowledge Distillation for Incremental Object Detection](/202607/18/2607.13452v1-symbiosis-inspired-knowledge-distillation-for-incremental-object-detection)  
-   标签：评分：7.0/10、query:neural-arch
-   evidence：利用对象共生关系的知识蒸馏方法用于增量检测
-4. [GlobalForge: Towards Robust AI-Generated Image Detection](/202607/18/2607.14684v1-globalforge-towards-robust-ai-generated-image-detection)  
-   标签：评分：7.0/10、query:neural-arch
-   evidence：提出局部信息瓶颈和全局结构推理模块，提升检测鲁棒性
-5. [A Strong Balanced-Softmax Classifier-Retraining Baseline for Long-Tailed Recognition](/202607/18/2607.09832v1-a-strong-balanced-softmax-classifier-retraining-baseline-for-long-tailed-recognition)  
+   evidence：提升深度网络中梯度计算效率
+2. [Adaptive Model Compression (AMC): Saliency-Driven Resource Allocation for Ultra-Low-Power Transformer Inference](/202607/19/2607.10109v1-adaptive-model-compression-amc-saliency-driven-resource-allocation-for-ultra-low-power-transformer-inference)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：长尾识别的分类器重训练
-6. [Geometry-aware Gaussian Prior and Axial Attention for Cervical Cytology Image Classification](/202607/18/2607.10278v1-geometry-aware-gaussian-prior-and-axial-attention-for-cervical-cytology-image-classification)  
+   evidence：自适应模型压缩用于Transformer推理
+3. [Spectral Heat Flow for Conservative Token Condensation in Vision-Language Models](/202607/19/2607.10640v1-spectral-heat-flow-for-conservative-token-condensation-in-vision-language-models)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：几何感知高斯先验和轴向注意力用于宫颈细胞学分类
-7. [Gradient-Skipping Relevance Propagation for Efficient Explainability of Vision Transformers](/202607/18/2607.10365v1-gradient-skipping-relevance-propagation-for-efficient-explainability-of-vision-transformers)  
+   evidence：基于谱热流的视觉语言模型令牌凝聚框架，保持结构并提升效率
+4. [Artificial Foveated Perception for Mitigating Shortcut Learning in Robotic Foundation Models](/202607/19/2607.10655v1-artificial-foveated-perception-for-mitigating-shortcut-learning-in-robotic-foundation-models)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：视觉Transformer的可解释性方法
-8. [Full-Pipeline Inference Optimization for MiMo-V2.5 Series: Pushing Hybrid SWA Efficiency to the Limit](/202607/18/2607.13095v1-full-pipeline-inference-optimization-for-mimo-v25-series-pushing-hybrid-swa-efficiency-to-the-limit)  
+   evidence：解决视觉模型中的捷径学习问题，属于性能提升技术
+5. [Answer-Conditioned Chain-of-Thought Distillation for Few-Shot Industrial Vision with Small VLMs](/202607/19/2607.10666v1-answer-conditioned-chain-of-thought-distillation-for-few-shot-industrial-vision-with-small-vlms)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：混合SWA和MoE模型的推理优化
+   evidence：少样本视觉中的知识蒸馏用于模型优化
+6. [On the modality gap and the contrastive loss in multi-modal representation learning](/202607/19/2607.10698v1-on-the-modality-gap-and-the-contrastive-loss-in-multi-modal-representation-learning)  
+   标签：评分：6.0/10、query:neural-arch
+   evidence：分析并改进多模态学习中的对比损失，属于深度学习模型优化策略
+7. [Scaling Synthetic-Image Pre-Training for Federated Fine-Tuning of Large Vision Models](/202607/19/2607.12583v1-scaling-synthetic-image-pre-training-for-federated-fine-tuning-of-large-vision-models)  
+   标签：评分：6.0/10、query:neural-arch
+   evidence：提出用于联邦微调的合成图像预训练，属于模型优化策略
+8. [RFMSR: Residual Flow Matching for Image Super-Resolution](/202607/19/2607.12753v1-rfmsr-residual-flow-matching-for-image-super-resolution)  
+   标签：评分：6.0/10、query:neural-arch
+   evidence：提出残差流匹配用于图像超分辨率，属于计算机视觉架构改进技术
 
 
 <div class="dpr-home-promo-card">

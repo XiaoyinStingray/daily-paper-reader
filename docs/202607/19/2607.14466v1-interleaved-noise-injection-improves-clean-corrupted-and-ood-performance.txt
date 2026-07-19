@@ -1,0 +1,849 @@
+Title: Interleaved Noise Injection Improves Clean, Corrupted, and OOD Performance
+
+URL Source: https://arxiv.org/pdf/2607.14466v1
+
+Published Time: Fri, 17 Jul 2026 00:58:37 GMT
+
+Number of Pages: 24
+
+Markdown Content:
+# Interleaved Noise Injection Improves Clean, Corrupted, and OOD Performance 
+
+Matt L. Wiemann matt.sampson@princeton.edu Princeton University 
+
+Peter Melchior peter.melchior@princeton.edu Princeton University 
+
+Andrew K. Saydjari andrew.saydjari@princeton.edu Princeton University 
+
+## Abstract 
+
+Noise injection is a well-known technique in stochastic optimization. We report its surprising effectiveness with an interleaved (on-off-on-off...) rather than the usual monotonic decay schedule. We present a theoretical analysis of noise injection, which confirms that corruption by impulse (salt-and-pepper) noise approximates a Jacobian regularization, whereas Gaussian noise acts as a curvature penalty. This regularization behavior has been invoked to explain why noise injection increases model robustness. But the interleaved nature of our proposed schedule produces superior results even for the optimization objective: mixing phases of noisy data permits the optimizer to escape local minima and increase exploration without the risk of catastrophically forgetting the important features from the clean data. To stabilize this training scheme against the rapid changes of the loss when switching between clean and noisy data, we introduce a gradient-norm stabilization technique that scales noisy updates based on clean gradient magnitudes. We compare this method with other common augmentation methods and find substantial improvements in corruption tolerance and robustness to real-world distribution shifts on CIFAR-100-C, ImageNet-C, and ImageNet-R datasets for ResNet and ViT architectures, with the best results being achieved when stacking our method on top of other augmentations. Through saliency and attention maps we show that the effect of interleaved noise injection stems from penalizing the failure modes encouraged by the inductive bias of the models: impulse noise works against the locality bias of convolutional (ResNet) architectures, and Gaussian noise reduces the tendency of attention-based models to pick up large-scale spurious features. Interleaved noise injection is therefore an effective tool to improve the test performance on clean, noisy, and out-of-distribution data at essentially zero computational cost. 
+
+## 1 Introduction 
+
+Stochastic gradient descent (SGD) and its variants are widely used as optimization algorithms for complex, non-convex functions, which often contain many under-performing local minima. One well-studied aspect of SGD, which is theorized to contribute to the method’s success, is the presence of noise (Hochreiter & Schmidhuber, 1994; 1997; Hardt et al., 2016; Wu et al., 2020; Xie et al., 2021; Battash et al., 2024), typically through the mini-batch process, whereby a noisy estimate of the true gradient signal is taken to update the weights of the model. This introduction of stochasticity helps to escape local minima and saddle points that otherwise may trap an optimizer. Consequently, it has been recognized that deliberate noise injection, typically the addition of Gaussian noise to the data, further improves robustness and generalization (Matsuoka, 1992; Grandvalet et al., 1997; Zur et al., 2009; He et al., 2019; Xie et al., 2021; Zhang et al., 2023; Xiao et al., 2024). Adding Gaussian noise 1arXiv:2607.14466v1 [cs.LG] 16 Jul 2026 0 20 40 60 80 100 
+
+epoch      
+
+> 20
+> 40
+> 60
+> clean test acc (%)
+> only-clean
+> only-noise
+> interleaved
+> 020 40 60 80 100
+
+epoch 
+
+> 0
+> 20
+> 40
+> 60
+> noisy test acc (%)
+
+Figure 1: Test accuracy during training for models trained on clean data only (gray), noisy data only (purple) or with our method of interleaved noise-injection epochs ( P = 10 , L = 5 , solid red line). Each curve stems from a single optimization run for WideResNet, trained from scratch on CIFAR-100. The left panel shows the accuracy on held-out clean data; the right panel shows the same for held-out noisy data. to the weights is employed for sharpness-aware-minimization (Foret et al., 2020) and, after training, to create a diverse ensemble of models (Gan & Isola, 2026). However, for optimization methods with noise injection one has to decide on a noise schedule, and each choice comes with downsides. A monotonic decaying schedule restricts the optimizers capacity to escape suboptimal minima late in training, whereas “curriculum” (Bengio et al. (2009), which starts with no noise and then switches to high noise) or “anti-curriculum” (which does the opposite) schedules either lose their regularization power or underfit the clean data, respectively: these schedules risk forgetting what they fit to during the early training phase. But this need not be the case. Rather than decaying the noise, or turning it on or off completely, we propose an interleaved schedule with several sharp transitions between clean epochs and corrupted epochs. By evaluating both additive (Gaussian) and non-additive (impulse) noise perturbations within this schedule, we demonstrate that interleaved noise injections improves clean, corrupt, and out-of-distribution (OOD) performance. While the latter two performance gains are not surprising, the improvement on clean data (compared to training only on clean data) deserves further investigation because it suggests using noise as a tool to improve not only the robustness but the outright training objective. The remainder of this paper presents a theoretical derivation of the effects of injected noise, empirical evidence for our claim of superior performance, and an investigation into the interplay between neural network architecture and the most effective type of noise corruption. 
+
+Contributions 
+
+• Interleaved noise curriculum: We introduce an interleaved noise curriculum for stochastic opti-mization, which outperforms standard curriculum and anti-curriculum methods on clean, corrupted, and out-of-distribution classification tasks. 
+
+• Theoretical formulation of impulse noise regularization: We present a second-order Taylor expansion to demonstrate how intermittently injecting noise acts as a regularizer. In particular, we derive that impulse noise approximates directional Jacobian regularization. 
+
+• Empirical improvements and orthogonality to existing regularizers: We test the interleaved curriculum against other corruption and robustness regularization techniques on CIFAR-100 and ImageNet-1k datasets on WideResNet, ResNet50 and ViT architectures. Interleaved noise injection improves clean accuracy, corrupted accuracy, and robustness across all tests. We show that layering the interleaved noise schedule on top of existing regularization methods further improves performance across all three domains. 
+
+• Gradient-norm stabilization: A primary challenge in optimization with noise injection is the volatility of the gradient signal and its magnitude during noisy epochs. We present a dynamic scaling method to constrain the magnitude of the optimizer updates to prevent vanishing and/or exploding gradients for noise-injection optimization. 2• Architecture specific noise preference: We provide empirical evidence showing convolutional-based networks benefit more from impulse noise, whereas attention-based models perform better under Gaussian noise. The specific noise distribution reduces overfitting for the specific inductive biases of each architecture. We show that injection with the appropriate noise distribution for a specific architecture always results in model improvements. 
+
+## 2 Related work 
+
+Simulated (and parallel) tempering Simulated tempering involves simultaneously performing stochastic optimization on some loss surface over a range of fixed temperatures (Marinari & Parisi, 1992; Earl & Deem, 2005). These methods aim to reduce the occurrence of optimizers becoming stuck in a sub-optimal local minima. As the action of adding noise to samples is equivalent to increasing the temperature, we see our work in this tradition, with the main contribution coming from temporal modulation of the noise. 
+
+Noise-injection for regularization: Franzke & Kosko (2019) explored injecting noise into datasets for MCMC algorithms and found this method is able to speed up convergence when using monotonically decaying noise curricula, akin to simulated annealing. Xie et al. (2021) explored the effect of simulating stochastic gradient noise, finding that using their “positive-negative momentum” method improved generalization performance over a variety of image classification tasks. The role of noise as a regularization method is also explored in Wu et al. (2020) who empirically find that SGD noise due to mini-batch sampling is Hessian-dependent and pushes the optimizer towards flatter minima. This result hints at noise structure, as well as magnitude, being important factors affecting regularization effectiveness. Levi et al. (2022) introduce Noise Injection Node Regularization (NINR), which adds additional noise-injecting nodes into the architecture of NNs. This acts to adaptively penalize the loss sharpness, which leads to flatter solutions but introduces additional training times and architecture alterations. 
+
+Sharpness-aware-minimization Stochastic noise can be injected directly into the model weights during optimization. Classical weight noise approaches add Gaussian perturbations to the parameters to encourage the optimizer to settle in flat minima, thereby improving generalization. More recently, this concept has been formalized by Sharpness-Aware Minimization (SAM) (Foret et al., 2020), which explicitly seeks parameters whose neighborhood has, ideally, uniformly low loss. While weight noise and SAM operate on the parameter space to implicitly or explicitly minimize the trace of the Hessian with respect to the weights, we will show that impulse noise acts equivalently but operates entirely on the input space. This allows our method to approximate directional Jacobian regularization and minimize input-loss sharpness, specifically guarding against corruptions and out-of-distribution input shifts rather than parameter perturbations. 
+
+Curriculum learning: Bengio et al. (2009) first introduced the concept of curriculum learning for the field of machine learning, typically proposing a curriculum for data samples then moves monotonically from easy (clean) to hard (noisy or complex). Conversely, anti-curriculum and golden-sample methods work to expose the optimizer to the most difficult samples first. Interleaving is the process of alternating between distinct tasks or concepts during learning, and has been consistently shown to improve long-term retention and generalization compared to blocked, continuous practice in student learning (Taylor & Rohrer, 2010; Rohrer et al., 2015; Firth et al., 2021). We draw from these lines of work and propose an interleaved curriculum, which aims to improve the overall performance of trained models. 
+
+## 3 Methods 
+
+In this section, we formalize our interleaved noise curriculum and show its regularization effects on the optimization landscape through a second-order Taylor expansion. We then introduce our gradient-norm stabilization routine which allows for stable training even at very high noise levels. We end by describing the range of experiments we perform in this study. 33.1 Interleaved noise regularization 
+
+The noise injection schedule N (t) determines whether (or how much) noise to add to the training data at epoch t. Unlike standard simulated annealing, where N (t) is always active, we choose an interleaved schedule, which injects noise for L epochs after P epochs without noise: 
+
+N (t) = I(t)σt with I(t) = 
+
+{
+
+1 if t mod (P + L) ≥ P (noise injection )0 otherwise (clean data ) (1) where σt represents the amount of noise, and I(t) is a square-wave indicator function for the injection. 
+
+3.1.1 Impulse noise 
+
+Assuming normalized input data x ∈ [0 , 1] D , the corrupted sample ˜xt is generated via a stochastic mask: 
+
+˜xt = (1 − mt) ⊙ x + mt ⊙ n, (2) where n ∼ Bernoulli ( 12 ) represents the impulse noise {0, 1}, and mt ∈ { 0, 1}D is the binary corruption mask sampled element-wise such that mt ∼ Bernoulli (σt). That means, σt indicates the per-pixel probability of receiving a noise corruption that removes all information of the initial pixel value. 
+
+Expected perturbation The perturbation of each sample image x is given by; 
+
+δ = ˜ x − x = mt ⊙ (n − x) (3) Because the noise instance and the mask are uncorrelated, the expected perturbation over a full batch is the expected probability of pixel corruption, multiplied by the expected difference between the clean and noisy image: 
+
+E[δ] = E[mt] · (E[n − x]) = I(t)σtE[( 12 − x)] 
+
+To see the approximate effect the noise-injection has on the optimization trajectory, we take a second-order Taylor expansion of the loss function L(θ, ˜x) around the clean training sample x:
+
+L(θ, ˜x) ≈ L (θ, x) + δ⊤∇xL(θ, x) + 12 δ⊤∇2
+
+> x
+
+L(θ, x)δ (4) We can take the expectation over a mini-batch, 
+
+Ex, δ [L(θ, ˜x)] ≈ Ex [L(θ, x)] 
+
+︸ ︷︷ ︸
+
+> clean loss
+
++ I(t)σtEx
+
+[( 12 − x)⊤∇xL(θ, x)]︸ ︷︷ ︸
+
+> Jacobian regularization
+
++ I(t)σt
+
+2 Ex
+
+[∑
+
+> i
+
+[Hx]ii ( 12 − xi + x2 
+
+> i
+
+)
+
+]
+
+,
+
+︸ ︷︷ ︸
+
+> weighted curvature regularization
+
+(5) which yields three separate components: the loss function of the clean data x, a regularization term proportional to both the magnitude of the noise level σt and the input sensitivity of the model to the data 
+
+∇xL(θ, x), and a loss term proportional to the weighted summation of the Hessian diagonal (curvature) which again is modulated by the noise level. Because the mask entries are independent, the off-diagonal second-order terms scale as σ2 
+
+> t
+
+compared to linear scaling with σt of the diagonal terms, hence we drop them in Equation 5. 1
+
+First order regularization With Cauchy-Schwarz we can provide an upper-bound on our first-order regularization term: 
+
+Ex
+
+[( 12 − x]) ⊤∇xL(θ, x)] ≤ Ex
+
+[∥ 12 − x∥2 · ∥∇ xL(θ, x)∥2
+
+] (6) Training with impulse noise invokes a magnitude-modulated Jacobian regularization, which has been shown to improve robustness against common data corruptions and improve the identification of large scale features in deep neural networks (Jakubovitz & Giryes, 2018; Chan et al., 2019; Hoffman et al., 2019; Cohen et al., 2019). The magnitude of the first-order regularizer is maximized for high contrast xi ∈ { 0, 1} pixels and zero for gray xi = 0 .5 pixels. This means our regularizer will more aggressively reduce the sensitivity to high contrast (extreme pixel values) features, while retaining high sensitivity for low contrast features.   
+
+> 1Note the maximum σtwe use is 0.65, so that, for large enough batch sizes, the off-diagonal terms vanish in expectation.
+
+4Second order regularization We can also upper-bound the second-order regularization term, connecting the minimization of the trace to minimizing the spectral norm (sharpness) of the Hessian matrix: 
+
+δ⊤Hxδ ≤ λmax (Hx)∥δ∥22 (7) 
+
+Eδ|x
+
+[δ⊤Hxδ] ≤ λmax · σt
+
+∑
+
+> i
+
+( 12 − xi + x2 
+
+> i
+
+) (8) By minimizing the expected local sharpness in Equation 5, impulse noise injection implicitly minimizes the sharpness (spectral norm) weighted by pixel-level contrast, ideally leading to flatter, more generalizable solutions (Hochreiter & Schmidhuber, 1997). This is similar to regularization approaches suggested in Sharpness-Aware-Minimization (Foret et al., 2020), but it is important to point out that we minimize the sharpness w.r.t. the input data x instead of the weights θ. Because impulse noise stochastically removes local information, the training is thus regularized against overfitting to high-frequency spatial features. Instead, the training encourages learning large-scale features that remain robust even to high levels of impulse noise. 
+
+3.1.2 Gaussian noise schedule 
+
+For interleaved Gaussian noise, we sample from a zero-mean Gaussian distribution, ˜xt = x + nt, where 
+
+nt ∼ N (0D , σ t1D ). The expected perturbation is thus E[δ] = 0 , and the expectation of the loss function over a mini-batch reduces to 
+
+Ex, δ [L(θ, ˜x)] ≈ Ex [L(θ, x)] 
+
+︸ ︷︷ ︸
+
+> clean loss
+
++ I(t)σ2
+
+> t
+
+2 Ex [Tr (Hx)] 
+
+︸ ︷︷ ︸
+
+> curvature regularization
+
+. (9) We no longer get a Jacobian regularization term but retain the familiar second-order curvature regularization, whose strength is again modulated by the noise curriculum. This term results in a uniform curvature penalty, independent of local pixel contrast. 
+
+3.2 Gradient-norm stabilization 
+
+The general update rule (ignoring preconditioning terms) for SGD-type algorithms is: 
+
+gt = ηt∇θ L(θt, x) (10) where ηt is the time-dependent learning rate. A potential issue with our interleaved noise schedule is that for a constant learning rate, the magnitude of the noisy gradient update ˜gt may deviate significantly from gt.For example, if we were to introduce an image of pure noise, the magnitude of the gradient term ∇θ L(θt, ˜x)
+
+would represent an average of n random vectors where n is the batch size. As n → ∞ this would cause 
+
+∇θ L → 0. Alternatively, at late training times when ∇θ L(θt, x) is small due to descending into a minima, even a small perturbation to x due to the impulse noise could lead to significant increases in the gradient norm. Hence, we modulate the noisy update magnitude ˜gt with a scalar prefactor term pt, defined as 
+
+pt = f · ∥∇ θ L(θt−1, x)∥2
+
+∥∇ θ L(θt, ˜x)∥2
+
+, (11) where the magnitude of the gradient norm of the last clean update (averaged over a full epoch) determines the magnitude of the current noisy update. We also introduce a tuning parameter f , which scales the overall strength of the noisy gradient updates (Section 5.3.1 investigates the effect of this parameter). The update step during the noisy epochs is then 
+
+˜gt = ηtpt∇θ L(θt, ˜x). (12) 54 Experiments 
+
+We evaluate the proposed interleaved curriculum using both impulse and Gaussian noise 1) against the standard training on clean data, 2) in comparison to alternative noise injection curricula, and 3) against more complex noise injection and augmentation methods, specifically: 1. Cutout (DeVries & Taylor, 2017) to determine whether generalization benefits from noise injection exceed those from masking large patches; 2. Sharpness-Aware Minimization (SAM, Foret et al., 2020) to test implicit input-space curvature minimization against explicit weight-space curvature minimization; 3. AugMix (Hendrycks et al., 2019), which performs a series of structural augmentations to the input images, to determine benefits for corrupted and OOD data errors; 4. Vital Phase Augmentation (VIPAug, Lee et al., 2024), a novel approach that introduces phase shifts during training, to compare frequency-space augmentation to spatial-domain regularization. In each case, we measure the performance on clean, corrupted, and OOD datasets. 
+
+Architectures and training details For our CIFAR-100 experiments, we utilize a WideResNet architecture (Zagoruyko & Komodakis, 2016). For ImageNet-1k evaluations, we test both ResNet50 (He et al., 2016) and Vision Transformer (ViT, Dosovitskiy et al., 2020) architectures to ensure our findings generalize across convolutional and attention-based models. We train the WideResNet from scratch for 100 epochs; for the ResNet50 and ViT we begin with pre-trained models and perform fine-tuning for 50 and 30 epochs for the ResNet50 and ViT, respectively. The ResNet50 architecture follows from He et al. (2016) and we use the ViT-B/16 variant with a patch size of 16 × 16 and an embedding dimension of 768. We perform hyper-parameter tuning over the learning rate for all results reported. For the CIFAR-100 trials our baseline method is AdamW, while for ImageNet-1k we use SGD with momentum for the ResNet50 model and AdamW for the ViT. For AugMix we use identical hyperparameters for the severity and Jensen-Shannon divergence loss as reported in (Hendrycks et al., 2019). For our noise schedules, we inject impulse or Gaussian noise to all training samples for one full epoch, once every 5 epochs, in all trials (P = 5) 2. We note that this results in a square wave curriculum with 156 noisy gradient updates every 5 epochs for the CIFAR-100 trials using a batch size of 256, and 8008 noisy updates for both ImageNet trials which use a batch size of 128. For all reported results we use the gradient norm scaling factor f = 0 .4, which was approximately the best performing trial in each case. We explicitly avoid a large hyperparameter sweep over P and f for our presented results to show the practical usefulness of this method without the need for extra costly tuning. Preliminary ablation tests (see Sections 5.3) showed performance was robust for a wide range of P and f .We train all models on NVIDIA-A100 GPUs. The training times remain unchanged because our method (unlike SAM, AugMix or VIPAug) does not require any additional forward or backwards passes over the data nor any additional clean epochs. The only extra computational cost stems from tracking the last clean gradient norm and calculating the gradient-norm scaling in Equation 11. 
+
+Corruption and robustness testing To assess model robustness against common corruptions, we use the CIFAR-100-C and ImageNet-C benchmark datasets introduced by Hendrycks & Dietterich (2019). These datasets apply 15 distinct types of corruptions across five severity levels. To test our noise injection method for improvements in OOD performance, we compare the inference performance of the ResNet50 and ViT models, trained on the ImageNet-1k dataset, on the ImageNet-R dataset (Hendrycks et al., 2021). This dataset consists of 200 subclasses of ImageNet-1k which have been altered to test for out-of-distribution robustness. We report standard clean top-1 error, mean corruption error (mCE), and structural mCE (which removes the noise-based corruption classes). All results are averaged over 5 random seeds with bootstrapped errors shown.      
+
+> 2Barring the results shown in Figures 1, and 2 which use P= 10 and L= 5 , but are for visualization purposes and not included in any tabulated results.
+
+610      
+
+> 20
+> 30
+> 40
+> 50
+> 60
+> 70
+> clean test acc (%)
+> golden-sample
+> anti-curriculum
+> curriculum
+> only-clean
+> only-noise
+> monotonic-decay
+> interleaved
+> 020 40 60 80 100
+
+epoch      
+
+> 0
+> 10
+> 20
+> 30
+> 40
+> 50
+> 60
+> noisy test acc (%)
+> 0.0
+> 0.5
+> pnoise  golden-sample
+> 0.0
+> 0.5
+> pnoise  anti-curriculum
+> 0.0
+> 0.5
+> pnoise  curriculum
+> 0.0
+> 0.5
+> pnoise  only-clean
+> 0.0
+> 0.5
+> pnoise  only-noise
+> 0.0
+> 0.5
+> pnoise  monotonic-decay
+> 020 40 60 80 100
+> epoch
+> 0.0
+> 0.5
+> pnoise  interleaved
+
+## WideResNet on CIFAR-100 curriculum Figure 2: Comparison of clean (top) and noisy (bottom) test accuracy throughout training for seven noise injection curricula (right panels): golden-sample, curriculum, anti-curriculum, only-clean, only-noise, monotonic-decay, and an example of an interleaved schedule with P = 10 , L = 5 .
+
+## 5 Results 
+
+We report error rates ( ↓ is better) in all tables and accuracy ( ↑ is better) in all figures. 
+
+5.1 Comparison to clean training and other noise injection curricula 
+
+For this section, we train the WideResNet model on CIFAR-100 data, using either only clean, or only noisy, or a mix of clean and noisy data, time-ordered as an interleaved curriculum ( P = 10 , L = 5 ; see Equation 1). The dataset was split into a 70/10/20 train/validation/test split, and each dataset was split further into a clean and noisy set, where the latter had impulse noise injected at a level of σ = 0 .65 .Figure 1 shows the accuracy on clean and noisy test data. It is evident that dataset switches are quickly picked up by the model: the transition from clean to noisy initially sharply degrades clean test accuracy, but only for a short period, while producing significant benefits in the long run. In particular: Training with interleaved noise improves long-term clean test accuracy beyond training on clean data only ,even though the model probes the clean data for fewer epochs. We interpret this outcome as the result of increased robustness during training with noisy data, leading to minimizers with wider, shallower minima (Hendrycks et al., 2021; Zhang et al., 2023; Ly & Gong, 2025). On the flip side, the interleaved scheme also shows drastic improvement on noisy data: When the training is stopped during a noise-injection period, the long-term accuracy on noisy data outperforms training on noisy data only. We interpret this behavior as the benefit of having access to high-quality samples even if the target data distribution is noisy. 7Table 1: CIFAR-100 Results. Comparison of robustness methods on WideResNet trained on CIFAR-100 and evaluated on CIFAR-100-C. We report Clean Error, Mean Corruption Error (mCE), and structural mCE (excluding noise). Bold indicates the best result; underline indicates the second best. Improvements over the respective baseline are shown in (green), ± values denote bootstrap standard errors. 
+
+Method Clean Err ( ↓) mCE ( ↓) Struct. mCE ( ↓)AdamW 25.7 ± 0.3 52.6 ± 0.4 47.1 ± 0.4 AdamW + Gaussian 24.9 ± 0.3 (-0.8) 47.5 ± 0.4 (-5.1) 43.2 ± 0.3 (-3.9) 
+
+AdamW + Impulse 24.8 ± 0.4 (-0.9) 49.3 ± 0.3 (-3.3) 43.8 ± 0.3 (-3.3) 
+
+Cutout (DeVries & Taylor, 2017) 24.9 ± 0.3 52.6 ± 0.3 46.4 ± 0.2 Cutout + Gaussian 24.9 ± 0.2 (0.0) 47.9 ± 0.3 (-4.7) 43.4 ± 0.3 (-3.0) 
+
+Cutout + Impulse 24.3 ± 0.1 (-0.5) 49.1 ± 0.4 (-3.5) 42.5 ± 0.4 (-3.9) 
+
+SAM (Foret et al., 2020) 25.0 ± 0.4 52.3 ± 0.2 46.2 ± 0.3 SAM + Gaussian 24.8 ± 0.3 (-0.2) 46.3 ± 0.2 (-6.0) 43.7 ± 0.3 (-2.5) 
+
+SAM + Impulse 24.7 ± 0.3 (-0.3) 48.2 ± 0.3 (-4.1) 42.4 ± 0.3 (-3.8) 
+
+VIPAug (Lee et al., 2024) 25.7 ± 0.4 52.4 ± 0.2 46.8 ± 0.3 VIPAug + Gaussian 25.2 ± 0.2 (-0.5) 46.5 ± 0.2 (-5.9) 42.8 ± 0.2 (-4.0) 
+
+VIPAug + Impulse 24.9 ± 0.3 (-0.8) 49.6 ± 0.3 (-2.8) 43.0 ± 0.3 (-3.8) 
+
+AugMix (Hendrycks et al., 2019) 25.2 ± 0.2 36.9 ± 0.2 34.6 ± 0.2 AugMix + Gaussian 24.9 ± 0.2 (-0.3) 35.3 ± 0.4 (-1.6) 33.9 ± 0.4 (-0.7) 
+
+AugMix + Impulse 24.3 ± 0.4 (-0.9) 36.5 ± 0.1 (-0.4) 33.9 ± 0.1 (-0.7) 
+
+The last result has implications for curriculum and transfer learning, which often employ only one or a small number of sharp transitions in dataset quality or optimization objective. We therefore expand the above test to include a suite of proposed curricula for noise injection. Figure 2 shows that the interleaved schedule consistently achieves the highest final accuracy on both the clean and noisy test datasets. Common alternative curricula either lose their regularization capacity late in training, or fail to converge on the clean data in the finite amount of epochs. We interpret these results as the benefits of repeated “kicks” out from narrow minima into wider ones as well as the repeated “reminders” of what accurate data looks like. 
+
+5.2 Comparison to other augmentation methods 
+
+The previous section demonstrated the effectiveness of interleaved noise for a specific model and interleaved period ( P = 10 , L = 5 ), which may appear fine-tuned. In this section we demonstrate that a fixed, simple choice of a single noisy epoch for every five clean epochs, i.e. P = 5 , L = 1 , reaps the same benefits, even when compared to more advanced and computationally costly augmentation schemes. An ablation study on the best choice for P is presented in Section 5.3.3. 
+
+5.2.1 CIFAR-100 
+
+We compare the performance of our method on the WideResNet model and the CIFAR-100 and CIFAR-100-C datasets. The baseline is a standard AdamW training run, which is enhanced with either Gaussian or impulse noise injection. The alternative methods use training with Cutout, SAM, VIPAug, and AugMix augmentations. Table 1 shows that the inclusion of interleaved Gaussian or impulse noise improves clean accuracy, mCE, and structural mCE for all methods, when the right noise distribution is selected. The best performance comes from using AugMix with interleaved impulse noise, which reduced the clean error by 1.4% ,mCE by 16 .1% , and structural mCE by 13 .2% compared to the baseline AdamW run. We note that much of this improvement for the corruption robustness comes from AugMix alone, but the noise injection further improves the results by 0.9% , 0.4% and 0.7% across clean, mCE and structural mCE, respectively. But even just our simple noise injection method improves performance to levels comparable or better than these more expensive schemes. 8Table 2: ImageNet Results . Struct : Structural mCE (excluding noise category). Rend : ImageNet-R Rendition Error (OOD). All metrics are error percentages ( ↓), with bootstrapped standard errors. 
+
+Architecture Method Clean Err ( ↓) mCE ( ↓) Struct. ( ↓) Rend. ( ↓)ResNet50 SGD 25 .8 ± .1 89 .1 ± .2 88 .1 ± .2 63 .2 ± .2
+
+SGD + Gaus. 25 .5±.2 (-0.3) 88 .2±.2 (-0.9) 87 .2±.1 (-0.9) 62 .4±.1 (-0.8) 
+
+SGD + Impulse 25 .1 ± .2 (-0.7) 87 .3±.1 (-1.8) 86 .2±.1 (-1.9) 61 .8±.1 (-1.4) 
+
+Cutout 24.4 ±.1 88.2 ±.3 87.0 ±.3 61.6 ±.1 Cutout + Gaus. 24.5 ±.1 (+0.1) 88.0 ±.2 (-0.2) 86.9 ±.2 (-0.1) 62.5 ±.4 (+0.9) 
+
+Cutout + Impulse 23.7 ±.1 (-0.7) 86.5 ±.3 (-1.7) 85.4 ±.4 (-1.6) 60.8 ±.4 (-0.8) 
+
+SAM 24 .9 ± .2 88 .3 ± .2 87 .5 ± .2 62 .6 ± .1
+
+SAM + Gaus. 24 .7 ± .1 (-0.2) 85 .7 ± .1 (-2.6) 86 .4 ± .1 (-1.1) 61 .8 ± .2 (-0.8) 
+
+SAM + Impulse 24 .8 ± .1 (-0.1) 84 .8 ± .1 (-3.5) 84 .6 ± .3 (-2.9) 60 .5 ± .3 (-2.1) 
+
+VIPAug 28 .7 ± .1 89 .7 ± .2 88 .6 ± .2 66 .0 ± .1
+
+VIPAug + Gaus. 28 .6 ± .3 (-0.1) 89 .6 ± .3 (-0.1) 88 .5 ± .3 (-0.1) 65 .9 ± .1 (-0.1) 
+
+VIPAug + Impulse 28 .1 ± .3 (-0.6) 88 .6 ± .2 (-1.1) 87 .5 ± .1 (-1.1) 64 .7 ± .1 (-1.3) 
+
+AugMix 23 .8 ± .2 83 .2 ± .2 81 .6 ± .2 55 .3 ± .1
+
+AugMix + Gaus. 23 .7 ± .2 (-0.1) 82 .3 ± .1 (-0.9) 80 .7 ± .1 (-0.9) 54 .6 ± .1 (-0.7) 
+
+AugMix + Impulse 23 .3 ± .2 (-0.5) 82 .0 ± .1 (-1.2) 80 .3 ± .1 (-1.3) 54 .7 ± .1 (-0.6) 
+
+ViT AdamW 20.1 ±.3 69.5 ±.4 67 .2 ± .3 55 .9 ± .3
+
+AdamW + Gaus. 19.5 ±.2 (-0.6) 66.1 ±.1 (-3.4) 64 .3 ± .2 (-2.9) 53 .8 ± .2 (-2.1) 
+
+AdamW + Impulse 20 .0 ± .2 (-0.1) 67 .7 ± .3 (-1.8) 65 .7 ± .4 (-1.5) 54 .7 ± .3 (-1.2) 
+
+Cutout 19 .9 ± .1 69 .4 ± .4 67 .2 ± .4 55 .7 ± .1
+
+Cutout + Gaus. 19 .2 ± .1 (-0.7) 66 .3 ± .2 (-3.1) 64 .5 ± .1 (-2.7) 53 .4 ± .1 (-2.3) 
+
+Cutout + Impulse 20 .3 ± .1 (+0.4) 68 .8 ± .4 (-0.6) 66 .7 ± .1 (-0.5) 55 .7 ± .1 (-0.0) 
+
+SAM 17 .5 ± .1 63.9 ±.2 62 .4 ± .1 50 .5 ± .1
+
+SAM + Gaus. 17 .4 ± .1 (-0.1) 63 .1 ± .1 (-0.8) 62 .1 ± .1 (-0.3) 50 .2 ± .1 (-0.3) 
+
+SAM + Impulse 17 .7 ± .1 (+0.2) 63 .6 ± .1 (-0.3) 62 .7 ± .1 (+0.3) 50 .6 ± .1 (+0.1) 
+
+VIPAug 19 .8 ± .2 69 .8 ± .6 67 .6 ± .2 55 .2 ± .1
+
+VIPAug + Gaus. 18 .9 ± .1 (-0.9) 66 .2 ± .2(-3.6) 64 .4 ± .1 (-3.2) 53 .5 ± .1 (-1.7) 
+
+VIPAug + Impulse 20 .0 ± .1 (+0.2) 68 .7 ± .5(-1.1) 66 .8 ± .3 (-0.8) 54 .1 ± .4 (-1.1) 
+
+AugMix 17 .8 ± .1 62 .4 ± .1 60 .7 ± .1 48 .6 ± .1
+
+AugMix + Gaus. 17 .5 ± .1 (-0.3) 60 .8 ± .1 (-1.6) 59 .7 ± .1 (-1.0) 48 .6 ± .1 (-0.0) 
+
+AugMix + Impulse 17 .5 ± .1 (-0.3) 61 .6 ± .1 (-0.8) 60 .1 ± .1 (-0.6) 48 .3 ± .1 (-0.3) 
+
+5.2.2 ImageNet-1k 
+
+We now investigate if these results hold up for larger models by fine-tuning pretrained ResNet50 and ViT architectures on the ImageNet-1k dataset. We report the clean error, corruption, and structural corruption error as well as the OOD accuracy via testing on the ImageNet-R dataset (Hendrycks et al., 2021). Table 2 shows that for the overwhelming majority of baseline regularization methods, the addition of either Gaussian or impulse noise with our interleaved curriculum reduces the error across all four performance metrics. Interestingly, for the ResNet50 models the impulse noise appears to work best to reduce the clean, corrupt, structural, and OOD error rates, while for the ViT Gaussian noise performs significantly better across all baselines. We will explore the reasons for this architecture dependence in Section 6.2. In Figure 3 we show a breakdown of the test performance by the specific type of corruption from Hendrycks & Dietterich (2019). For a clearer comparison, we only show the best performing baseline regularizer with and without noise injection (full results of per-type corruption accuracy are listed in Appendix B). Injection of impulse noise outperforms both baseline AugMix and the Gaussian noise injection at every severity level across all metrics. 9Figure 3: Results for different corruptions. Accuracy improvement from noise injection with impulse (blue) and Gaussian noise (orange) over the reference AugMix for the ResNet50 model on the ImageNet-C dataset (Hendrycks & Dietterich, 2019), sorted by corruption category (rows) and subcategory (columns). We visualize the test accuracy of the same runs used for Table 2 in Figure 4, showing the performance of the ResNet50 and ViT models on the clean (ImageNet-1k), corrupt (ImageNet-C), and OOD (ImageNet-R) test sets. It confirms the clear trend of interleaved noise injection consistently improving across performance metrics and optimization baselines. 
+
+5.3 Ablations 
+
+We now present ablation tests over a set of hyperparameters we have introduced in this paper. 
+
+5.3.1 Gradient-norm scaling 
+
+We perform ablations over the gradient-norm scaling factor f with the WideResNet model on the CIFAR-100 and CIFAR-100-C datasets. Table 3 shows results with varying levels of f as well as a trial with no gradient-norm stabilization. We find that reducing the value of f to around 0.2 tends to increase the error on the clean data, however increasing f increases the performance on the corrupt data. The general trend shows that increasing f past 0.4 reduces the corruption error rates, but at the cost of higher clean error rates. For impulse noise, the clean error rate never rises above 25 .4 ± .3. The performance of both the Gaussian and impulse noise injection with no gradient-norm stabilization degrades noticeably on clean data, however the corruption performance improves. 10 72 74 76 
+
+10 
+
+12 
+
+14 
+
+16 
+
+18 
+
+> ImageNet-C accuracy (%  )
+
+# ResNet-50 
+
+79 80 81 82 83 
+
+30 
+
+32 
+
+34 
+
+36 
+
+38 
+
+40 
+
+# ViT 
+
+72 74 76 
+
+ImageNet-1k accuracy (% )
+
+34 
+
+36 
+
+38 
+
+40 
+
+42 
+
+44 
+
+46 
+
+> ImageNet-R accuracy (%  )
+
+79 80 81 82 83 
+
+ImageNet-1k accuracy (% )
+
+44 
+
+46 
+
+48 
+
+50 
+
+52 
+
+regularization 
+
+> SGD/AdamW
+> Cutout
+> VIPAug
+> SAM
+> AugMix
+
+noise type   
+
+> No noise Impulse Gaussian
+
+Figure 4: Clean accuracy vs. corruption and OOD robustness trade-off for ResNet50 and ViT on ImageNet-1k. Each point represents a distinct trial, with clean accuracy on the x-axis and mean corruption accuracy (top row) and ImageNet-R OOD accuracy (bottom row) on the y-axis for ResNet50 (left column) and ViT (right column). Point color indicates the baseline regularization method with the shape indicating noise type. All results are averaged over 5 seeds with the error bars showing the bootstrapped standard error. 11 Table 3: Ablation over the gradient-norm scaling factor f . We report Clean Error, Mean Corruption Error (mCE) for both impulse and Gaussian interleaved noise injection for the WideResNet model. All metrics are error percentages ( ↓). 
+
+Gaussian noise Impulse noise scaling factor ( f ) Clean mCE Struct. Clean mCE Struct. 0.2 25 .0 ± .2 47 .2 ± .1 43 .7 ± .2 25 .0 ± .2 50 .6 ± .2 44 .5 ± .1
+
+0.4 24 .9 ± .1 47 .5 ± .2 43 .2 ± .1 24 .9 ± .3 49 .3 ± .1 43 .8 ± .1
+
+0.6 25 .2 ± .2 46 .1 ± .1 42 .7 ± .2 25 .0 ± .1 49 .3 ± .1 43 .0 ± .1
+
+0.8 25 .4 ± .1 44 .9 ± .2 42 .2 ± .2 25 .1 ± .1 48 .9 ± .1 42 .4 ± .2
+
+1.0 25 .6 ± .1 45 .1 ± .1 42 .0 ± .1 25 .0 ± .1 48 .4 ± .1 42 .4 ± .1
+
+1.2 26 .1 ± .1 43 .9 ± .2 41 .9 ± .1 25 .2 ± .1 48 .8 ± .2 42 .3 ± .3
+
+1.4 25 .9 ± .1 43 .7 ± .1 41 .9 ± .1 25 .4 ± .2 48 .7 ± .1 42 .4 ± .1
+
+1.6 26 .4 ± .1 43 .6 ± .1 41 .8 ± .2 25 .2 ± .1 48 .1 ± .5 41 .8 ± .4
+
+1.8 26 .6 ± .2 43 .6 ± .2 42 .0 ± .1 25 .3 ± .3 47 .9 ± .3 41 .6 ± .1
+
+2.0 26 .9 ± .2 43 .5 ± .1 41 .9 ± .1 25 .3 ± .1 47 .7 ± .2 41 .6 ± .2
+
+no stabilization 27 .6 ± .1 43 .1 ± .1 41 .8 ± .1 26 .0 ± .2 47 .2 ± .1 41 .4 ± .1
+
+5.3.2 Noise level 
+
+The amount of noise σt added during each noisy epoch is another hyperparameter. Figure 5 shows an ablation over both the gradient-norm scaling factor and the level of noise injected during the noisy epochs. We also show a trial (in green) for linearly decaying the amount of noise injected. In general, we find a gradient-norm scaling factor of roughly f ≈ 0.4 performs best across all noise levels in terms of clean accuracy. We show a visual example of the noise levels when utilizing salt-and-pepper noise for CIFAR-100 samples in Figure 11. 74.0              
+
+> 74.5
+> 75.0
+> 75.5
+> test accuracy (%)  linear noise decay
+> clean-baseline
+> constant noise=20% constant noise=40%
+> 0.2 0.4 0.6 0.8 1.0
+> gradient scale factor ( f)
+> 74.0
+> 74.5
+> 75.0
+> 75.5
+> test accuracy (%)  constant noise=60%
+> 0.2 0.4 0.6 0.8 1.0
+> gradient scale factor ( f)
+> constant noise=80%
+> 0.2 0.4 0.6 0.8 1.0
+> gradient scale factor ( f)
+> constant noise=100%
+
+Figure 5: Ablation over gradient scaling factor f across noise levels on WideResNet/CIFAR-100, showing clean test accuracy as a function of the gradient-norm scaling factor f for different noise levels σt. The top left panel shows the results of a linear decay of the noise level during an interleaved injection curriculum. The dashed line indicates the clean-only data baseline. 
+
+5.3.3 Interleaved period 
+
+We also evaluate the sensitivity of the results to the interleaved period P , which determines the frequency of the noisy epochs (while leaving L = 1 for simplicity). We perform trials again over the WideResNet on the CIFAR-100 dataset varying the period from 1 to 100 in Figure 6. We find the best results occur for 
+
+P ∈ [5 , 10] . Importantly, and as expected, lower values (more frequent noise) can harm clean accuracy but improve corruption performance, and conversely, larger values limit the regularization strength, thus reducing the corruption performance until noise injection has little to no effect on performance, regardless of noise distribution. 12 72       
+
+> 74
+> 76
+> clean accuracy (%)
+> 0
+> noise
+> only
+> 12510 20 40 100
+> clean
+> only
+
+period P       
+
+> 56
+> 58 Impulse
+> Gaussian
+> 0
+> noise
+> only
+> 12510 20 40 100
+> clean
+> only
+
+period P      
+
+> 45
+> 50
+> 55
+> mCE accuracy (%)
+> 0
+> noise
+> only
+> 12510 20 40 100
+> clean
+> only
+
+period P
+
+> 48
+> 50
+> 52
+> 54
+> 56
+> 58
+> struct mCE accuracy (%)
+
+Figure 6: Ablation over the interleaved period P showing the same performance metrics with the same model/dataset as Table 3. Tabular results are provided in Table 6 
+
+## 6 Discussion 
+
+6.1 Interleaved curricula 
+
+Our results demonstrate that noise injection, which has traditionally been invoked to improve optimization robustness, is more effective than previously known. It provides a tool to improve the performance under the optimization objective itself, but it has to be treated with nuance. In particular, the specific curriculum used to inject noise is as important as the noise distribution. Monotonic decay schedules lose their regularizing effect late in training, trapping the optimizer in local minima. Conversely, permanently applying heavy noise prevents the network from exploiting fine-grained features. We find the anti-curriculum loses the robustness benefit in the late training stages while standard curriculum fails to converge to accurate solutions on clean data (see Figure 2). Our proposed interleaved noise schedule resolves this conflict by mixing exploration during noisy epochs with exploitation during the clean epochs. Noise acts as a regularizer, forcing the optimizer out of sharp, overfitting minima, while the clean epochs allow the model to refine its decision boundaries without the interference from data distortion. Interleaving these periods prevents the model from catastrophically forgetting either of these regimes. 
+
+6.2 Architecture-specific noise preferences 
+
+Table 1 and Table 2 suggest that the choice of Gaussian vs impulse noise appears to be dependent on the underlying model architecture. The ResNet architectures work best with the impulse noise, while the vision transformer performs best the with Gaussian noise. We find the interaction between noise type and architecture intuitive in the context of the inductive biases of each architecture. The convolutional layers of the ResNet models create a strong locality bias. Impulse noise randomly corrupts individual pixel intensities, preventing the network from over-fitting to localized pixel-level features. Vision transformers, on the other hand, treat images as sequences of patches and thus lack this form of locality bias, instead learning primarily global features. Because Gaussian noise applies perturbations uniformly across all of these patches, it tends to smooth out low-contrast global features, which forces the attention mechanism to emphasize higher frequency, local features. Recent work by Hajimiri et al. (2026) has demonstrated that explicitly enforcing locality structure in ViTs via architectural changes can significantly improve high frequency spatial representation, and we believe that applying interleaved Gaussian noise achieves precisely this training goal. Figure 7 shows a gradient saliency map for the ResNet50 and an attention map for the ViT, before and after fine-tuning with interleaved noise injection. We observe that the ResNet50 models initially concentrate heavily on a small number of important pixels, in clean and noisy samples. After the fine-tuning with our impulse noise curriculum, the focus is more diffuse and appears to capture a much larger area of the main feature, especially for the noisy sample (2nd row). Conversely, the pretrained ViT shows very little focus on the main feature, especially for the noisy sample, where the attention is drawn to weak, spurious features of the snow corruption. After the interleaved noise injection with Gaussian noise, the focus becomes significantly 13 ResNet50  ViT 
+
+pre-trained noise-injection  pre-trained noise-injection Figure 7: Visualization of the effect of interleaved noise injection on model focus for ResNet50 (left) and ViT (right). The rows show samples from ImageNet-1k (clean), ImageNet-C (corrupt) and ImageNet-R (OOD), with saliency and attention maps both before and after fine-tuning with noise injection. For the ResNet50, we calculate the gradient-based saliency maps; for the ViT, we show attention maps of the final layer (CLS) attention. After fine-tuning with interleaved noise, the ResNet50 saliency maps for the corrupt and OOD samples move away from high-frequency local features toward broader spatial regions, consistent with the Jacobian regularization effect derived in Equation 5. The ViT attention maps show an opposite effect: Fine-tuning with interleaved Gaussian noise produces more uniform attention across patches and in particular, helps the model focus on the correct local features in all samples. sharper with the majority of the attention being directed at the telephone pole. Interestingly, the same noise injection yields better generalization to OOD samples (3rd row) as well, as evidenced by a shifted focus to the dog in the middle (the actual chow-chow) instead of the other dog on the left edge of the image. 
+
+6.3 Combination with alternative augmentations 
+
+Despite being powerful on its own, another advantage of noise injection (interleaved or otherwise) lies in its ability to be combined, at virtually no extra cost, with existing training and augmentation pipelines. Our results demonstrate that the interleaved noise curriculum acts to further improve the performance of established robustness-enhancing training techniques, such as Cutout, AugMix, SAM, and VIPAug. As SAM operates entirely in the weight space, it is not surprising that our method (which operates in data space) provides complementary benefits. But we have clearly seen that our method also improves the performance of spatial and frequency-space data augmentations like Cutout, AugMix, and VIPAug. These augmentations directly alter the structure of the input samples to encourage invariance under the respective equivalence transformations. So, why does a simple data-space noise injection provide additional benefits beyond these more complex data-space augmentations? We believe the improvements from interleaved noise injection primarily come from altering the optimization dynamics through the regularizer. Specifically, from improving the ability to escape sub-optimal local minima of the loss surface. By injecting noise into the data, the gradient signal is randomized, causing a random walk with drift. The drift component stems from the original gradient, which is not fully destroyed by the 14 noise. If the optimizer is stuck in a sharp minimum, the random component will allow it to escape, so that it ends in larger, flatter minima that are harder to leave through a random walk. Finding such flat minima has been found to lead to better overall solutions as well as increased generalization and robustness (Ly & Gong, 2025). The gradient-norm scaling is therefore a critical component of our method because it provides a balance between the random and the drift component. 
+
+## 7 Conclusions 
+
+In this study we introduce an interleaved noise injection scheme and demonstrate that periodically shifting between clean and noisy training epochs improves the test performance on clean data compared to the customary optimization that trains only with clean data. This benefit comes at essentially zero computational cost, does not require more training data or additional optimization epochs, and requires only minimal hyperparameter tuning. We provide a theoretical analysis to demonstrate that noise injection is equivalent to regularization. Specifically, we show that impulse noise introduces penalties that are proportional to the Jacobian and the Hessian of the loss with respect to the data; for Gaussian noise only a previously known curvature term remains. The benefits of these penalties can best be realized through an interleaved schedule compared to alternative curricula, which either transition only once from noisy to clean data or linearly change the noise level. We believe that repeatedly switching between noisy and clean data encourages exploration during the noisy epochs without entirely forgetting the features of the clean data. This combination allows optimizers to escape sub-optimal local minima, reducing overfitting and improving performance on in-domain, out-of-domain, and corrupted samples. We also find that the type of noise is best chosen to combat the failure modes of different model architectures. While interleaved noise injection generally improves training performance, convolutional architectures tend to benefit more from impulse noise, whereas attention-based models benefit more from Gaussian noise. Lastly, we show that our method can also be combined with other common forms of corruption and augmentation to further improve their performance with minimal added computational overhead. Overall, interleaved noise injection provides a simple, yet effective tool to improve model performance and robustness against noise and real-world distribution shifts. 
+
+## Software and Data 
+
+We use jax (Bradbury et al., 2018), pytorch (Paszke et al., 2019), and tensorflow (Abadi et al., 2016) for model architecture and data-loading. We use the publicly available CIFAR-100, CIFAR-100-C, ImageNet-1k, ImageNet-C, and ImageNet-R datasets (Hendrycks & Dietterich, 2019; Hendrycks et al., 2021). 
+
+## Impact Statement 
+
+This paper presents work whose goal is to advance the field of Machine Learning. There are many potential societal consequences of our work, none of which we feel must be specifically highlighted here. 
+
+## References 
+
+Martín Abadi, Paul Barham, Jianmin Chen, Zhifeng Chen, Andy Davis, Jeffrey Dean, Matthieu Devin, Sanjay Ghemawat, Geoffrey Irving, Michael Isard, et al. {TensorFlow }: a system for {Large-Scale } machine learning. In 12th USENIX symposium on operating systems design and implementation (OSDI 16) , pp. 265–283, 2016. Barak Battash, Lior Wolf, and Ofir Lindenbaum. Revisiting the noise model of stochastic gradient descent. In International Conference on Artificial Intelligence and Statistics , pp. 4780–4788. PMLR, 2024. 15 Yoshua Bengio, Jérôme Louradour, Ronan Collobert, and Jason Weston. Curriculum learning. In Proceedings of the 26th Annual International Conference on Machine Learning , ICML ’09, pp. 41–48, New York, NY, USA, 2009. Association for Computing Machinery. ISBN 9781605585161. doi: 10.1145/1553374.1553380. URL https://doi.org/10.1145/1553374.1553380 .James Bradbury, Roy Frostig, Peter Hawkins, Matthew James Johnson, Chris Leary, Dougal Maclaurin, George Necula, Adam Paszke, Jake VanderPlas, Skye Wanderman-Milne, and Qiao Zhang. JAX: composable transformations of Python+NumPy programs, 2018. URL http://github.com/jax-ml/jax .Alvin Chan, Yi Tay, Yew Soon Ong, and Jie Fu. Jacobian adversarially regularized networks for robustness. 
+
+arXiv preprint arXiv:1912.10185 , 2019. Jeremy Cohen, Elan Rosenfeld, and Zico Kolter. Certified adversarial robustness via randomized smoothing. In international conference on machine learning , pp. 1310–1320. PMLR, 2019. Terrance DeVries and Graham W Taylor. Improved regularization of convolutional neural networks with cutout. arXiv preprint arXiv:1708.04552 , 2017. Alexey Dosovitskiy, Lucas Beyer, Alexander Kolesnikov, Dirk Weissenborn, Xiaohua Zhai, Thomas Unterthiner, Mostafa Dehghani, Matthias Minderer, Georg Heigold, Sylvain Gelly, et al. An image is worth 16x16 words: Transformers for image recognition at scale. arXiv preprint arXiv:2010.11929 , 2020. David J Earl and Michael W Deem. Parallel tempering: Theory, applications, and new perspectives. Physical Chemistry Chemical Physics , 7(23):3910–3916, 2005. Jonathan Firth, Ian Rivers, and James Boyle. A systematic review of interleaving as a concept learning strategy. Review of Education , 9(2):642–684, 2021. Pierre Foret, Ariel Kleiner, Hossein Mobahi, and Behnam Neyshabur. Sharpness-aware minimization for efficiently improving generalization. arXiv preprint arXiv:2010.01412 , 2020. Brandon Franzke and Bart Kosko. Noise can speed markov chain monte carlo estimation and quantum annealing. Phys. Rev. E , 100:053309, Nov 2019. doi: 10.1103/PhysRevE.100.053309. URL https: //link.aps.org/doi/10.1103/PhysRevE.100.053309 .Yulu Gan and Phillip Isola. Neural thickets: Diverse task experts are dense around pretrained weights. arXiv preprint arXiv:2603.12228 , 2026. Yves Grandvalet, Stéphane Canu, and Stéphane Boucheron. Noise injection: Theoretical prospects. Neural Computation , 9(5):1093–1108, 1997. Sina Hajimiri, Farzad Beizaee, Fereshteh Shakeri, Christian Desrosiers, Ismail Ben Ayed, and Jose Dolz. Locality-Attending Vision Transformer. arXiv e-prints , art. arXiv:2603.04892, March 2026. Moritz Hardt, Ben Recht, and Yoram Singer. Train faster, generalize better: Stability of stochastic gradient descent. In International conference on machine learning , pp. 1225–1234. PMLR, 2016. Kaiming He, Xiangyu Zhang, Shaoqing Ren, and Jian Sun. Deep residual learning for image recognition. In 
+
+Proceedings of the IEEE conference on computer vision and pattern recognition , pp. 770–778, 2016. Zhezhi He, Adnan Siraj Rakin, and Deliang Fan. Parametric noise injection: Trainable randomness to improve deep neural network robustness against adversarial attack. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , pp. 588–597, 2019. Dan Hendrycks and Thomas Dietterich. Benchmarking neural network robustness to common corruptions and perturbations. arXiv preprint arXiv:1903.12261 , 2019. Dan Hendrycks, Norman Mu, Ekin D Cubuk, Barret Zoph, Justin Gilmer, and Balaji Lakshminarayanan. Augmix: A simple data processing method to improve robustness and uncertainty. arXiv preprint arXiv:1912.02781 , 2019. 16 Dan Hendrycks, Steven Basart, Norman Mu, Saurav Kadavath, Frank Wang, Evan Dorundo, Rahul Desai, Tyler Zhu, Samyak Parajuli, Mike Guo, et al. The many faces of robustness: A critical analysis of out-of-distribution generalization. In Proceedings of the IEEE/CVF international conference on computer vision , pp. 8340–8349, 2021. Sepp Hochreiter and Jürgen Schmidhuber. Simplifying neural nets by discovering flat minima. Advances in neural information processing systems , 7, 1994. Sepp Hochreiter and Jürgen Schmidhuber. Flat minima. Neural computation , 9(1):1–42, 1997. Judy Hoffman, Daniel A Roberts, and Sho Yaida. Robust learning with jacobian regularization. arXiv preprint arXiv:1908.02729 , 2019. Daniel Jakubovitz and Raja Giryes. Improving dnn robustness to adversarial attacks using jacobian regularization. In Proceedings of the European conference on computer vision (ECCV) , pp. 514–529, 2018. Ingyun Lee, Wooju Lee, and Hyun Myung. Domain generalization with vital phase augmentation. In 
+
+Proceedings of the AAAI conference on artificial intelligence , volume 38, pp. 2892–2900, 2024. Noam Levi, Itay M Bloch, Marat Freytsis, and Tomer Volansky. Noise injection node regularization for robust learning. arXiv preprint arXiv:2210.15764 , 2022. Andrew Ly and Pulin Gong. Optimization on multifractal loss landscapes explains a diverse range of geometrical and dynamical properties of deep learning. Nature Communications , 16(1):3252, April 2025. doi: 10.1038/s41467-025-58532-9. Enzo Marinari and Giorgio Parisi. Simulated tempering: a new monte carlo scheme. Europhysics letters , 19 (6):451, 1992. Kiyotoshi Matsuoka. Noise injection into inputs in back-propagation learning. IEEE Transactions on Systems, Man, and Cybernetics , 22(3):436–440, 1992. Adam Paszke, Sam Gross, Francisco Massa, Adam Lerer, James Bradbury, Gregory Chanan, Trevor Killeen, Zeming Lin, Natalia Gimelshein, Luca Antiga, et al. Pytorch: An imperative style, high-performance deep learning library. Advances in neural information processing systems , 32, 2019. Doug Rohrer, Robert F Dedrick, and Sandra Stershic. Interleaved practice improves mathematics learning. 
+
+Journal of Educational Psychology , 107(3):900, 2015. Kelli Taylor and Doug Rohrer. The effects of interleaved practice. Applied cognitive psychology , 24(6):837–848, 2010. Jingfeng Wu, Difan Zou, Vladimir Braverman, and Quanquan Gu. Direction matters: On the implicit bias of stochastic gradient descent with moderate learning rate. arXiv preprint arXiv:2011.02538 , 2020. Li Xiao, Zeliang Zhang, Kuihua Huang, Jinyang Jiang, and Yijie Peng. Noise optimization in artificial neural networks. IEEE Transactions on Automation Science and Engineering , 22:2780–2793, 2024. Zeke Xie, Li Yuan, Zhanxing Zhu, and Masashi Sugiyama. Positive-negative momentum: Manipulating stochastic gradient noise to improve generalization. In International Conference on Machine Learning , pp. 11448–11458. PMLR, 2021. Sergey Zagoruyko and Nikos Komodakis. Wide residual networks. arXiv preprint arXiv:1605.07146 , 2016. Zeliang Zhang, Jinyang Jiang, Minjie Chen, Zhiyuan Wang, Yijie Peng, and Zhaofei Yu. A Novel Noise Injection-based Training Scheme for Better Model Robustness. arXiv e-prints , art. arXiv:2302.10802, February 2023. doi: 10.48550/arXiv.2302.10802. Richard M Zur, Yulei Jiang, Lorenzo L Pesce, and Karen Drukker. Noise injection for training artificial neural networks: A comparison with weight decay and early stopping. Medical physics , 36(10):4810–4818, 2009. 17 A Effect of gradient-norm stabilization 
+
+We find f = 0 .4 to provide the best results in our tests, i.e., we take steps a bit less than half the magnitude taken during the clean epochs, but we find any value between 0.2 and 0.8 to provide similar results. We present an ablation over the scale-factor f in Section 5.3. Setting f > 1 means that during a noisy epoch, the optimizer will potentially move far away from desirable regions of the loss surface. Setting f too small simply means that very small updates are performed during the noisy epochs, hence the benefits of our method vanish. In Figure 8 we show the effect on the magnitude of the gradient norm, and hence the change to the effective learning rate via Equation 11. We show this for a ResNet50 fine-tuned with interleaved noise injection on ImageNet-1k with impulse noise in the left column and Gaussian noise in the right. Note that further details on all trials and architecture setups are in the following section. We color the noisy epochs in gray shading, and see that this corresponds to strong spikes in ∥∇ θ L∥ which can have strong destabilizing effects if not scaled down particularly in late training. We apply Equation 11 to the base η to control the effective total update magnitude via using the new scaling η as shown in the colored dashed lines in the top rows of Figure 8. We observe similar spiking when using a ViT for ImageNet-1k, and a WideResNet on CIFAR-100 which we show in Figure 9 and Figure 10 in the appendix. 10 20 30 40 50 
+
+> 2
+> 3
+> 4
+> 5
+> 6
+
+Impulse     
+
+> base
+> scaled
+> noisy epoch
+> 10 20 30 40 50
+> 2.0
+> 2.5
+> 3.0
+> 3.5
+
+Gaussian     
+
+> base
+> scaled
+> 10 20 30 40 50
+
+epoch     
+
+> 0.00
+> 0.02
+> 0.04
+> 0.06
+> 0.08
+> 0.10
+> 10 20 30 40 50
+
+epoch 
+
+> 0.00
+> 0.02
+> 0.04
+> 0.06
+> 0.08
+> 0.10
+
+# ResNet-50 
+
+Figure 8: In the top row we show the magnitude of the gradient-norm before stabilization for the ResNet50 with interleaved noise using impulse and Gaussian noise from left to right respectively. The gray shading indicates noise has been injected for that epoch. In the bottom row we show the learning rate, and effective learning rate (after gradient-norm stabilization from Equation 11 with f = 0 .4). 18 5 10 15 20 25 30 
+
+1
+
+2
+
+3
+
+4
+
+Impulse 
+
+base 
+
+scaled 
+
+noisy epoch 
+
+5 10 15 20 25 30 
+
+0.5 
+
+1.0 
+
+1.5 
+
+2.0 
+
+2.5 
+
+3.0 
+
+Gaussian 
+
+base 
+
+scaled 
+
+5 10 15 20 25 30 
+
+epoch 
+
+0.00 
+
+0.25 
+
+0.50 
+
+0.75 
+
+1.00  
+
+> ×10 3
+
+5 10 15 20 25 30 
+
+epoch 
+
+0.0 
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1.0  
+
+> ×10 3
+
+# ViT Figure 9: Same as Figure 8 but for the ViT architecture. 19 20 40 60 80 100 
+
+> 0
+> 5
+> 10
+> 15
+
+Impulse     
+
+> base
+> scaled
+> noisy epoch
+> 20 40 60 80 100
+> 0.0
+> 2.5
+> 5.0
+> 7.5
+> 10.0
+> 12.5
+
+Gaussian     
+
+> base
+> scaled
+> 20 40 60 80 100
+
+epoch     
+
+> 0.000
+> 0.005
+> 0.010
+> 0.015
+> 0.020
+> 0.025
+> 20 40 60 80 100
+
+epoch 
+
+> 0.000
+> 0.005
+> 0.010
+> 0.015
+> 0.020
+> 0.025
+
+# WideResNet - CIFAR-100 Figure 10: Same as Figure 8 but for the WideResNet of CIFAR-100. 
+
+## B Performance with corruption severity 
+
+In Table 4 we show the performance of the ResNet50 and ViT models with the suite of robustness regularizers with the range of 5 corruption severities. We see that, as expected, the error rate increases with severity. In Table 5 we show the same results but by corruption type which is explained in detail in Hendrycks et al. (2019). 
+
+## C Noise period ablation results 
+
+Table 6 shows an ablation over the noise injection period P run on the CIFAR-100 dataset with the WideResNet model. For the results, we chose P based on the strongest performance on the clean data, resulting in a period of 5 used for all trials (we note P=10 also performs strong for the Gaussian noise, but is worse for impulse noise). 
+
+## D Noise corruption visualization 
+
+We show a visualisation of different impulse noise levels on the CIFAR-100 dataset in Figure 11. 20 Table 4: Comparison of baseline regularizers and interleaved noise augmentations across corruption severity levels. Clean Error and Mean Corruption Error (mCE) are reported alongside error rates for severities 1 through 5. All metrics are error percentages ( ↓), with bootstrapped standard errors. Improvements over the respective baseline are shown in (green), regressions in (red). 
+
+> Architecture  Method  Clean Err ( ↓) mCE ( ↓) Sev 1 ( ↓) Sev 2 ( ↓) Sev 3 ( ↓) Sev 4 ( ↓) Sev 5 ( ↓)ResNet50 SGD  25 .8 ± .1 89 .1 ± .2 82 .6 ± .4 86 .1 ± .3 89 .4 ± .3 92 .6 ± .2 94 .7 ± .1
+> SGD + Gaus.  25 .5 ± .2 (-0.3)  88 .2 ± .2 (-0.9)  81 .4 ± .1 (-1.2)  85 .1 ± .2 (-1.0)  88 .5 ± .2 (-0.9)  91 .9 ± .2 (-0.7)  94 .2 ± .2 (-0.5) SGD + Impulse  25 .1 ± .2 (-0.7)  87 .3 ± .1 (-1.8)  80 .2 ± .4 (-2.4)  84 .0 ± .2 (-2.1)  87 .6 ± .1 (-1.8)  91 .1 ± .1 (-1.5)  93 .5 ± .1 (-1.2) Cutout  24 .4 ± .1 88 .2 ± .3 81 .2 ± .6 85 .0 ± .5 88 .5 ± .5 91 .9 ± .4 94 .3 ± .3
+> Cutout + Gaus.  24 .5 ± .1 (+0.1)  88 .0 ± .2 (-0.2)  80 .9 ± .3 (-0.3)  84 .8 ± .4 (-0.2)  88 .4 ± .4 (-0.1)  91 .9 ± .3 (-0.0)  94 .2 ± .2 (-0.1) Cutout + Impulse  23 .7 ± .1 (-0.7)  86 .5 ± .3 (-1.7)  78 .6 ± .5 (-2.6)  82 .6 ± .6 (-2.4)  86 .5 ± .5 (-2.0)  90 .4 ± .5 (-1.5)  93 .1 ± .4 (-1.2) SAM  24 .9 ± .2 88 .3 ± .2 81 .6 ± .5 85 .2 ± .5 88 .6 ± .3 91 .9 ± .2 94 .2 ± .2
+> SAM + Gaus.  24 .7 ± .1 (-0.2)  85 .7 ± .1 (-2.6)  80 .2 ± .2 (-1.4)  84 .1 ± .2 (-1.1)  87 .7 ± .1 (-0.9)  91 .4 ± .2 (-0.5)  93 .8 ± .2 (-0.4) SAM + Impulse  24 .8 ± .1 (-0.1)  84 .8 ± .1 (-3.5)  78 .1 ± .3 (-3.5)  82 .1 ± .2 (-3.1)  86 .1 ± .2 (-2.5)  89 .9 ± .2 (-2.0)  92 .7 ± .1 (-1.5) VIPAug  28 .7 ± .1 89 .7 ± .2 83 .4 ± .6 87 .0 ± .5 90 .1 ± .4 93 .0 ± .2 95 .0 ± .1
+> VIPAug + Gaus.  28 .6 ± .3 (-0.1)  89 .6 ± .3 (-0.1)  83 .0 ± .6 (-0.4)  86 .7 ± .6 (-0.3)  90 .1 ± .5 (-0.0)  93 .1 ± .4 (+0.1)  95 .0 ± .3 (-0.0) VIPAug + Impulse  28 .1 ± .3 (-0.6)  88 .6 ± .2 (-1.1)  80 .9 ± .3 (-2.5)  84 .7 ± .4 (-2.3)  88 .3 ± .2 (-1.8)  91 .6 ± .2 (-1.4)  93 .9 ± .1 (-1.1) AugMix  23 .8 ± .2 83 .2 ± .2 75 .1 ± .3 79 .0 ± .3 83 .2 ± .3 87 .7 ± .3 91 .0 ± .2
+> AugMix + Gaus.  23 .7 ± .2 (-0.1)  82 .3 ± .1 (-0.9)  74 .1 ± .1 (-1.0)  78 .0 ± .1 (-1.0)  82 .2 ± .2 (-1.0)  87 .1 ± .2 (-0.6)  90 .5 ± .2 (-0.5) AugMix + Impulse  23 .3 ± .2 (-0.5)  82 .0 ± .1 (-1.2)  73 .8 ± .1 (-1.3)  77 .7 ± .1 (-1.3)  81 .9 ± .1 (-1.3)  86 .6 ± .1 (-1.1)  90 .1 ± .1 (-0.9) ViT AdamW  20 .1 ± .3 69 .5 ± .4 57 .1 ± .7 62 .4 ± .7 69 .2 ± .7 76 .5 ± .6 82 .1 ± .6
+> AdamW + Gaus.  19 .5 ± .3 (-0.6)  66 .1 ± .1 (-3.4)  53 .7 ± .2 (-3.4)  58 .8 ± .1 (-3.6)  65 .5 ± .1 (-3.7)  73 .2 ± .2 (-3.3)  79 .6 ± .2 (-2.5) AdamW + Impulse  20 .0 ± .3 (-0.1)  67 .7 ± .3 (-1.8)  56 .1 ± .9 (-1.0)  60 .7 ± .6 (-1.7)  67 .1 ± .6 (-2.1)  74 .3 ± .4 (-2.2)  80 .0 ± .4 (-2.1) Cutout  19 .9 ± .1 69 .4 ± .4 57 .0 ± .3 62 .3 ± .4 69 .2 ± .4 76 .5 ± .4 82 .2 ± .4
+> Cutout + Gaus.  19 .2 ± .1 (-0.7)  66 .3 ± .2 (-3.1)  54 .1 ± .5 (-2.9)  59 .0 ± .4 (-3.3)  65 .6 ± .6 (-3.6)  73 .2 ± .5 (-3.3)  79 .6 ± .5 (-2.6) Cutout + Impulse  20 .3 ± .1 (+0.4)  68 .8 ± .4 (-0.6)  56 .9 ± .5 (-0.1)  61 .8 ± .7 (-0.5)  68 .5 ± .7 (-0.7)  75 .6 ± .7 (-0.9)  81 .2 ± .8 (-1.0) SAM  17 .5 ± .1 63 .9 ± .2 50 .6 ± .2 55 .9 ± .2 63 .1 ± .1 71 .6 ± .1 78 .5 ± .1
+> SAM + Gaus.  17 .4 ± .1 (-0.1)  63 .1 ± .1 (-0.8)  50 .1 ± .2 (-0.5)  55 .3 ± .3 (-0.6)  62 .2 ± .2 (-0.9)  70 .5 ± .1 (-1.1)  77 .4 ± .1 (-1.1) SAM + Impulse  17 .7 ± .1 (+0.2)  63 .6 ± .1 (-0.3)  51 .1 ± .4 (+0.5)  55 .9 ± .4 (-0.0)  62 .6 ± .4 (-0.5)  70 .5 ± .5 (-1.1)  77 .2 ± .5 (-1.3) VIPAug  19 .8 ± .2 69 .8 ± .6 56 .8 ± .6 62 .2 ± .3 69 .2 ± .3 76 .5 ± .2 81 .9 ± .2
+> VIPAug + Gaus.  18 .9 ± .1 (-0.9)  66 .2 ± .2 (-3.6)  53 .8 ± .2 (-3.0)  58 .9 ± .2 (-3.3)  65 .5 ± .3 (-3.7)  73 .3 ± .3 (-3.2)  79 .6 ± .3 (-2.3) VIPAug + Impulse  20 .0 ± .1 (+0.2)  68 .7 ± .5 (-1.1)  55 .8 ± .9 (-1.0)  60 .6 ± .9 (-1.6)  67 .1 ± .9 (-2.1)  74 .5 ± .8 (-2.0)  80 .2 ± .7 (-1.7) AugMix  17 .8 ± .1 62 .4 ± .1 49 .9 ± .2 54 .5 ± .1 61 .2 ± .2 69 .5 ± .1 76 .8 ± .2
+> AugMix + Gaus.  17 .5 ± .1 (-0.3)  60 .8 ± .1 (-1.6)  49 .1 ± .3 (-0.8)  53 .2 ± .2 (-1.3)  59 .4 ± .3 (-1.8)  67 .4 ± .4 (-2.1)  74 .7 ± .4 (-2.1) AugMix + Impulse  17 .5 ± .1 (-0.3)  61 .6 ± .1 (-0.8)  49 .4 ± .1 (-0.5)  53 .8 ± .1 (-0.7)  60 .3 ± .1 (-0.9)  68 .5 ± .1 (-1.0)  75 .8 ± .1 (-1.0)
+
+21 Table 5: Per-type corruption error rate (%) on ImageNet-C averaged over severity levels for ResNet50 and ViT architectures. 
+
+> Noise  Blur  Weather  Digital Method  Gauss.  Shot  Imp.  Defoc.  Glass  Motion  Zoom  Snow  Frost  Fog  Bright.  Contr.  Elast.  Pixel.  JPEG
+> ResNet50
+> SGD  93 .5 ± .3 91 .9 ± .4 93 .5 ± .4 89 .7 ± .1 95 .6 ± .2 88 .2 ± .3 88 .3 ± .2 87 .8 ± .1 86 .4 ± .3 87 .3 ± .2 79 .1 ± .2 95 .1 ± .1 86 .3 ± .3 86 .9 ± .3 86 .5 ± .4
+> SGD + Gaussian  92 .7 ± .4 90 .9 ± .4 92 .9 ± .3 88 .9 ± .1 95 .1 ± .2 87 .2 ± .2 87 .6 ± .1 86 .8 ± .2 85 .2 ± .3 86 .5 ± .1 77 .9 ± .2 94 .6 ± .1 85 .5 ± .1 86 .0 ± .5 85 .3 ± .1
+> SGD + Impulse  92 .0 ± .1 90 .0 ± .1 92 .3 ± .1 87 .9 ± .2 94 .3 ± .2 86 .1 ± .2 86 .5 ± .2 85 .9 ± .5 84 .2 ± .2 85 .9 ± .3 76 .5 ± .3 94 .3 ± .2 84 .4 ± .2 84 .0 ± .4 84 .5 ± .3
+> Cutout  92 .8 ± .2 91 .2 ± .4 93 .5 ± .2 88 .2 ± .9 94 .8 ± .2 86 .5 ± .9 86 .9 ± 1 87 .0 ± .6 86 .0 ± .4 85 .9 ± .7 78 .0 ± 1 94 .8 ± .2 84 .6 ± .7 84 .8 ± .2 84 .4 ± .5
+> Cutout + Gaussian  92 .2 ± .2 90 .2 ± .3 92 .7 ± .3 87 .5 ± .5 94 .3 ± .2 85 .6 ± .3 85 .8 ± .4 85 .7 ± .4 84 .2 ± .5 84 .5 ± .3 76 .3 ± .5 93 .8 ± .4 83 .5 ± .2 83 .7 ± .3 82 .7 ± .4
+> Cutout + Impulse  91 .7 ± .1 89 .6 ± .1 92 .1 ± .4 87 .1 ± .4 94 .2 ± .4 85 .6 ± .7 85 .8 ± .8 85 .8 ± .6 84 .0 ± .7 85 .6 ± .7 76 .4 ± .7 94 .4 ± .6 84 .0 ± .9 83 .4 ± .6 84 .0 ± .5
+> SAM  93 .3 ± .2 91 .7 ± .2 93 .9 ± .8 89 .5 ± .5 95 .3 ± .3 87 .7 ± .4 88 .2 ± .5 87 .3 ± .6 85 .9 ± .5 86 .6 ± .5 78 .1 ± .5 94 .9 ± .3 86 .1 ± .3 86 .2 ± .3 86 .1 ± .5
+> SAM + Gaussian  92 .5 ± .7 90 .6 ± .7 92 .3 ± .2 88 .2 ± .4 94 .6 ± .2 86 .6 ± .4 86 .7 ± .5 86 .2 ± .5 84 .3 ± .4 85 .7 ± .2 77 .0 ± .1 94 .1 ± .2 84 .8 ± .3 85 .3 ± .3 84 .5 ± .4
+> SAM + Impulse  91 .5 ± .4 89 .6 ± .5 91 .5 ± .4 86 .8 ± .9 93 .7 ± .6 85 .1 ± .9 85 .4 ± 1.0 85 .2 ± .8 83 .2 ± .9 85 .0 ± 1.0 75 .1 ± .9 93 .6 ± .6 83 .4 ± .9 83 .0 ± .8 83 .5 ± 1.2
+> VIPAug  94 .5 ± .1 93 .0 ± .1 94 .7 ± .4 90 .2 ± .6 95 .5 ± .1 88 .7 ± .4 89 .2 ± .9 88 .7 ± .3 88 .0 ± .4 87 .3 ± .7 80 .9 ± .5 95 .2 ± .3 86 .6 ± .7 86 .8 ± .2 85 .9 ± .6
+> VIPAug + Gaussian  94 .4 ± .3 92 .9 ± .3 94 .5 ± .1 90 .4 ± .9 95 .6 ± .4 88 .9 ± .7 89 .3 ± .8 88 .2 ± .2 87 .7 ± .5 87 .3 ± .8 80 .5 ± .5 95 .2 ± .3 86 .3 ± .7 86 .9 ± .6 85 .6 ± .6
+> VIPAug + Impulse  93 .1 ± .4 91 .1 ± .4 93 .3 ± .4 88 .4 ± .5 94 .2 ± .1 86 .9 ± .2 87 .4 ± .5 86 .6 ± .2 85 .7 ± .5 86 .2 ± .1 78 .5 ± .5 94 .3 ± .4 84 .3 ± .3 84 .2 ± .2 84 .3 ± .3
+> AugMix  89 .7 ± .1 87 .3 ± .1 91 .7 ± .2 82 .2 ± .4 91 .7 ± .1 79 .4 ± .3 80 .8 ± .6 82 .5 ± .5 80 .7 ± .3 80 .5 ± .4 72 .6 ± .2 87 .6 ± .3 79 .6 ± .3 81 .5 ± .2 80 .4 ± .3
+> AugMix + Gaussian  89 .3 ± .1 86 .8 ± .1 91 .2 ± .2 80 .9 ± .5 91 .3 ± .2 78 .1 ± .5 79 .5 ± .6 82 .0 ± .4 80 .1 ± .1 79 .6 ± .2 71 .4 ± .2 87 .2 ± .1 78 .6 ± .1 80 .4 ± .1 79 .1 ± .1
+> AugMix + Impulse  89 .0 ± .2 86 .5 ± .2 91 .2 ± .3 80 .9 ± .3 90 .7 ± .1 77 .9 ± .4 79 .5 ± .2 81 .3 ± .1 79 .6 ± .1 79 .3 ± .2 71 .4 ± .2 86 .8 ± .4 78 .2 ± .2 79 .6 ± .2 79 .0 ± .2
+> ViT
+> AdamW  80 .2 ± .4 75 .6 ± .7 79 .7 ± 1.2 68 .0 ± .9 81 .3 ± .3 64 .4 ± 1.0 66 .8 ± 1.4 68 .1 ± .7 63 .7 ± .7 70 .7 ± .8 55 .8 ± .5 81 .8 ± .2 62 .9 ± .6 61 .3 ± .9 61 .4 ± .7
+> AdamW + Gaussian  75 .2 ± .6 70 .8 ± .7 74 .4 ± .9 65 .2 ± .5 79 .1 ± .5 61 .6 ± .5 64 .3 ± .4 65 .3 ± .3 60 .9 ± .3 67 .3 ± .6 52 .5 ± .2 79 .3 ± .1 59 .9 ± .3 58 .1 ± .2 58 .4 ± .5
+> AdamW + Impulse  76 .7 ± .4 72 .1 ± .3 77 .5 ± .8 66 .9 ± .9 77 .9 ± .6 64 .1 ± .9 65 .7 ± 1.0 66 .4 ± .9 61 .5 ± .9 69 .4 ± .6 55 .1 ± 1.3 79 .8 ± .6 62 .2 ± .9 58 .9 ± 1.0 60 .2 ± .9
+> Cutout  79 .8 ± .4 75 .1 ± .6 79 .1 ± .7 69 .6 ± .8 80 .9 ± .8 64 .8 ± .9 67 .4 ± .9 67 .7 ± .5 63 .6 ± .6 70 .7 ± .6 55 .5 ± 1.0 81 .7 ± .4 63 .0 ± .8 61 .7 ± .5 60 .8 ± .9
+> Cutout + Gaussian  74 .7 ± .9 69 .7 ± .8 75 .2 ± 1.0 66 .0 ± .8 79 .1 ± .7 62 .3 ± .6 64 .7 ± .7 64 .6 ± .5 60 .4 ± .2 67 .1 ± .2 53 .0 ± .4 79 .0 ± .4 60 .5 ± .4 58 .9 ± .6 59 .3 ± .4
+> Cutout + Impulse  78 .2 ± .9 73 .8 ± 1.1 79 .7 ± .4 67 .4 ± .6 79 .1 ± 1.3 64 .2 ± .9 66 .9 ± .5 67 .4 ± .8 62 .2 ± .9 70 .7 ± .8 55 .9 ± .4 81 .8 ± .7 62 .9 ± .5 61 .1 ± 1.3 60 .8 ± .6
+> SAM  72 .2 ± .1 67 .3 ± .1 70 .7 ± .2 65 .0 ± .1 78 .2 ± .1 58 .3 ± .2 63 .6 ± .2 64 .1 ± .1 59 .6 ± .2 64 .8 ± .2 51 .1 ± .2 78 .4 ± .1 59 .8 ± .1 52 .7 ± .2 52 .8 ± .2
+> SAM + Gaussian  69 .5 ± .4 64 .7 ± .3 68 .8 ± .3 64 .5 ± .4 77 .5 ± .1 57 .9 ± .5 62 .9 ± .6 63 .3 ± .1 59 .1 ± .2 64 .9 ± .1 51 .1 ± .5 78 .2 ± .4 59 .5 ± .5 52 .5 ± .1 52 .6 ± .1
+> SAM + Impulse  69 .9 ± .6 64 .9 ± .8 68 .6 ± .8 64 .5 ± .4 74 .2 ± 1.0 58 .1 ± .8 62 .3 ± .9 63 .8 ± .3 58 .5 ± .4 66 .0 ± .2 52 .8 ± .5 78 .7 ± .7 59 .6 ± .6 55 .3 ± .6 54 .6 ± .6
+> VIPAug  80 .0 ± .6 75 .4 ± .5 80 .2 ± .5 68 .9 ± .8 81 .4 ± .1 64 .9 ± .7 67 .5 ± .6 66 .7 ± .6 63 .0 ± .2 69 .9 ± .5 54 .8 ± .7 82 .1 ± .2 62 .7 ± .7 61 .6 ± .4 60 .9 ± .6
+> VIPAug + Gaussian  75 .3 ± .6 70 .9 ± .7 74 .8 ± 1.0 65 .3 ± .2 79 .5 ± .6 61 .5 ± .3 64 .2 ± .3 64 .8 ± .4 61 .0 ± .4 67 .3 ± .6 51 .9 ± .1 78 .9 ± .3 60 .0 ± .1 59 .2 ± .5 59 .0 ± .2
+> VIPAug + Impulse  76 .6 ± 1.6 72 .3 ± 1.6 78 .5 ± 1.5 66 .8 ± .8 78 .7 ± .7 63 .4 ± .8 65 .8 ± .5 65 .5 ± 1.4 61 .3 ± .9 69 .0 ± .8 54 .7 ± .6 81 .0 ± .6 61 .2 ± .8 60 .2 ± .4 59 .9 ± .7
+> AugMix  71 .1 ± .1 65 .8 ± .1 70 .3 ± .2 61 .0 ± .3 76 .0 ± .1 55 .5 ± .3 59 .6 ± .2 62 .1 ± .3 59 .1 ± .1 61 .8 ± .3 50 .3 ± .2 73 .3 ± .1 57 .9 ± .2 55 .7 ± .1 56 .2 ± .2
+> AugMix + Gaussian  66 .5 ± .8 62 .0 ± .9 66 .2 ± .9 60 .5 ± .1 74 .4 ± .5 54 .8 ± .1 58 .7 ± .1 61 .2 ± .3 57 .8 ± .2 60 .8 ± .1 49 .8 ± .1 72 .4 ± .1 57 .4 ± .1 54 .2 ± .6 55 .0 ± .6
+> AugMix + Impulse  69 .4 ± .1 64 .2 ± .1 69 .0 ± .1 60 .3 ± .1 75 .2 ± .2 55 .0 ± .1 59 .0 ± .2 61 .5 ± .1 58 .3 ± .1 61 .1 ± .1 49 .8 ± .1 73 .0 ± .1 57 .3 ± .1 55 .3 ± .1 55 .6 ± .2
+
+22 Table 6: Ablation over the interleaved period P showing the same performance metrics with the same model/dataset as Table 3. Note ninj denotes the total amount of noise injections during the 100 epoch training run. 
+
+Gaussian noise Impulse noise 
+
+period (P) ninj Clean mCE Struct. Clean mCE Struct. 0 100 43 .4 ± .1 50 .7 ± .1 51 .9 ± .1 42 .0 ± .1 56 .0 ± .2 50 .0 ± .1
+
+1 50 28 .3 ± .2 42 .3 ± .2 41 .5 ± .2 25 .3 ± .2 48 .8 ± .2 42 .3 ± .2
+
+2 33 26 .0 ± .1 43 .9 ± .2 41 .7 ± .1 25 .3 ± .1 49 .0 ± .1 42 .5 ± .2
+
+5 20 25 .0 ± .1 46 .3 ± .1 42 .8 ± .1 24 .9 ± .2 50 .4 ± .1 44 .3 ± .1
+
+10 10 24 .9 ± .1 47 .5 ± .1 43 .2 ± .1 25 .4 ± .1 51 .3 ± .1 45 .3 ± .1
+
+20 5 25 .5 ± .2 50 .6 ± .1 45 .5 ± .2 25 .5 ± .1 51 .8 ± .2 46 .0 ± .1
+
+40 2 25 .5 ± .1 50 .2 ± .1 45 .1 ± .1 25 .7 ± .2 51 .8 ± .1 46 .2 ± .1
+
+50 1 25 .6 ± .1 52 .2 ± .2 46 .7 ± .2 25 .6 ± .1 52 .8 ± .1 47 .0 ± .2
+
+no noise injection 25 .7 ± .1 52 .6 ± .1 47 .1 ± .4 25 .7 ± .3 52 .6 ± .2 47 .1 ± .2
+
+23 noise 0% noise 20% noise 40% noise 60% noise 80% noise 100% Figure 11: CIFAR-100 samples with increasing levels of impulse noise, with the percentages corresponding to the probability ( σ) of individual pixel corruption. 24
