@@ -6,49 +6,57 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-19
-- 运行时间：2026-07-19 20:56:10 UTC
+- 最新运行日期：2026-07-20
+- 运行时间：2026-07-20 21:06:26 UTC
 - 运行状态：成功
-- 本次总论文数：9
-- 精读区：1
-- 速读区：8
+- 本次总论文数：12
+- 精读区：0
+- 速读区：12
 
 ### 今日简报（AI）
-1) 今日9篇论文中，精读重点探讨交错噪声注入提升模型鲁棒性，速读覆盖权重反馈局部计算、自适应模型压缩及视觉语言模型中的令牌压缩。
-2) 最值得关注的方向：精读论文显示交错噪声注入可同时提升干净、损坏和OOD性能；速读中权重反馈方法首次实现前向网络局部雅可比转置计算。
-3) 建议优先精读噪声注入论文掌握核心技巧，再结合自适应压缩方法优化低功耗部署，最后可尝试将光谱热流方法应用于你的视觉语言模型中。
-- 详情：[/202607/19/README](/202607/19/README)
+今日速读12篇论文，3篇获7分推荐，聚焦图像去模糊、场景文字识别与视觉位置识别。值得关注多级预条件策略对图像去模糊的加速效果，以及脉冲神经网络在视觉位置识别中的新应用。建议优先了解预条件方法的实用价值，或旋转位置编码在文本识别中的创新思路。
+- 详情：[/202607/20/README](/202607/20/README)
 
 ### 精读区论文标签
-1. [Interleaved Noise Injection Improves Clean, Corrupted, and OOD Performance](/202607/19/2607.14466v1-interleaved-noise-injection-improves-clean-corrupted-and-ood-performance)  
-   标签：评分：8.0/10、query:neural-arch
-   evidence：交错噪声注入改善优化和泛化
+- 本次无精读推荐。
 
 ### 速读区论文标签
-1. [Weight Feedback Computes the Jacobian Transpose Locally in Modern Deep Networks](/202607/19/2607.13380v1-weight-feedback-computes-the-jacobian-transpose-locally-in-modern-deep-networks)  
+1. [Multilevel Preconditioning Strategies for Convex Optimization Methods in Image Deblurring](/202607/20/2607.10864v1-multilevel-preconditioning-strategies-for-convex-optimization-methods-in-image-deblurring)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：提升深度网络中梯度计算效率
-2. [Adaptive Model Compression (AMC): Saliency-Driven Resource Allocation for Ultra-Low-Power Transformer Inference](/202607/19/2607.10109v1-adaptive-model-compression-amc-saliency-driven-resource-allocation-for-ultra-low-power-transformer-inference)  
+   evidence：多级预处理加速图像恢复中的凸优化
+2. [2D Rotary Position Embedding for Scene Text Recognition with Transformers](/202607/20/2607.13458v1-2d-rotary-position-embedding-for-scene-text-recognition-with-transformers)  
+   标签：评分：7.0/10、query:neural-arch
+   evidence：用于场景文本识别编码器-解码器Transformer的二维旋转位置嵌入
+3. [Visual Place Recognition Using Rate-Encoded Spiking Neural Networks with Discrete STDP Learning](/202607/20/2607.13584v1-visual-place-recognition-using-rate-encoded-spiking-neural-networks-with-discrete-stdp-learning)  
+   标签：评分：7.0/10、query:neural-arch
+   evidence：使用STDP学习的高效脉冲神经网络架构用于视觉地点识别
+4. [Fast and Scalable Caputo Fractional Gradient Descent via Perturbation-Preserving Memory Compression](/202607/20/2607.15505v1-fast-and-scalable-caputo-fractional-gradient-descent-via-perturbation-preserving-memory-compression)  
+   标签：评分：7.0/10、query:neural-arch
+   evidence：通过扰动保持内存压缩提出快速可扩展的分数阶梯度下降，属于深度学习模型优化策略
+5. [Learning Faster without Deeper Networks: A*-Inspired Batch Selection for Efficient CNN Training](/202607/20/2607.15745v1-learning-faster-without-deeper-networks-a-inspired-batch-selection-for-efficient-cnn-training)  
+   标签：评分：7.0/10、query:neural-arch
+   evidence：A*启发式批量选择策略用于高效CNN训练，改善收敛和学习信号，模型无关的优化方法
+6. [Distributional Matching for Vector Quantization: A Unified Theoretical and Empirical Framework](/202607/20/2607.15933v1-distributional-matching-for-vector-quantization-a-unified-theoretical-and-empirical-framework)  
+   标签：评分：7.0/10、query:compress
+   evidence：向量量化的分布匹配框架
+7. [Water Reflection Detection Using Symmetric Attention](/202607/20/2607.10749v1-water-reflection-detection-using-symmetric-attention)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：自适应模型压缩用于Transformer推理
-3. [Spectral Heat Flow for Conservative Token Condensation in Vision-Language Models](/202607/19/2607.10640v1-spectral-heat-flow-for-conservative-token-condensation-in-vision-language-models)  
+   evidence：用于水面反射检测的对称注意力网络
+8. [GFR-SAM: Training-Free Referring Camouflaged Object Segmentation via Cross-Image Prompting](/202607/20/2607.11732v1-gfr-sam-training-free-referring-camouflaged-object-segmentation-via-cross-image-prompting)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：基于谱热流的视觉语言模型令牌凝聚框架，保持结构并提升效率
-4. [Artificial Foveated Perception for Mitigating Shortcut Learning in Robotic Foundation Models](/202607/19/2607.10655v1-artificial-foveated-perception-for-mitigating-shortcut-learning-in-robotic-foundation-models)  
+   evidence：基于SAM和DINO的无训练伪装目标分割框架
+9. [No Attention, No Problem: DPU-Aware Attention Approximation in Modern YOLO on FPGA](/202607/20/2607.13106v1-no-attention-no-problem-dpu-aware-attention-approximation-in-modern-yolo-on-fpga)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：解决视觉模型中的捷径学习问题，属于性能提升技术
-5. [Answer-Conditioned Chain-of-Thought Distillation for Few-Shot Industrial Vision with Small VLMs](/202607/19/2607.10666v1-answer-conditioned-chain-of-thought-distillation-for-few-shot-industrial-vision-with-small-vlms)  
+   evidence：在FPGA上近似YOLO的注意力机制作为架构改进
+10. [AlphaWiSE: Adaptive Weight Interpolation for Continual Multimodal Representation Learning](/202607/20/2607.15094v1-alphawise-adaptive-weight-interpolation-for-continual-multimodal-representation-learning)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：少样本视觉中的知识蒸馏用于模型优化
-6. [On the modality gap and the contrastive loss in multi-modal representation learning](/202607/19/2607.10698v1-on-the-modality-gap-and-the-contrastive-loss-in-multi-modal-representation-learning)  
+   evidence：持续学习中用于模型优化的权重空间插值方法
+11. [QuReC: All-in-One Image Restoration with Query-Specific Guidance and Local-Global Response Calibration](/202607/20/2607.15097v1-qurec-all-in-one-image-restoration-with-query-specific-guidance-and-local-global-response-calibration)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：分析并改进多模态学习中的对比损失，属于深度学习模型优化策略
-7. [Scaling Synthetic-Image Pre-Training for Federated Fine-Tuning of Large Vision Models](/202607/19/2607.12583v1-scaling-synthetic-image-pre-training-for-federated-fine-tuning-of-large-vision-models)  
+   evidence：具有查询特定指导和校准的全能图像恢复框架
+12. [Structural-Semantic Reciprocal Learning for Unsupervised Visible-Infrared Person Re-Identification](/202607/20/2607.15220v1-structural-semantic-reciprocal-learning-for-unsupervised-visible-infrared-person-re-identification)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：提出用于联邦微调的合成图像预训练，属于模型优化策略
-8. [RFMSR: Residual Flow Matching for Image Super-Resolution](/202607/19/2607.12753v1-rfmsr-residual-flow-matching-for-image-super-resolution)  
-   标签：评分：6.0/10、query:neural-arch
-   evidence：提出残差流匹配用于图像超分辨率，属于计算机视觉架构改进技术
+   evidence：用于行人重识别的结构-语义学习，改进视觉特征提取
 
 
 <div class="dpr-home-promo-card">

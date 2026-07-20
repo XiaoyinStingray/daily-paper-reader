@@ -1,0 +1,310 @@
+Title: 2D Rotary Position Embedding for Scene Text Recognition with Transformers
+
+URL Source: https://arxiv.org/pdf/2607.13458v1
+
+Published Time: Thu, 16 Jul 2026 00:34:59 GMT
+
+Number of Pages: 17
+
+Markdown Content:
+# 2D Rotary Position Embedding for Scene Text Recognition with Transformers 
+
+## Zobeir Raisi 1* 
+
+1* Electrical Engineering Department, Chabahar Maritime University, Chabahar, Iran. Corresponding author(s). E-mail(s): zobeir.raisi@cmu.ac.ir; 
+
+Abstract 
+
+Scene Text Recognition (STR) remains challenging due to the diversity of text appearances, including curvature, rotation, and perspective distortion. Recent Transformer-based approaches perform well but usually rely on one-dimensional positional encodings that ignore the 2D spatial structure of text images. Axial 2D extensions of Rotary Position Embedding (RoPE) have been proposed for vision Transformers, but they assume roughly square, isotropic image content and apply the rotation only within encoder self-attention. Scene text violates both assump-tions: crops are markedly anisotropic (wider than tall), and STR models are encoder-decoder, so a decoder must relate its queries to the encoder’s 2D layout through cross-attention rather than self-attention alone. We introduce 2D-RoPE-STR, which adapts axial 2D-RoPE to this setting through (1) an anisotropic row/column dimension allocation matched to the aspect ratio of text, and (2) an extension of the rotary coupling into encoder-decoder cross-attention, letting autoregressive decoding steps attend to encoder tokens by their 2D layout— a setting not addressed by prior, encoder-only formulations. Both changes are essentially parameter-free and require no architectural redesign beyond the positional-encoding module. Beyond reporting accuracy, we introduce a diagnos-tic protocol—a controlled ablation pair isolating only the positional encoding, an image-level net-win disagreement analysis, and encoder attention visualization— that identifies where and why relative 2D position helps: curved, rotated, and perspective-distorted layouts where reading order departs from a straight hori-zontal line. We evaluate 2D-RoPE-STR on six standard benchmarks—IIIT5K, SVT, ICDAR 2013, ICDAR 2015, CUTE80, and SVTP—showing gains concen-trated on exactly these irregular layouts, with ablations isolating each design choice against 1D RoPE and 2D sinusoidal/learnable alternatives. 
+
+Keywords: Scene Text Recognition, Transformer, Positional Encoding, Rotary Position Embedding, 2D-RoPE 
+
+1arXiv:2607.13458v1 [cs.CV] 15 Jul 2026 Irregular 
+
+scene text 
+
+1D Positional Encoding 
+
+(baseline) 2D-RoPE (Ours) 
+
+encoder self-attention encoder self-attention 
+
+come coffee 
+
+Key idea 
+
+(h, w) 
+
+> h
+
+(row)  
+
+> w
+
+(col) 
+
+Rotate q, k by row & column 
+
+position attention q, k
+
+depends only on offset ( h, w). Fig. 1 Motivation, on a real perspective-distorted crop fed to the positional-encoding ablation pair (identical backbone, decoder, and training schedule; only the positional encoding differs). The 1D-sinusoidal baseline mis-reads the word ( come ), whereas our 2D-RoPE —which rotates queries and keys by both row and column position so that self-attention depends only on the relative 2D offset (∆ h, ∆w)—reads it correctly ( coffee ). Overlays show the encoder self-attention of each model. The encoding is plug-and-play, replacing the positional module of any Transformer-based STR model. 
+
+# 1 Introduction 
+
+Scene Text Recognition (STR) aims to transcribe text from natural images into digital characters. It is a core component in many real-world applications such as document digitization, autonomous driving, and augmented reality. Despite years of progress, 2STR remains challenging because of variations in font, colour, orientation, perspec-tive distortion, and cluttered backgrounds [25, 38]; we refer the reader to a recent survey [21] for a broad overview of the field. Deep learning has driven STR forward, with architectures evolving from CNN-RNN hybrid models [38, 39] to attention-based encoder-decoder frameworks [7, 9] and, more recently, Transformer-based approaches [3, 15, 47]; see [1] for a recent survey of Transformers in text recognition. Transformers [43] have become the dominant architecture due to their ability to model long-range dependencies via self-attention. However, a critical yet underexplored component in Transformer-based STR is 
+
+positional encoding . Since the self-attention operation is permutation-invariant, posi-tional information must be injected explicitly. Most existing STR methods adopt one of three strategies: 1D sinusoidal encoding [43], which encodes position along a single sequence axis and ignores the 2D spatial layout of text images; 1D learnable encoding [12], which learns a position vector per token index but is likewise limited to a single dimension; and 2D sinusoidal or learnable encoding [13, 34, 35], which extends to two dimensions by concatenating row and column embeddings but treats them as independent additive biases, failing to capture relative spatial relationships. All three share the same limitation: they encode absolute positions as additive offsets, so the model cannot easily reason about the relative geometric relationships between characters. These relationships matter most in STR, where characters can be curved, rotated, or perspectively warped. Fig. 1 contrasts this failure mode with our 2D-RoPE, which reads the same irregular word correctly. Recently, Rotary Position Embedding (RoPE) [40] has emerged as a powerful alter-native in natural language processing. RoPE encodes position by rotating query and key vectors, so that the dot product between a query at position m and a key at posi-tion n depends only on the relative distance m − n. This property gives RoPE length extrapolation and strong relative-position modelling. RoPE has become the de facto standard in large language models such as LLaMA [42] and PaLM [10]. RoPE has since been extended to two dimensions for vision Transformers, typically via an axial decomposition that rotates one half of the channels by the row index and the other half by the column index [19], with recent multi-directional variants relax-ing the axis-aligned restriction [27]. These formulations target general imagery: they assume a roughly isotropic, square grid and apply the rotation only within encoder self-attention. Text images break both assumptions. Crops are markedly anisotropic— wider than tall—and STR architectures are encoder-decoder, so an autoregressive decoder must relate its queries to the encoder’s 2D layout through cross-attention, not self-attention alone. We adapt axial 2D-RoPE to this setting along two axes of the problem. First, rather than splitting the rotary dimensions evenly between row and column as in prior vision formulations, we allocate them according to the aspect ratio of text, giving the row axis—which spans a single line of characters—a larger share of the encoding. Second, we extend the rotary coupling into the decoder’s cross-attention, applying it to the encoder keys so that each decoding step attends to encoder tokens by their 2D spatial position, a setting the encoder-only formulations above do not address. Both 3changes require no architectural redesign beyond the positional-encoding module and add no learned parameters beyond two per-axis scale scalars. Our main contributions are: 1. We adapt axial 2D Rotary Position Embedding to the anisotropic, encoder-decoder setting of scene text recognition, via a text-aspect-ratio-matched row/column dimension split and an extension of the rotary coupling into decoder cross-attention—both absent from prior vision-only 2D-RoPE formulations and both validated as the best-performing choice in our ablations. 2. We design a plug-and-play module that can replace the positional encoding in any Transformer-based STR system without modifying the backbone architecture. 3. We conduct experiments on six standard STR benchmarks together with controlled ablations that isolate the effect of the positional encoding from the rest of the architecture. 4. We introduce a diagnostic protocol—a controlled ablation pair isolating the positional encoding, an image-level net-win disagreement analysis, and encoder attention visualization—that identifies where and why the 2D rotary formulation helps, showing gains concentrate on irregular and perspective-distorted text at essentially no parameter cost. 
+
+# 2 Related Work 
+
+## 2.1 Scene Text Recognition 
+
+Early STR methods relied on connectionist temporal classification (CTC) [16] with CNN encoders [38]. Attention-based encoder-decoder models [9, 25] then introduced learned alignment between image features and output characters. More recent works address irregular text through rectification modules [39, 48], multi-directional feature extraction [46], or language model integration [15, 47]. Transformer-based STR methods have shown strong results. TRIG [3] uses a pure Transformer for both encoding and decoding. ABINet [15] combines a vision Transformer with an autonomous bidirectional language model. PARSeq [6] proposes permuted autoregressive sequences for flexible inference. More recent work keeps refin-ing the attention itself: Tian et al. [41] adapt the receptive field to the varying character scales found in complex scenes. Others move beyond the encoder-decoder atten-tion stack altogether, with SVTRv2 [14] showing that a CTC recognizer can match encoder-decoder accuracy and Mamba-STR [2] using selective state-space modelling for efficient context. However, these methods typically use standard 1D positional encodings inherited from NLP, overlooking the 2D nature of text images. 
+
+## 2.2 Positional Encoding in Transformers 
+
+Absolute Positional Encoding. The original Transformer [43] uses sinusoidal functions of different frequencies. Learnable positional embeddings [12] replace fixed sinusoids with trainable parameters. Both are additive and encode absolute position. 
+
+Relative Positional Encoding. Shaw et al. [37] add learnable relative position biases to attention logits. T5 [32] uses simplified relative biases. ALiBi [31] applies 4linear penalties to attention scores. These methods explicitly model relative distances but are still 1D. 
+
+2D Positional Encoding. For vision tasks, 2D sinusoidal [13] or 2D learnable [8] encodings are common. They concatenate or sum separate row and column embed-dings. Conditional positional encoding (CPE) [11] uses depth-wise convolutions for local context. In the STR domain specifically, the importance of two-dimensional position has been studied in our prior work: a 2D positional embedding-based trans-former [34] and a 2D learnable sinusoidal positional encoding (2LSPE) [35] that adapts the sinusoidal frequencies to the training data, while a contextual position encoding scheme was later applied to Persian text recognition in the wild [33]. These STR encod-ings are nonetheless additive and absolute : none of them encode relative 2D positions through rotation, which is the gap addressed in this work. 
+
+Rotary Position Embedding (RoPE). Su et al. [40] proposed RoPE, which applies rotation matrices to queries and keys based on their absolute positions. The key property is that q⊤
+
+> m
+
+kn depends only on m − n. The properties of RoPE have since been analysed in depth—for example, [5] show that the highest frequencies build positional attention patterns while the lowest carry semantic content, which motivates our study of the frequency bases (Table 3). RoPE has also been extended to 2D for vision tasks: an axial formulation that rotates one half of the channels by the row index and the other half by the column index [19], and, more recently, multi-directional variants that lift the axis-aligned restriction [27]. These formulations assume near-isotropic image content and operate only within encoder self-attention; neither property holds for scene text, which is anisotropic and processed by encoder-decoder architectures. Building on our earlier additive 2D positional encodings for STR [33–35], this work adapts the axial rotary formulation to this setting through a text-aspect-ratio-matched dimension split and an extension of the rotary coupling into encoder-decoder cross-attention, together with a diagnostic protocol that isolates and explains the resulting gains. 
+
+# 3 Methodology 
+
+## 3.1 Preliminary: Rotary Position Embedding 
+
+Given an input vector x ∈ Rd at position m, RoPE applies a rotation: RoPE( x, m ) = Rm,θ x (1) where Rm,θ is a block-diagonal rotation matrix: 
+
+Rm,θ =
+
+
+
+cos mθ 1 − sin mθ 1
+
+sin mθ 1 cos mθ 1
+
+. . .cos mθ d/ 2 − sin mθ d/ 2
+
+sin mθ d/ 2 cos mθ d/ 2
+
+
+
+(2) with frequency bases θi = 10000 −2( i−1) /d for i = 1 , . . . , d/ 2. 5For self-attention with query q at position m and key k at position n:
+
+⟨Rm,θ q, Rn,θ k⟩ = ⟨q, Rn−m,θ k⟩ (3) This shows the attention score depends only on the relative distance n − m.In practice, RoPE is applied in the complex-valued form for efficiency. For each pair of dimensions ( x2i−1, x 2i), treated as a complex number zi = x2i−1 + jx 2i:
+
+zi · ejmθ i = ( x2i−1 + jx 2i)(cos mθ i + j sin mθ i) (4) 
+
+## 3.2 2D Rotary Position Embedding 
+
+A text image feature map has two spatial axes: the row axis h ∈ { 0, . . . , H − 1} and the column axis w ∈ { 0, . . . , W − 1}. A token at spatial position ( h, w ) must encode position along both axes. We partition the d-dimensional feature vector into two halves: the first d/ 2 dimen-sions encode the row position, and the remaining d/ 2 dimensions encode the column position: 
+
+x = [ xh; xw], xh, xw ∈ Rd/ 2 (5) We define 2D-RoPE as applying independent rotations along each spatial axis: 2D-RoPE( x, h, w ) = [ Rh,θ h xh; Rw,θ w xw] (6) where Rh,θ h and Rw,θ w are rotation matrices of dimension d/ 2 with frequency bases 
+
+θhi = 10000 −2( i−1) /d and θwi = 10000 −2( i−1) /d respectively. 
+
+Theorem 1 (2D Relative Position Property) For query q = [ qh; qw] at position (hq , w q )
+
+and key k = [ kh; kw] at position (hk, w k), the attention score satisfies: 
+
+⟨2D-RoPE (q, h q , w q ), 2D-RoPE (k, h k, w k)⟩
+
+= ⟨qh, R∆h,θ h kh⟩ + ⟨qw, R∆w,θ w kw⟩ (7) 
+
+where ∆h = hk − hq and ∆w = wk − wq .Proof Expanding the inner product: 
+
+⟨[Rhq qh; Rwq qw], [Rhk kh; Rwk kw]⟩
+
+= ⟨Rhq qh, Rhk kh⟩ + ⟨Rwq qw, Rwk kw⟩
+
+= ⟨qh, R−1 
+
+> hq
+
+Rhk kh⟩ + ⟨qw, R−1 
+
+> wq
+
+Rwk kw⟩
+
+= ⟨qh, Rhk −hq kh⟩ + ⟨qw, Rwk −wq kw⟩
+
+□
+
+Interpretation. The attention between any two tokens encodes their relative dis-placement in both spatial axes, which is precisely the geometric relationship that matters for text reading order and character adjacency. 63.3 Integration into Transformer-based STR 
+
+3.3.1 Overall Architecture 
+
+As illustrated in Fig. 2, our framework consists of three components. A CNN feature extractor (ResNet-50 backbone) extracts a 2D feature map F ∈ RC×H′×W ′
+
+from the input image. A 2D-RoPE Transformer encoder then flattens this map into H′×W ′
+
+tokens of dimension C and processes them with a stack of L Transformer encoder layers equipped with 2D-RoPE, each token retaining its 2D spatial coordinate ( h, w )for positional encoding. Finally, a Transformer decoder —a standard autoregressive decoder—generates the character sequence token by token, using cross-attention to attend to the encoder output. 
+
+3.3.2 2D-RoPE in Self-Attention 
+
+For each encoder layer, the self-attention computation with 2D-RoPE is: Attention( Q, K, V) = softmax ˜Q ˜K⊤
+
+√dk
+
+!
+
+V (8) where ˜Q and ˜K are the query and key matrices with 2D-RoPE applied. Concretely, for the i-th token at spatial position ( hi, w i): ˜qi = 2D-RoPE( WQzi, h i, w i) (9) ˜ki = 2D-RoPE( WK zi, h i, w i) (10) where zi is the input token embedding. 
+
+3.3.3 Frequency Base Selection 
+
+Following [40], we set the default frequency bases as θi = 10000 −2( i−1) /d . Additionally, we explore mixed-frequency bases for the row and column dimensions to account for the anisotropy of text (wider than tall): 
+
+θhi = βh · 10000 −2( i−1) /d , θwi = βw · 10000 −2( i−1) /d (11) where βh and βw are learnable scale factors initialized to 1.0. This allows the model to adapt the frequency spectrum to the aspect ratio of the text image. 
+
+3.3.4 Cross-Attention Positional Encoding 
+
+In the decoder, cross-attention queries (from the decoder) do not have 2D spatial positions. We apply 2D-RoPE only to the keys from the encoder, so that each query can attend to encoder tokens based on their 2D spatial layout. The decoder’s self-attention over the output sequence uses standard sinusoidal positional encoding. 7Input Image                
+
+> I∈R3×H×W
+> CNN Backbone (ResNet-50)
+> Feature Map
+> F∈RC×H′×W′
+> Flatten + Linear Proj
+> 2D-RoPE Transformer Encoder
+> ×Llayers
+> Transformer Decoder Output Text
+> cross-attn
+> Position ( h, w ) per token
+> 2D-RoPE Module
+> ˜qi= [ Rh,θ hqh;Rw,θ wqw]˜ki= [ Rh,θ hkh;Rw,θ wkw]
+
+Fig. 2 Overall architecture of 2D-RoPE-STR. The CNN backbone extracts a 2D feature map, which is flattened and processed by a Transformer encoder equipped with 2D Rotary Position Embedding. The decoder generates characters autoregressively via cross-attention. 
+
+# 4 Experiments 
+
+## 4.1 Datasets 
+
+We evaluate on six STR benchmarks: IIIT5K [28] (3,000 test images from the web and signboards), SVT [44] (647 images from Google Street View), ICDAR 2013 (IC13) [22] (1,015 images of focused scene text), ICDAR 2015 (IC15) [23] (2,077 images of challenging incidental text), CUTE80 [36] (288 images of curved text), and 
+
+SVTP [30] (645 images with perspective distortion). 
+
+## 4.2 Implementation Details 
+
+Backbone. We use ResNet-50 [18] as the CNN feature extractor. To preserve genuine 2D spatial extent we reduce the network’s output stride to 4 by disabling the spatial down-sampling in the last three residual stages, yielding a feature map of size C ×
+
+H′ × W ′ with C = 2048, H′ = 8, and W ′ = 32 for input images of 32 × 128. The map is flattened in row-major order and linearly projected to dmodel .
+
+Transformer. The encoder has L = 6 layers with 8 attention heads, dmodel = 512, and FFN dimension 2048. The decoder has 6 layers with the same configuration; the target sequence uses sinusoidal positional encoding. 
+
+Training. We train on the MJSynth [20] and SynthText [17] datasets. The model is trained for 300K iterations with an effective batch size of 256, the AdamW opti-mizer [24] (weight decay 0 .01), an initial learning rate of 3 × 10 −4 with 5K-step linear warm-up followed by cosine decay, label smoothing of 0 .1, gradient clipping at 5 .0, and mixed-precision (FP16) training. Labels are normalised to the case-insensitive 36-symbol alphanumeric set. We apply data augmentation including random rotation (±15 ◦), random perspective distortion, colour jitter, and Gaussian blur. 
+
+Inference. We use greedy autoregressive decoding with a maximum output length of 25 characters. Word accuracy is measured on the case-insensitive 36-character set (0–9, a–z). 
+
+## 4.3 Comparison with State-of-the-Art 
+
+Table 1 compares 2D-RoPE-STR with recent STR methods; the baseline numbers are taken from the respective papers. 8Table 1 Comparison with state-of-the-art methods on six STR benchmarks. Word accuracy (%). Bold indicates best result. * denotes models with external language model data. Method IIIT5K SVT IC13 IC15 CUTE80 SVTP Avg. CRNN [38] 81.2 82.7 89.6 65.3 60.1 68.5 74.6 ASTER [39] 93.4 89.5 92.8 76.1 79.5 78.5 85.0 SAR [26] 95.0 88.3 93.0 76.5 81.2 79.3 85.6 TRBA [4] 94.7 90.0 93.5 78.2 83.3 82.0 87.0 ViTSTR [3] 94.2 89.5 93.1 77.0 82.1 80.5 86.1 ABINet* [15] 95.7 91.5 94.2 79.3 85.2 83.7 88.3 PARseq [6] 95.7 91.8 94.5 80.1 85.8 84.2 88.7 LPV [45] 95.6 91.2 94.0 79.8 85.0 83.5 88.2 MATRN [29] 96.1 92.3 95.0 81.5 87.2 85.0 89.5 2D-RoPE-STR 96.2 92.4 95.2 81.2 91.0 86.5 90.4 Table 2 Ablation on positional encoding type. All models share the same backbone and decoder and are trained under an identical reduced schedule (60k iterations on MJ+ST); absolute accuracies are therefore below the main result in Table 1, as the relative ordering is the object of study. Best per column in bold .PE Type Dim. IIIT5K SVT CUTE80 Avg. None – 93.5 90.1 85.4 85.9 1D Sinusoidal [43] 1D 94.3 89.3 86.5 86.2 1D Learnable 1D 94.0 89.6 86.8 86.2 2D Sinusoidal 2D 93.9 89.3 86.5 86.6 2D Learnable 2D 93.9 90.0 86.8 86.3 1D RoPE [40] 1D 94.1 91.0 85.8 86.5 
+
+2D-RoPE (Ours) 2D 94.4 90.6 85.8 86.8 
+
+Across all six benchmarks, 2D-RoPE-STR reaches the best average accuracy (90.4%), ahead of the strongest prior method, MATRN (89.5%). As the design pre-dicts, the gains are largest on the irregular sets—+3 .8 on the curved CUTE80 and +1 .5 on the perspective-distorted SVTP over MATRN—supporting the view that 2D relative position helps most when the layout is complex. The only benchmark where 2D-RoPE-STR trails MATRN is IC15 (81 .2 vs. 81 .5). 
+
+## 4.4 Ablation Studies 
+
+4.4.1 Effect of Positional Encoding Type 
+
+Table 2 reveals a consistent ordering. Removing positional encoding entirely yields the lowest average accuracy (85.9%), with the steepest degradation on perspective text (SVTP, 78.8% vs. 81.2% for 2D-RoPE). On average, each 2D encoding edges out its 1D counterpart (sinusoidal 86.6 vs. 86.2, learnable 86.3 vs. 86.2, RoPE 86.8 vs. 86.5), consistent with the value of encoding spatial structure, and RoPE outperforms the 9Table 3 2D-RoPE design ablations under the reduced schedule (60k iters, MJ+ST). Each block varies one factor; bold = best in block, “(def.)” marks the default carried to the main model. Word accuracy (%). Configuration CUTE80 Avg.                                         
+
+> (a) Frequency base
+> Fixed θ= 10000 87.85 86.71
+> Fixed θ= 500 88.19 86.64 Learnable βh, β w(def.) 86.11 86.31 Mixed (row 500, col 10000) 86.11 86.66
+> (b) Dimension split (dh:dw),d= 512 256 : 256 (equal) 85.07 86.75 384 : 128 (row-heavy, def.) 86.11 86.92
+> 128 : 384 (col-heavy) 84.03 86.36
+> (c) Encoder layers
+> 386.11 86.04 6 (def.) 86.81 87.18 986.81 87.25
+> 12 86.46 86.44
+> (d) 2D-RoPE in decoder cross-attention
+> None 87.85 87.19 1D RoPE 86.81 87.43 2D-RoPE (def.) 88.54 87.82
+
+sinusoidal and learnable encodings in both the 1D and 2D settings. Overall, 2D-RoPE attains the best average accuracy (86.8%) , ahead of 1D RoPE (86.5%) and the strongest additive 2D encoding (86.6%); its gains over 1D RoPE are concentrated on SVTP and IIIT5K, while the two are on par on the small CUTE80 set. We note that, under this reduced ablation schedule, the margins between encodings are modest (within ∼1% average accuracy); the ordering is nonetheless consistent and the full-length model (Table 1) shows the larger irregular-text gains that motivate the 2D formulation. Importantly, this comes at essentially zero parameter cost : RoPE injects position by rotating queries and keys rather than learning a table, so 2D-RoPE adds only the two scalar per-axis scales βh, β w (2 parameters total), against ∼1.05M parameters for a learnable 1D embedding and 49K for a learnable 2D embedding. The 2D encodings that rely on learned tables therefore pay a large parameter overhead for no accuracy advantage over 2D-RoPE. 
+
+4.4.2 2D-RoPE Design Choices 
+
+Table 3 sweeps the remaining design choices of 2D-RoPE. (a) The encoding is robust to the frequency base—all four configurations lie within 0 .4% Avg; we keep the learn-able per-axis scales βh, β w as the default since they avoid manual tuning and let the encoding adapt to the spatial statistics of text. (b) A modest row-heavy dimension split (384:128) is best, with accuracy decreasing monotonically as dimensions shift to 10 GT: ARSHAVIN 1D-Sin:ARSHAVI 
+
+2D-RoPE:ARSHAVIN 
+
+GT: BOOKSTORE 1D-Sin:BOOKSTOP 
+
+2D-RoPE:BOOKSTORE 
+
+GT: COFFEE 1D-Sin:COME 
+
+2D-RoPE:COFFEE 
+
+GT: lOOK 1D-Sin:LACK 
+
+2D-RoPE:LOOK 
+
+GT: BLOCK 1D-Sin:ELOCK 
+
+2D-RoPE:BLOCK 
+
+GT: ARSENAL 1D-Sin:ARBENAL 
+
+2D-RoPE:ARSENAL       
+
+> Curved Curved, Perspective
+> Incidental
+> Perspective
+> Incidental
+> Curved Fig. 3Qualitative comparison on real evaluation crops where 2D-RoPE succeeds and the 1D-sinusoidal baseline fails. Each panel is labelled by distortion type (curved / perspective / incidental). Red: 1D-sinusoidal prediction; green : 2D-RoPE prediction; GT is the ground truth. Both models are the positional-encoding ablation pair (identical backbone, decoder, and schedule), so differences are attributable to the positional encoding alone.
+
+the column axis. (c) Accuracy peaks at 9 encoder layers (87 .25%), but 6 layers are within 0 .1% at substantially lower cost, so we adopt 6 as the default. (d) Applying 2D-RoPE to the cross-attention keys yields a further gain (87 .19 → 87 .82% Avg), mir-roring the encoder-side ordering 2D > 1D > none. Across all four studies the margins are small and the ordering consistent, confirming the design carried into the main model. 
+
+## 4.5 Qualitative Analysis 
+
+Fig. 3 compares the transcriptions of the 1D-sinusoidal baseline and 2D-RoPE on real evaluation crops. The two models share an identical backbone, decoder, and training schedule (the positional-encoding ablation pair of Table 2), so the only difference is the positional encoding. On curved (CUTE80), perspective-distorted (SVTP), and incidental/rotated (IC15) text, the 1D-sinusoidal model drops or sub-stitutes characters once the layout departs from a horizontal line (e.g. coffee →come ,
+
+bookstore →bookstop ), whereas 2D-RoPE reads the word correctly. These are not cherry-picked illustrations but actual outputs of the two checkpoints on the standard benchmarks. To check that Fig. 3 is not anecdotal, we count, on every benchmark, the images that one model in the ablation pair reads correctly while the other fails (Table 4). 11 Table 4 Disagreement analysis between the 1D-sinusoidal and 2D-RoPE ablation models. “2D-only” / “1D-only” = images read correctly by only that model; “Net” = 2D-only − 1D-only (positive favours 2D-RoPE). Benchmark n 2D-only 1D-only Net IIIT5K 3000 38 41 −3SVT 647 18 11 +7 IC13 1015 11 15 −4IC15 2077 86 60 +26 CUTE80 288 10 11 −1SVTP 645 24 12 +12         
+
+> Total 7672 187 150 +37 GT: RONALDO GT: SEACREST GT: WYNDHAM GT: HOTEL
+> (a) (b)
+> Fig. 4 Encoder self-attention of the full 2D-RoPE model on irregular text (mean over heads and the six encoder layers, overlaid as a heatmap; warmer = higher attention). Attention concentrates on the character strokes and follows the 2D layout of curved and perspective-distorted words.
+
+2D-RoPE has a net advantage of +37 images over the full 7 ,672-image suite, and— consistent with the design motivation—the gains concentrate on the irregular and perspective-distorted sets: IC15 (+26), SVTP (+12), and SVT (+7). On the regular-text sets (IIIT5K, IC13) and the small CUTE80 set the two models are within a handful of images of each other, i.e. within noise. The qualitative wins in Fig. 3 are thus representative of a consistent, if modest, benefit on exactly the layouts that motivate the 2D formulation. Fig. 4 visualises the encoder self-attention of the full 2D-RoPE model, averaged over heads and encoder layers, as a saliency map over the 8 × 32 feature grid. The attention concentrates tightly on the character strokes and traces the text layout even when it is curved (e.g. the arched RONALDO ) or slanted ( WYNDHAM ), while suppressing the cluttered background. This is the behaviour the formulation is designed to induce: because position enters through relative row/column rotations, the encoder can lock onto the characters and follow the reading order regardless of the global geometric transformation. 
+
+# 5 Discussion 
+
+Why does 2D-RoPE work better for STR? Scene text often deviates from a simple left-to-right layout. Curved, rotated, and perspective-warped text requires the model to reason about the 2D spatial arrangement of characters. 2D-RoPE encodes 12 relative displacement in both axes, which lets attention follow the reading order even when the text is geometrically distorted. 
+
+Comparison with explicit rectification. Methods like ASTER [39] use a spa-tial transformer to rectify text before recognition. Our approach is complementary: 2D-RoPE provides implicit spatial awareness without an explicit rectification module. Combining both could yield further improvements. 
+
+Generalization to other vision tasks. The 2D-RoPE formulation is general and can be applied to any Vision Transformer where 2D spatial structure matters, such as object detection, semantic segmentation, and image captioning. 
+
+Limitations. Our formulation is axial : it rotates one group of channels by the row index and another by the column index. As recently observed for vision trans-formers [27], this axis-aligned decomposition concentrates the encoded relationships along the horizontal and vertical directions and is less expressive for oblique or diago-nal arrangements, which can arise in steeply slanted or curved text. Multi-directional rotary schemes that distribute the rotation across several directions are a natural extension of our method and a promising direction for future work. The equal split of dimensions between row and column rotations may also be sub-optimal for all aspect ratios, suggesting adaptive allocation based on input dimensions; and extending to 3D-RoPE for video text recognition remains unexplored. 
+
+# 6 Conclusion 
+
+We presented 2D-RoPE-STR, which adapts axial 2D Rotary Position Embedding to the anisotropic, encoder-decoder setting of scene text recognition through a text-aspect-ratio-matched row/column dimension split and an extension of the rotary coupling into decoder cross-attention—both absent from prior, vision-only formula-tions. The encoding is plug-and-play and adds essentially no parameters. On six standard benchmarks the gains concentrate on irregular and perspective-distorted text, and our diagnostic protocol—a controlled ablation pair, image-level net-win anal-ysis, and attention visualization—shows where and why: the 2D rotary formulation matches or improves on 1D RoPE and the 2D sinusoidal/learnable alternatives pre-cisely on the layouts where reading order departs from a straight horizontal line. A natural next step is to relax the axial decomposition with multi-directional rotations, and to extend 2D-RoPE to 3D for video text recognition. 
+
+# Declarations 
+
+Funding. The author received no specific funding for this work. 
+
+Conflict of interest. The author declares no competing interests. 
+
+Ethics approval and consent to participate. Not applicable; this study did not involve human participants, human data, or animals. 
+
+Consent for publication. Not applicable. 
+
+Data availability. All experiments use publicly available benchmark datasets, listed in Section 4. 
+
+Materials availability. Not applicable. 13 Code availability. Code, trained checkpoints, and scripts to reproduce all tables and figures are available at https://github.com/zobeirraisi/2D-RoPE-STR. 
+
+Author contribution. Z.R. conceived the study, implemented the method and training pipeline, ran all experiments and ablations, and wrote the manuscript. 
+
+# References 
+
+[1] Afkari-Fahandari A, Shabaninia E, Asadi-Zeydabadi F, et al (2025) A comprehen-sive survey of transformers in text recognition: Techniques, challenges, and future directions. ACM Computing Surveys 58(5). https://doi.org/10.1145/3771273 [2] Ali S, Gao T, Zhu Z, et al (2026) Mamba-str: Efficient context-aware scene text recognition framework with selective state space modeling. Information Sciences p 123242 [3] Atienza R (2021) Vision transformer for fast and efficient scene text recognition. In: ICDAR, pp 319–334 [4] Baek Y, Lee G, Yun D, et al (2021) What is wrong with scene text recognition model comparisons? dataset and model analysis. In: ICCV, pp 4715–4723 [5] Barbero F, Vitvitskyi A, Perivolaropoulos C, et al (2024) Round and round we go! What makes rotary positional encodings useful? arXiv preprint arXiv:241006205 [6] Bautista DB, Atienza R (2022) Scene text recognition with permuted autoregres-sive sequence models. In: ECCV, pp 178–196 [7] Bhunia AK, Bhunia AK, Sain A, et al (2021) Joint visual-linguistic representation for text recognition. In: AAAI, pp 1430–1437 [8] Carion N, Massa F, Synnaeve G, et al (2020) End-to-end object detection with transformers. In: ECCV, pp 213–229 [9] Cheng Z, Bai F, Xu Y, et al (2017) Focusing attention: Towards accurate text recognition in natural images. In: ICCV, pp 5070–5078 [10] Chowdhery A, Narang S, Devlin J, et al (2023) PaLM: Scaling language modeling with pathways. JMLR 24(240):1–113 [11] Chu X, Tian Z, Wang Y, et al (2021) Conditional positional encodings for vision transformers. In: NeurIPS [12] Devlin J, Chang MW, Lee K, et al (2019) BERT: Pre-training of deep bidirectional transformers for language understanding. In: NAACL-HLT, pp 4171–4186 [13] Dosovitskiy A, Beyer L, Kolesnikov A, et al (2021) An image is worth 16x16 words: Transformers for image recognition at scale. In: ICLR 14 [14] Du Y, Chen Z, Xie H, et al (2025) Svtrv2: Ctc beats encoder-decoder mod-els in scene text recognition. In: Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV), pp 20147–20156 [15] Fang S, Xie H, Wang Y, et al (2021) Read like humans: Autonomous, bidirectional and iterative language modeling for scene text recognition. In: CVPR, pp 7098– 7107 [16] Graves A, Fern´ andez S, Gomez F, et al (2006) Connectionist temporal classifi-cation: Labelling unsegmented sequence data with recurrent neural networks. In: ICML, pp 369–376 [17] Gupta A, Vedaldi A, Zisserman A (2016) Synthetic data for text localisation in natural images. In: CVPR, pp 2315–2324 [18] He K, Zhang X, Ren S, et al (2016) Deep residual learning for image recognition. In: CVPR, pp 770–778 [19] Heo B, Yun S, Han D, et al (2024) Rotary position embedding for vision transformer. In: ECCV, pp 336–352 [20] Jaderberg M, Simonyan K, Vedaldi A, et al (2016) Reading text in the wild with convolutional neural networks. IJCV 116(1):1–20 [21] Kadha V, Duddeti BB, Srinadh K, et al (2026) From pixels to text: A deep learning survey of scene text detection and recognition. Computers and Electrical Engineering 135:111139. https://doi.org/10.1016/j.compeleceng.2026.111139 [22] Karatzas D, Shafait F, Uchida S, et al (2013) ICDAR 2013 robust reading competition. In: ICDAR, pp 1484–1493 [23] Karatzas D, Gomez-Bigorda L, Nicolaou A, et al (2015) ICDAR 2015 competition on robust reading. In: ICDAR, pp 1156–1160 [24] Kingma DP, Ba J (2015) Adam: A method for stochastic optimization. In: ICLR [25] Lee CY, Osindero S (2016) Recursive recurrent nets with attention modeling for OCR in the wild. In: CVPR, pp 2231–2239 [26] Li H, Wang P, Shen C, et al (2019) Show, attend and read: A simple and strong baseline for irregular text recognition. In: AAAI, pp 8610–8617 [27] Liu H, Ren S, Zhu T, et al (2026) Spiral RoPE: Rotate your rotary positional embeddings in the 2D plane. arXiv preprint arXiv:260203227 [28] Mishra A, Alahari K, Jawahar CV (2012) Scene text recognition using higher order language priors. In: BMVC 15 [29] Nuriel O, Benny S, Aides A (2023) MATRN: Multimodal-aware text recognition network. In: WACV, pp 824–833 [30] Phan TQ, Shivakumara P, Tian S, et al (2013) Recognizing text with perspective distortion in natural scenes. In: ICCV, pp 569–576 [31] Press O, Smith NA, Lewis M (2022) Train short, test long: Attention with linear biases enables input length extrapolation. In: ICLR [32] Raffel C, Shazeer N, Roberts A, et al (2020) Exploring the limits of transfer learning with a unified text-to-text transformer. JMLR 21(140):1–67 [33] Raisi Z, Had VMN (2024) A transformer-based approach with contextual position encoding for robust Persian text recognition in the wild. Journal of Artificial Intelligence and Data Mining (JAIDM) 12(3):455–464 [34] Raisi Z, Naiel MA, Fieguth P, et al (2020) 2D positional embedding-based trans-former for scene text recognition. Journal of Computational Vision and Imaging Systems 6(1):1–4 [35] Raisi Z, Naiel MA, Younes G, et al (2021) 2LSPE: 2D learnable sinusoidal posi-tional encoding using transformer for scene text recognition. In: 18th Conference on Robots and Vision (CRV), IEEE, pp 119–126 [36] Risnumawan A, Shivakumara P, Chan CS, et al (2014) A robust arbitrary text detection system for natural scene images. Expert Systems with Applications 41(18):8027–8048 [37] Shaw P, Uszkoreit J, Vaswani A (2018) Self-attention with relative position representations. In: NAACL-HLT, pp 464–468 [38] Shi B, Bai X, Yao C (2016) An end-to-end trainable neural network for image-based sequence recognition and its application to scene text recognition. IEEE TPAMI 39(11):2298–2304 [39] Shi B, Yang M, Wang X, et al (2018) ASTER: An attentional scene text recognizer with flexible rectification. IEEE TPAMI 41(9):2035–2048 [40] Su J, Ahmed M, Lu Y, et al (2024) RoFormer: Enhanced transformer with rotary position embedding. Neurocomputing 568:127063 [41] Tian S, Zhu KX, Qin HB, et al (2024) Dynamic receptive field adaptation for scene text recognition. Pattern Recognition Letters 178:55–61. https://doi.org/ 10.1016/j.patrec.2023.12.005 [42] Touvron H, Lavril T, Izacard G, et al (2023) LLaMA: Open and efficient foundation language models. arXiv preprint arXiv:230213971 16 [43] Vaswani A, Shazeer N, Parmar N, et al (2017) Attention is all you need. In: NeurIPS, pp 5998–6008 [44] Wang K, Babenko B, Belongie S (2011) End-to-end scene text recognition. In: ICCV, pp 1457–1464 [45] Wang P, Da C, Yao C (2022) Multi-granularity prediction for scene text recognition. In: ECCV, pp 339–355 [46] Yang M, Liu Y, Jiang Z, et al (2019) Symmetry-constrained rectification network for scene text recognition. In: ICCV, pp 9147–9156 [47] Yang M, Guo Y, Chen Z, et al (2022) Reading and writing: Discriminative and generative modeling for self-supervised text recognition. In: CVPR, pp 7329–7338 [48] Zhan F, Lu C (2019) ESIR: End-to-end scene text recognition via iterative image rectification. In: CVPR, pp 2059–2068 17

@@ -1,0 +1,2867 @@
+Title: Fast and Scalable Caputo Fractional Gradient Descent via Perturbation-Preserving Memory Compression
+
+URL Source: https://arxiv.org/pdf/2607.15505v1
+
+Published Time: Mon, 20 Jul 2026 00:34:47 GMT
+
+Number of Pages: 44
+
+Markdown Content:
+# Fast and Scalable Caputo Fractional Gradient Descent via Perturbation-Preserving Memory Compression 
+
+Hwanseo Lee a, Junseo Lee a, Hyunju Kim a, ∗
+
+> aDepartment of Energy Engineering, Korea Institute of Energy Technology, Naju 58330, Republic of Korea
+
+Abstract 
+
+Fractional gradient descent (FGD) incorporates long-range memory through Caputo-type operators and has been shown to improve stability in ill-conditioned and nonconvex optimization problems. Despite these advantages, its practical use remains limited, mainly due to the high computational cost of evaluating history-dependent convolutions, which scales quadratically with the number of iterations. In this paper, we focus on making Caputo-based optimization computationally viable without sacrificing its intrinsic memory structure. We begin by expressing the fractional descent direction as a discrete con-volution over past gradients, which provides a unified view of the method. Based on this formulation, we introduce two complementary mechanisms to reduce the cost of the memory term. The first uses a sum-of-exponentials (SOE) approximation of the power-law kernel, leading to efficient recursive updates. The second approach, newly proposed in this paper as dyadic hierarchical discrete convolution (DHDC), compresses the gradient history through a multiscale aggregation strategy. Rather than treating these approximations as purely numerical accelerations, we interpret them as per-turbations of the ideal Caputo operator. This viewpoint allows us to analyze how the compressed memory affects the optimization dynamics. Under standard μ-strong convexity and L-smoothness assumptions, we show that the resulting method still exhibits monotone descent and linear convergence, provided that the approximation error remains controlled. We validate the proposed approach on several representative tasks, including battery state estimation, stochastic signal reconstruction, and image classification on CIFAR-10. Across these settings, the method consistently demonstrates improved stability compared to classical gradient descent and better robustness than truncated fractional schemes, while significantly reducing computational and memory costs. To further investigate the optimization behavior in highly multimodal landscapes, we additionally study the Rastrigin benchmark problem. The experiments demonstrate that the proposed DHDC method main-tains persistent but bounded oscillatory dynamics induced by compressed fractional memory, enabling the optimizer to repeatedly escape shallow local minima while remaining stable near the global minimizer. We further analyze the oscillation magnitude with respect to the fractional order and empirically verify the computational complexity of the proposed methods. These results suggest that fractional-order optimization can be made scalable in practice, without losing the essential benefits of long-memory dynamics. 
+
+Keywords: Fractional gradient descent, Caputo fractional derivative, Fast-memory approximation, Dyadic hierarchical convolution, Long-memory optimization 
+
+1. Introduction 
+
+Fractional calculus extends classical differentiation and integration to non-integer orders, providing a nat-ural framework for modeling systems with memory and nonlocal interactions. Since its formal development   
+
+> ∗Corresponding author. Tel:+82-61-320-9240
+> Email address: hjkim@kentech.ac.kr (Hyunju Kim) arXiv:2607.15505v1 [math.OC] 16 Jul 2026
+
+through the works of Liouville, Riemann, and Caputo [1–4], it has become an essential tool in the analysis of processes where past states influence present behavior. In modern scientific computing, fractional operators are particularly valued for their ability to capture long-range temporal and spatial dependencies, which are difficult to represent using classical integer-order models [5–8]. Among the various formulations, the Caputo derivative is especially well suited for physical modeling, as it accommodates classical initial conditions and yields interpretable constitutive laws in viscoelasticity, anomalous diffusion, and other hereditary systems [1, 4, 6, 7, 9]. The nonlocal memory inherent in fractional calculus has naturally motivated its extension to optimiza-tion problems [10–12]. In classical gradient-based methods, parameter updates depend solely on the instan-taneous gradient, leading to inherently memoryless dynamics [13, 14]. In contrast, fractional-order updates incorporate a history-dependent mechanism, where past gradients contribute through a kernel-weighted accumulation [10, 11]. This formulation is consistent with the memory structures observed in fractional dif-ferential equations [1, 7], and enables optimization dynamics that explicitly account for long-range temporal interactions. The distinction between momentum-based methods and fractional gradient descent (FGD) becomes particularly clear when viewed through their underlying memory kernels. In classical heavy-ball momentum, an auxiliary variable evolves according to 
+
+vn+1 = βvn + gn, 0 ≤ β < 1,
+
+which can be interpreted as a linear discrete-time dynamical system [14, 15]. Assuming v0 = 0, unrolling the recursion yields 
+
+vn =
+
+> n−1
+
+X
+
+> j=0
+
+β n−1−j gj ,
+
+revealing that momentum is equivalent to a convolution with an exponentially decaying kernel [16, 17]. This exponential weighting implies that past gradients are discounted geometrically, resulting in a short-range memory mechanism. In particular, when β approaches 1, the effective memory length scales as (1 − β)−1,indicating that the influence of past information is governed by a single characteristic time scale. By contrast, Caputo-based FGD induces a fundamentally different memory structure in the descent dynamics, characterized by a power-law kernel. The discrete fractional gradient at iteration n is computed as a weighted sum of historical gradients: 
+
+bgn =
+
+> n−1
+
+X
+
+> j=0
+
+w(α) 
+
+> n−j
+
+gj , (1) where the weights w(α) 
+
+> k
+
+are positive and non-increasing. These coefficients are defined as follows, with their detailed derivation and properties provided in Appendix A.2: 
+
+w(α) 
+
+> k
+
+= ∆t1−α
+
+Γ(2 − α)
+
+k1−α − (k − 1) 1−α , k = 1 , 2, . . . , n, (2) where 0 < α < 1 denotes the fractional order. Unlike exponential decay, this power-law weighting introduces a scale-free memory mechanism with no intrinsic characteristic time scale. As a consequence, the influence of past gradients persists over long horizons in a non-negligible manner, rather than being rapidly attenu-ated. Importantly, this behavior cannot be replicated by any finite combination of exponential kernels, since such mixtures inevitably retain an exponential tail and therefore impose a finite memory scale. This struc-tural difference implies that fractional gradient descent is not merely a momentum variant with a modified parameter, but represents a fundamentally distinct class of nonlocal optimization dynamics. The development of fractional optimization can be broadly organized into two closely related strands. The first stems from the direct discretization of fractional gradient flows, where Caputo or Riemann–Liouville derivatives are employed to define nonlocal descent dynamics [10, 11]. These approaches have demonstrated 2reduced oscillatory behavior and improved stability in nonlinear optimization settings, highlighting the practical benefits of incorporating long-memory effects. The second strand adopts an algorithmic perspective, interpreting fractional updates as history-weighted gradient schemes and analyzing their convergence under convexity assumptions [12, 18]. From this viewpoint, fractional descent can be understood as inducing a power-law memory kernel, providing a conceptual link between optimization algorithms and fractional dynamical systems. While these developments have clarified the role of memory in optimization, most existing works either focus on the formulation of fractional updates or their theoretical properties, with limited attention to how such long-range memory can be implemented efficiently in large-scale settings. More recently, fractional optimization has been explored in neural network training and signal processing applications, where empirical studies indicate improved robustness to noise and ill-conditioning [11, 12, 18, 19]. In parallel, numerical analysis has developed efficient techniques for handling long-memory kernels, including sum-of-exponentials approximations and hierarchical history compression [20, 21]. Despite the growing interest in fractional-order optimization, existing approaches face a fundamental challenge: the incompatibility between long-memory dynamics and scalable computation. FGD, particularly in its Caputo formulation, introduces a nonlocal temporal structure in which the descent direction depends on the entire history of past gradients. This power-law memory is a key feature that distinguishes fractional methods from classical gradient-based algorithms, enabling improved stability and robustness in complex optimization landscapes. However, a direct implementation of Caputo-based FGD is computationally prohibitive. The discrete realization of the fractional convolution requires access to all past gradients, resulting in O(n) cost per iter-ation and O(N 2) total complexity over N iterations. This quadratic scaling severely limits the applicability of fractional optimization methods in large-scale learning problems. A natural approach to address this issue is to adopt fast-memory techniques developed in the numerical analysis of fractional differential equations, such as sum-of-exponentials approximation (SOE)[22] and hierarchical convolution schemes. These meth-ods reduce computational complexity by compressing the history dependence of the fractional kernel. But, they are primarily designed for forward time-stepping problems, where the objective is accurate operator evaluation under a fixed trajectory. In contrast, optimization algorithms involve an evolving sequence of iterates, where gradient information must be updated adaptively. As a result, a direct transfer of fast-memory techniques is not straightforward. Naive memory compression may distort the effective descent direction, potentially altering the optimiza-tion dynamics. This observation raises a fundamental question: how can one achieve scalable computation while preserving the intrinsic power-law memory structure of fractional optimization? In this paper, we ad-dress this challenge by embedding fast-memory mechanisms directly into the optimization dynamics. Rather than treating memory compression as an external approximation, we reinterpret fractional gradient descent as a history-dependent convolution operator and construct a compressed representation that preserves its structural properties. A key insight of this work is that the proposed fast-memory schemes—based on SOE approximation and dyadic hierarchical discrete convolution (DHDC)—can be viewed as inducing a controlled perturbation of the ideal Caputo convolution. This perspective allows us to analyze their effect on optimization dynamics and establish that the convergence behavior of fractional gradient descent is preserved under suitable conditions. To make the formulation concrete, we consider Caputo-based fractional gradient descent. For 0 < α < 1,the Caputo fractional derivative is defined by 
+
+> Ca
+
+Dαt f (t) = 1Γ(1 − α)
+
+Z ta
+
+f ′(τ )(t − τ )α dτ, 
+
+which introduces a slowly decaying kernel and induces long-range memory effects. Such operators naturally arise in the modeling of systems with history dependence and have been extensively studied in fractional cal-culus [7]. Building on this formulation, we define a history-dependent descent direction as a convolution over past gradients, leading to a discrete fractional gradient descent update. This formulation captures the essen-tial nonlocal structure of the Caputo operator while providing a natural bridge to numerical discretization. The main contributions of this paper are summarized as follows: 31. We reinterpret Caputo-based fractional gradient descent as a nonlocal convolution operator acting on the gradient history, clarifying the role of power-law memory in optimization. 2. We develop a scalable computational framework by integrating SOE-based approximation and DHDC-based memory compression, reducing the overall complexity from O(N 2) to nearly O(N ).3. We show that the proposed fast-memory schemes can be interpreted as controlled perturbations of the ideal fractional descent direction, and establish convergence preservation under smooth strong convexity. 4. We provide a unified framework that connects fractional numerical analysis with large-scale optimiza-tion, enabling efficient realization of long-memory effects without truncating the intrinsic power-law structure. The proposed approach bridges the gap between high-fidelity fractional modeling and scalable optimiza-tion, providing a principled pathway for incorporating long-range memory into modern learning algorithms. The effectiveness of the method is demonstrated through one highly multimodal benchmark problem and three representative problem classes: Rastringin optimization, battery-related regression tasks exhibit-ing diffusion-driven memory effects, stochastic signal estimation with long-range dependence, and image classification on CIFAR-10, where nonconvexity and ill-conditioning are prominent. These experiments are intentionally chosen to cover optimization landscapes with fundamentally different memory and stability characteristics. In particular, the Rastrigin benchmark highlights the ability of the proposed DHDC dy-namics to escape shallow local minima through persistent but bounded oscillatory behavior induced by compressed fractional memory. The remaining applications further demonstrate that power-law memory can improve optimization stability, robustness, and learning behavior compared with classical gradient de-scent and momentum-based methods while substantially reducing the computational burden associated with full-history fractional optimization. The remainder of the paper is organized as follows. Section 2 introduces the proposed fast-memory framework and presents the SOE- and DHDC-based realizations of fractional gradient descent. Section 2.2 describes the construction of the DHDC algorithm and its hierarchical discrete convolution mechanism for compressed long-memory accumulation. Section 3 establishes convergence preservation results under smooth strong convexity and analyzes the effect of fast-memory perturbations on the optimization dynamics. Section 4 describes the experimental setup and benchmark configurations, while Section 5 presents the numerical results, oscillation analysis, and empirical computational complexity studies that validate the effectiveness and scalability of the proposed framework. 
+
+2. From Caputo gradient flow to a discrete optimizer 
+
+To construct a practical algorithm, we work on a uniform time grid tn = n∆t with step size ∆t > 0,and denote θn ≈ θ(tn) and gn = ∇L(θn). Under a Caputo-based formulation, the descent direction at step 
+
+n is no longer given by a single gradient, but by a history-weighted combination of all past gradients. As discussed in Section 1, this leads naturally to a discrete convolution (DC) structure, which serves as the starting point for all FGD methods considered in this paper. The central challenge is therefore not how to define fractional descent, but how to evaluate this history-dependent convolution efficiently and robustly inside an optimizer. In the following, we present two comple-mentary strategies to reduce this computational burden. The first is introduced in Section 2.1 and accelerates the convolution by approximating the Caputo kernel via a SOE representation. The second, introduced in Section 2.2, compresses the gradient history directly using a DHDC. Both approaches preserve the essential power-law memory structure, but differ in how memory is represented and updated during training. 
+
+2.1. Fast Caputo memory in fractional gradient descent via Sum-Of-Exponentials 
+
+A defining characteristic of Caputo-based FGD is the presence of long-range, power-law memory in the update direction. After discretization, the fractional gradient at iteration n takes the convolutional form: 
+
+bgn =
+
+> n−1
+
+X
+
+> j=0
+
+w(α) 
+
+> n−j
+
+gj , (3) 4where gj = ∇L(θj ), and the weights w(α) 
+
+> k
+
+are defined as in (2). This formulation faithfully realizes fractional dynamics, as all past gradients contribute to the descent direction with algebraically decaying influence. However, a direct implementation of (3) poses a significant computational challenge. As the iteration count n increases, both the memory required to store the gradient history and the computational work per step grow linearly, resulting in an O(n2) total cost after n steps. Such growth is prohibitive for long training horizons and large-scale learning problems where n can be extremely large. To overcome this "growing memory" bottleneck, an efficient numerical approach is required to approximate the non-local convolution with a fixed per-step cost. This motivates the use of the Sum-of-Exponentials (SOE) approximation, which transforms the global summation into a set of local recursive updates. Our first acceleration strategy exploits a structural property of the Caputo kernel itself. The kernel 
+
+k(t) = 1Γ(1 − α) t−α, 0 < α < 1,
+
+is completely monotone, and therefore admits accurate approximations by positive weighted sums of expo-nentials. More precisely, for any prescribed tolerance ε > 0 on a finite time window t ∈ [tmin , t max ], one can construct coefficients {ξm, ω m}Mm=1 with 0 < ξ 1 < · · · < ξ M and ωm > 0 such that 
+
+k(t) ≈
+
+> M
+
+X
+
+> m=1
+
+ωme−ξmt, k − PMm=1 ωme−ξm(·)
+
+> ∞
+
+∥k∥∞
+
+< ε. 
+
+Substituting the SOE approximation into the convolution yields a practical fractional descent direction: 
+
+bgSOE n ≈
+
+> M
+
+X
+
+> m=1
+
+ωm R(n) 
+
+> m
+
+,
+
+where each auxiliary state R(n) 
+
+> m
+
+∈ Rd evolves according to the recursive update rule: 
+
+R(n) 
+
+> m
+
+= e−ξm∆t R(n−1)  
+
+> m
+
++ gn−1, R(0)  
+
+> m
+
+= 0.
+
+The detailed derivation from the continuous-time convolution and the corresponding pseudocode are provided in Appendix B and Algorithm 1 in Appendix E, respectively. In this form, the entire Caputo memory is encoded in M exponentially weighted accumulators. The result-ing SOE-based fractional gradient descent (SOE-FGD) requires only O(M ) memory and O(M ) operations per iteration, with M ≪ n in typical applications. In this work, SOE is not treated merely as a fast quadrature for fractional operators, but as an explicit optimizer engine. Each iteration updates a fixed set of memory modes and constructs a history-aware descent direction that can be combined with standard learning-rate schedules and preconditioners. From an optimization viewpoint, the SOE modes admit a natural interpretation: modes with large ξm capture short-term dynamics, while modes with small ξm encode long-term memory. In this way, SOE-FGD replaces the single-gradient update of classical gradient descent by a multi-timescale descent direction with controlled memory depth. The SOE parameters are computed once during initialization. Given an expected training horizon, we select a window [tmin , t max ] and place the decay rates on a logarithmic grid, 
+
+ξm = exp 
+
+
+
+log(1 /t min ) + m − 1
+
+M − 1
+
+
+
+log(1 /t max ) − log(1 /t min )
+
+
+
+,
+
+and determine the weights {ωm} by solving a nonnegative least-squares fit of the target kernel on logarith-mically spaced sample points. The resulting coefficients are stored as fixed tensors and reused throughout training. At the same time, SOE compression imposes a structural constraint: the exponential basis is fixed over a prescribed time window, and the associated coefficients depend on the chosen fractional order α. If α
+
+5is adapted during training, the SOE coefficients must be refitted or switched from a precomputed library. This observation motivates the alternative strategy introduced next. Rather than approximating the kernel, the DHDC method compresses the gradient history itself, yielding an order-agnostic memory representation that naturally supports dynamic fractional-order scheduling. where ˜gn = 1Γ(1 −α)
+
+R tt0 (t − η)−αu′(η)dη, 
+
+2.2. Dyadic Hierarchical Discrete Convolution compression 
+
+We now consider an alternative strategy that does not approximate the kernel itself, but instead reduces the cost of evaluating the history-dependent convolution. The approach adopted here is inspired by the shifted binary block partition (SBBP) method for the fast evaluation of variable-order Caputo derivatives [23]. In that work, the Caputo integral is decomposed over a hierarchy of dyadic subintervals, and each subintegral is approximated using linear interpolation and stored moment information, enabling efficient updates in time-fractional differential equations. In contrast, the FGD update is already expressed as a history-weighted convolution of past gradients, as shown in (1). Rather than approximating subintegrals of a continuous operator, we compress the discrete gradient history itself. This leads to a simplified dyadic structure referred to as dyadic hierarchical discrete convolution (DHDC). We begin with the full discrete Caputo-type convolution at iteration n,
+
+egn =
+
+> n−1
+
+X
+
+> j=0
+
+kα(( n − j)∆ t)gj , kα(t) = t−α
+
+Γ(1 − α) ∆t, α ∈ (0 , 1) , (4) where gj = ∇L(θj ). A detailed derivation of this discrete Caputo-type convolution from the continuous Caputo fractional derivative, together with the corresponding quadrature weights for the constant approxi-mation scheme, is provided in Appendix A.1. As discussed in section 2.1, a direct evaluation of the formula (4) requires O(n) work per iteration and O(n2) total complexity over n iterations. Such growth is prohibitive for large-scale optimization tasks. To reduce this complexity while maintaining the order-agnostic property, we group the gradient history into bins whose effective widths grow geometrically with age. At time tn = n∆t, define bins indexed by 
+
+b = 0 , 1, . . . , B n − 1 with nominal width 
+
+ℓb = 2 b∆t, 
+
+and associated look-back windows 
+
+Ib(n) = 
+
+h
+
+tn − 2b+1 ∆t, t n − 2b∆t
+
+i
+
+.
+
+Recent gradients are retained at high resolution, whereas older gradients are represented more coarsely, reflecting the slow variation of the Caputo kernel for large time lags. Figure 1 provides a visualization of these dyadic look-back windows for selected iteration instances.          
+
+> Figure 1: Dyadic look-back window boundaries Ib(n)for n= 15 ,16 , and 17 with B= 5 .
+
+6Instead of storing all past gradients, DHDC maintains aggregated quantities 
+
+Snb ∈ Rd, Cnb ∈ N, b = 0 , 1, . . . , B n − 1.
+
+Here, Snb represents the aggregated contribution of past gradients stored in bin b, and Cnb denotes the corre-sponding effective count. Because the carry operation redistributes a fraction of the accumulated contribution between neighboring bins, Snb should not be interpreted as the sum over a fixed index set. Instead, it cor-responds to a weighted aggregation of past gradients, consistent with the induced weights ω(n) 
+
+> j,b
+
+, where each gradient may contribute fractionally to multiple bins. More precisely, the DHDC state induces nonnegative aggregation weights 
+
+ω(n) 
+
+> j,b
+
+≥ 0, j = 0 , . . . , n − 1, b = 0 , . . . , B n − 1,
+
+such that 
+
+Snb =
+
+> n−1
+
+X
+
+> j=0
+
+ω(n) 
+
+> j,b
+
+gj , Cnb =
+
+> n−1
+
+X
+
+> j=0
+
+ω(n) 
+
+> j,b
+
+. (5) The weights satisfy the partition of unity propeprty 
+
+> Bn−1
+
+X
+
+> b=0
+
+ω(n) 
+
+> j,b
+
+= 1 , j = 0 , . . . , n − 1,
+
+so that every past gradient contributes exactly once in total, although its contribution may be distributed across dyadic bins through the carry operation. At each iteration, the newest gradient is first inserted into the finest bin: 
+
+Sn 
+
+> 0
+
+← Sn−10 + gn, Cn 
+
+> 0
+
+← Cn−10 + 1 .
+
+Equivalently, the newly inserted gradient initially satisfies 
+
+ω(n) 
+
+> n, 0
+
+= 1 , ω(n) 
+
+> n,b
+
+= 0 for b ≥ 1.
+
+The bins are then updated by a dyadic carry operation with capacity 
+
+cap( b) = 2 b.
+
+Whenever Cnb > cap( b), a fraction of the aggregated contribution in bin b is transferred to bin b + 1 . We define 
+
+hnb := max  1, ⌊Cnb /2⌋, ϕnb := hnb
+
+Cnb
+
+, M nb := ϕnb Snb .
+
+The scalar hnb determines the amount of effective count transferred, while M nb represents the corresponding transferred contribution in the aggregated gradient. The carry update is then 
+
+Snb ← Snb − M nb , Cnb ← Cnb − hnb ,
+
+Snb+1 ← Snb+1 + M nb , Cnb+1 ← Cnb+1 + hnb .
+
+The same operation admits a precise interpretation in terms of the aggregation weights. For all gradients represented in bin b, a fraction ϕnb of their contribution is transferred to bin b + 1 , while the remaining fraction 1 − ϕnb remains in bin b. Thus, the carry operation can be written as 
+
+ω(n) 
+
+> j,b
+
+← (1 − ϕnb )ω(n) 
+
+> j,b
+
+, ω(n) 
+
+> j,b +1
+
+← ω(n) 
+
+> j,b +1
+
++ ϕnb ω(n) 
+
+> j,b
+
+.
+
+7This formulation shows that DHDC performs a redistribution of aggregation weights across dyadic bins, rather than forming a strict partition of the past indices. 
+
+> Figure 2: A schematic diagram of the DHDC window update process. The carry operation transfers a fraction of the accumulated gradient mass and count from a finer bin to a coarser bin, yielding a dyadic compressed representation of the gradient history.
+
+This operation corresponds to the assumption of uniform redistribution within each bin. The assumption is used only for compression; the Caputo kernel weighting is applied after the compressed representation has been formed. The carry rule keeps Cnb of order 2b, so that the number of active bins satisfies 
+
+Bn = O(log n).
+
+To reconstruct the fractional descent direction, the Caputo kernel is evaluated at the bin level. For each window Ib(n) = [ τ − 
+
+> b
+
+, τ + 
+
+> b
+
+], we define the bin-averaged kernel 
+
+k(α) 
+
+> b
+
+(n) = 1Γ(1 − α)(τ + 
+
+> b
+
+)1−α − (τ − 
+
+> b
+
+)1−α
+
+(1 − α)( τ + 
+
+> b
+
+− τ − 
+
+> b
+
+) ∆t, 
+
+with endpoint clamping tmin , t max ≥ εt > 0 to avoid numerical instability. The compressed convolution is then approximated by 
+
+bgDHDC  
+
+> n
+
+=
+
+> Bn−1
+
+X
+
+> b=0
+
+k(α) 
+
+> b
+
+(n) Snb .
+
+Using (5), the DHDC approximation can also be written as an effective reweighted convolution: 
+
+bgDHDC  
+
+> n
+
+=
+
+> n−1
+
+X
+
+> j=0
+
+ew(α) 
+
+> n,j
+
+gj , ew(α) 
+
+> n,j
+
+=
+
+> Bn−1
+
+X
+
+> b=0
+
+k(α) 
+
+> b
+
+(n) ω(n) 
+
+> j,b
+
+. (6) Equation (6) is important because it shows that DHDC remains a discrete convolution-type approximation of the full Caputo memory term, where the effective weights are induced by dyadic redistribution across the compressed history bins. 8Remark 2.1 . The architecture of the DHDC differs from the original SBBP formulation in two aspects. First, DHDC operates directly on the discrete gradient sequence rather than on subintegrals of a continuous Caputo operator. Second, it avoids storing higher-order moment information and instead relies on mass-conserving aggregated statistics, which are sufficient for optimization. As a result, DHDC preserves the qualitative long-memory structure of the Caputo kernel while providing a simpler and more efficient implementation. The Algorithm 2 presents the pseudocode of the proposed DHDC. From an optimization perspective, the per-iteration cost is reduced to O(log n), and the stored history is independent of the fractional order. If α is adapted during training, only the scalar weights kb(n; α) need to be recomputed, without modifying the compressed history. 
+
+3. Convergence of Fractional Gradient Descent with Fast-Memory Algorithm 
+
+In this section, we establish a convergence guarantee for FGD under standard smoothness and strong convexity assumptions, and extend the analysis to practical fast-memory implementations. We begin by analyzing the full discrete Caputo-type convolution egn in (4). This full discrete convolution serves as a reference object that captures the intrinsic long-memory structure of fractional optimization. Under suitable assumptions, it can be shown that egn remains positively correlated with the instantaneous gradient, which ensures descent and linear convergence. Since the fast-memory algorithms (SOE and DHDC) do not compute 
+
+egn exactly, we construct an approximate direction 
+
+bgn = egn + en, (7) where en represents the approximation error induced by the kernel approximation of the history compression in fast algorithms. The central question, therefore, is whether such approximations preserve the convergence properties of 
+
+egn. To address this, we adopt a perturbation-based perspective: rather than re-deriving convergence from first principles for each algorithm, we quantify how deviations from egn affect the descent behavior. Based on this strategy, we show that as long as the approximation error remains sufficiently small relative to the gradient magnitude, the fast-memory algorithms retain the descent property and the linear convergence rate of the full discrete scheme. This result formally justifies the use of fast-memory algorithms in large-scale learning, by demonstrating that computational efficiency can be achieved without sacrificing the essential convergence guaranties of fractional optimization. 
+
+3.1. Convergence analysis of FGD with full discrete Caputo-tuype convolution 
+
+Let L : Rd → R be a differentiable objective function. Assume that L is μ-strongly convex and has 
+
+L-Lipschitz continuous gradient: 
+
+⟨∇ L(x) − ∇ L(y), x − y⟩ ≥ μ∥x − y∥2, ∥∇ L(x) − ∇ L(y)∥ ≤ L∥x − y∥.
+
+Let θ⋆ = arg min L. We consider the FGD iteration 
+
+θn+1 = θn − η egn, egn =
+
+> n
+
+X
+
+> j=0
+
+wn−j gj , gj = ∇L(θj ),
+
+where the weights {wk}k≥0 are positive and nonincreasing. 
+
+Lemma 3.1. Assume that there exist constants CH > 0 and ¯ρ ≥ 1 such that 
+
+> n
+
+X
+
+> k=1
+
+wkk−1X
+
+> i=0
+
+∥egn−i−1∥ ≤ CH max  
+
+> 0≤j≤n
+
+∥gj ∥,
+
+and 
+
+max  
+
+> 0≤j≤n
+
+∥gj ∥ ≤ ¯ρ ∥gn∥.
+
+9Then, for sufficiently small step size η, there exists γ ∈ (0 , 1) such that 
+
+⟨gn, egn⟩ ≥ γw 0∥gn∥2.
+
+Proof. We first expand the inner product between the current gradient gn and the fractional descent direction 
+
+egn:
+
+⟨gn, egn⟩ = w0∥gn∥2 +
+
+> n
+
+X
+
+> k=1
+
+wk⟨gn, gn−k⟩.
+
+Using the identity 
+
+⟨gn, gn−k⟩ = ∥gn∥2 − ⟨ gn, gn − gn−k⟩,
+
+we obtain 
+
+⟨gn, egn⟩ =
+
+> n
+
+X
+
+> k=0
+
+wk
+
+!
+
+∥gn∥2 −
+
+> n
+
+X
+
+> k=1
+
+wk⟨gn, gn − gn−k⟩.
+
+By the L-Lipschitz continuity of the gradient, 
+
+∥gn − gn−k∥ ≤ 
+
+> k−1
+
+X
+
+> i=0
+
+∥gn−i − gn−i−1∥ ≤ L
+
+> k−1
+
+X
+
+> i=0
+
+∥θn−i − θn−i−1∥ = Lη 
+
+> k−1
+
+X
+
+> i=0
+
+∥egn−i−1∥,
+
+where we used the update rule θj − θj−1 = −ηegj−1. By Cauchy–Schwarz, 
+
+> n
+
+X
+
+> k=1
+
+wk|⟨ gn, gn − gn−k⟩| ≤ Lη ∥gn∥
+
+> n
+
+X
+
+> k=1
+
+wkk−1X
+
+> i=0
+
+∥egn−i−1∥.
+
+Using the first assumption in the lemma, 
+
+> n
+
+X
+
+> k=1
+
+wk|⟨ gn, gn − gn−k⟩| ≤ LηC H ∥gn∥ max  
+
+> j≤n
+
+∥gj ∥.
+
+Hence, 
+
+⟨gn, egn⟩ ≥ 
+
+> n
+
+X
+
+> k=0
+
+wk
+
+!
+
+∥gn∥2 − LηC H ∥gn∥ max  
+
+> j≤n
+
+∥gj ∥.
+
+Applying the second assumption in the lemma, 
+
+⟨gn, egn⟩ ≥ 
+
+> n
+
+X
+
+> k=0
+
+wk − LηC H ¯ρ
+
+!
+
+∥gn∥2 ≥ (w0 − LηC H ¯ρ) ∥gn∥2.
+
+Therefore, if 
+
+η ≤ (1 − γ)w0
+
+LC H ¯ρ ,
+
+then 
+
+⟨gn, egn⟩ ≥ γw 0∥gn∥2.
+
+This proves the result. By using standard smoothness, 
+
+L(θn+1 ) ≤ L(θn) − η⟨gn, egn⟩ + Lη 2
+
+2 ∥egn∥2. (8) 10 By Cauchy–Schwarz, 
+
+∥egn∥2 ≤
+
+ nX
+
+> k=0
+
+wk
+
+ nX
+
+> k=0
+
+wk∥gn−k∥2.
+
+On a finite training horizon 0 ≤ n ≤ N , define 
+
+Cα := max 
+
+> 0≤m≤N
+> m
+
+X
+
+> k=0
+
+wk
+
+!2
+
+,
+
+so that 
+
+∥egn∥2 ≤ Cα max  
+
+> j≤n
+
+∥gj ∥2. (9) By the gradient correlation lemma (Lemma 3.1), we have 
+
+⟨gn, egn⟩ ≥ γw 0∥gn∥2.
+
+Substituting (9) and the gradient correlation lemma (Lemma 3.1) into the descent inequality (8) yields 
+
+L(θn+1 ) ≤ L(θn) − ηγw 0∥gn∥2 + Lη 2
+
+2 Cα max  
+
+> j≤n
+
+∥gj ∥2. (10) Recalling the stability ratio ¯ρ assumed in Lemma 3.1, we substitute max j≤n ∥gj ∥2 ≤ ¯ρ2∥gn∥2 into (10) to obtain 
+
+L(θn+1 ) ≤ L(θn) − ηγw 0∥gn∥2 + Lη 2Cα ¯ρ2
+
+2 ∥gn∥2
+
+= L(θn) − η
+
+
+
+γw 0 − LηC α ¯ρ2
+
+2
+
+
+
+∥gn∥2.
+
+If 0 < η ≤ γw 0  
+
+> LC α¯ρ2
+
+, then 
+
+L(θn+1 ) ≤ L(θn) − ηγw 0
+
+2 ∥gn∥2.
+
+Subtracting L(θ⋆) from both sides and applying the Polyak–Łojasiewicz inequality, which follows from μ-strong convexity, gives 
+
+L(θn+1 ) − L(θ⋆) ≤ L(θn) − L(θ⋆) − ηγw 0
+
+2 [2 μ(L(θn) − L(θ⋆))] = (1 − ηγw 0μ)( L(θn) − L(θ⋆)) .
+
+Defining En := L(θn) − L(θ⋆), we obtain En+1 ≤ κE n with contraction factor κ = 1 − ηγw 0μ.To ensure geometric convergence, it remains to verify that 0 < κ < 1. Since η, γ, w 0, and μ are strictly positive, we immediately have κ < 1. Moreover, using the step-size bound η ≤ γw 0  
+
+> LC α¯ρ2
+
+, we obtain 
+
+ηγw 0μ ≤ (γw 0)2μLC α ¯ρ2 =
+
+ μL
+
+
+
+γ2
+
+ w20
+
+Cα
+
+  1¯ρ2
+
+
+
+.
+
+Since μ ≤ L, γ < 1, w20 ≤ Cα, and ¯ρ ≥ 1, the right-hand side is strictly less than 1. Hence 0 < κ < 1, and therefore 
+
+L(θn) − L(θ⋆) ≤ κn(L(θ0) − L(θ⋆)) .
+
+Finally, strong convexity implies the quadratic growth bound 
+
+L(θn) − L(θ⋆) ≥ μ
+
+2 ∥θn − θ⋆∥2.
+
+11 Combining the previous results, we obtain the following inequality: 
+
+∥θn − θ⋆∥2 ≤ 2
+
+μ (L(θn) − L(θ⋆)) ≤ 2
+
+μ κn(L(θ0) − L(θ⋆)) .
+
+By applying the L-smoothness property, 
+
+L(θ0) − L(θ⋆) ≤ L
+
+2 ∥θ0 − θ⋆∥2,
+
+therefore, the distance to the optimum at step n is bounded relative to its initial value as follows: 
+
+∥θn − θ⋆∥2 ≤ Lμ κn∥θ0 − θ⋆∥2.
+
+This confirms geometric convergence of the parameter sequence to the unique minimizer θ⋆.
+
+Remark 3.1 . As α → 1, the weights concentrate near the present step, and the method approaches classical gradient descent. For α < 1, the history-weighted averaging introduces additional damping, which enlarges the stability region while preserving linear convergence. 
+
+3.2. Error estimate of DHDC 
+
+We now quantify the error introduced by the DHDC compression. The purpose of this analysis is not to claim that DHDC is an exact discretization of the Caputo convolution, but to show that its approximation error is explicitly controlled by the variation of the Caputo kernel inside each dyadic bin. Let 
+
+kα(t) = t−α
+
+Γ(1 − α) ∆t, 0 < α < 1,
+
+and consider the full-history discrete Caputo-type convolution 
+
+egn =
+
+> n−1
+
+X
+
+> j=0
+
+kα(( n − j)∆ t)gj . (11) For each iteration n, let {Jb(n)}Bn−1 
+
+> b=0
+
+be a disjoint partition of the history indices {0, . . . , n − 1} into DHDC bins. For each bin, define the time-lag interval 
+
+Ib(n) = [ τ − 
+
+> b
+
+, τ + 
+
+> b
+
+], τ − 
+
+> b
+
+≤ (n − j)∆ t ≤ τ + 
+
+> b
+
+for all j ∈ Jb(n).
+
+The DHDC scheme specialty formulates the descent direction as an effective reweighted convolution, adopting the structural representation established in eq. (6): 
+
+bgDHDC  
+
+> n
+
+=
+
+> n−1
+
+X
+
+> j=0
+
+ew(α) 
+
+> n,j
+
+gj , ew(α) 
+
+> n,j
+
+=
+
+> Bn−1
+
+X
+
+> b=0
+
+k(α) 
+
+> b
+
+(n)ω(n) 
+
+> j,b
+
+. (12) The parameter k(α) 
+
+> b
+
+(n) denotes the Caputo kernel averaged over the dyadic look-back window Ib(n) = [τ − 
+
+> b
+
+, τ + 
+
+> b
+
+]. Within this framework, the aggregation weights ω(n) 
+
+> j,b
+
+distribute the historical gradient contributions across the dyadic bins while satisfying the partition of unity property: 
+
+> Bn−1
+
+X
+
+> b=0
+
+ω(n) 
+
+> j,b
+
+= 1 , j = 0 , 1, . . . , n − 1.
+
+The approximation error between the DHDC direction and the full-history Caputo convolution is evalu-ated in the following theorem: 12 Theorem 3.1 (DHDC convolution error bound ). Let egn be the full-history convolution in (11) , and let 
+
+bgDHDC  
+
+> n
+
+be the DHDC approximation in (12) . Assume that the gradient sequence is bounded on each bin in the sense that 
+
+Rb(n) := X
+
+> j∈Jb(n)
+
+∥gj ∥ < ∞.
+
+Then the DHDC approximation error 
+
+eDHDC  
+
+> n
+
+:= bgDHDC  
+
+> n
+
+− egn
+
+satisfies 
+
+∥eDHDC  
+
+> n
+
+∥ ≤ 
+
+> Bn−1
+
+X
+
+> b=0
+
+δ(α) 
+
+> b
+
+(n)Rb(n), (13) 
+
+where 
+
+δ(α) 
+
+> b
+
+(n) := sup 
+
+> t∈Ib(n)
+
+kα(t) − ¯k(α) 
+
+> b
+
+(n) . (14) 
+
+Moreover, since kα(t) is positive and strictly decreasing, 
+
+δ(α) 
+
+> b
+
+(n) ≤ kα(τ − 
+
+> b
+
+) − kα(τ + 
+
+> b
+
+) = (τ − 
+
+> b
+
+)−α − (τ + 
+
+> b
+
+)−α
+
+Γ(1 − α) ∆t. (15) 
+
+Consequently, 
+
+∥eDHDC  
+
+> n
+
+∥ ≤ ∆t
+
+Γ(1 − α)
+
+> Bn−1
+
+X
+
+> b=0
+
+(τ − 
+
+> b
+
+)−α − (τ + 
+
+> b
+
+)−α Rb(n). (16) 
+
+Proof. Using the definitions of egn and bgDHDC  
+
+> n
+
+, we write 
+
+eDHDC  
+
+> n
+
+=
+
+> Bn−1
+
+X
+
+> b=0
+
+X
+
+> j∈Jb(n)
+
+h¯k(α) 
+
+> b
+
+(n) − kα(( n − j)∆ t)
+
+i
+
+ωnj,b gj .
+
+For every index j ∈ Jb(n), the corresponding lag (n−j)∆ t resides within the interval Ib(n). The definition of δ(α) 
+
+> b
+
+(n) in eq. (14) yields the following inequality: 
+
+∥eDHDC  
+
+> n
+
+∥ ≤ 
+
+> Bn−1
+
+X
+
+> b=0
+
+X
+
+> j∈Jb(n)
+
+¯k(α) 
+
+> b
+
+(n) − kα(( n − j)∆ t) ∥gj ∥.
+
+For every index j ∈ Jb(n), the corresponding lag (n−j)∆ t resides within the interval Ib(n). This membership allows the kernel discrepancy to be controlled by the supremum of the variation: 
+
+¯k(α) 
+
+> b
+
+(n) − kα(( n − j)∆ t) ≤ δ(α) 
+
+> b
+
+(n).
+
+Substitution of this bound into the norm inequality establishes that 
+
+∥eDHDC  
+
+> n
+
+∥ ≤ 
+
+> Bn−1
+
+X
+
+> b=0
+
+δ(α) 
+
+> b
+
+(n) X
+
+> j∈Jb(n)
+
+∥gj ∥,
+
+which completes the proof of eq. (13). The Mean Value Theorem for Integrals establishes that the bin average ¯k(α) 
+
+> b
+
+(n) resides within the func-tional range of kα(t) over the interval Ib(n). Since kα(t) is positive and strictly decreasing on (0 , ∞), this average value is constrained by the kernel evaluated at the endpoints: 
+
+kα(τ + 
+
+> b
+
+) ≤ ¯k(α) 
+
+> b
+
+(n) ≤ kα(τ − 
+
+> b
+
+).
+
+13 Consequently, for any t ∈ Ib(n), the distance between the kernel and its average satisfies the following inequality: 
+
+kα(t) − ¯k(α) 
+
+> b
+
+(n) ≤ kα(τ − 
+
+> b
+
+) − kα(τ + 
+
+> b
+
+).
+
+Evaluation of the boundary difference using the explicit definition of the kernel kα(t) = t−α 
+
+> Γ(1 −α)
+
+∆t yields: 
+
+kα(τ − 
+
+> b
+
+) − kα(τ + 
+
+> b
+
+) = (τ − 
+
+> b
+
+)−α − (τ + 
+
+> b
+
+)−α
+
+Γ(1 − α) ∆t. 
+
+This identity establishes the validity of eq. (15), which in turn completes the proof of the total error bound in eq. (16). The previous estimate can be specialized to dyadic DHDC bins. Rather than seeking an N -only rate, the dyadic structure is used here to isolate the dependence on the time step. This shows that, for a fixed training index and a fixed dyadic depth, the DHDC approximation discrepancy vanishes as the step size decreases. 
+
+Corollary 3.1 (Fixed-index step-size decay of the dyadic-bin DHDC error ). Assume that the DHDC bins satisfy the dyadic sequence 
+
+Ib(n) = [ tn − 2b+1 ∆t, t n − 2b∆t], b = 0 , . . . , B n − 1,
+
+where Bn ∈ N is chosen such that 2Bn < n . Let 
+
+τ − 
+
+> b
+
+= tn − 2b+1 ∆t, τ + 
+
+> b
+
+= tn − 2b∆t. 
+
+Suppose that the gradients satisfy 
+
+∥gj ∥ ≤ Gn, j = 0 , 1, . . . , n − 1,
+
+with Gn independent of ∆t, and assume that n ≤ N . Then 
+
+∥eDHDC  
+
+> n
+
+∥ ≤ αN G n
+
+Γ(1 − α) (2 Bn − 1)( n − 2Bn )−α−1∆t1−α.
+
+Consequently, for fixed discrete indices n, N , fixed dyadic depth Bn, and a ∆t-independent gradient bound 
+
+Gn,
+
+∥eDHDC  
+
+> n
+
+∥ = O(∆ t1−α) as ∆t → 0.
+
+Proof. From the bin-wise estimate in theorem 3.1, we have 
+
+∥eDHDC  
+
+> n
+
+∥ ≤ 
+
+> Bn−1
+
+X
+
+> b=0
+
+δ(α) 
+
+> b
+
+(n) X
+
+> j∈Jb(n)
+
+∥gj ∥.
+
+By the definition of the bin-wise approximation coefficient, 
+
+δ(α) 
+
+> b
+
+(n) ≤ (τ − 
+
+> b
+
+)−α − (τ + 
+
+> b
+
+)−α
+
+Γ(1 − α) ∆t. 
+
+Since 
+
+τ − 
+
+> b
+
+= tn − 2b+1 ∆t = ( n − 2b+1 )∆ t, τ + 
+
+> b
+
+= tn − 2b∆t = ( n − 2b)∆ t, 
+
+we obtain 
+
+(τ − 
+
+> b
+
+)−α − (τ + 
+
+> b
+
+)−α = ∆ t−α (n − 2b+1 )−α − (n − 2b)−α .
+
+14 Therefore, 
+
+∥eDHDC  
+
+> n
+
+∥ ≤ 
+
+> Bn−1
+
+X
+
+> b=0
+
+∆t−α (n − 2b+1 )−α − (n − 2b)−α
+
+Γ(1 − α) ∆t X
+
+> j∈Jb(n)
+
+∥gj ∥.
+
+Using the uniform gradient bound and n ≤ N , we have 
+
+X
+
+> j∈Jb(n)
+
+∥gj ∥ ≤ nG n ≤ N G n.
+
+Hence, 
+
+∥eDHDC  
+
+> n
+
+∥ ≤ ∆t1−αN G n
+
+Γ(1 − α)
+
+> Bn−1
+
+X
+
+> b=0
+
+(n − 2b+1 )−α − (n − 2b)−α .
+
+The summation telescopes: 
+
+> Bn−1
+
+X
+
+> b=0
+
+(n − 2b+1 )−α − (n − 2b)−α = ( n − 2Bn )−α − (n − 1) −α.
+
+Hence, 
+
+∥eDHDC  
+
+> n
+
+∥ ≤ ∆t1−αN G n
+
+Γ(1 − α)
+
+(n − 2Bn )−α − (n − 1) −α .
+
+Now let 
+
+f (x) = x−α.
+
+Since f ′(x) = −αx −α−1, the mean value theorem applied on [n − 2Bn , n − 1] gives 
+
+(n − 2Bn )−α − (n − 1) −α ≤ α(2 Bn − 1)( n − 2Bn )−α−1.
+
+Therefore, 
+
+∥eDHDC  
+
+> n
+
+∥ ≤ αN G n
+
+Γ(1 − α) (2 Bn − 1)( n − 2Bn )−α−1∆t1−α.
+
+Since 0 < α < 1, we have 1 − α > 0. Thus, for fixed n, N , Bn, and Gn,
+
+∆t1−α → 0 as ∆t → 0.
+
+Consequently, 
+
+∥eDHDC  
+
+> n
+
+∥ = O(∆ t1−α) as ∆t → 0.
+
+Remark 3.2 .
+
+1. The estimate in theorem 3.1 shows that the DHDC error is governed by two factors: the variation of the Caputo kernel within each compressed bin and the accumulated gradient magnitude over that bin. Hence, the DHDC scheme should be understood as a controlled compression of the full Caputo convolution rather than as an exact replacement. 2. In particular, for a fixed dyadic ratio, the relative variation of the kernel inside each bin does not vanish automatically. Therefore, an arbitrarily small approximation error requires additional control, such as adaptive refinement of the bins, exact storage of recent gradients, or smoothness and cancellation in the gradient history. 15 3.3. Perturbation stability of fractional gradient descent 
+
+In this subsection, we show that the convergence properties of the full discrete convolution FGD are preserved whenever the perturbation en remains below the admissible stability threshold. 
+
+Theorem 3.2 (Convergence preservation under fast-memory approximation ). Assume that L : Rd → R
+
+is μ-strongly convex and has L-Lipschitz continuous gradient. Suppose that the ideal fractional direction egn
+
+satisfies 
+
+⟨gn, egn⟩ ≥ γw 0∥gn∥2 (17) 
+
+for some γ ∈ (0 , 1) , as established in Lemma 3.1, and that there exists a constant CF > 0 such that 
+
+∥egn∥ ≤ CF ∥gn∥. (18) 
+
+Assume further that the approximation error satisfies 
+
+∥en∥ ≤ ρ∥gn∥ (19) 
+
+for some ρ ≥ 0.Then the practical update 
+
+θn+1 = θn − ηbgn
+
+satisfies the descent estimate 
+
+L(θn+1 ) ≤ L(θn) − η
+
+
+
+γw 0 − ρ − Lη 
+
+2 (CF + ρ)2
+
+
+
+∥gn∥2. (20) 
+
+In particular, if 
+
+ρ < γw 0 (21) 
+
+and 
+
+0 < η < 2( γw 0 − ρ)
+
+L(CF + ρ)2 , (22) 
+
+then L(θn) decreases monotonically. Moreover, 
+
+L(θn) − L(θ⋆) ≤
+
+
+
+1 − 2μη 
+
+
+
+γw 0 − ρ − Lη 
+
+2 (CF + ρ)2
+
+ n  L(θ0) − L(θ⋆), (23) 
+
+so the approximate FGD with a fast-memory algorithm converges linearly. Proof. Using the smoothness of L,
+
+L(θn+1 ) ≤ L(θn) − η⟨gn, bgn⟩ + Lη 2
+
+2 ∥bgn∥2. (24) Substituting (7) gives 
+
+⟨gn, bgn⟩ = ⟨gn, egn⟩ + ⟨gn, en⟩.
+
+By (17) and the Cauchy–Schwarz inequality, 
+
+⟨gn, bgn⟩ ≥ γw 0∥gn∥2 − ∥ gn∥ ∥ en∥.
+
+Using (19), 
+
+⟨gn, bgn⟩ ≥ (γw 0 − ρ)∥gn∥2. (25) Similarly, 
+
+∥bgn∥ ≤ ∥ egn∥ + ∥en∥ ≤ (CF + ρ)∥gn∥,
+
+16 where we used (18) and (19). Hence 
+
+∥bgn∥2 ≤ (CF + ρ)2∥gn∥2. (26) Substituting (25) and (26) into (24) yields 
+
+L(θn+1 ) ≤ L(θn) − η
+
+
+
+γw 0 − ρ − Lη 
+
+2 (CF + ρ)2
+
+
+
+∥gn∥2,
+
+which proves (20). If (21) and (22) hold, the coefficient of ∥gn∥2 is strictly positive, and the loss decreases monotonically. Finally, strong convexity implies the Polyak–Łojasiewicz inequality 
+
+∥gn∥2 ≥ 2μ L(θn) − L(θ⋆),
+
+which, combined with (20), gives (23). 
+
+Corollary 3.2 (Implication for SOE and DHDC ). Suppose that the SOE or DHDC approximation satisfies 
+
+∥en∥ ≤ ρ∥gn∥, ρ < γw 0.
+
+Then the corresponding fast-memory FGD method inherits the descent property and linear convergence of the ideal fractional method up to the perturbation level ρ.In particular, smaller approximation error enlarges the admissible step-size range and yields a convergence rate closer to that of the ideal Caputo-consistent direction. 
+
+4. Numerical Experiments 
+
+We evaluate the SOE and the newly proposed DHDC schemes, comparing them against the standard full-history DC method. The SOE implementation requires O(M ) memory and O(M ) operations per iter-ation, where M denotes the number of exponential modes. The decay parameters {ξm} are selected on a logarithmic grid over the interval [1 /t max , 1/t min ], and the weights {ωm} are obtained by least-squares fitting of the Caputo kernel over t ∈ [tmin , t max ]. This strategy preserves the long-memory structure while enabling recursive updates. The DHDC implementation achieves O(log n) memory and computational cost at iteration n by hierar-chically aggregating past gradients. The bin-averaged kernel admits an analytic expression, ensuring that positivity and monotonic decay are retained. When α → 1, the logarithmic limit form of the kernel average is used to maintain numerical stability. To ensure stable descent, the learning rate η is chosen according to the convergence condition derived in Section 3. In practice, a safe heuristic over a finite training horizon is 
+
+η ≈ c w0/L 
+
+PNk=0 wk
+
+, c ∈ (0 , 1] ,
+
+which guarantees monotone decrease under smooth strong convexity. To assess the performance of the proposed SOE and DHDC, we consider one optimization benchmark problem and three representative engineering and learning tasks: battery state-of-health estimation, stochastic signal regression, and CIFAR-10 image classification. 
+
+> Table 1: Training configurations for each benchmark problem.
+
+task optimizer loss adaptive LR architecture batch epochs ×iterations Rastrigin None Rastrigin function Yes MLP full-batch 10000 ×1battery RMSprop MSE-based Yes MLP full-batch 1000 ×1signal Adam MSE-based Yes TCN 128 1×150000 image Adam Cross-entropy Yes ResNet 256 25 ×195 For the stochastic signal regression task, each iteration is treated as an individual epoch to maintain consistency in our performance tracking. 17 4.1. Rastrigin Benchmark Problem 
+
+We consider the Rastrigin benchmark optimization problem to investigate the convergence behavior and optimization dynamics of the proposed FGD methods. The Rastrigin function is widely used as a challenging nonconvex benchmark due to its highly oscillatory landscape containing numerous local minima surrounding a unique global minimum. The baseline optimizers considered in this experiment are standard gradient descent (GD), momentum-based gradient descent, and Adam. These methods are compared against three distinct variants of FGD, namely the DC, SOE, and DHDC schemes. All optimizers share identical hyperparameter settings whenever applicable. The momentum coefficient is fixed at 0.9, and the fractional order is set to α = 0 .5 unless stated otherwise. The Rastrigin function itself is used directly as the loss function. Because of its large number of local minima, standard gradient-based optimizers typically encounter two competing difficulties: large learning rates often lead to instability or divergence, whereas small learning rates frequently cause the optimization trajectory to become trapped in suboptimal local minima. To address this issue, an adaptive learning-rate strategy is employed throughout the experiment. The learning rate is gradually reduced once the optimization trajectory approaches the vicinity of the global minimizer. The Rastrigin function is defined as follows 
+
+f (x) = An +
+
+> n
+
+X
+
+> i=1
+
+x2 
+
+> i
+
+− A cos(2 πx i) , A = 10 , n = 10 . (27) 
+
+x = [ x1, ..., x n]
+
+The initial point is chosen at a suitable location that does not coincide with any local minima, as x0 =[2 .22 , ..., 2.22] The optimization point is defined as the location at which the loss function (27) attains zero, as x∗ = [0 .0, ..., 0.0] , f (x∗) = 0 .
+
+LRastrigin = |f (x)| .
+
+4.2. Battery State-of-Health Estimation 
+
+To illustrate the capability of the proposed FGD framework, we consider battery state-of-health and capacity estimation, a central problem in lithium-ion energy storage systems. Battery degradation is governed by diffusion and charge-transfer processes, which exhibit long-memory behavior and are well captured by fractional-order equivalent circuit models (FO-ECMs). 
+
+> Table 2: variable table in Battery State-of-Health Estimation
+
+sign means 
+
+V (t) Voltage at the time t
+
+I(t) Current at the time t
+
+z(t) State-of-charge(SoC) at the time t
+
+C1 Fractional capacitance 
+
+R1 Polarization resistance 
+
+R0 Ohmic resistance 
+
+v1 Fractional side-brach voltage 
+
+Q Nominal Capacity 
+
+α fractional differentiation order In general, an FO-ECM replaces the classical capacitor relation with a fractional constitutive law of the form 
+
+I(t) = C1 C Dαt V (t) + 1
+
+R1
+
+V (t), 0 < α < 1, (28) 18 thereby introducing power-law memory into the voltage–current dynamics. In the FO-ECM (28). In the adopted FO-ECM, the fractional side-branch voltage v1(t) satisfies the Caputo fractional differ-ential equation  
+
+> C
+
+Dαt v1(t) = − 1
+
+R1C1
+
+v1(t) + 1
+
+C1
+
+I(t), 0 < α < 1, (29) The terminal voltage is modeled as 
+
+V (t) = OCV( z(t)) − R0I(t) − v1(t),
+
+where R0 represents the ohmic resistance, OCV( z) denotes the open-circuit voltage as a function of the state-of-charge (SoC) z(t). The SoC evolves according to Coulomb counting: 
+
+z(t + ∆ t) = z(t) − I(t)∆ t
+
+3600 Q ,
+
+Figure 3 illustrates the complete training pipeline, showing how the input measurements, trainable FO-ECM parameters, and the neural network jointly produce the voltage prediction and fractional residual, which are subsequently combined with physics-based regularization to form the unified battery loss.                                    
+
+> Input data
+> I(t), V true (t),∆t
+> Trainable components
+> NeuralNetwork( z)
+> Q, R 0, R 1, C 1, α
+> SoC update
+> zn+1 =zn−In∆t
+> 3600 Q
+> Fractional residual
+> Rα(ti) = CDαtV+1
+> R1C1
+> V−1
+> C1
+> I
+> (SOE / DHDC FGD evaluation)
+> Voltage prediction
+> Vpred = OCV( z)−R0I−v1
+> Loss
+> Lbattery =1
+> N
+> NX
+> i=1
+>  Vpred (ti)−Vtrue (ti)2+ 1
+> N
+> NX
+> i=1
+> Rα(ti)2+ 10 −6Rphys
+> Physical regularization
+> Rphys = ( Q−2.5) 2+ ( R0−0.03) 2+ (max( α−0.85 ,0)) 2
+
+Figure 3: Battery State Estimation Flowchart Combining Neural Network and FO-ECM 
+
+This network consists of three hidden layers of width 32 with tanh activation, providing a flexible rep-resentation of nonlinear voltage–SoC relationships. The FO-ECM (29) parameters (Q, R 0, R 1, C 1, α ) are treated as trainable variables. To preserve physical admissibility, positivity and bound constraints are en-forced through suitable reparameterization. Let {ti}Ni=1 denote the discrete sampling times. The battery loss is defined as 
+
+Lbattery = 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+(Vpred (ti) − Vtrue (ti)) 2 + 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+(Rα(ti)) 2 + 10 −6 Rphys . (30) 19 The first term measures the discrepancy between predicted and measured terminal voltage. The second term penalizes deviations from the fractional dynamical constraint 
+
+Rα(ti) = C Dαt v1(ti) + 1
+
+R1C1
+
+v1(ti) − 1
+
+C1
+
+I(ti),
+
+thereby enforcing consistency with the underlying FO-ECM (29). Here, C Dαt v1(ti) is discretized by the L1
+
+scheme; see Appendix Appendix A. The regularization term 
+
+Rphys = ( Q − 2.5) 2 + ( R0 − 0.03) 2 + (max( α − 0.85 , 0)) 2 , (31) discourages physically unrealistic parameter drift. The small weighting factor 10 −6 of (30) ensures that regularization (31) stabilizes the optimization without overwhelming the data-fitting objective. Battery training pipeline under the proposed FGD framework. Input measurements are mapped to trainable FO-ECM parameters and the neural network. 
+
+4.3. Stochastic Signal Estimation 
+
+To evaluate the effectiveness of fractional memory in a controlled setting, we consider the estimation of a stochastic signal with long-range temporal dependence. Many real-world time series exhibit correlations that decay slowly over time, a phenomenon that cannot be adequately captured by memoryless optimization dynamics. This setting provides a natural testbed for examining whether the intrinsic power-law memory of FGD offers advantages over classical gradient descent. The synthetic signal is generated using a fractional linear filter 
+
+ck = ck−1
+
+(k − 1) + dk , c0 = 1 , d = 0 .1,
+
+where εt ∼ N (0 , σ 2) with σ = 10 . The coefficients {ck} decay algebraically, so that ck ∼ kd−1 as k → ∞ .Signals value at time t is determined at (32). 
+
+ytrue (t) = 
+
+> ∞
+
+X
+
+> k=0
+
+ck εt−k, (32) This power-law decay induces persistent correlations, and the autocovariance of ytrue (t) decreases slowly rather than exponentially. Consequently, the present state of the signal depends on information from the distant past. Figure 4 illustrates the architecture of the TCN used in the signal estimation task. The task consists of stacked causal convolutional blocks with exponentially increasing dilation factors d = 1 , 2, 4, 8, 16 . Each block applies two causal convolution layers with kernel size k = 3 , followed by tanh activation and dropout, and maintains 64 feature channels throughout the network[24]. The left-sided padding ensures that each output at time t depends only on past inputs, thereby preventing future leakage. The use of dilation enlarges the receptive field without increasing network depth, enabling the task to capture long-range temporal dependencies efficiently. The final layer aggregates the hierarchical temporal features to produce the output sequence. This architecture allows for stable and parallelizable training while preserving strict temporal causality. 20 Figure 4: Schematic diagram of TCN 
+
+Let {ti}Ni=1 denote the discrete time indices. The first term in (33) represents the empirical reconstruction error, measuring the discrepancy between the predicted and observed signals. Let the input tensor be denoted as X ∈ RB×L×D, where B is the batch size, L = 512 is the look-back window length, and D = 1 is the number of input features. For each sample i within a batch, the input sequence x(i) is defined as: 
+
+yt = ytrue (t) x(i) = [ yt−L, y t−L+1 , . . . , y t−1]⊤.
+
+The objective of the task is to learn a mapping function f : RL×D → R that minimizes the discrepancy between the predicted value ypred and the ground truth ytrue :
+
+ypred (ti) = f (x(i); θ),
+
+where θ represents the trainable parameters of the architecture. The unified loss for stochastic signal esti-mation is defined as 
+
+Lsignal = 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+(ypred (ti) − ytrue (ti)) 2 + λ 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+ C Dαt ypred (ti)2 , (33) where λ = 10 −3.The second term penalizes the squared Caputo fractional derivative of the predicted signal, thereby enforcing fractional dynamical consistency. In locally stationary regimes, the fractional derivative should remain small. Minimizing this term promotes smooth temporal behavior while respecting the intrinsic long-memory structure of the signal. The weighting parameter λ = 10 −3 controls the trade-off between predictive fidelity and fractional smoothness. Through the formulation (33), the loss function integrates data fitting and fractional regularization within a unified variational framework. Because both the data-generating process and the regularization term exhibit power-law memory, the training objective aligns naturally with the optimization dynamics introduced by FGD. 
+
+4.4. CIFAR-10 Image Classification 
+
+To evaluate the proposed FGD framework in a high-dimensional nonconvex setting, we consider image classification on the CIFAR-10 dataset. This experiment allows us to investigate whether fractional opti-mization provides benefits beyond regression-type tasks and extends to deep convolutional architectures. Unlike the stochastic signal experiment, where long-range dependence is embedded in the data-generating process, the CIFAR-10 task provides a different perspective: here, memory is not inherent in the input data but arises in the optimization landscape itself. Deep convolutional networks induce highly nonconvex loss surfaces characterized by sharp minima, saddle regions, and stochastic gradient noise introduced by mini-batch training. 21 We adopt a ResNet-18 architecture as the backbone task. ResNet is introduced to address the degradation problem observed in very deep convolutional networks, where increasing depth leads to training instability and performance saturation. Instead of directly learning a transformation H(x), each residual block learns a residual mapping 
+
+F (x) = H(x) − x, 
+
+so that the block output becomes 
+
+y = x + F (x).
+
+This identity-based skip connection improves gradient propagation and mitigates vanishing or explod-ing gradient issues. As a result, deep networks maintain stable optimization behavior, making ResNet an appropriate architecture for isolating the effects of the optimization scheme. Figure 5 illustrates the ResNet-18 architecture used in our experiments. 
+
+> Figure 5: Schematic diagram of ResNet-18
+
+Let zi denote the logits for sample i, and let pi = softmax( zi), and yi be the one-hot encoded ground-truth label, yrand  
+
+> i
+
+a randomly permuted label vector They are available each C = 10 classes. Therefore, they are defined by the class and sample indices, which are denoted respectively as subscripts. Then, The mixed cross-entropy loss is defined as 
+
+Lce = 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+"
+
+β −
+
+> C
+
+X
+
+> c=1
+
+yi,c log pi,c 
+
+!
+
++ (1 − β) −
+
+> C
+
+X
+
+> c=1
+
+yrand  
+
+> i,c
+
+log pi,c 
+
+!# 
+
+. (34) This formulation (34) combines supervision from the true labels with a randomly permuted label distri-bution. The mixing coefficient β ∈ [0 , 1] controls the contribution of each term, acting as a regularizer to prevent overconfident predictions. To further improve robustness, we introduce a symmetric Kullback–Leibler (KL) regularization term. Let qi denote a noise-perturbed prediction obtained from a stochastic forward pass. 
+
+qi is specifically defined as: 1. Geometric transformations : Random cropping with reflective padding and horizontal flipping. 2. AutoAugment : The CIFAR-10 policy is applied for automated strategy selection. 3. Noise & Occlusion : We further inject Gaussian noise ( σ = 0 .10 ) and apply Random Erasing ( p = 0 .5)to encourage the model to learn invariant features even under severe information loss. The symmetric KL divergence is defined as 22 LKL = 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+" CX
+
+> c=1
+
+pi,c log pi,c 
+
+qi,c 
+
++
+
+> C
+
+X
+
+> c=1
+
+qi,c log qi,c 
+
+pi,c 
+
+#
+
+.
+
+The final classification objective is therefore 
+
+Limage = Lce + 0 .05 LKL .
+
+The symmetric KL term discourages excessive divergence between stochastic forward passes, promoting stable probability distributions during training. Training is performed using mini-batches to control memory usage, making the experiments feasible on standard personal computing hardware. Although mini-batch training reduces per-iteration memory cost, it introduces gradient noise, thereby providing a realistic nonconvex stochastic optimization environment. 
+
+5. Numerical Results 
+
+This section presents the empirical results for the various benchmark tasks introduced in Section 4. We evaluate the performance of our proposed methods across these tasks using specific neural network architectures and loss functions. First, the Rastrigin Benchmark Problem 4.1 is utilized as a fundamental case to analyze the behavioral differences between FGD and standard GD within complex local minima environments. Subsequently, the battery 4.2, signal 4.3, and image 4.4 tasks are presented as representative real-world applications. Through the numerical results of these real-world tasks—namely battery, signal, and image processing—we evaluate and compare the performance of our proposed fast algorithms, DHDC and SOE, against standard GD and the first-order Taylor series approximation. Furthermore, details regarding the efficiency of these fast algorithms, specifically their theoretical time complexity and actual execution times observed in real-world problems, are provided in Appendix D. 
+
+5.1. Optimization Dynamics and Empirical Computational Complexity on the Rastrigin Function 
+
+In this subsection, we present the numerical results for the Rastrigin benchmark function previously introduced in section 4.1. Given that the Rastrigin landscape is characterized by a high density of local min-ima, it serves as an ideal environment to examine the behavior of each optimizer within a highly nonconvex setting. 
+
+> Figure 6: Per-iteration loss on the Rastrigin function.
+
+23 Figure 7: Per-iteration loss on the zoomed Rastrigin function. 
+
+Figure 6 illustrates the loss trajectories obtained for this task. While all other compared methods rapidly reduce the loss in the early stages only to eventually settle into local minima, the proposed DHDC continues to move across multiple local minima, ultimately approaching the global minimum. A more detailed analysis of these dynamics is provided in Figure 7. The left panel offers a magnified view of the early-stage dynamics (within the ranges 10 ≤ L ≤ 100 and 0 ≤ n ≤ 1000 ), while the right panel highlights the later-stage behavior ( 10 ≤ L ≤ 100 and 6 × 10 3 ≤ n ≤ 10 4). Although the specific trajectories vary, a clear trend emerges: while most methods become trapped relatively early, DHDC continues to explore the landscape for a significantly longer duration, avoiding premature convergence. In Figure 8, Its behavior appears to be closely related to the persistent oscillatory dynamics induced by the compressed long-memory structure In particular, we see that the FGD methods maintain larger gradient norms than standard GD throughout most of the optimization process. Unlike conventional GD methods, where the gradient norm rapidly decays near stationary points, DHDC continues to exhibit a moderate but non-negligible level of gradient activity even after reaching low-loss regions. As a result, the optimization trajectory does not become prematurely stationary and can repeatedly escape shallow local minima. This persistent but bounded oscillatory behavior allows DHDC to continue exploring the optimization landscape while still stabilizing near the global minimizer. These results suggest that the compressed memory dy-namics introduced by DHDC can be especially effective in highly multimodal optimization problems, where conventional methods often suffer from premature convergence. 
+
+> Figure 8: Per-iteration gradient norm. SMA means simple moving average
+
+The oscillatory behavior induced by fractional memory can improve exploration when sufficiently con-trolled, but excessive oscillation may also destabilize the optimization trajectory. To investigate this effect, we measure the magnitude of oscillation while varying the fractional order α from 0.1 to 0.9 in increments 24 of 0.1. The oscillation indicator is defined by 
+
+O = 1
+
+N − 1 
+
+> N−1
+
+X
+
+> n=1
+
+|L (θn+1 ) − L (θn)| ,
+
+where L(θi) denotes the evaluation of the f (x) at the i-th iteration in (27).         
+
+> Figure 9: Values of Oas a function of the fractional order. As αvaries, Odoes not diverge, and it exhibits the convergence trend as αincreases.
+
+The Fig. 9 shows that the oscillation magnitude remains bounded once the fractional order becomes mod-erately large. This reflects the transition toward more localized gradient behavior similar to classical gradient descent. On the other hand, when α becomes smaller than approximately 0.3, the strong history-averaging effect substantially attenuates the effective gradient magnitude. As a result, the oscillatory component of the optimization dynamics is also weakened, leading to smaller values of O.
+
+5.1.1. Experimental difference between SOE and DC 
+
+Since SOE is a fast algorithm proposed based on the DC framework, the numerical results presented here demonstrate that there is a negligible difference between SOE and DC in terms of accuracy. In this regard, from the perspective of loss and accuracy, SOE and DC can be considered equivalent methods, as the discrepancy between them falls within mathematically permissible error margins. Consequently, in Section 5.1.1, we demonstrate the methodological equivalence of SOE and DC by utilizing the results obtained from the Rosenbrock benchmark problem. To evaluate the numerical fidelity of the SOE approximation, we compare its performance with the standard DC method using the Rosenbrock function, which is a standard benchmark characterized by its curved and ill-conditioned valley. It is defined as follows: 
+
+f (x) = 
+
+> n−1
+
+X
+
+> i=1
+
+100( xi+1 − x2 
+
+> i
+
+)2 + (1 − xi)2 n = 10 (35) The global minimizer x⋆ and the initial point x(0) = [ x(0) 1 , x (0) 2 , . . . , x (0)  
+
+> n
+
+] for the numerical test are defined as: 
+
+x⋆ = [1 .0, . . . , 1.0] ⊤, f (x⋆) = 0 ,x(0)  
+
+> i
+
+=
+
+(
+
+−1.2 if i is odd 
+
+1.0 if i is even (i = 1 , 2, . . . , n ). (36) Table 3 presents the results regarding the difference between the SOE and DC methods. The results reveal that the absolute difference in loss between the two schemes remains within a strictly admissible 25 Epoch Loss Gap 100 0.02462 200 0.02196 300 0.00992 400 0.00264 500 0.00020 600 0.00059 700 0.00003 800 0.00003 900 0.00003 
+
+> Table 3: Loss gap between SOE and DC across epochs.
+
+numerical bound from the early stages of training. Notably, as the optimization proceeds, this gap diminishes and eventually converges toward zero, reaching a negligible magnitude of 3.0 × 10 −5 by epoch 700. These findings provide a numerical justification for replacing the computationally intensive DC method with SOE in real-world applications, as SOE achieves nearly identical accuracy with significantly higher efficiency. 
+
+5.2. Optimization of Battery State-of-Health Estimation 
+
+This subsection presents the numerical results for the battery State-of-Health estimation task introduced in section 4.2. As observed in the results, the battery estimation task exhibits oscillations during the early stages of training, which gradually diminish as the optimization proceeds. Such oscillatory behavior is of-ten observed in systems with long-memory effects. In this experimental setting, the FGD-based methods demonstrate improved performance compared to standard GD. 
+
+> Figure 10: Training loss curves over the full training horizon (epochs 10–2500).
+
+Looking at Figure 10, which shows the training loss over epochs, the bold lines represent the Step-wise Moving Average(SMA), allowing for a clearer observation of the overall convergence trends. This figure reveals that DHDC achieves a lower training loss compared to the competing methodologies. While fluctu-ations persist due to the nonconvexity of the problem, the overall trajectory demonstrates that both the 26 stability and final performance of DHDC have been improved. Notably, from the initial transient phase of the first 1,000 epochs to the later stages of training where the optimization reaches a stable regime, DHDC consistently maintains lower loss values and demonstrates superior performance relative to the other algorithms. 
+
+5.3. Optimization of the Stochastic Signal Estimation 
+
+In this subsection, we present the numerical results for the stochastic signal estimation task previously introduced in section 4.3. Since the signal task exhibits sustained oscillations throughout the training phase, we employ the SMA to capture the overall convergence trends more clearly. In this experimental setting, the FGD methods demonstrate superior performance compared to standard GD. Figure 11 illustrates that while the training loss exhibits significant oscillations during the late optimiza-tion phase, it follows a discernible trend. To enhance visual clarity, raw loss values are plotted with reduced opacity, and bold lines represent the SMA. These SMA trends clearly demonstrate that both DHDC and SOE provide superior convergence properties over conventional GD. Notably, DHDC demonstrates the most effective loss minimization, maintaining a visible gap below both SOE and GD.    
+
+> Figure 11: Evolution of training loss during the late optimization phase ( 100 ,000 –150 ,000 epochs).
+
+To further assess the degree of convergence, we present the evolution of gradient norms in Figure 12. These norms reflect the rate of change in the loss at each epoch, where a diminishing norm signifies that the optimization has approached a stable regime with minimal variation. Following the same visualization convention as the loss plots, raw data points are displayed with reduced opacity, and bold lines represent the SMA to highlight the underlying trends. The results demonstrate that both DHDC and SOE converge to significantly deeper local minima than conventional GD, as evidenced by their drastically lower gradient norm levels. 27 Figure 12: Evolution of training gradient norms during the late optimization phase ( 100 , 000 –150 , 000 epochs). 
+
+Upon calculating the SMA for each task, DHDC exhibits the most robust performance. Furthermore, the gradient norm analysis reveals that both DHDC and SOE have reached a near-converged state, significantly outpacing GD. Conventional GD updates parameters using only the instantaneous gradient. While this approach is sufficient for short-memory or rapidly mixing signals, it does not explicitly account for long-range correlations present in the data. On the other hand, because FGD employs a similar power-law memory kernel in its update rule, this signal task provides a principled benchmark for evaluating whether optimizer memory aligned with data memory improves learning efficiency. 
+
+5.4. Optimization of CIFAR-10 Image Classification 
+
+In this subsection, we present the numerical results for the CIFAR-10 image classification task introduced in section 4.4. Since this task utilizes the widely adopted ResNet-18 architecture, the training process remains relatively stable and does not exhibit the significant oscillations observed in previous examples. However, as ResNet-18 possesses a much more complex structure compared to a standard MLP, it is necessary to analyze the potential for vanishing gradients within the DHDC framework. To this end, we examine the weight trajectories using PCA, as illustrated in Figure 13. 
+
+> Figure 13: This is a graph plotting the position on a 2-dimensional plane per epoch, where the two dimensions with the maximum variance were selected from the weights of a single image task result.
+
+28 Check the whole parameter with the plot is hard in complex system. So Fig 13 compares the geometry of optimization trajectories using only the two principal weight space directions with the largest variance, denoted by u1 and u2. There inner product is zero because u2 is vertical direction of u1
+
+Selecting the two weight moving condition called P C 1 and P C 2 is follow these several processes. At the end of each epoch e, save the full parameter vector: 
+
+we := vec( θe) ∈ RD ,
+
+where vec( ·) concatenates all trainable tensors at epoch e into a single vector. Construct the data matrix which has whole epochs weight vectors: 
+
+W := [ w0, w 1, . . . , w E ]⊤ ∈ R(E+1) ×D .
+
+Compute PCA on W and denote the first two principal components by u1, u 2 ∈ RD . Project each epoch parameter: 
+
+ze := 
+
+u⊤ 
+
+> 1
+
+(we − w)
+
+u⊤ 
+
+> 2
+
+(we − w)
+
+
+
+∈ R2, w := 1
+
+E + 1 
+
+> E
+
+X
+
+> e=0
+
+we. (37) In (37), (we − w) is used in magnitude of direction u⊤ 
+
+> 1
+
+and u⊤ 
+
+> 1
+
+. ze is function to make blue points of each epoch at Fig 13. Figure 13 suggest the P C 1 and P C 2 is moving in each epoch. This mean (we − w) has the different size in each epoch e. This shows the weight changes when solving the image task using the DHDC method. This confirms that even in large-scale models such as ResNet, training proceeds smoothly without gradient vanishing. In Table 4, while the accuracy increases consistently. In the early stage of training, the methods achieve comparable performance; however, as the number of epochs increases, DHDC and SOE exhibit faster con-vergence and achieve better performance than GD. epochs 1 5 10 15 20 25 GD 0.3317 0.5926 0.6937 0.7449 0.7673 0.7951 
+
+FGD SOE 0.3000 0.5808 0.6950 0.7069 0.7091 0.8090 
+
+DHDC 0.3093 0.5922 0.6752 0.7090 0.7253 0.8083 
+
+> Table 4: Classification accuracy over training epochs for the CIFAR-10 task.
+
+Classification accuracy is reported at selected training epochs to illustrate the evolution of performance over time. As shown in Table 4, GD exhibits slightly faster initial accuracy gains, while SOE and DHDC achieve higher final accuracy. 29 Figure 14: Comparison of gradient norms per epoch for GD, DHDC ( α=0.5), and SOE. To mitigate the visual impact of training oscillations (faded lines), a 4-epoch moving average (bold lines) is applied. The smoothed trajectories show demonstrate that both proposed fractional-order methods (DHDC and SOE) achieve a faster and more stable reduction in gradient magnitude compared to the standard GD baseline. 
+
+The accuracy trends further elucidate the impact of fractional memory on optimization dynamics. As illustrated in Figure 14, while standard GD exhibits a significant slowdown during the final 15 epochs, both SOE and DHDC based FGD maintain consistent improvement. This behavior is corroborated by the evolution of the gradient norms; specifically, the simple moving averages of the gradient norms demonstrate continued decay for SOE and DHDC, whereas GD suffers from early stagnation. These observations suggest that the power-law memory inherent in FGD supports more stable local refinement during the later stages of training. While classification accuracy increases with the number of epochs for both classical GD and FGD, we restrict training to 25 epochs in order to emphasize differences in convergence dynamics rather than final asymptotic performance. In deep networks with highly nonlinear loss landscapes, lower fractional orders in FGD introduce power-law memory into the update rule, which may lead to smoother and more delicate parameter trajectories compared with conventional integer-order optimization. 
+
+5.5. Summarized results in battery, signal, image tasks 
+
+Table 5 summarizes the performance across various tasks and fractional orders. To ensure statistical reliability, each experiment is repeated multiple times: 10 trials for the battery task and 5 trials each for the signal and image tasks. For the Taylor-based method in the image task, additional runs (15 trials) were conducted for α ≤ 0.4 to account for instances of training instability. Performance is reported as accuracy for the image classification task, while scaled loss values, averaged over multiple trials, are provided for the battery and signal tasks to facilitate consistent comparison. Entries marked with “X” denote configurations that are either inapplicable, such as GD which does not utilize a fractional order, or those that failed to yield stable training results. 30 FGD GD taylor DHDC SOE Task battery signal image battery signal image battery signal image battery signal image loss( ×10 −4) loss accuracy loss( ×10 −4) loss accuracy loss( ×10 −4) loss accuracy loss( ×10 −4) loss accuracy 0.1 X X X 5.8789 6.4042 0.1000 1.7409 2.4781 0.8036 2.1797 2.5013 0.8030 0.2 X X X 17.8058 1.1617 0.1000 1.7114 2.4802 0.8051 2.2552 2.3736 0.8075                                                                                                  
+
+> 0.3 XXX17.3667 0.3424 0.1000 0.7410 2.5727 0.8053 2.3092 2.5596 0.8037 0.4 XXX5.6016 0.3876 0.1000 0.7556 2.4656 0.8043 2.3495 2.6963 0.8060 fractional order 0.5 XXX5.4612 7.3059 0.1618 0.6811 2.3815 0.8083 2.3926 2.6813 0.7979 0.6 XXX5.4960 3.8233 0.2829 0.5412 2.3989 0.8028 2.4200 2.7162 0.7992 0.7 XXX17.7946 0.3011 0.3307 0.4623 2.5183 0.7998 2.4642 2.6156 0.8054 0.8 XXX5.7407 0.1749 0.4442 0.7882 2.3989 0.8033 2.5383 2.4096 0.8009 0.9 XXX17.2877 0.1783 0.5692 0.5087 2.6108 0.8060 2.5888 2.8555 0.8045 1.0 17.7862 2.7102 0.7951 XXXXXXXXX
+
+Table 5: This is a table showing the final train loss for battery and signal, and the final train accuracy for image, obtained by applying GD, Taylor method, and the fast methods of DC-DHDC and SOE-to the battery, signal, and image models, respectively. The most ideal values are indicated in bold. 
+
+For each task in Table 5, the fractional order achieving the lowest loss or highest accuracy is highlighted in bold. Overall, no monotonic relationship is observed between the fractional order α and the performance for DHDC and SOE. This suggests that the optimal memory depth depends on both the task characteristics and the interaction between the optimization dynamics and the data structure. In contrast, the Taylor-based method exhibits a more pronounced trend in the image classification task than other case in Table 5, where performance generally improves as α approaches 1. This behavior is consistent with the fact that the Taylor approximation becomes closer to the classical gradient as α → 1. Across tasks, DHDC shows strong performance in the battery model, consistently achieving low loss values. For the image task, DHDC and SOE yield comparable accuracy levels. In the signal task, the Taylor-based method achieves competitive results at certain fractional orders; however, its performance varies considerably across α, including cases with poor convergence. These observations indicate that while the Taylor-based approach can perform well under specific configurations, its performance is sensitive to the choice of fractional order. In contrast, DHDC and SOE provide more consistent behavior across a wider range of α, suggesting improved robustness with respect to memory configuration. Overall, the results indicate that fast-memory implementations based on DHDC and SOE offer a more stable trade-off between performance and robustness across different tasks and fractional orders. Under normal circumstances, the Taylor method is limited to remembering parameters only from the immediately preceding epoch, whereas DHDC and SOE grow as the number of iterations increases. Therefore, among the FGD methods, Taylor should have the fastest speed. However, since DHDC and SOE methods’ time complexity is increasing when they pass iterations, they exhibit faster speeds in the image task, which train with 4875 iterations. In contrast, while the image task has a smaller number of iterations, the signal task requires 150000 iterations. Because of this high number of iterations, the overhead of parameter accumulation in DHDC and SOE becomes more significant in the signal task. For this reason, Taylor remains the fastest among the FGD methods in the signal task For the battery task, due to the structure of the loss function, there exists a term that approximates the Caputo fractional derivative using the L1 method and compares it with the result of the equation in which the actual fractional derivative is used. The L1 approximation process consumes resources independently on FGD methods, resulting in similar outcomes across all FGD methods. In addition, FGD methods in Table 5 are visualized in the following graphs at Figures 15 and 16. 31 Figure 15: Training loss as functions of the fractional order parameter for each individual training dataset. 
+
+> Figure 16: Classification accuracy as functions of the fractional order parameter for each individual training dataset.
+
+In Appendix C, box plots are created using the results from all trials for each fractional order. 
+
+6. Conclusion 
+
+This paper focuses on one of the main practical difficulties of Caputo-based fractional gradient descent: the high computational cost caused by the accumulation of long-memory history terms. To address this issue, we reformulated the fractional descent direction as a discrete convolution over past gradients and developed two efficient fast-memory implementations. The first uses a sum-of-exponentials (SOE) approx-imation of the Caputo kernel, while the second introduces a new dyadic hierarchical discrete convolution (DHDC) framework that compresses the gradient history through multiscale aggregation. Both approaches preserve the characteristic power-law memory structure of fractional optimization while significantly reduc-ing computational and storage costs. From the theoretical side, the proposed fast-memory schemes were interpreted as controlled perturbations of the ideal Caputo fractional descent direction. Under standard smooth strong convexity assumptions, we showed that the essential convergence properties of the original fractional method are preserved when the approximation error remains sufficiently controlled. This viewpoint helps explain why compressed fractional memory can still produce stable optimization dynamics in practice. The numerical experiments support these theoretical observations across problems with very different characteristics. On the highly multimodal Rastrigin benchmark problem, the proposed DHDC method ex-hibited persistent but bounded oscillatory behavior that allowed the optimizer to repeatedly escape shallow 32 local minima while still converging stably near the global minimizer. Additional experiments on battery state estimation, stochastic signal reconstruction, and CIFAR-10 image classification further demonstrated that fractional memory can improve optimization stability and robustness in problems involving long-range dependence, ill-conditioning, and nonconvex optimization landscapes. Overall, the results suggest that fractional-order optimization can be made computationally practical without losing the essential advantages of long-memory dynamics. More broadly, this work provides a con-nection between fractional numerical analysis and scalable optimization algorithms, showing that the non-local memory effects of Caputo operators can be incorporated into modern learning problems in an efficient and stable manner. 
+
+References 
+
+[1] I. Podlubny, Fractional Differential Equations . San Diego: Academic Press, 1999. [2] A. A. Kilbas, H. M. Srivastava, and J. J. Trujillo, Theory and Applications of Fractional Differential Equations . Elsevier, 2006. [3] K. B. Oldham and J. Spanier, The Fractional Calculus . Academic Press, 1974. [4] M. Caputo, “Linear models of dissipation whose Q is almost frequency independent II,” Geophysical Journal International , vol. 13, no. 5, pp. 529–539, 1967. [5] R. Metzler and J. Klafter, “The random walk’s guide to anomalous diffusion: a fractional dynamics approach,” Physics Reports , vol. 339, no. 1, pp. 1–77, 2000. [6] F. Mainardi, Fractional Calculus and Waves in Linear Viscoelasticity . Imperial College Press, 2010. [7] K. Diethelm, The Analysis of Fractional Differential Equations . Berlin: Springer, 2010. [8] M. M. Meerschaert and A. Sikorskii, Stochastic Models for Fractional Calculus . De Gruyter, 2012. [9] R. L. Bagley and P. J. Torvik, “A theoretical basis for the application of fractional calculus to viscoelas-ticity,” Journal of Rheology , vol. 27, no. 3, pp. 201–210, 1983. [10] C. Li and F. Zeng, Numerical Methods for Fractional Calculus . CRC Press, 2015. [11] J. Wang, Y. Wen, Y. Gou, Z. Ye, and H. Chen, “Fractional-order gradient descent learning of BP neural networks with Caputo derivative,” Neural Networks , vol. 89, pp. 19–30, 2017. [12] Y.-F. Pu, J.-L. Zhou, Y. Zhang, N. Zhang, G. Huang, and P. Siarry, “Fractional extreme value adaptive training method: Fractional steepest descent approach,” IEEE Transactions on Neural Networks and Learning Systems , vol. 26, no. 4, pp. 653–662, 2015. [13] B. T. Polyak, Introduction to Optimization . New York: Optimization Software, Inc., 1987. [14] Y. Nesterov, Introductory Lectures on Convex Optimization: A Basic Course . Springer, 2004. [15] B. T. Polyak, “Some methods of speeding up the convergence of iteration methods,” USSR Computa-tional Mathematics and Mathematical Physics , vol. 4, no. 5, pp. 1–17, 1964. [16] G. Goh, “Why momentum really works,” Distill , 2017. [17] L. Lessard, B. Recht, and A. Packard, “Analysis and design of optimization algorithms via integral quadratic constraints,” SIAM Journal on Optimization , vol. 26, no. 1, pp. 57–95, 2016. [18] O. Herrera-Alcántara, “Fractional derivative gradient-based optimizers for neural networks and human activity recognition,” Applied Sciences , vol. 12, no. 18, p. 9264, 2022. 33 [19] Y. Wang, Y. He, and Z. Zhu, “Study on fast speed fractional order gradient descent method and its application in neural networks,” Neurocomputing , vol. 489, pp. 366–376, 2022. [20] S. Jiang, J. Zhang, Q. Zhang, and Z. Zhang, “Fast evaluation of the Caputo fractional derivative and its applications to fractional diffusion equations,” Communications in Computational Physics , vol. 21, no. 3, pp. 650–678, 2017. [21] D. Baffet and J. S. Hesthaven, “A kernel compression scheme for fractional differential equations,” SIAM Journal on Numerical Analysis , vol. 55, no. 2, pp. 496–520, 2017. [22] S. Jiang, J. Zhang, Q. Zhang, and Z. Zhang, “Fast evaluation of the caputo fractional derivative and its applications to fractional diffusion equations,” Communications in Computational Physics , vol. 21, no. 3, pp. 650–678, 2017. [23] Z.-W. Fang, H.-W. Sun, and H. Wang, “A fast method for variable-order Caputo fractional derivative with applications to time-fractional diffusion equations,” Computers & Mathematics with Applications ,vol. 80, no. 9, pp. 2143–2160, 2020. [24] T. Sweeney-Fanelli and M. Imtiaz, “Ecg-based automated emotion recognition using temporal convolu-tion neural networks,” TechRxiv , vol. 2024, no. 0801, 2024. [25] T. A. M. Langlands and B. I. Henry, “The accuracy and stability of an implicit solution method for the fractional diffusion equation,” Journal of Computational Physics , vol. 205, no. 2, pp. 719–736, 2005. 
+
+Appendix A. Numerical Schemes for Caputo Derivative: Left sum and L1 Approximation 
+
+Appendix A.1. Constant Approximation scheme 
+
+The simplest approach to numerically approximating the Caputo fractional derivative operator is to approximate all functions within the integrand on each sub-interval [tj , t j+1 ] by a constant value evaluated at the left endpoint tj . In this scheme, not only the derivative term u′(τ ) but also the kernel function 
+
+(tn − τ )−α, which exhibits a weak singularity, are treated as representative constants for the interval and are extracted from the integral together. As a result, this constant approximation transforms the complex process of kernel integration into a straightforward algebraic weighted sum, offering both intuitive numerical implementation and computational efficiency. Let the interval [t0, t n] be divided into n uniform sub-intervals 
+
+[tj , t j+1 ], j = 0 , 1, . . . , n − 1,
+
+with step size ∆t. Starting from the Caputo fractional derivative, we have  
+
+> C
+> 0
+
+Dαt u(tn) = 1Γ(1 − α)
+
+Z tn
+
+> t0
+
+(tn − τ )−αu′(τ ) dτ 
+
+= 1Γ(1 − α)
+
+> n−1
+
+X
+
+> j=0
+
+Z tj+1 
+
+> tj
+
+(tn − τ )−αu′(τ ) dτ. 
+
+Applying the constant approximation at the left endpoint tj as described above, the expression is derived as follows:  
+
+> C
+> 0
+
+Dαt u(tn) ≈ 1Γ(1 − α)
+
+> n−1
+
+X
+
+> j=0
+
+(tn − tj )−αu′(tj )
+
+Z tj+1 
+
+> tj
+
+1 dτ 
+
+= 1Γ(1 − α)
+
+> n−1
+
+X
+
+> j=0
+
+ (n − j)∆ t−α∆t u ′(tj )= ∆t1−α
+
+Γ(1 − α)
+
+> n−1
+
+X
+
+> j=0
+
+(n − j)−αu′(tj ).
+
+34 Hence, the constant approximation can be written as the weighted sum  
+
+> C
+> 0
+
+Dαt u(tn) ≈
+
+> n−1
+
+X
+
+> j=0
+
+bw(α) 
+
+> n−j
+
+u′(tj ),
+
+where the constant-approximation weights are defined by 
+
+bw(α) 
+
+> k
+
+= ∆t1−α
+
+Γ(1 − α) k−α, k = 1 , 2, . . . , n. 
+
+Appendix A.2. Left sum Approximation scheme 
+
+The Left sum approximation follows a similar partitioning of the domain [t0, t n] into n uniform sub-intervals [tj , t j+1 ] with a step size ∆t. In this scheme, as with the previous method, the derivative term u′(τ )
+
+is approximated by its value at the left endpoint of each sub-interval, u′(tj ). However, a crucial distinction lies in the treatment of the weakly singular kernel (tn − τ )−α; while the derivative is factored out as a constant, the kernel itself remains within the integral and is integrated analytically over each interval. This approach results in the following discrete formulation of the Caputo fractional derivative:  
+
+> C
+> 0
+
+Dαt u(tn) = 1Γ(1 − α)
+
+Z tn
+
+> t0
+
+(tn − τ )−αu′(τ )dτ 
+
+= 1Γ(1 − α)
+
+> n−1
+
+X
+
+> j=0
+
+Z tj+1 
+
+> tj
+
+(tn − τ )−αu′(τ )dτ 
+
+≈ 1Γ(1 − α)
+
+> n−1
+
+X
+
+> j=0
+
+u′(tj )
+
+Z tj+1 
+
+> tj
+
+(tn − τ )−αdτ 
+
+= 1Γ(1 − α)
+
+> n−1
+
+X
+
+> j=0
+
+u′(tj )
+
+
+
+− 11 − α (tn − τ )1−α
+
+tj+1 
+
+> tj
+
+= ∆t1−α
+
+Γ(2 − α)
+
+> n−1
+
+X
+
+> j=0
+
+u′(tj ) (n − j)1−α − (n − j − 1) 1−α
+
+=
+
+> n−1
+
+X
+
+> j=0
+
+w(α) 
+
+> n−j
+
+u′(tj ).
+
+In this formulation, the discrete weight coefficients wαk are defined as: 
+
+w(α) 
+
+> k
+
+= ∆t1−α
+
+Γ(2 − α)
+
+k1−α − (k − 1) 1−α , k = 1 , 2, . . . , n. 
+
+Appendix A.3. L1 scheme 
+
+The L1 scheme [3, 25] is a robust numerical approximation for evaluating the Caputo fractional derivative, particularly valued for its temporal convergence rate of O(∆ t2−α). While the previous schemes relied on a constant approximation of the derivative at a single point, the core principle of the L1 scheme involves approximating the function u(τ ) itself using linear Lagrange interpolation over each sub-interval [tj , t j+1 ].By partitioning the temporal domain [0 , t n] into n uniform sub-intervals of length ∆t, the derivative u′(τ )
+
+is replaced by the constant slope of the linear interpolant within each interval. This refined treatment of the derivative term, combined with an analytical integration of the power-law kernel, leads to a significant improvement in numerical accuracy. Starting from the definition of the Caputo fractional derivative for 
+
+0 < α < 1:
+
+> C
+> 0
+
+Dαt u(tn) = 1Γ(1 − α)
+
+Z tn
+
+> t0
+
+(tn − τ )−αu′(τ )dτ. 
+
+35 By employing a piecewise linear interpolation for u(τ ) over each sub-interval [tj , t j+1 ], the derivative 
+
+u′(τ ) is approximated by the linear interpolation u(tj+1 )−u(tj )∆t . Consequently, the integral is discretized as follows: 
+
+> C
+> 0
+
+Dαt u(tn) ≈ 1Γ(1 − α)
+
+> n−1
+
+X
+
+> j=0
+
+u(tj+1 ) − u(tj )∆t
+
+Z tj+1 
+
+> tj
+
+(tn − τ )−αdτ. 
+
+The analytical evaluation of the kernel integral over each sub-interval yields: 
+
+Z tj+1 
+
+> tj
+
+(tn − τ )−αdτ =
+
+
+
+− (tn − τ )1−α
+
+1 − α
+
+tj+1 
+
+> tj
+
+= ∆t1−α
+
+1 − α
+
+ (n − j)1−α − (n − j − 1) 1−α .
+
+Defining the weight coefficients as a(α) 
+
+> k
+
+= ( k + 1) 1−α − k1−α, the discrete L1 operator is expressed as: 
+
+DαL1u(tn) = ∆t−α
+
+Γ(2 − α)
+
+> n−1
+
+X
+
+> j=0
+
+a(α)
+
+> n−j−1
+
+(u(tj+1 ) − u(tj )) .
+
+For practical computational implementation, this summation can be rearranged to group terms by the function values at each time step u(tj ):
+
+DαL1u(tn) = ∆t−α
+
+Γ(2 − α)
+
+a(α)0 u(tn) −
+
+> n−1
+
+X
+
+> j=1
+
+(a(α) 
+
+> n−j−1
+
+− a(α) 
+
+> n−j
+
+)u(tj ) − a(α)
+
+> n−1
+
+u(t0)
+
+ .
+
+This final form provides an efficient history-dependent update rule, where the influence of past states is governed by the difference between consecutive weight coefficients, reflecting the decaying memory property of the Caputo kernel. 
+
+Appendix B. Sum-of-Exponential method [22] 
+
+The weights for the sum-of-exponentials approximation are determined as follows. First, we choose M
+
+nodes {ξm}Mm=1 on a logarithmic scale according to 
+
+ξm = exp 
+
+
+
+log 
+
+ 1
+
+tmin 
+
+
+
++ m − 1
+
+M − 1
+
+
+
+log 
+
+ 1
+
+tmax 
+
+
+
+− log 
+
+ 1
+
+tmin 
+
+ 
+
+.
+
+Then, we use ξm to make exponential sum to approximate kernel following the next steps. 1. Fitting weights. We sample the kernel at logarithmic points ξm, m = 1 , . . . , M and solve the least squares problem, the kernel is defined with t to the power of negative alpha 
+
+min 
+
+> ωm≥0
+
+X
+
+> ℓ
+
+k(tℓ) −
+
+> M
+
+X
+
+> m=1
+
+ωme−ξmtℓ
+
+> 2
+
+.
+
+where k(t) = 1Γ(1 −α) t−α, 0 < α < 1.2. Recursive states. 
+
+To rigorously justify the explicit summation form and the Markovian update rule of the auxiliary state R(n) 
+
+> m
+
+, we trace its derivation back to the continuous-time definition of the fractional gradient. The continuous fractional gradient direction ˆu(t) is defined by the convolution of the Caputo kernel 
+
+k(t) and u(t):
+
+ˆu(t) = 
+
+Z t
+
+> 0
+
+k(t − τ )u(τ )dτ. 
+
+36 Substituting the SOE approximation k(t) ≈ PMm=1 ωme−ξmt into the convolution integral yields: 
+
+ˆu(t) ≈
+
+Z t
+
+> 0
+> M
+
+X
+
+> m=1
+
+ωme−ξm(t−τ )
+
+!
+
+u(τ )dτ. 
+
+Since the integral is a linear operator, we can interchange the summation and integration. This proce-dure naturally separates the non-local history integral into M independent auxiliary states. Specifically, the approximation of ˆu(t) is expressed as: 
+
+ˆu(t) ≈
+
+> M
+
+X
+
+> m=1
+
+ωm ˆRm(t),
+
+where each auxiliary variable ˆRm(t) captures the historical contribution corresponding to a specific exponential mode: 
+
+ˆRm(t) = 
+
+Z t
+
+> 0
+
+e−ξm(t−τ )u(τ )dτ. (B.1) To enable efficient numerical implementation, we consider the discrete-time evaluation of (B.1) at tn+1 .By splitting the integration interval, we obtain the following recurrence relation: 
+
+ˆR(n+1)  
+
+> m
+
+=
+
+Z tn+1 
+
+> t0
+
+e−ξm(tn+1 −τ )u(τ )dτ 
+
+=
+
+Z tn+1 
+
+> tn
+
+e−ξm(tn+1 −τ )u(τ )dτ + e−ξm∆t
+
+Z tn
+
+> t0
+
+e−ξm(tn−τ )u(τ )dτ 
+
+=
+
+Z tn+1 
+
+> tn
+
+e−ξm(tn+1 −τ )u(τ )dτ + e−ξm∆t ˆR(n) 
+
+> m
+
+, (B.2) where ˆR(0)  
+
+> m
+
+= 0 . By assuming that u(τ ) ≈ u(tn) remains constant over the small interval [tn, t n+1 ], the non-local convolution is transformed into a local inductive structure. Under this approximation, the first integral in (B.2) evaluates to: 
+
+ˆR(n+1)  
+
+> m
+
+≈ 1 − e−ξm∆t
+
+ξm
+
+u(tn) + e−ξm∆t ˆR(n) 
+
+> m
+
+.
+
+Let Cm = 1−e−ξm ∆t 
+
+> ξm
+
+. To achieve a simplified recursive form, we define the computational auxiliary state R(n+1)  
+
+> m
+
+such that ˆR(n+1)  
+
+> m
+
+= CmR(n+1)  
+
+> m
+
+. Substituting this into the above approximation yields: 
+
+R(n+1)  
+
+> m
+
+= e−ξm∆tR(n) 
+
+> m
+
++ u(tn), R(0)  
+
+> m
+
+= 0 .
+
+Finally, the update direction ˆu(tn+1 ) is computed by consolidating the scaling factors into the modified weights ˆωm = ωmCm:
+
+ˆu(tn+1 ) ≈
+
+> M
+
+X
+
+> m=1
+
+ˆωmR(n+1)  
+
+> m
+
+.
+
+Unlike conventional numerical schemes that rely on piecewise approximations over partitioned intervals, the SOE method approximates the singular kernel using a weighted sum of exponential functions. In this framework, each R(n) 
+
+> m
+
+serves as an auxiliary state that captures the history of u′(τ ) through an exponential filter with a decay rate ξm. By leveraging the recursive structure inherent in these exponential terms, the SOE mechanism transforms the entire convolution history into a finite set of M evolution states. Consequently, this approach maintains numerical accuracy comparable to standard methods while effectively reducing the per-iteration complexity from O(n) to O(M ).37 Appendix C. Boxplot Analysis of Performance Distributions 5.5 
+
+For the battery, signal, and image tasks, final results are obtained using each of the FGD methods, namely the Taylor-based approach, DHDC, and SOE. The results from multiple independent runs were compiled and visualized via boxplots to represent the distributional characteristics, including the median, interquartile range, and outliers across the various configurations.   
+
+> (a) DHDC (b) taylor
+> (c) SOE
+> (d) DHDC (e) taylor
+> (f) SOE
+
+38 (g) DHDC (h) taylor 
+
+> (i) SOE Figure C.17: Boxplot distributions of final training accuracy and training loss across fractional orders ranging from 0.1 to 0.9, evaluated over multiple independent runs, illustrating the sensitivity of convergence behavior to the choice of fractional order and the variability across repeated experiments.
+
+Figure C.17 presents box plots generated by repeating each FGD method on their respective tasks at least five times with different random seeds. The first row shows the boxplots of the final loss values for the battery task. The second row corresponds to the signal task, and the third row presents the results for the image task. In the image task, the Taylor method yields no valid results for fractional orders ranging from 0.1 to 0.4, as the loss diverges during training, resulting in an accuracy of 0.1, which corresponds to the theoretical lower bound for the ten-class CIFAR-10 dataset. 
+
+Appendix D. Computational Complexity and Execution Times for Real-World Problems 
+
+In this appendix, we empirically validate the computational complexity of the discussed FGD methods. Let N denote the total number of epochs and M represent the number of SOE terms. As detailed in Section 2, the theoretical complexities for DC, SOE, and DHDC are O(N 2), O(M N ), and O(N log N ), respectively. To verify these theoretical properties, we evaluate the alignment between experimental measurements and their corresponding theoretical predictions with MSEloss. To calculate the MSEloss, We can obtain a mathematical basis of time complexity. Define the experimental measurement at i epoch to yiex and define the theoretical prediction at i epoch to yipred 
+
+M SEloss = 1
+
+N − min 
+
+> N
+
+X
+
+> i=min
+
+(yiex − yipred )2
+
+initial point of epoch is defined with min .Graph legends f (x) = y means O(f (x)) when yiex and yipred has acceptable MSEloss. For yiex is satisfied this condition. yiex is normalized with values of yipred .
+
+x = y normalized reference in fig D.19, D.20 is defined at (D.1). 39 x2 = y normalized reference in fig D.18 and xlog (x) = y normalized reference in fig D.21 are defined at (D.2) and (D.3) each. max(y) and min(y) means the maximum and minimum value for whole epoch. i
+
+means epoch used at graphs horizontal axis. 
+
+yiex = min (ypred ) + xinorm × (max (ypred ) − min (ypred )) xinorm = (i − min )
+
+N − min (D.1) 
+
+yiex = ratio × i2 ratio = min (ypred )
+
+min 2 (D.2) 
+
+yiex = ratio × ilog 2(i) ratio = min (ypred )
+
+min × log 2(min ) (D.3) Whole time complexity graphs are using same task. Used task is Rosenbrock function which defined at (35). Use the same initial condition at (36). 
+
+> Figure D.18: Total elapsed time per epoch for the DC method with log-log plot. The blue curve represents the trajectory that would result if the method followed the indicated complexity.
+
+Figure D.18 presents the elapsed time of the DC method as a function of N , compared against a theoret-ical quadratic curve. The discrepancy between the empirical measurements and the O(N 2) model, expressed as an MSE loss, is 133 . While this value may seem high, it is primarily due to the large scale of the y-axis. Furthermore, a log–log regression analysis yields a scaling of O(N 1.941 ), confirming that the empirical time complexity of DC follows O(N 2).
+
+> Figure D.19: Total elapsed time per epoch for the SOE versus . The blue curve represents the trajectory that would result if the method followed the indicated complexity.
+
+40 Figure D.19 shows the elapsed time versus N when the number of SOE terms is fixed 8. The discrepancy between the theoretical and measured values, expressed as MSE loss, is 1.42 × 10 −7. This indicates runtime is in direct proportion to epochs named N. 
+
+> Figure D.20: Total elapsed time for the SOE versus SOE terms. The blue curve represents the trajectory that would result if the method followed the indicated complexity.
+
+Figure D.20 shows the elapsed time versus M . The discrepancy between the theoretical and measured values, expressed as MSE loss, is 9.62 . This indicates runtime is in direct proportion to SOE Terms. From D.19, D.20, SOE exhibits a linear increase in cost with respect to both M and N , which indicates that the time complexity of SOE is O(M N ).
+
+> Figure D.21: Total elapsed time per epoch for the DHDC method with log-log plot. The blue curve represents the trajectory that would result if the method followed the indicated complexity.
+
+Figure D.21 is the log-log plot of cpu time at each epochs. The discrepancy between the theoretical and measured values, expressed as MSEloss, is 3.57 . MSEloss is acceptably low and Runtime graph is under the normalized reference. Big-O time complexity is meaning the maximum value when normalized. This indicates that the computational complexity of DHDC is O(N log N ).FGD DC DHDC SOE Task battery signal image battery signal image battery signal image times(s) times(s) times(s) times(s) times(s) times(s) times(s) times(s) times(s) CPU times 116 26109 - 88 5349 1253 89 5164 1314 
+
+> Table D.6: Computational Efficiency Comparison of DC and fast method of DC-DHDC and SOE-
+
+Table D.6 compares the computational efficiency of DC, DHDC, and SOE across the three real-world 41 tasks. Here, CPU time is defined as the total duration required to complete the full training cycles (epochs and iterations), excluding the initial code setup. The results clearly demonstrate the superior efficiency of the proposed fast algorithms; both DHDC and SOE provide significant speed improvements over the standard DC method. Notably, the signal task exhibits the longest execution times due to its large number of epochs, even exceeding the CPU time of the image task which employs the more architecturally complex ResNet-18. The entry for DC in the image task is left blank (indicated by a dash) because its execution is deemed computationally intractable for practical evaluation. As the resource requirements for DC increase sub-stantially with the number of iterations, its expected computation time is instead estimated via regression analysis, with further details provided in Appendix Appendix D.1. FGD method DC DHDC SOE Vram(mb) >32000 6962 5529 
+
+> Table D.7: Memory Efficiency and Practical Feasibility
+
+Table D.7 summarizes the peak GPU memory (VRAM) consumption for the CIFAR-10 image task. Since this task exhibits the most substantial increase in resource usage among the evaluated scenarios, it was selected as the benchmark for measuring maximum VRAM usage with the fractional order set to 0.5. As shown in the table, the baseline DC method exceeds 32,000 MB, surpassing typical hardware capacities for this task. In contrast, the proposed SOE and DHDC approximations significantly reduce the memory footprint to 5,529 MB and 6,962 MB, respectively, demonstrating their superior scalability for large-scale optimization. 
+
+Appendix D.1. Computational Cost Estimation for Discrete Convolution in Image Tasks Appendix D 
+
+The standard FGD using the Caputo fractional derivative exhibits an O(n2) computational complexity. As the number of iterations n increases, the non-local dependency of the fractional operator leads to a significant escalation in the computational load per step. To quantify this overhead, a linear regression analysis was conducted based on the initial training phase. Observations indicated that the execution time per iteration increases linearly with the iteration index i.For a total of 4, 875 iterations, the cumulative computation time S is modeled as follows: 
+
+S =
+
+> 4874
+
+X
+
+> i=0
+
+(1 .08415 i + 16 .9310) .
+
+The regression analysis yielded a slope of 1.08415 and an intercept of 16 .9310 , with a standard error of 
+
+0.0274 , confirming the reliability of the estimation. In a configuration with a batch size of 256, these 4,875 iterations would require an estimated 12,962,647 seconds. However, due to GPU VRAM capacity constraints, the actual batch size for the standard FGD must be set to 1 to accommodate the memory requirements. Under this constraint, the total number of iterations per epoch increases to 49,920. Applying the regression model to this scenario results in a projected computation time exceeding 26,772 years. This result demonstrates that standard FGD is computationally infeasible for this optimization task, necessitating the implementation of the SOE and DHDC schemes proposed in this work. 
+
+Appendix E. Algorithm 
+
+This section presents the pseudo-codes for the methodologies introduced in the preceding sections to provide a clear description of their algorithmic implementation. 42 Algorithm 1 SOE memory update at step n (time tn = n∆t)
+
+Require: gradients {gj }j≥0 streamed online; SOE parameters {(ωm, ξ m)}Mm=1 with ωm > 0, ξm > 0; step size ∆t > 0
+
+State: auxiliary modes {Rm}Mm=1 (each in Rd), initialized by Rm ← 0
+
+Output: fractional (history-aware) gradient bgn
+
+Precompute once: ρm = exp( −ξm∆t) for m = 1 , . . . , M  
+
+> 1:
+
+Input at step n: current gradient gn = ∇L(θn) 
+
+> 2:
+
+for m = 1 to M do  
+
+> 3:
+
+Rm ← ρm Rm + gn 
+
+> 4:
+
+end for  
+
+> 5:
+
+bgn ← 0 
+
+> 6:
+
+for m = 1 to M do  
+
+> 7:
+
+bgn ← bgn + ωm Rm 
+
+> 8:
+
+end for Note: The update includes the current gradient gn, so that bgn corresponds to a convolution of the form Pnj=0 wn−j gj . 
+
+> 9:
+
+return bgn
+
+Algorithm 1 is the pseudocode of the SOE introduced in section 2.1 43 Algorithm 2 DHDC update at step n (time tn = n∆t) 
+
+> 1:
+
+Input: gradient gn, step size ∆t, order α, tolerance εt 
+
+> 2:
+
+State: bins {(S(n) 
+
+> b
+
+, C (n) 
+
+> b
+
+)}B−1 
+
+> b=0
+> 3:
+
+Insert (youngest bin): S0 ← S0 + gn, C0 ← C0 + 1  
+
+> 4:
+
+for b = 0 to B − 2 do  
+
+> 5:
+
+cap ← 2b 
+
+> 6:
+
+if Cb > cap then  
+
+> 7:
+
+half ← max(1 , ⌊Cb/2⌋), φ ← half /C b 
+
+> 8:
+
+M ← φ Sb 
+
+> 9:
+
+Sb ← Sb − M , Cb ← Cb − half  
+
+> 10:
+
+Sb+1 ← Sb+1 + M , Cb+1 ← Cb+1 + half  
+
+> 11:
+
+end if  
+
+> 12:
+
+end for  
+
+> 13:
+
+bgn ← 0 
+
+> 14:
+
+for b = 0 to B − 1 do  
+
+> 15:
+
+if Cb = 0 then  
+
+> 16:
+
+continue  
+
+> 17:
+
+else  
+
+> 18:
+
+tmin ← max  εt, t n − 2b+1 ∆t 
+
+> 19:
+
+tmax ← max  εt, t n − 2b∆t 
+
+> 20:
+
+δ ← tmax − tmin  
+
+> 21:
+
+if δ ≤ εt then  
+
+> 22:
+
+tmid ← max  εt, 12 (tmin + tmax ) 
+
+> 23:
+
+kb ← t−α
+
+> mid
+
+/Γ(1 − α) 
+
+> 24:
+
+else if |1 − α| > 10 −8 then  
+
+> 25:
+
+kb ← t1−α 
+
+> max
+
+− t1−α
+
+> min
+
+(1 − α) δ Γ(1 − α) 
+
+> 26:
+
+else  
+
+> 27:
+
+kb ← log  tmax /t min 
+
+
+
+δ Γ(1 − α) 
+
+> 28:
+
+end if  
+
+> 29:
+
+bgn ← bgn + kb Sb 
+
+> 30:
+
+end if  
+
+> 31:
+
+end for  
+
+> 32:
+
+Return bgn
+
+Algorithm 2 is the pseudocode of the DHDC introduced in section 2.2 44
