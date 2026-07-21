@@ -6,57 +6,64 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-20
-- 运行时间：2026-07-20 21:06:26 UTC
+- 最新运行日期：2026-07-21
+- 运行时间：2026-07-21 21:24:19 UTC
 - 运行状态：成功
-- 本次总论文数：12
-- 精读区：0
+- 本次总论文数：14
+- 精读区：2
 - 速读区：12
 
 ### 今日简报（AI）
-今日速读12篇论文，3篇获7分推荐，聚焦图像去模糊、场景文字识别与视觉位置识别。值得关注多级预条件策略对图像去模糊的加速效果，以及脉冲神经网络在视觉位置识别中的新应用。建议优先了解预条件方法的实用价值，或旋转位置编码在文本识别中的创新思路。
-- 详情：[/202607/20/README](/202607/20/README)
+1) 今日精读2篇高分论文，聚焦信息表示极限与高效ViT密集预测，速读12篇涵盖视频编码、正则化与Transformer归纳偏置。  
+2) 最值得关注的方向：Rate-Distortion-Perception理论重新定义了信息表示的基本极限；DPNeXt提出了轻量级多尺度融合框架，高效适配ViT多任务密集预测。  
+3) 建议优先精读两篇高分论文，深入理解信息论新范式与ViT实用化进展，再按兴趣浏览速读中的视频编码滤波或ResNet理论分析。
+- 详情：[/202607/21/README](/202607/21/README)
 
 ### 精读区论文标签
-- 本次无精读推荐。
+1. [Rate-Distortion-Perception Theory: Redefining the Fundamental Limits of Information Representation](/202607/21/2607.17232v1-rate-distortion-perception-theory-redefining-the-fundamental-limits-of-information-representation)  
+   标签：评分：10.0/10、query:compress
+   evidence：率失真感知理论用于有损压缩
+2. [DPNeXt: A Lightweight Multi-Scale Feature Fusion Framework for Efficient ViT-Based Multi-Task Dense Prediction](/202607/21/2607.16012v1-dpnext-a-lightweight-multi-scale-feature-fusion-framework-for-efficient-vit-based-multi-task-dense-prediction)  
+   标签：评分：9.0/10、query:neural-arch
+   evidence：面向ViT多任务密集预测的轻量多尺度特征融合解码器
 
 ### 速读区论文标签
-1. [Multilevel Preconditioning Strategies for Convex Optimization Methods in Image Deblurring](/202607/20/2607.10864v1-multilevel-preconditioning-strategies-for-convex-optimization-methods-in-image-deblurring)  
-   标签：评分：7.0/10、query:neural-arch
-   evidence：多级预处理加速图像恢复中的凸优化
-2. [2D Rotary Position Embedding for Scene Text Recognition with Transformers](/202607/20/2607.13458v1-2d-rotary-position-embedding-for-scene-text-recognition-with-transformers)  
-   标签：评分：7.0/10、query:neural-arch
-   evidence：用于场景文本识别编码器-解码器Transformer的二维旋转位置嵌入
-3. [Visual Place Recognition Using Rate-Encoded Spiking Neural Networks with Discrete STDP Learning](/202607/20/2607.13584v1-visual-place-recognition-using-rate-encoded-spiking-neural-networks-with-discrete-stdp-learning)  
-   标签：评分：7.0/10、query:neural-arch
-   evidence：使用STDP学习的高效脉冲神经网络架构用于视觉地点识别
-4. [Fast and Scalable Caputo Fractional Gradient Descent via Perturbation-Preserving Memory Compression](/202607/20/2607.15505v1-fast-and-scalable-caputo-fractional-gradient-descent-via-perturbation-preserving-memory-compression)  
-   标签：评分：7.0/10、query:neural-arch
-   evidence：通过扰动保持内存压缩提出快速可扩展的分数阶梯度下降，属于深度学习模型优化策略
-5. [Learning Faster without Deeper Networks: A*-Inspired Batch Selection for Efficient CNN Training](/202607/20/2607.15745v1-learning-faster-without-deeper-networks-a-inspired-batch-selection-for-efficient-cnn-training)  
-   标签：评分：7.0/10、query:neural-arch
-   evidence：A*启发式批量选择策略用于高效CNN训练，改善收敛和学习信号，模型无关的优化方法
-6. [Distributional Matching for Vector Quantization: A Unified Theoretical and Empirical Framework](/202607/20/2607.15933v1-distributional-matching-for-vector-quantization-a-unified-theoretical-and-empirical-framework)  
+1. [Deep Learning-based Filtering for Video Coding: A Survey on Architectures, Algorithms, and Complexity Analysis](/202607/21/2607.16319v1-deep-learning-based-filtering-for-video-coding-a-survey-on-architectures-algorithms-and-complexity-analysis)  
    标签：评分：7.0/10、query:compress
-   evidence：向量量化的分布匹配框架
-7. [Water Reflection Detection Using Symmetric Attention](/202607/20/2607.10749v1-water-reflection-detection-using-symmetric-attention)  
+   evidence：基于深度学习的视频编码滤波综述，涉及压缩伪影消除
+2. [Dropout and Random Gradient Masking Are Asymptotically Equivalent in Large ResNets](/202607/21/2607.16761v1-dropout-and-random-gradient-masking-are-asymptotically-equivalent-in-large-resnets)  
+   标签：评分：7.0/10、query:neural-arch
+   evidence：Dropout与随机梯度掩蔽训练技巧的理论等价性
+3. [Can Transformers Really Do It All? On the Compatibility of Inductive Biases Across Tasks](/202607/21/2607.17624v1-can-transformers-really-do-it-all-on-the-compatibility-of-inductive-biases-across-tasks)  
+   标签：评分：7.0/10、query:neural-arch
+   evidence：面向任务特定归纳偏好的Transformer架构优化方法
+4. [BMFA: Boundary-Minority Free-Energy Adaptive Screening](/202607/21/2607.17656v1-bmfa-boundary-minority-free-energy-adaptive-screening)  
+   标签：评分：7.0/10、query:neural-arch
+   evidence：提升视觉Transformer的令牌处理效率
+5. [EVOLVE: Efficient Learned Volume Compression with Variable-Rate Encoding on a Cross-Domain Database](/202607/21/2607.18187v1-evolve-efficient-learned-volume-compression-with-variable-rate-encoding-on-a-cross-domain-database)  
+   标签：评分：7.0/10、query:compress
+   evidence：基于自编码器的学习型体积压缩，支持可变码率
+6. [Efficient Difficulty-Aware Dynamic Routing for Diffusion-Based Real-World Image Super-Resolution](/202607/21/2607.15711v1-efficient-difficulty-aware-dynamic-routing-for-diffusion-based-real-world-image-super-resolution)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：用于水面反射检测的对称注意力网络
-8. [GFR-SAM: Training-Free Referring Camouflaged Object Segmentation via Cross-Image Prompting](/202607/20/2607.11732v1-gfr-sam-training-free-referring-camouflaged-object-segmentation-via-cross-image-prompting)  
+   evidence：图像超分辨率的难度感知动态路由
+7. [Backpropagation-Free Trunk Training via the Split Forward Gradients](/202607/21/2607.16612v1-backpropagation-free-trunk-training-via-the-split-forward-gradients)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：基于SAM和DINO的无训练伪装目标分割框架
-9. [No Attention, No Problem: DPU-Aware Attention Approximation in Modern YOLO on FPGA](/202607/20/2607.13106v1-no-attention-no-problem-dpu-aware-attention-approximation-in-modern-yolo-on-fpga)  
+   evidence：前向梯度训练以减少内存
+8. [Robust Losses from Univariate Base Functions for Noisy-Label Learning](/202607/21/2607.16768v1-robust-losses-from-univariate-base-functions-for-noisy-label-learning)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：在FPGA上近似YOLO的注意力机制作为架构改进
-10. [AlphaWiSE: Adaptive Weight Interpolation for Continual Multimodal Representation Learning](/202607/20/2607.15094v1-alphawise-adaptive-weight-interpolation-for-continual-multimodal-representation-learning)  
+   evidence：噪声标签的鲁棒损失函数
+9. [Test-Time Registers as Global Priors for Tokenized Image Generation](/202607/21/2607.16824v1-test-time-registers-as-global-priors-for-tokenized-image-generation)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：持续学习中用于模型优化的权重空间插值方法
-11. [QuReC: All-in-One Image Restoration with Query-Specific Guidance and Local-Global Response Calibration](/202607/20/2607.15097v1-qurec-all-in-one-image-restoration-with-query-specific-guidance-and-local-global-response-calibration)  
+   evidence：测试时寄存器特征作为全局先验用于令牌化图像生成
+10. [Searching for Task-Specific Vision Paths: Evolutionary Block Pruning Across Vision-Language Models](/202607/21/2607.17052v1-searching-for-task-specific-vision-paths-evolutionary-block-pruning-across-vision-language-models)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：具有查询特定指导和校准的全能图像恢复框架
-12. [Structural-Semantic Reciprocal Learning for Unsupervised Visible-Infrared Person Re-Identification](/202607/20/2607.15220v1-structural-semantic-reciprocal-learning-for-unsupervised-visible-infrared-person-re-identification)  
+   evidence：通过进化块剪枝搜索任务特定的视觉路径，解决高效架构设计问题
+11. [MIS-HCC: Hierarchical Channel Clustering for Efficient Medical Image Segmentation](/202607/21/2607.17329v1-mis-hcc-hierarchical-channel-clustering-for-efficient-medical-image-segmentation)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：用于行人重识别的结构-语义学习，改进视觉特征提取
+   evidence：用于模型压缩的层次聚类
+12. [AutoEncoder-Compressed Parallel Split Learning for Pre-trained Model Fine-Tuning](/202607/21/2607.17913v1-autoencoder-compressed-parallel-split-learning-for-pre-trained-model-fine-tuning)  
+   标签：评分：6.0/10、query:neural-arch
+   evidence：自编码器压缩用于分割学习通信
 
 
 <div class="dpr-home-promo-card">
