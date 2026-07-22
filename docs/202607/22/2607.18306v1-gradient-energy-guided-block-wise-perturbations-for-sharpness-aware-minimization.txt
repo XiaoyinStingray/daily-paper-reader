@@ -1,0 +1,829 @@
+Title: Gradient-Energy Guided Block-Wise Perturbations for Sharpness-Aware Minimization
+
+URL Source: https://arxiv.org/pdf/2607.18306v1
+
+Published Time: Wed, 22 Jul 2026 00:03:02 GMT
+
+Number of Pages: 11
+
+Markdown Content:
+> 1
+
+# Gradient-Energy Guided Block-Wise Perturbations for Sharpness-Aware Minimization 
+
+Zhen Huang, Jiaxin Deng, and Junbiao Pang 
+
+Abstract —Sharpness-Aware Minimization (SAM) improves generalization by minimizing the worst-case loss in a local parameter neighborhood. Standard SAM implicitly allocates its global perturbation budget across parameter blocks according to instantaneous minibatch gradient norms. Such an allocation can be noisy and may not reflect the sensitivity that blocks accumulate throughout training. We propose Gradient-Energy Adaptive Ra-dius SAM (GEAR-SAM), which maintains an exponential moving average (EMA) of squared block gradients as a lightweight, curvature-related sensitivity signal and allocates the fixed SAM budget through a closed-form constrained optimization. GEAR-SAM preserves the global SAM radius, requires no Hessian-vector products or explicit Fisher estimation, and adds only scalar state beyond SAM. Experiments on image classification, transfer learning, noisy-label learning, and partition studies demonstrate improved generalization and robustness across architectures and tasks. More broadly, GEAR-SAM provides a dynamic view of sharpness-aware optimization: a fixed perturbation budget should be redistributed as the sensitivity of functional network blocks evolves during training. 
+
+I. I NTRODUCTION 
+
+Deep neural networks often generalize better when opti-mization converges to flatter minima [1]–[3]. Sharpness-Aware Minimization (SAM) explicitly encourages such solutions by minimizing the worst-case loss in a local neighborhood of the current parameters [4]. Due to its simplicity and effectiveness, SAM has become a widely used training strategy and has in-spired many follow-up methods, including ASAM [5], GSAM [6], Fisher SAM [7], F-SAM [8], and BSAM [9]. Despite its success, standard SAM makes its perturbation decision from the current stochastic gradient. When the net-work is partitioned into functional blocks, this decision implic-itly assigns a different portion of the global perturbation budget to each block, but the allocation is determined only by the current minibatch. This is a dynamic issue: the optimization roles and perturbation sensitivities of network blocks can evolve throughout training, whereas an instantaneous gradient can be dominated by minibatch noise or transient updates. Thus, a fixed global radius should not imply a fixed or purely instantaneous allocation across the network. To construct a stable dynamic allocation, the signal should reflect more than a transient gradient magnitude. Directly using curvature information during training is difficult: Hessian matrices are infeasible to store for modern networks, and online Hessian-vector or Hessian-block estimation introduces 
+
+Z. Huang, J. Deng, and J. Pang are with the Faculty of Informa-tion Technology, Beijing University of Technology, Beijing, China (e-mail: huangzhen@emails.bjut.edu.cn; dengjiaxin@emails.bjut.edu.cn; jun-biao_pang@bjut.edu.cn). Corresponding author: Junbiao Pang. 
+
+additional computation. Fisher information provides a natural curvature-related alternative and has been used in geometry-aware SAM methods [7]. Nevertheless, explicit Fisher esti-mation is still costly. Motivated by the connection between squared gradients, diagonal empirical Fisher information, and expected Hessian information under standard likelihood as-sumptions [10], [11], we use an online second-moment statistic as a lightweight curvature-related signal. In this work, we revisit SAM as a dynamic block-wise budget-allocation method. We show that standard SAM in-duces a different effective radius for each block, but this implicit allocation depends only on instantaneous minibatch gradient norms. GEAR-SAM instead uses an exponential mov-ing average (EMA) of squared block gradients as a persistent sensitivity score and allocates the fixed SAM perturbation budget according to this historical signal. The resulting per-turbation preserves the global SAM budget while assigning larger radii to blocks that have remained sensitive over the recent optimization history. Our contributions are summarized as follows:  
+
+> •
+
+We analyze SAM from a second-order and dynamic block-wise perspective, showing that its practical pertur-bation is first-order optimal but ignores curvature-related block sensitivity and temporal persistence.  
+
+> •
+
+We propose GEAR-SAM, which uses EMA-based histor-ical gradient energy as a persistent Fisher-related second-moment signal and derives a closed-form block-wise radius allocation under a fixed SAM budget.  
+
+> •
+
+We conduct experiments on image classification, transfer learning, label-noise robustness, and partition and param-eter studies, demonstrating the effectiveness and stability of the proposed allocation strategy. II. R ELATED WORK 
+
+A. Sharpness-Aware Minimization 
+
+SAM improves generalization by optimizing the loss at adversarially perturbed parameters within a local neighbor-hood [4]. The method is simple and effective, but its practical perturbation is computed using a first-order approximation of the inner maximization. A large body of work has therefore studied how to improve SAM from different perspectives. ASAM addresses the scale dependency of sharpness [5]. GSAM introduces a surrogate gap to better guide flat-minima search [6]. F-SAM analyzes the role of stochastic-gradient components in SAM perturbations [8]. BSAM introduces bi-lateral sharpness by considering both max-sharpness and min-sharpness [9]. Other methods improve the efficiency of SAM arXiv:2607.18306v1 [cs.LG] 17 Jul 2026 2
+
+through stochastic perturbation, perturbation reuse, sample selection, or parallelization [12]–[16]. These methods mainly modify the sharpness objective, perturbation direction, or computational procedure. In contrast, GEAR-SAM focuses on how a fixed perturbation budget is allocated across parameter blocks. 
+
+B. Structure-aware SAM 
+
+Although SAM is usually formulated over the full parameter vector, recent work shows that its behavior depends strongly on network structure. Perturbing normalization layers can retain much of the benefit of full-parameter SAM [17], and the role of normalization has been studied theoretically and empirically [18]. Effective SAM updates may require layer-wise perturbation scaling [19], while sparse or selective per-turbations can further improve SAM [20]–[23]. These findings indicate that treating the network as a single undifferentiated parameter vector can overlook useful structure. These studies motivate structure-aware perturbation design. Most existing methods either select a subset of parameters or modify scaling at the layer level. GEAR-SAM instead partitions the network into functional blocks and continuously allocates a fixed global perturbation budget among them according to historical block sensitivity. It therefore changes neither the perturbation geometry nor the set of perturbed parameters. 
+
+C. Curvature Proxies for Hessian 
+
+Sharpness-aware training is closely related to local curva-ture. Hessian-based quantities, such as the largest eigenvalue or trace, are widely used to characterize flatness and generaliza-tion [1]–[3], [24]. Recent studies also connect SAM with sta-bility, first-order flatness, and explicit curvature regularization [25]–[27]. However, explicit Hessian computation is expensive for modern neural networks. Fisher information provides a practical curvature-related alternative. Fisher SAM uses Fisher geometry to define SAM neighborhoods [7], while Fisher Mask SAM uses Fisher infor-mation to estimate parameter importance [21]. Nevertheless, explicit Fisher estimation is still costly, and empirical Fisher should not be treated as an exact Hessian estimator [10]. Adam-style squared-gradient statistics provide an efficient online second-moment signal [28] and have been connected to diagonal empirical Fisher information [11]. Motivated by this connection, GEAR-SAM uses block-wise historical gradient energy as a lightweight curvature-related proxy for adaptive radius allocation. III. M ETHOD 
+
+A. Motivation 
+
+SAM solves the following local min-max problem: 
+
+min  
+
+> w
+
+max  
+
+> ∥ϵ∥2≤ρ
+
+L(w + ϵ). (1) At iteration t, let 
+
+gt = ∇wLBt (wt), Ht = ∇2
+
+> w
+
+LBt (wt). (2) The practical perturbation used by SAM is derived from the first-order approximation 
+
+LBt (wt + ϵ) ≈ LBt (wt) + g⊤ 
+
+> t
+
+ϵ. (3) Solving the corresponding inner maximization gives 
+
+ϵSAM  
+
+> t
+
+= ρ gt
+
+∥gt∥2
+
+. (4) for gt̸ = 0; if the full gradient is zero, we define the first-order perturbation as zero. Thus, Eq. (4) is optimal for the linearized sharpness objective. This follows directly from the Cauchy–Schwarz inequality: g⊤ 
+
+> t
+
+ϵ ≤ ∥ gt∥2∥ϵ∥2 ≤ ρ∥gt∥2,with equality when ϵ is parallel to gt.However, the local sharpness objective also contains curva-ture. A second-order approximation gives 
+
+LBt (wt + ϵ) ≈ LBt (wt) + g⊤ 
+
+> t
+
+ϵ + 12 ϵ⊤Htϵ
+
+| {z }
+
+> Qt(ϵ)
+
+. (5) Let Qt(ϵ) denote the quadratic terms in Eq. (5). The max-imization of Qt over the norm ball is a classical trust-region problem [29]. When the associated optimality system is nonsingular, its solution has the form 
+
+ϵ⋆t = (2 λtI − Ht)−1gt, (6) where λt is chosen to satisfy the trust-region conditions. The complete conditions, including the singular hard case, are given in the appendix. Equation (6) shows that the desirable perturbation is shaped by both gradient gt and curvature 
+
+Ht. Thus, SAM is first-order optimal, but it is generally not optimal for the second-order sharpness objective. 
+
+B. Block-Wise View of SAM 
+
+Computing the Hessian information in Eq. (6) online is costly. We therefore study how to allocate the fixed SAM radius across parameter blocks while preserving the current gradient direction within each block. Let the parameters be divided into B disjoint blocks: 
+
+w = ( w1, w2, . . . , wB ), (7) with the corresponding gradient decomposition 
+
+gt = ( g1,t , g2,t , . . . , gB,t ). (8) 
+
+Architecture-aware block partition. We use a coarse, architecture-aware partition rather than treating every parame-ter tensor as an independent group. A block is a self-contained architecture-level computation unit, or a contiguous group of such units that operates at the same representation scale. Thus, a coarse block can contain multiple residual units; the input stem and final classifier are separate blocks. Every trainable parameter belongs to exactly one block. All trainable affine normalization parameters belonging to a computation unit are assigned to the same block as its weight layers; non-trainable normalization buffers are not perturbed. This treatment is important because normalization parameters are not interchangeable with arbitrary small parameter subsets. In particular, perturbing only affine normalization parameters 3
+
+can retain, and sometimes exceed, the benefit of full-parameter SAM [17]. Assigning these parameters to a separate radius would split the scale-modulating normalization operation from the weights whose activations it normalizes. We therefore use the aggregate gradient energy of the complete functional block as its allocation signal. This is an architecture-aware design principle, not a claim that a single partition granularity is uni-versally optimal; alternative block granularities are evaluated in Table VI. From Eq. (4), the perturbation applied to block b is 
+
+ϵSAM  
+
+> b,t
+
+= ρ gb,t 
+
+qPBj=1 ∥gj,t ∥22
+
+. (9) This can be written as a block-wise radius times a normalized block direction: 
+
+ϵSAM  
+
+> b,t
+
+= rSAM 
+
+> b,t
+
+gb,t 
+
+∥gb,t ∥2
+
+, rSAM  
+
+> b,t
+
+= ρ ∥gb,t ∥2
+
+qPBj=1 ∥gj,t ∥22
+
+. (10) Equation (10) reveals that SAM already performs block-wise radius allocation. Its allocation score is the instantaneous minibatch gradient norm ∥gb,t ∥2. This allocation is consistent with the first-order inner maximization, but it does not encode the curvature term in Eq. (5). 
+
+Observation 1 (Implicit SAM allocation). For any partition of parameters into blocks and any nonzero full gradient, the SAM perturbation in Eq. (4) is equivalent to a block-wise perturbation whose block radius is given by Eq. (10). Moreover, these block radii preserve the global SAM budget, i.e., PBb=1 (rSAM  
+
+> b,t
+
+)2 = ρ2. The derivation is given in the appendix. This observation makes explicit that SAM is already an implicit allocation method, but the allocation signal is only the instantaneous gradient norm. If the full gradient is zero, SAM uses zero perturbation under our convention. When only a block gradient is zero, its SAM radius and perturbation are defined as zero. Figure 1 illustrates this dynamic allocation on ResNet-18 during the first 40 epochs, when the allocation changes most rapidly. Although both methods use the same global pertur-bation budget at every iteration, GEAR-SAM more quickly reduces the share assigned to the classifier and assigns larger shares to Layer3 and Layer4. The complete trajectories are reported in the appendix. This early redistribution motivates an allocation signal that summarizes recent optimization history rather than reacting only to the current minibatch. To see the second-order information missing from the instantaneous allocation, write the block perturbation as 
+
+ϵb,t = rb,t ub,t , ub,t = gb,t 
+
+∥gb,t ∥2
+
+. (11) Here ub,t is defined for blocks with nonzero gradient; zero-gradient blocks contribute no first-order direction under our convention. Let ∆Lt = LBt (wt + ϵt) − LBt (wt) denote the perturbed minibatch-loss increase. Applying a second-order Taylor expansion and, for interpretation, omitting cross-block Hessian terms gives 
+
+∆Lt ≈
+
+> B
+
+X
+
+> b=1
+
+rb,t ∥gb,t ∥2 + 12
+
+> B
+
+X
+
+> b=1
+
+r2
+
+> b,t
+
+u⊤
+
+> b,t
+
+Hbb,t ub,t . (12) Therefore, an informative block-wise allocation should con-sider not only the current gradient magnitude but also persis-tent block sensitivity related to curvature. 
+
+C. Gradient Energy as a Curvature-related Proxy 
+
+The ideal block sensitivity in Eq. (12) would involve Hessian-block information such as u⊤
+
+> b,t
+
+Hbb,t ub,t , trace, or spectral quantities. These quantities are too expensive to estimate at every iteration. We instead use squared-gradient statistics as a lightweight online proxy. To distinguish per-example and minibatch quantities, let 
+
+zt(x) = ∇wℓ(wt; x) denote the gradient of one example x.Define its mean and second-moment matrix, 
+
+μt = Ex[zt(x)] , Ct = Ex[zt(x)zt(x)⊤]. (13) For a negative log-likelihood, Ct equals the Fisher information when the expectation is taken under the model distribution. Under the training distribution, it is an empirical-Fisher-related gradient second moment and should not be identified with the Hessian in general [10]. Under standard likelihood regularity and model-matching assumptions, however, the Fisher equals the expected Hessian. We use only this curvature-related connection, not an exact Hessian equivalence. Assume that the minibatch loss is an average over m
+
+independently sampled examples. For block b,
+
+gb,t = 1
+
+m
+
+> m
+
+X
+
+> i=1
+
+zb,t (xi). (14) Conditioned on wt, its squared norm satisfies the exact identity 
+
+EBt ∥gb,t ∥22 = 1
+
+m Tr( Cbb,t )+
+
+
+
+1 − 1
+
+m
+
+
+
+∥μb,t ∥22.
+
+(15) Thus, the squared minibatch gradient is not an unbiased empirical-Fisher trace estimator. Near a stationary region, where ∥μb,t ∥2 is small, m E∥gb,t ∥22 approaches the block-wise second-moment trace; the common factor m cancels after block normalization. Away from stationarity, the statistic also retains a mean-gradient contribution, making it a mixed first-and second-moment sensitivity signal. For block b, we define the instantaneous gradient energy as 
+
+eb,t = ∥gb,t ∥22, (16) and maintain its exponential moving average: 
+
+sb,t = βs b,t −1 + (1 − β)eb,t , β ∈ [0 , 1) . (17) Because summation and EMA updates are linear, sb,t is equivalent to summing Adam-style per-parameter second mo-ments within block b [11], [28]. We deliberately retain the total second-moment mass rather than divide by the block dimension: it is additive over a partition and represents the aggregate sensitivity of a block under a global ℓ2 perturbation budget. 
+
+Lemma 1 (EMA estimation). Assume that the stochastic en-ergies eb,t are locally stationary with mean ¯eb. With sb, 0 = 0 ,the EMA satisfies 
+
+E[sb,t ] = (1 − βt)¯ eb. (18) 4SAM  GEAR-SAM                
+
+> Budget share
+> ρᵦ² / ρ²
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 110 20 30 40
+> (a) Classifier
+> Epoch
+> Epoch-40 (SAM / GEAR-SAM)
+> 0.076 / 0.030
+> 110 20 30 40
+> (b) Layer3
+> Epoch
+> Epoch-40 (SAM / GEAR-SAM)
+> 0.290 / 0.359
+> 110 20 30 40
+> (c) Layer4
+> Epoch
+> Epoch-40 (SAM / GEAR-SAM)
+> 0.406 / 0.467
+> Fig. 1. Early block-wise perturbation dynamics of SAM and GEAR-SAM on ResNet-18 trained on CIFAR-100. The plots show the first 40 epochs for the classifier and the two deeper feature blocks. Each panel reports the normalized perturbation-budget share ρ2
+> b,t /ρ 2at epoch 40.
+
+The common bias factor 1 − βt cancels in the normalized allocation rule. The appendix also shows that, under an independent-noise idealization, EMA reduces the variance of the instantaneous energy. We therefore use sb,t as a persistent aggregate sensitivity score, not as an exact Fisher or Hessian estimator. 
+
+D. Gradient-Energy Adaptive Radius Allocation 
+
+Given the block sensitivity scores {sb,t }Bb=1 , we allocate the global SAM radius ρ across blocks. Let rb,t denote the radius assigned to block b. We require the same global budget as SAM: BX
+
+> b=1
+
+r2 
+
+> b,t
+
+≤ ρ2, rb,t ≥ 0. (19) This leaves the question of how to transform sensitivity scores into radii. We use a simple surrogate allocation principle: larger sensitivity should receive a larger radius, the global bud-get should remain controlled, and the rule should not introduce additional block-wise hyperparameters. These requirements do not uniquely solve the second-order inner problem. We instan-tiate them with a scale-invariant linear alignment surrogate: 
+
+max 
+
+> {rb,t }Bb=1
+> B
+
+X
+
+> b=1
+
+sb,t rb,t , s.t.
+
+> B
+
+X
+
+> b=1
+
+r2 
+
+> b,t
+
+≤ ρ2, rb,t ≥ 0. (20) Equation (20) is a budget-preserving surrogate rather than an exact second-order solution. We align radii directly with the second-moment mass sb,t , which emphasizes blocks with persistently large aggregate sensitivity, is invariant to a com-mon rescaling of all scores, and avoids an additional exponent hyperparameter. 
+
+Proposition 1 (Closed-form allocation). If the nonnegative score vector is nonzero, the unique radius vector solving Eq. (20) is 
+
+r⋆b,t = ρ sb,t 
+
+qPBj=1 s2
+
+> j,t
+
+. (21) The proof is given in the appendix. We denote the resulting block radius by ρb,t = r⋆b,t .The perturbation direction within each block is kept as the current gradient direction, giving 
+
+ϵb,t = ρb,t 
+
+gb,t 
+
+∥gb,t ∥2
+
+. (22) The idealized analysis assumes nonzero block gradients. In implementation, we use the stabilized direction eub,t =
+
+gb,t /(∥gb,t ∥2 + δ) with a small δ > 0; a zero-gradient block therefore contributes no perturbation. The complete perturbation is 
+
+ϵt = ( ϵ1,t , ϵ2,t , . . . , ϵB,t ). (23) The allocated radii exactly exhaust the radius budget, 
+
+> B
+
+X
+
+> b=1
+
+ρ2 
+
+> b,t
+
+= ρ2. (24) With exact unit directions, Eq. (24) also gives ∥ϵt∥2 = ρ.With the stabilized implementation, ∥eub,t ∥2 ≤ 1, and hence 
+
+∥ϵt∥2 ≤ ρ. Therefore, GEAR-SAM never enlarges the SAM neighborhood. Its effect comes from reallocating the same radius budget according to historical curvature-related block sensitivity. 
+
+E. Algorithm and Complexity 
+
+After constructing ϵt, GEAR-SAM follows the standard SAM update rule. The perturbed gradient is computed as 
+
+Gt = ∇wLBt (wt + ϵt). (25) With SGD as the base optimizer, the parameter update is 
+
+wt+1 = wt − ηGt. (26) Other base optimizers can also be used in the same way. GEAR-SAM has the same number of forward–backward passes as SAM: one gradient computation constructs the per-turbation and a second computes the gradient at the perturbed point. Computing the block energies requires reductions over the model gradients, with O(d) arithmetic for d parameters, comparable to the global-norm reduction already used by SAM. The persistent state consists of only B scalar EMA values, followed by O(B) normalization. Thus GEAR-SAM 5
+
+Algorithm 1 GEAR-SAM 
+
+Require: Training data, model parameters w, learning rate η,SAM radius ρ, EMA factor β, stability constant δ 
+
+> 1:
+
+Initialize sb = 0 for each block b = 1 , . . . , B  
+
+> 2:
+
+for each iteration t do  
+
+> 3:
+
+Sample a minibatch Bt 
+
+> 4:
+
+Compute block-wise gradients on Bt 
+
+> 5:
+
+Update block sensitivity scores according to Eq. (17)  
+
+> 6:
+
+if the score vector is nonzero then  
+
+> 7:
+
+Allocate block radii according to Eq. (21)  
+
+> 8:
+
+else  
+
+> 9:
+
+Set ρb,t = 0 for all blocks  
+
+> 10:
+
+end if  
+
+> 11:
+
+Construct stabilized block perturbations as described after Eq. (22)  
+
+> 12:
+
+Compute the perturbed gradient according to Eq. (25)  
+
+> 13:
+
+Update the parameters according to Eq. (26)  
+
+> 14:
+
+end for 
+
+does not change the dominant forward–backward complexity and introduces only lightweight reductions and scalar state beyond SAM. Different from sparse or selective SAM methods, GEAR-SAM does not decide whether a layer should be perturbed. Instead, it continuously allocates radii across blocks under a fixed global budget. Different from Fisher-based SAM vari-ants, it does not modify the perturbation geometry or require explicit Fisher matrix estimation. Thus, GEAR-SAM provides a lightweight plug-in allocation mechanism for sharpness-aware optimization. IV. E XPERIMENTS 
+
+A. Image Classification 1) Setup: To evaluate GEAR-SAM’s effectiveness, we con-duct experiments on the CIFAR-10 and CIFAR-100 datasets across a variety of architectures, i.e., ResNet-18, WideResNet-28-10, and PyramidNet-110. ResNet-18 and WideResNet-28-10 are trained for 200 epochs, while PyramidNet-110 is trained for 300 epochs. For ResNet-18 and WideResNet-28-10, the initial learning rate is set to 0.05 with a cosine schedule, and the momentum and weight decay are set to 0.9 and 0.001, respectively. For PyramidNet-110, the initial learning rate is 0.1, and the momentum and weight decay are set to 0.9 and 0.0005, respectively. For CIFAR-10, ρ is set to 0.1, while for CIFAR-100, it is set to 0.2. The EMA factor β is set to 0.9 for both datasets. We apply the architecture-aware block partition described in the method section. ResNet-18 is divided into the stem, four coarse residual blocks ( layer1 –layer4 ), and the classifier. WideResNet-28-10 and PyramidNet-110 are divided into the stem, three coarse representation blocks, and the classifier. For GEAR-SAM, we conduct three independent runs with different random seeds and report the average accuracy and standard deviation. We use vanilla SGD and SAM as baselines. To compre-hensively evaluate the performance, we also include ASAM, FisherSAM, F-SAM, SGD-SALR, Unified VaSSO, SSAM-F, and SSAM-D for comparison. These methods are follow-up works of SAM that aim to enhance generalization. For ASAM, FisherSAM, and F-SAM, we report the results in F-SAM [8]. These three methods were run for 300 epochs on PyramidNet-110, and we denote them as ASAM (300) , FisherSAM (300) ,and F-SAM (300) , respectively. In addition, we compare several efficient SAM variants, including LookSAM, ESAM, and SAF. For SGD-SALR, Unified VaSSO, SSAM-F, SSAM-D, LookSAM, ESAM, SAF, SGD, SAM, and BSAM, we directly use the results reported in BSAM [9]. 
+
+2) Results: Table I reports the test accuracy on CIFAR-10 and CIFAR-100. GEAR-SAM consistently improves upon SGD across all architectures and datasets. On CIFAR-10, its largest gain over SGD is obtained with PyramidNet-110, where accuracy increases by 0.71%; it also improves standard SAM by 0.09% and 0.16% on ResNet-18 and PyramidNet-110, respectively. On CIFAR-100, the improvements are consider-ably larger. GEAR-SAM exceeds SGD by 1.85%, 2.97%, and 3.52%, and exceeds SAM by 0.66%, 0.82%, and 0.84% on ResNet-18, WideResNet-28-10, and PyramidNet-110, respec-tively. This indicates that the proposed allocation is effective across networks with different depth and width configurations. Compared with other SAM variants, GEAR-SAM achieves the best accuracy for all three architectures on CIFAR-100, including both methods designed to enhance generalization and efficient SAM variants. On CIFAR-10, it remains compet-itive, while SSAM-D gives the highest accuracy on ResNet-18 and WideResNet-28-10 and BSAM gives the highest accuracy on PyramidNet-110. The smaller differences among methods on CIFAR-10 suggest that performance is already close to saturation on this dataset. In contrast, the consistent advantage on CIFAR-100 shows that historical block sensitivity becomes more useful as the classification problem requires finer inter-class discrimination. Overall, these results support the effec-tiveness of using a stable curvature-related signal to guide perturbation allocation across heterogeneous network blocks. 
+
+B. Top Eigenvalues of Hessian 
+
+The maximum Hessian eigenvalue is commonly viewed as a potential sharpness/flatness metric [2], [3], [24]. To offer a more quantitative assessment of sharpness, we compare the maximum Hessian eigenvalues obtained from SGD, SAM, and GEAR-SAM. The resulting spectra provide complementary evidence about both the sharpest local direction and the overall distribution of dominant curvature. We analyze the Hessian spectra of ResNet-18 trained on CIFAR-100 with SGD, SAM, and GEAR-SAM using the CIFAR-100 test set. We compute the Hessian spectrum using PyHessian [30]. For each method, we report the maximum eigenvalue of the Hessian, a histogram of the top-50 Hes-sian eigenvalues, and the mean and variance of these top-50 Hessian eigenvalues. As shown in Fig. 2, both SAM and GEAR-SAM substantially shift the dominant Hessian spec-trum toward smaller values compared with SGD. GEAR-SAM obtains the smallest maximum eigenvalue, reducing it from 365.78 for SGD and 200.72 for SAM to 192.92. Its variance 60 100 200 300 400 
+
+> Eigenvalue
+> 0
+> 5
+> 10
+> 15
+> 20
+> Frequency
+> The maximum eigenvalue: 365.78
+> The mean of top-50 eigenvalues: 117.45
+> The variance of top-50 eigenvalues: 6266.93
+
+(a) 0 100 200 300 400 
+
+> Eigenvalue
+> 0
+> 5
+> 10
+> 15
+> 20
+> Frequency
+> The maximum eigenvalue: 200.72
+> The mean of top-50 eigenvalues: 52.48
+> The variance of top-50 eigenvalues: 1656.25
+
+(b) 0 100 200 300 400 
+
+> Eigenvalue
+> 0
+> 5
+> 10
+> 15
+> 20
+> Frequency
+> The maximum eigenvalue: 192.92
+> The mean of top-50 eigenvalues: 55.16
+> The variance of top-50 eigenvalues: 1633.00
+
+(c) 
+
+Fig. 2. Histograms of the top-50 Hessian eigenvalues of ResNet-18 trained on CIFAR-100 with (a) SGD, (b) SAM, and (c) GEAR-SAM. Each panel also reports the maximum eigenvalue and the mean and variance of the top-50 eigenvalues. TABLE I TEST ACCURACY (%) COMPARISON OF VARIOUS NETWORKS ON 
+
+CIFAR-10 AND CIFAR-100. 
+
+Architecture Method CIFAR-10 CIFAR-100 ResNet-18 SGD 96.18 ±0.09 79.89 ±0.38 SAM 96.74 ±0.05 81.08 ±0.27 ASAM 96.63 ±0.15 81.68 ±0.12 FisherSAM 96.72 ±0.03 80.99 ±0.13 F-SAM 96.75 ±0.09 81.29 ±0.12 SGD-SALR / 81.73 ±0.10 Unified VaSSO 96.34 ±0.01 80.01 ±0.07 SSAM-F 96.81 ±0.02 81.24 ±0.21 SSAM-D 96.87 ±0.04 80.58 ±0.44 LookSAM 96.47 ±0.13 80.48 ±0.24 ESAM 96.56 ±0.08 80.41 ±0.10 SAF 96.37 ±0.02 80.06 ±0.05 BSAM 96.82 ±0.12 81.48 ±0.18 GEAR-SAM 96.83 ±0.10 81.74 ±0.08 
+
+WideResNet-28-10 SGD 96.93 ±0.05 82.56 ±0.27 SAM 97.52 ±0.05 84.71 ±0.21 ASAM 97.63 ±0.13 84.99 ±0.22 FisherSAM 97.46 ±0.18 84.91 ±0.07 F-SAM 97.53 ±0.11 85.16 ±0.07 SGD-SALR / 83.12 ±0.09 Unified VaSSO 97.06 ±0.09 83.66 ±0.19 SSAM-F 97.71 ±0.23 85.16 ±0.96 SSAM-D 97.72 ±0.24 84.99 ±0.79 LookSAM 97.13 ±0.04 83.52 ±0.09 ESAM 97.29 ±0.11 84.51 ±0.01 SAF 97.08 ±0.15 83.81 ±0.04 BSAM 97.56 ±0.07 85.51 ±0.14 GEAR-SAM 97.50 ±0.05 85.53 ±0.04 
+
+PyramidNet-110 SGD 97.10 ±0.08 83.38 ±0.21 SAM 97.65 ±0.06 86.06 ±0.16 ASAM (300) 97.82 ±0.07 86.47 ±0.09 FisherSAM (300) 97.64 ±0.09 86.53 ±0.07 F-SAM (300) 97.84 ±0.05 86.70 ±0.14 SGD-SALR / 85.69 ±0.10 LookSAM 97.22 ±0.05 83.76 ±0.45 ESAM 97.81 ±0.01 85.56 ±0.05 SAF 97.34 ±0.06 84.71 ±0.01 BSAM 97.96 ±0.10 86.20 ±0.06 GEAR-SAM 97.81 ±0.01 86.90 ±0.27 
+
+is also slightly lower than that of SAM (1633.00 versus 1656.25), suggesting that GEAR-SAM suppresses extreme high-curvature directions without broadening the dominant spectrum. GEAR-SAM does not outperform SAM on every spectral statistic: its top-50 mean is 55.16, compared with 52.48 for SAM. This result indicates that the benefit of block-wise radius allocation is concentrated in reducing the sharpest local direction rather than uniformly shrinking all dominant eigenvalues. Overall, the spectrum supports a more precise conclusion: GEAR-SAM reaches a curvature profile compa-rable to SAM while further reducing the worst-case local sharpness measured by the maximum Hessian eigenvalue. 
+
+TABLE II TEST ACCURACY (%) OF RES NET -18 UNDER SYMMETRIC LABEL NOISE .
+
+Dataset Method 20% 40% 60% 80% CIFAR-10 SGD 85.94 70.25 48.50 28.91 SAM 90.44 79.71 67.22 76.94 GEAR-SAM 92.90 90.91 87.21 79.15 
+
+CIFAR-100 SGD 65.42 48.91 31.46 12.32 SAM 69.10 55.06 35.59 9.82 GEAR-SAM 68.11 57.86 50.45 35.96 
+
+C. Robustness to Label Noise 
+
+Since prior studies have shown that SAM is robust to label noise, this section evaluates the effect of applying GEAR-SAM in the classical noisy-label setting for CIFAR-10 and CIFAR-100. We evaluate GEAR-SAM under symmetric label noise by randomly flipping training labels [9], [31]. The training settings are the same as those in the image classification experiments, except that the perturbation radii of both SAM and GEAR-SAM are set to ρ = 0 .05 for all noise rates on both datasets. As shown in Table II, for CIFAR-10, the accuracy of models optimized with SGD decreases rapidly as the noise rate increases, dropping to only 28.91% when the noise rate reaches 80%. In contrast, the accuracy of models optimized with SAM and GEAR-SAM decreases more slowly as the label noise increases, and both methods maintain over 70% accuracy at the 80% noise rate. GEAR-SAM achieves the best results at all four noise rates, reaching 92.90%, 90.91%, 87.21%, and 79.15%, respectively. For CIFAR-100, we observe a similar overall trend. At the 20% noise rate, SAM obtains slightly higher accuracy than GEAR-SAM. When the noise rate rises to 40%, 60%, and 80%, however, GEAR-SAM achieves 57.86%, 50.45%, and 35.96%, respectively, consistently outperforming both SGD and SAM. In particular, when the noise rate reaches 80%, SAM falls below SGD, whereas GEAR-SAM still maintains substantially higher accuracy. These observations indicate that GEAR-SAM can converge effectively in the presence of extensive incorrect supervision, facilitates learning from the remaining clean labels, and mitigates overfitting to noisy labels. Overall, GEAR-SAM improves the robustness of sharpness-aware training and provides stronger generalization under moderate and severe label noise. 7
+
+TABLE III TEST ACCURACY (%) ON TRANSFER -LEARNING BENCHMARKS .                                  
+
+> Backbone Dataset SGD SAM GEAR-SAM EfficientNet-B0 CIFAR-10 97.32 ±0.07 97.48 ±0.07 97.95 ±0.03
+> CIFAR-100 87.05 ±0.11 87.27 ±0.21 88.28 ±0.05
+> Flowers102 77.11 ±0.36 78.04 ±0.37 84.04 ±0.24
+> Stanford Cars 74.47 ±0.55 75.75 ±0.41 80.54 ±0.45
+> Oxford-IIIT Pet 87.89 ±0.43 88.30 ±0.16 91.91 ±0.21
+> ResNet-50 CIFAR-10 97.28 ±0.05 97.78 ±0.02 97.77 ±0.04 CIFAR-100 86.20 ±0.18 87.48 ±0.04 87.80 ±0.04
+> Flowers102 86.74 ±0.16 87.53 ±0.13 89.29 ±0.08
+> Stanford Cars 80.02 ±0.24 83.69 ±0.19 86.69 ±0.10
+> Oxford-IIIT Pet 93.11 ±0.17 93.14 ±0.14 92.96 ±0.11
+
+D. Transfer Learning 
+
+Transfer learning leverages a model trained on one task to improve performance on a related task. By fine-tuning a pretrained model or using its learned representations, transfer learning can reduce the training time and data requirement of the target task, and often improves performance when the target dataset is limited. Previous studies have demonstrated the effectiveness of SAM and its variants in transfer learning [4], [8]. In this section, we evaluate the performance of GEAR-SAM in transfer learning tasks. Specifically, we apply SGD, SAM, and GEAR-SAM to fine-tune EfficientNet-B0 and ResNet-50 pretrained on ImageNet. Weights are initialized from publicly available checkpoints, except for the final classification layer, which is resized according to the number of target classes and randomly initialized. We train the models for 30 epochs with a batch size of 128. The initial learning rate is set to 0.01 with cosine learning rate decay. Weight decay is set to 1 × 10 −5
+
+for EfficientNet-B0 and 1 × 10 −4 for ResNet-50. For SAM and GEAR-SAM, we use SGD as the base optimizer. The perturbation radius of SAM is set to 0.05. For GEAR-SAM, the perturbation radius ρ is set to 0.2, and the EMA factor 
+
+β is set to 0.9. We do not use any data augmentation for Flowers102, Stanford Cars, and Oxford-IIIT Pet. For CIFAR-10 and CIFAR-100, we employ the same data augmentations as the image classification experiments. As shown in Table III, SAM exhibits stronger generalization than SGD on both EfficientNet-B0 and ResNet-50, and GEAR-SAM further improves SAM in most transfer-learning tasks. On EfficientNet-B0, GEAR-SAM achieves the best results on all five datasets, with particularly large gains on Flowers102, Stanford Cars, and Oxford-IIIT Pet. On ResNet-50, GEAR-SAM obtains the best accuracy on CIFAR-100, Flowers102, and Stanford Cars, while remaining competitive on CIFAR-10 and Oxford-IIIT Pet. These results indicate that the proposed block-wise radius allocation is effective not only when training from scratch, but also when adapting pretrained representa-tions to downstream tasks. Additional results comparing alternative block partitions are provided in the appendix. 
+
+E. Parameter Studies 
+
+We examine the sensitivity of GEAR-SAM to its main hyperparameters. The perturbation radius ρ controls the size of the neighborhood, while the EMA factor β controls the 
+
+TABLE IV EFFECT OF PERTURBATION RADIUS ρ ON CIFAR-100 WITH RES NET -18.           
+
+> ρ0.10 0.15 0.20 0.25 0.30 Accuracy 81.45 81.52 81.83 81.18 81.22
+
+TABLE V EFFECT OF EMA FACTOR β ON CIFAR-100 WITH RES NET -18.           
+
+> β0.80 0.85 0.90 0.95 0.99 Accuracy 81.55 81.56 81.83 81.38 81.27
+
+stability of the block sensitivity estimate. Tables IV and V show that GEAR-SAM performs best around ρ = 0 .2 and 
+
+β = 0 .9 on ResNet-18 with CIFAR-100. Smaller radii provide weaker sharpness regularization, while larger radii may harm optimization. Smaller β values make the allocation close to instantaneous gradients, while larger values adapt too slowly. V. C ONCLUSION 
+
+In this paper, we revisited SAM from a curvature-aware block-wise allocation perspective. We showed that the practi-cal SAM perturbation is optimal for the first-order inner max-imization, but the second-order sharpness objective indicates that curvature information should also guide perturbations. We further showed that standard SAM already performs an implicit block-wise radius allocation, where the radius of each block depends only on instantaneous minibatch gradient norms. Based on these observations, we proposed GEAR-SAM, which estimates block sensitivity using EMA-based gradient energy and allocates the fixed SAM radius through a closed-form constrained alignment rule. GEAR-SAM pre-serves the global SAM budget and requires no explicit Hessian or Fisher computation. Experiments on image classification, transfer learning, noisy-label learning, and partition and pa-rameter studies demonstrate that the proposed allocation strat-egy improves the effectiveness and robustness of SAM-based optimization. REFERENCES [1] N. S. Keskar, D. Mudigere, J. Nocedal, M. Smelyanskiy, and P. T. P. Tang, “On large-batch training for deep learning: Generalization gap and sharp minima,” arXiv preprint arXiv:1609.04836 , 2016. [2] Y. Jiang, B. Neyshabur, H. Mobahi, D. Krishnan, and S. Bengio, “Fantastic generalization measures and where to find them,” arXiv preprint arXiv:1912.02178 , 2019. [3] P. Chaudhari, A. Choromanska, S. Soatto, Y. LeCun, C. Baldassi, C. Borgs, J. Chayes, L. Sagun, and R. Zecchina, “Entropy-sgd: Biasing gradient descent into wide valleys,” Journal of Statistical Mechanics: Theory and Experiment , vol. 2019, no. 12, p. 124018, 2019. [4] P. Foret, A. Kleiner, H. Mobahi, and B. Neyshabur, “Sharpness-aware minimization for efficiently improving generalization,” arXiv preprint arXiv:2010.01412 , 2020. [5] J. Kwon, J. Kim, H. Park, and I. K. Choi, “Asam: Adaptive sharpness-aware minimization for scale-invariant learning of deep neural net-works,” in International conference on machine learning . PMLR, 2021, pp. 5905–5914. [6] J. Zhuang, B. Gong, L. Yuan, Y. Cui, H. Adam, N. Dvornek, S. Tatikonda, J. Duncan, and T. Liu, “Surrogate gap minimization improves sharpness-aware training,” arXiv preprint arXiv:2203.08065 ,2022. [7] M. Kim, D. Li, S. X. Hu, and T. Hospedales, “Fisher sam: Information geometry and sharpness aware minimisation,” in International Confer-ence on Machine Learning . PMLR, 2022, pp. 11 148–11 161. 8
+
+[8] T. Li, P. Zhou, Z. He, X. Cheng, and X. Huang, “Friendly sharpness-aware minimization,” in Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , 2024, pp. 5631–5640. [9] J. Deng, J. Pang, B. Zhang, and Q. Huang, “Bilateral sharpness-aware minimization for flatter minima,” IEEE Transactions on Neural Networks and Learning Systems , 2026. [10] F. Kunstner, P. Hennig, and L. Balles, “Limitations of the empirical fisher approximation for natural gradient descent,” Advances in neural information processing systems , vol. 32, 2019. [11] D. Hwang, “Fadam: Adam is a natural gradient optimizer using diagonal empirical fisher information,” arXiv preprint arXiv:2405.12807 , 2024. [12] J. Du, H. Yan, J. Feng, J. T. Zhou, L. Zhen, R. S. M. Goh, and V. Y. Tan, “Efficient sharpness-aware minimization for improved training of neural networks,” arXiv preprint arXiv:2110.03141 , 2021. [13] Y. Liu, S. Mai, X. Chen, C.-J. Hsieh, and Y. You, “Towards efficient and scalable sharpness-aware minimization,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,2022, pp. 12 360–12 370. [14] W. Jiang, H. Yang, Y. Zhang, and J. Kwok, “An adaptive policy to em-ploy sharpness-aware minimization,” arXiv preprint arXiv:2304.14647 ,2023. [15] R. Ni, P.-y. Chiang, J. Geiping, M. Goldblum, A. G. Wilson, and T. Goldstein, “K-sam: Sharpness-aware minimization at the speed of sgd,” arXiv preprint arXiv:2210.12864 , 2022. [16] W. Xie, T. Pethick, and V. Cevher, “Sampa: Sharpness-aware minimiza-tion parallelized,” Advances in Neural Information Processing Systems ,vol. 37, pp. 51 333–51 357, 2024. [17] M. Mueller, T. Vlaar, D. Rolnick, and M. Hein, “Normalization layers are all that sharpness-aware minimization needs,” Advances in Neural Information Processing Systems , vol. 36, pp. 69 228–69 252, 2023. [18] Y. Dai, K. Ahn, and S. Sra, “The crucial role of normalization in sharpness-aware minimization,” Advances in Neural Information Pro-cessing Systems , vol. 36, pp. 67 741–67 770, 2023. [19] M. Haas, J. Xu, V. Cevher, and L. C. Vankadara, “ μP2: Effective sharpness aware minimization requires layerwise perturbation scaling,” 
+
+arXiv preprint arXiv:2411.00075 , 2024. [20] P. Mi, L. Shen, T. Ren, Y. Zhou, X. Sun, R. Ji, and D. Tao, “Make sharpness-aware minimization stronger: A sparsified perturbation ap-proach,” Advances in Neural Information Processing Systems , vol. 35, pp. 30 950–30 962, 2022. [21] Q. Zhong, L. Ding, L. Shen, P. Mi, J. Liu, B. Du, and D. Tao, “Improving sharpness-aware minimization with fisher mask for better generalization on language models,” in Findings of the Association for Computational Linguistics: EMNLP 2022 , 2022, pp. 4064–4085. [22] S. Lee, “Layer-wise adaptive gradient norm penalizing method for efficient and accurate deep learning,” in Proceedings of the 30th ACM SIGKDD Conference on Knowledge Discovery and Data Mining , 2024, pp. 1518–1529. [23] Y. Cheng, X. Yang, G. Wang, C. Huang, F. Ma, D. Yu, X. Cao, and L. Shen, “Sparse layer sharpness-aware minimization for efficient fine-tuning,” arXiv preprint arXiv:2602.09395 , 2026. [24] S. Jastrz˛ ebski, Z. Kenton, D. Arpit, N. Ballas, A. Fischer, Y. Bengio, and A. Storkey, “Three factors influencing minima in sgd,” arXiv preprint arXiv:1711.04623 , 2017. [25] P. M. Long and P. L. Bartlett, “Sharpness-aware minimization and the edge of stability,” Journal of Machine Learning Research , vol. 25, no. 179, pp. 1–20, 2024. [26] X. Zhang, R. Xu, H. Yu, H. Zou, and P. Cui, “Gradient norm aware minimization seeks first-order flatness and improves generalization,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 2023, pp. 20 247–20 257. [27] T. Wu, T. Luo, and D. C. Wunsch II, “Cr-sam: Curvature regularized sharpness-aware minimization,” in Proceedings of the AAAI Conference on Artificial Intelligence , vol. 38, 2024, pp. 6144–6152. [28] D. P. Kingma and J. Ba, “Adam: A method for stochastic optimization,” 
+
+arXiv preprint arXiv:1412.6980 , 2014. [29] J. J. Moré and D. C. Sorensen, “Computing a trust region step,” SIAM Journal on Scientific and Statistical Computing , vol. 4, no. 3, pp. 553– 572, 1983. [30] Z. Yao, A. Gholami, K. Keutzer, and M. W. Mahoney, “Pyhessian: Neural networks through the lens of the hessian,” in 2020 IEEE international conference on big data (Big data) . IEEE, 2020, pp. 581– 590. [31] J. Huang, L. Qu, R. Jia, and B. Zhao, “O2u-net: A simple noisy label detection approach for deep neural networks,” in Proceedings of the IEEE/CVF International Conference on Computer Vision , 2019, pp. 3326–3334. 9
+
+APPENDIX 
+
+This appendix provides additional details supporting the design of GEAR-SAM. It gives complete derivations for the trust-region motivation, the stochastic gradient second mo-ment, the EMA estimator, and the budget-preserving allocation rule. These results establish exact properties of the proposed surrogate while keeping separate the assumptions used to motivate its curvature-related sensitivity signal. 
+
+Trust-region Conditions and SAM Decomposition 
+
+For the quadratic approximation, define 
+
+Qt(ϵ) = g⊤ 
+
+> t
+
+ϵ + 12 ϵ⊤Htϵ. (27) The Lagrangian for maximizing Qt subject to ∥ϵ∥22 ≤ ρ2 is 
+
+L(ϵ, λ ) = Qt(ϵ) − λ(∥ϵ∥22 − ρ2), λ ≥ 0. (28) By the classical trust-region optimality theorem [29], a global maximizer ϵ⋆t admits a multiplier λt satisfying 
+
+gt + Htϵ⋆t = 2 λtϵ⋆t ,
+
+∥ϵ⋆t ∥22 ≤ ρ2,λt(∥ϵ⋆t ∥22 − ρ2) = 0 ,
+
+2λtI − Ht ⪰ 0.
+
+(29) These conditions are also sufficient. To see this, let d = ϵ−ϵ⋆t
+
+for any feasible ϵ. Stationarity gives 
+
+Qt(ϵ) − Qt(ϵ⋆t ) = 2 λt(ϵ⋆t )⊤d + 12 d⊤Htd
+
+≤ − 12 d⊤(2 λtI − Ht)d ≤ 0,
+
+(30) where the first inequality follows from feasibility and com-plementary slackness. If 2λtI − Ht ≻ 0, stationarity yields Eq. (6). If it is singular, a null-space component may be required; this is the classical hard case. GEAR-SAM does not attempt to solve either case online. Under the block-diagonal interpretation in the main text, let ab,t = ∥gb,t ∥2 and qb,t = u⊤
+
+> b,t
+
+Hbb,t ub,t . For an active block coordinate with rb,t > 0, the KKT stationarity condition becomes 
+
+ab,t + qb,t rb,t = 2 λtrb,t . (31) Whenever 2λt > max b qb,t , this gives 
+
+rb,t = ab,t 
+
+2λt − qb,t 
+
+. (32) For a fixed feasible multiplier and comparable ab,t , the ex-pression increases with directional curvature qb,t . It motivates using curvature-related block information but does not derive GEAR-SAM’s surrogate allocation rule. For completeness, when gt̸ = 0, Observation 1 follows directly from the orthogonal parameter partition: 
+
+∥gt∥22 =
+
+> B
+
+X
+
+> b=1
+
+∥gb,t ∥22. (33) Substituting Eq. (10) gives 
+
+> B
+
+X
+
+> b=1
+
+(rSAM  
+
+> b,t
+
+)2 = ρ2
+
+P 
+
+> b
+
+∥gb,t ∥22
+
+P 
+
+> j
+
+∥gj,t ∥22
+
+= ρ2. (34) If gt = 0, SAM uses the zero perturbation by convention, and the block-wise radii are all set to zero. 
+
+Minibatch Gradient Second Moment 
+
+Condition on wt and let zb,i = ∇wb ℓ(wt; xi) be IID per-example gradients with mean μb,t and second-moment block 
+
+Cbb,t . For a minibatch mean gb,t = m−1 Pmi=1 zb,i ,
+
+E∥gb,t ∥22 = 1
+
+m2 E
+
+> m
+
+X
+
+> i=1
+
+zb,i 
+
+> 22
+
+= 1
+
+m2
+
+ m E∥zb, 1∥22 + m(m − 1) ∥μb,t ∥22
+
+
+
+= 1
+
+m Tr( Cbb,t ) + 
+
+
+
+1 − 1
+
+m
+
+
+
+∥μb,t ∥22.
+
+(35) This proves Eq. (15). For negative log-likelihoods, Ct is the Fisher only when its expectation is taken under the model distribution. Under the empirical data distribution it is a gra-dient second moment, and neither it nor the minibatch quantity above is generally equal to the Hessian. Near stationarity, the mean-gradient term is small and the second-moment trace dominates up to the common factor 1/m .
+
+EMA Expectation and Variance 
+
+Unrolling Eq. (17) with sb, 0 = 0 gives 
+
+sb,t = (1 − β)
+
+> t−1
+
+X
+
+> k=0
+
+βkeb,t −k. (36) Under local stationarity, E[eb,t −k] = ¯ eb throughout this win-dow. Therefore, 
+
+E[sb,t ] = (1 − β)¯ ebt−1X
+
+> k=0
+
+βk = (1 − βt)¯ eb, (37) which proves Eq. (18). If the centered stochastic energies are additionally independent over iterations with variance σ2 
+
+> b
+
+, then 
+
+Var( sb,t ) = (1 − β)2σ2
+
+> bt−1
+
+X
+
+> k=0
+
+β2k
+
+= 1 − β
+
+1 + β (1 − β2t)σ2 
+
+> b
+
+.
+
+(38) Thus, under this idealized independent-noise model, the asymptotic variance is reduced by (1 − β)/(1 + β) relative to an instantaneous energy. The formula is an estimator property under the stated assumptions, not a claim that optimization gradients are exactly stationary or independent. 
+
+Closed-form Allocation and Budget Preservation 
+
+Let st̸ = 0 be nonnegative. For every feasible radius vector 
+
+rt, Cauchy–Schwarz gives 
+
+s⊤ 
+
+> t
+
+rt ≤ ∥ st∥2∥rt∥2 ≤ ρ∥st∥2. (39) Equality in both inequalities is attained uniquely at 
+
+r⋆t = ρ st
+
+∥st∥2
+
+, (40) 10 
+
+which is nonnegative and proves Proposition 1. It also gives 
+
+> B
+
+X
+
+> b=1
+
+(r⋆b,t )2 = ρ2. (41) For exact unit block directions, the concatenated perturbation therefore has norm ρ. With the stabilized directions used in Algorithm 1, each direction has norm at most one, so the realized perturbation instead satisfies ∥ϵt∥2 ≤ ρ. A common positive rescaling of all sensitivity scores leaves r⋆t unchanged. If st = 0, the alignment objective is identically zero over the feasible set. In this degenerate case, Algorithm 1 sets all radii to zero, which is feasible and avoids injecting an arbitrary perturbation before any block-sensitivity signal is available. 
+
+Coarse Block Grouping 
+
+Let a block contain K tensors with energy estimates 
+
+e1,t , . . . , e K,t . Suppose each tensor-level estimate can be de-composed as ei,t = μi+ξi,t , where ξi,t is zero-mean minibatch noise. Tensor-wise grouping assigns a separate radius to every noisy estimate. In contrast, coarse block grouping uses the aggregate 
+
+eb,t =
+
+> K
+
+X
+
+> i=1
+
+ei,t =
+
+> K
+
+X
+
+> i=1
+
+μi +
+
+> K
+
+X
+
+> i=1
+
+ξi,t . (42) If the noise terms are weakly correlated, the relative fluctuation of the aggregate score is smaller than that of individual tensor scores. For example, with independent noise of variance σ2
+
+and comparable means μ, the coefficient of variation changes from σ/μ for a tensor-level score to σ/ (√Kμ ) for the aggregated block score. Coarse grouping therefore improves the stability of online allocation. Coarse grouping also preserves the joint perturbation direc-tion of tensors that operate at the same representation scale. Tensor-wise grouping can normalize each tensor independently and fragment a functional block into many small allocation decisions. Coarse block grouping avoids this fragmentation while still distinguishing parts of the network with different spatial resolution, channel width, and optimization roles. This provides the theoretical rationale for the architecture-aware partition used in GEAR-SAM. 
+
+Structured Partitioning Analysis 
+
+We further investigate alternative block partitions. Tensor-wise grouping assigns an independent sensitivity score and radius to every weight or bias tensor. Our default coarse block-wise grouping assigns one score to each architecture-level functional block, such as layer1 in ResNet-18. Fine block-wise grouping assigns a separate score to every residual block, while keeping the stem and classifier as separate blocks. As shown in Table VI, all structured partitions clearly outperform standard SAM. The default coarse block-wise GEAR-SAM improves SAM from 81.08 to 81.83 on ResNet-18 and from 84.71 to 85.49 on WideResNet-28-10. Fine block-wise grouping performs slightly better still, reaching 81.84 and 85.60, respectively. These results show that the benefit of GEAR-SAM is not tied to a single manually selected partition.              
+
+> TABLE VI COMPARISON OF PARTITION STRATEGIES ON CIFAR-100.
+> Method Grouping ResNet-18 WRN-28-10 SAM –81.08 84.71 GEAR-SAM Tensor-wise 81.67 85.24 Coarse block-wise 81.83 85.49 Fine block-wise 81.84 85.60
+
+More broadly, preserving functional units while avoiding ex-cessively small groups appears important for reliable online allocation. Tensor-wise grouping also improves SAM, but its larger number of independent allocation variables can introduce noisier sensitivity estimates and excessive allocation freedom. The small advantage of fine blocks suggests that the most effective granularity can depend on the architecture; learning an adaptive block partition is an interesting direction for future work. 
+
+Full Block-Wise Perturbation Dynamics 
+
+For completeness, Fig. 3 reports the normalized budget shares of all six coarse blocks over the full 200-epoch training run. The trajectories provide the long-horizon context for the early redistribution shown in Fig. 1: the allocation is not a uniform rescaling of SAM, but a redistribution of the same global perturbation budget. 11 (a) Stem 
+
+0.0 
+
+0.2 
+
+0.4 
+
+0.6 
+
+> Normalized perturbation budget
+> 2
+> b / 2
+> Last-20 avg. (SAM / GEAR-SAM)
+> 0.017 / 0.003
+
+(b) Layer1 
+
+> Last-20 avg. (SAM / GEAR-SAM)
+> 0.055 / 0.029
+
+(c) Layer2 
+
+> Last-20 avg. (SAM / GEAR-SAM)
+> 0.115 / 0.094
+
+0 50 100 150 200 
+
+Epoch 
+
+(d) Layer3 
+
+0.0 
+
+0.2 
+
+0.4 
+
+0.6 
+
+> Normalized perturbation budget
+> 2
+> b / 2
+> Last-20 avg. (SAM / GEAR-SAM)
+> 0.267 / 0.339
+
+0 50 100 150 200 
+
+Epoch 
+
+(e) Layer4 
+
+> Last-20 avg. (SAM / GEAR-SAM)
+> 0.531 / 0.534
+
+0 50 100 150 200 
+
+Epoch 
+
+(f) Classifier 
+
+> Last-20 avg. (SAM / GEAR-SAM)
+> 0.014 / 0.002
+
+SAM GEAR-SAM 
+
+Fig. 3. Full block-wise perturbation dynamics of SAM and GEAR-SAM on ResNet-18 trained on CIFAR-100. Each panel shows the normalized perturbation-budget share ρ2
+
+b,t /ρ 2 of one network block. The gray region denotes the final 20 epochs, and each annotation reports the corresponding SAM and GEAR-SAM averages. All panels use the same vertical scale.
