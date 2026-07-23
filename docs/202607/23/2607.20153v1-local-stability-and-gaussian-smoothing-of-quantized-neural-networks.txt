@@ -1,0 +1,892 @@
+Title: Local Stability and Gaussian Smoothing of Quantized Neural Networks
+
+URL Source: https://arxiv.org/pdf/2607.20153v1
+
+Published Time: Thu, 23 Jul 2026 00:56:59 GMT
+
+Number of Pages: 6
+
+Markdown Content:
+# Local Stability and Gaussian Smoothing of Quantized Neural Networks 
+
+Sergey Salishev ∗ Anton Makarov ∗ Oleg Granichin ∗∗ St. Petersburg State University, 199034, Saint Petersburg, Russia (e-mail: s.salischev@spbu.ru, a.a.makarov@spbu.ru, o.granichin@spbu.ru) 
+
+Abstract: We study Gaussian averaging as a smooth surrogate for quantized neural models. Under bounded local oscillation, we derive a local dimension-dependent bound on |f −g|, linking Gaussian smoothing to the stability analysis of discontinuous networks. We compute closed-form Gaussian averages of the rectified linear unit (ReLU) and sign activation functions, and illustrate the mechanism on a high-dimensional binary perceptron, where layer-preactivation aggregation under an explicit quantization-noise surrogate yields the Gaussian envelope used in inference-side smoothing and training-side smooth surrogate gradients. 
+
+Keywords: Quantized neural networks, Low-bit neural networks, Gaussian smoothing, Steklov averages, Sobolev convolution, Stability under input and parameter perturbations 1. INTRODUCTION Modern control and estimation systems now deploy low-bit neural networks as observers, controllers, and gain schedulers on quantized hardware. Their discrete, non-smooth nature blocks standard stability certificates and complicates gradient-based design, motivating principled smoothing. Functionally, such networks are often piecewise-affine for continuous inputs, but after digitization of the inputs and internal signals they behave effectively as piecewise-constant maps; in either description, quantization, sat-uration, clipping, and switching nonlinearities induce a discontinuous input-output law. Yet many control and estimation tools (stability certificates, sensitivity analysis, gradient-based optimization) assume at least Sobolev reg-ularity. We therefore study Gaussian averaging as a way to construct a continuous analytical proxy for the same discrete model. The key structural condition is bounded local oscillation (Definition 1): a weak quantitative sub-stitute for Lipschitz-type regularity that controls output variation at a prescribed scale without assuming continuity or differentiability. Gaussian averaging plays here the role of a mollifier, but the object being smoothed is the hardware-driven quantized model itself rather than an externally pre-scribed smooth target. The resulting surrogate is used for inference-side stability analysis and training-side smooth surrogate gradients, in a spirit related to stochastic ap-proximation and randomized-control viewpoints (Spall, 1992; Granichin et al., 2015). The use of matched-variance rounding-noise surrogates is supported by Salishev et al. (2026), where the STE/noise-scale update mechanism is analyzed from an SPSA view-  
+
+> ⋆©2026 the authors. This work has been accepted to IFAC for publication under a Creative Commons Licence CC-BY-NC-ND.
+
+point and validated empirically for low-bit neural-network training. That evidence also has an inference-side read-ing for smooth image-to-image tasks: for super-resolution, Salishev et al. report that RFDN quantized to W4A4 keeps overlapping final PSNR confidence intervals across stochastic and deterministic rounding-noise variants. A rigorous control paper would replace this empirical PSNR evidence by an explicit tail-probability bound, but the observation is consistent with the probabilistic disturbance interpretation used here: on the tested data distribution, harmful quantization events are either rare or sufficiently small in magnitude to be absorbed by the reconstruction task. The formal inference-side smoothing and local error control are provided here by Theorem 3 and the layer-wise CLT mechanism of Theorem 9. This averaging viewpoint also helps interpret empirical smooth surrogates used in practice, including learned step size quantization (LSQ) (Esser et al., 2020) and gradual differentiable noise scale quantization (GDNSQ) (Salishev and Akhremchik, 2025). Comparison with explicitly sampled-Gaussian methods is useful. In randomized smoothing (Cohen et al., 2019), the model is averaged over externally sampled Gaussian per-turbations to obtain a certified smooth proxy. In Smooth-Hess (Torop et al., 2023), Gaussian samples are likewise drawn explicitly and combined with Stein-type identities to estimate feature interactions in ReLU networks. In the present paper, by contrast, the Gaussian is not the prim-itive perturbation law. Theorem 9 formalizes a layer-level mechanism: under an explicit i.i.d. additive-noise quantiza-tion surrogate, componentwise residuals aggregate inside a preactivation and produce the CLT-Gaussian envelope used to define the averaged surrogate g.For control-oriented use, this CLT-Gaussian viewpoint should be read as a compact analytical proxy whose local failures are rare disturbance events rather than determin-istic failure of the surrogate. Modern stochastic, quantized, and networked-control formulations can allow such events arXiv:2607.20153v1 [cs.LG] 22 Jul 2026 when their probability distribution is quantified and the closed-loop system attenuates their effect, for example through inertia, bandwidth limitation, or robustness mar-gins. In this sense, Theorem 3 separates the nominal local mismatch ε2 from the Gaussian tail contribution corre-sponding to excursions outside the trusted region. A full closed-loop probability-of-bad-event analysis is outside the scope of this short paper. Within this scope, g(·, s ) can be used when deriving Lyapunov-style stability conditions or sensitivity bounds (Slotine and Li, 1991), since g is 
+
+C∞ and its derivatives admit explicit integral represen-tations. Here and throughout, “stability” means support for Lyapunov-style analysis rather than a full closed-loop stability theorem. Specifically, we make the following contributions. 
+
+• Treating data and parameters uniformly as inputs, we show that Gaussian averaging produces a C∞ surro-gate g(x, s ) with explicit mixed-derivative formulas. 
+
+• Under boundedness and bounded local oscillation, we derive a local dimension-dependent estimate for 
+
+|f (x) − g(x, s )| (Theorem 3) in terms of the noise variance, oscillation radius, and supremum of |f |.
+
+• We compute the Gaussian averages of ReLU and sign functions in closed form and relate them to a high-dimensional binary perceptron, where aggregation of quantization residuals in a layer preactivation yields the Gaussian envelope used by both inference-side smoothing and training-side surrogate gradients. The paper therefore separates the two roles of noise cleanly: Gaussian convolution gives smoothness, while approximation fidelity depends on local control of the oscillation of the discrete model. 2. MODEL We now formalize the setting and define bounded local oscillation, the weak regularity condition used in the approximation bound. Here and below | · | denotes the Euclidean norm in Rd. Let D ⊂ Rd be some bounded open set. 
+
+Definition 1. Let E ⊂ D. We say that f has ( ε1, ε 2)-
+
+bounded local oscillation on E if 
+
+|x − y| < ε 1 =⇒ |f (x) − f (y)| < ε 2
+
+for every x ∈ E and every y ∈ D. If E is a point, e.g., E = {x}, we say that f has ( ε1, ε 2)-bounded local oscillation at the point x. This is a weak quantitative substitute for Lipschitz-type regularity in a discontinuous setting: it controls oscillation at a prescribed scale without assuming continuity, differentiability, or a linear modulus of variation. 
+
+Lemma 2. (Data-supported oscillation). Let S be a train-ing set with samples ( xi, y i), i = 1 , . . . , N , and let f be a trained network. Assume that f fits the training labels uniformly with error δ, that is, 
+
+|f (xi) − yi| ≤ δ, i = 1 , . . . , N. 
+
+Assume also that the labels have empirical local oscillation 
+
+η at scale ε1, namely, 
+
+|xi − xj | < ε 1 =⇒ |yi − yj | ≤ η
+
+for all training samples xi, x j . Then f has empirical bounded local oscillation on S at scale ε1 with constant 
+
+ε2 = η + 2 δ:
+
+|xi − xj | < ε 1 =⇒ |f (xi) − f (xj )| ≤ η + 2 δ. 
+
+Proof. By the triangle inequality, 
+
+|f (xi) − f (xj )| ≤ | f (xi) − yi| + |yi − yj | + |yj − f (xj )|≤ δ + η + δ = η + 2 δ. 
+
+For the strict convention in Definition 1, replace η + 2 δ by any larger constant. 2
+
+The practical interpretation is that ε1 and ε2 can be tied to task/data geometry and interpolation quality on the data support. To apply Theorem 3 to Gaussian smoothing in the ambient space, one still needs control of off-support behavior. We use this condition locally, either at a point of interest or on an operating region, rather than as a blanket assumption on an arbitrary discontinuous network. In the neural-network interpretation, it means that small perturbations of the data or parameters do not cause large output jumps on the region where the approximation is to be trusted. Under this condition, averaging over small input noise yields a natural infinitely smooth surrogate. The present paper proves function-level regularity and approximation statements; optimization guarantees for the original dis-crete learned parameters require additional assumptions. However, because the averaged surrogate is C∞, standard local smooth-optimization arguments can be applied to surrogate objectives built from g. As the input of the model, we allow the concatenation of data and parame-ters, so the same notation covers perturbations in either. Throughout, the perturbation is additive Gaussian noise, independent of both data and parameters, and we study the expected output rather than a single noisy realization. We denote the density of the multivariate normal distri-bution N (0 , sI ) with a zero mean and covariance sI by 
+
+ϕs(ξ) = 1(2 πs )d/ 2 exp 
+
+
+
+− |ξ|2
+
+2s
+
+
+
+,
+
+and the density of the standard normal distribution 
+
+N (0 , I ) by ϕ(ξ) := ϕ1(ξ). Consider an integrable function f : D → R, f ∈ L1(D), extended by zero outside D. For s > 0, define 
+
+g(x, s ) := E[f (x + ξ)] = 
+
+Z
+
+> Rd
+
+f (x + ξ) ϕs(ξ) dξ, (1) where ξ ∼ N (0 , sI ). Then for any multi-index α there exist continuous derivatives Dαg(x, s ) given by 
+
+Dαg(x, s ) := ∂|α|g∂x α1 
+
+> 1
+
+· · · ∂x αd
+
+> d
+
+(x)= ( −1) |α|
+
+Z
+
+> Rd
+
+f (x + ξ) Dαϕs(ξ) dξ. 
+
+3. MAIN RESULT We obtain an estimate for the deviation of the averaged function from the original under a local oscillation as-sumption: on the scale ε1, nearby inputs induce output changes no larger than ε2. The result is most naturally read pointwise, or uniformly on an operating region where the same constants ( ε1, ε 2) apply. 
+
+Theorem 3. Let D ⊂ Rd be some bounded open set with dimension d ≥ 3. Consider a function f : D → R,
+
+f ∈ L1(D), extended by zero outside D. Fix a point x ∈ D
+
+at which f (x) is defined. Assume that there exists C > 0such that |f (x)| ≤ C and |f (y)| ≤ C for almost all y ∈ D.Let constants ϵ1 > 0, ϵ2 > 0 such that B(x, ϵ 1) ⊂ D and 
+
+|f (x) − f (y)| < ϵ 2 whenever |x − y| < ϵ 1.
+
+Assume furthermore that γ2 := ϵ21/s ≥ d − 1. Then 
+
+|f (x) − g(x, s )| ≤ ϵ2 + 2 Cγd exp 
+
+
+
+− γ2
+
+> 2
+
+
+
+2 d 
+
+> 2−1
+
+Γ  d
+
+> 2
+
+ (γ2 − d + 2) . (2) 
+
+Proof. Let us estimate the modulus of the difference 
+
+|f (x) − g(x, s )| =
+
+Z
+
+> Rd
+
+ f (x) − f (x + ξ)ϕs(ξ) dξ 
+
+≤
+
+Z
+
+> Rd
+
+|f (x) − f (x + ξ)| ϕs(ξ) dξ. 
+
+Split the integral into two parts: 
+
+|f (x) − g(x, s )| ≤ 
+
+Z
+
+> |ξ|<ϵ 1
+
+|f (x) − f (x + ξ)| ϕs(ξ) dξ 
+
++
+
+Z
+
+> |ξ|≥ ϵ1
+
+|f (x) − f (x + ξ)| ϕs(ξ) dξ 
+
+≤ ϵ2 P(|ξ| < ϵ 1) + 2 C P(|ξ| ≥ ϵ1)
+
+≤ ϵ2 + 2 C P(|ξ| ≥ ϵ1).
+
+(3) Since ξ ∼ N (0 , sI ), the equality ξ = √s z holds, where 
+
+z ∼ N (0 , I ). Then 
+
+P(|ξ| ≥ ϵ1) = P (|z| ≥ γ) .
+
+It is known that for z ∼ N (0 , I ) the density of the norm 
+
+|z| has the form 
+
+p|z|(r) = 12 d 
+
+> 2−1
+
+Γ   d
+
+> 2
+
+ rd−1 exp 
+
+
+
+− r2
+
+2
+
+
+
+, r ≥ 0.
+
+Thus, for any t > 0
+
+P(|z| ≥ t) = 
+
+> ∞
+
+Z
+
+> t
+
+p|z|(r) dr = 12 d 
+
+> 2−1
+
+Γ   d
+
+> 2
+
+ I(t), (4) where 
+
+I(t) := 
+
+> ∞
+
+Z
+
+> t
+
+rd−1 exp 
+
+
+
+− r2
+
+2
+
+
+
+dr. (5) For d ≥ 3 and t ≥ √d − 1, using integration by parts, we have 
+
+I(t) = td−2 exp 
+
+
+
+− t2
+
+2
+
+
+
++ ( d − 2) J(t), (6) where J(t) := 
+
+> ∞
+
+R
+
+> t
+
+rd−3 exp 
+
+
+
+− r2
+
+> 2
+
+
+
+dr. 
+
+Due to the inequality 0 < t ≤ r, we find 
+
+J(t) ≤ t−2
+
+> ∞
+
+Z
+
+> t
+
+rd−1 exp 
+
+
+
+− r2
+
+2
+
+
+
+dr = I(t)
+
+t2 .
+
+Using this estimate in equality (6), we obtain 
+
+I(t)( t2 − d + 2) ≤ td exp 
+
+
+
+− t2
+
+2
+
+
+
+.
+
+From this, we find a majorant for t > √d − 2
+
+I(t) ≤
+
+td exp 
+
+
+
+− t2
+
+> 2
+
+
+
+t2 − d + 2 . (7) The integrand (5) attains its maximum at the point r =√d − 1. If t ≥ √d − 1, then estimate (7) is suitable for the integral (5). Substituting the value t = γ into equality (4), using estimate (7), we obtain 
+
+P (|z| ≥ γ) ≤ 12 d 
+
+> 2−1
+
+Γ   d
+
+> 2
+
+ ·
+
+γd exp 
+
+
+
+− γ2
+
+> 2
+
+
+
+γ2 − d + 2 .
+
+From this, taking into account inequality (3), we find the desired estimate (2). 2
+
+Remark 4. Theorem 3 is local in the evaluation point x.For quantized or piecewise-affine networks, the natural use case is an operating region E ⊂ D on which the same pair (ϵ1, ϵ 2) is valid for every x ∈ E. In particular, the theorem should not be read as a generic global property of arbitrary discontinuous networks. 
+
+Remark 5. Bounded local oscillation is essential for ap-proximation accuracy, not for smoothness. If f oscillates strongly on arbitrarily small neighborhoods, then ϵ2 in Theorem 3 cannot be made small and Gaussian averaging need not remain faithful to the discrete model, even though 
+
+g(·, s ) is smooth for every f ∈ L1(D). 4. EXAMPLES 
+
+4.1 One-dimensional smoothed activations 
+
+We now compute Gaussian averages for the nonlinear ReLU and sign activation functions. In this subsection, we restrict attention to the one-dimensional case d = 1. We write ϕs(t) for the density of N (0 , s ) on R and Φ s
+
+(or simply Φ when s = 1) for its cumulative distribution function. Let ξ be a one-dimensional random variable distributed according to N (0 , s ) with s > 0, and density ϕs.
+
+Theorem 6. The average of the ReLU activation function (given by f (x) = max {x, 0}) is 
+
+g(x, s ) = E[f (x + ξ)] = 
+
+> +∞
+
+Z
+
+> −∞
+
+max {x + ξ, 0} ϕs(ξ) dξ 
+
+= x Φ
+
+ x
+
+√s
+
+
+
++ √s ϕ 
+
+ x
+
+√s
+
+
+
+.
+
+(8) 
+
+Proof. Note that the function max {x+ξ, 0} equals 0 when 
+
+ξ ≤ − x. Therefore, the integral (8) is 
+
+g(x, s ) = 
+
+> +∞
+
+Z
+
+> −x
+
+(x + ξ) ϕs(ξ) dξ 
+
+= x
+
+> +∞
+
+Z
+
+> −x
+
+ϕs(ξ) dξ +
+
+> +∞
+
+Z
+
+> −x
+
+ξ ϕ s(ξ) dξ. 
+
+(9) By introducing the substitution z = ξ/ √s, we find 
+
+> +∞
+
+Z
+
+> −x
+
+ϕs(ξ) dξ =
+
+> +∞
+
+Z
+
+> −x/ √s
+
+1
+
+√2π exp 
+
+
+
+− z2
+
+2
+
+
+
+dz = Φ 
+
+ x
+
+√s
+
+
+
+. (10) Similarly, 
+
+> +∞
+
+Z
+
+> −x
+
+ξ ϕ s(ξ) dξ =
+
+> +∞
+
+Z
+
+> −x/ √s
+
+√s z 
+
+√2π exp 
+
+
+
+− z2
+
+2
+
+
+
+dz 
+
+= √s
+
+> +∞
+
+Z
+
+> −x/ √s
+
+z ϕ (z) dz. 
+
+(11) As for the standard normal distribution 
+
+> +∞
+
+Z
+
+> a
+
+z ϕ (z) dz = ϕ(a),
+
+setting a = −x/ √s and taking into account the even symmetry of ϕ, from (11) we have 
+
+> +∞
+
+Z
+
+> −x
+
+ξ ϕ s(ξ) dξ = √s ϕ 
+
+ x
+
+√s
+
+
+
+.
+
+Thus, from the decomposition (9), using the previous equality and the formula (10), the desired representation (8) is obtained. 2
+
+−2 0 2
+
+0
+
+1
+
+2
+
+3
+
+x
+
+> f (x)
+
+GELU 
+
+softplus(2 x)/2
+
+g(x, 1) 
+
+ReLU 
+
+Fig. 1. Smoothing of ReLU activation function Fig. 1 compares the ReLU function, its Gaussian aver-age at s = 1, and the classical smooth approximations given by the Gaussian error linear unit GELU( x) =
+
+x Φ( x) (Hendrycks and Gimpel, 2016) and softplus( x) = ln(1 + exp( x)). We plot softplus(2 x)/2 to align its slope near the origin and its large-x behavior with ReLU. 
+
+Theorem 7. Define the function sign as sign( x) = 
+
+(1, x > 0,
+
+−1, x < 0.
+
+Then its average is 
+
+g(x, s ) = Esign( x + ξ) = 2 Φ 
+
+ x
+
+√s
+
+
+
+− 1. (12) The sign(0) value is irrelevant for the expectation and can be chosen arbitrarily. 
+
+Proof. Since ξ ∼ N (0 , s ), the random variable x + ξ has a distribution N (x, s ). The function sign( x + ξ) takes the value 1 if x + ξ > 0, and −1 if x + ξ < 0. Thus, 
+
+g(x, s ) = Esign( x + ξ)
+
+= P(x + ξ > 0) − P(x + ξ < 0) . (13) Taking into account that P(x + ξ > 0) + P(x + ξ < 0) = 1, we can write 
+
+g(x, s ) = 1 − 2 P(x + ξ < 0) .
+
+Since x + ξ ∼ N (x, s ), the probability P(x + ξ < 0) equals 
+
+P(x + ξ < 0) = Φ 
+
+ 0 − x
+
+√s
+
+
+
+= Φ 
+
+
+
+− x
+
+√s
+
+
+
+.
+
+Using the symmetry of the standard normal distribution, i.e., the equality Φ( −t) = 1 − Φ( t), we obtain 
+
+P(x + ξ < 0) = 1 − Φ
+
+ x
+
+√s
+
+
+
+.
+
+Substituting this into expression (13), we have 
+
+g(x, s ) = 1 − 2
+
+h
+
+1 − Φ
+
+ x
+
+√s
+
+i 
+
+= 2 Φ 
+
+ x
+
+√s
+
+
+
+− 1.
+
+This completes the proof. 2
+
+Remark 8. The function (12), mapping the real axis R to the interval ( −1, 1), serves as a smooth approximation of the discrete function sign( x). For comparison, the logistic function σ(x) = 1/(1 + exp( −x)) satisfies 2 σ(x) − 1 = tanh( x/ 2), so both logistic and tanh give smooth surrogates of sign( x) similar to 
+
+g(x, s ); the parameter s in g(x, s ) controls the transition steepness. Fig. 2 compares the smoothed sign surrogate g(x, s ) with the hyperbolic tangent. The choice s = 2 /π makes the derivative of g(x, s ) at the origin match that of tanh( x), so the two curves have comparable transition steepness. 
+
+−2 0 2
+
+−1
+
+−0.500.51
+
+x
+
+> f (x)
+
+sign( x)tanh( x)
+
+g(x, 2/π )Fig. 2. Smoothing of sign activation function 
+
+4.2 High-dimensional binary perceptron 
+
+We now illustrate how the bounded local oscillation con-dition and the Gaussian averaging mechanism interact in a high-dimensional setting that is directly relevant to quantized policy and estimator blocks. Threshold networks of this type appear naturally in quantized perception-and-control stacks and provide a convenient high-dimensional test case. Consider a two-layer binary perceptron (a building block of multilayer networks) interpreted as a quantized decision block: 
+
+f (x) = 1
+
+√m
+
+> m
+
+X
+
+> j=1
+
+aj σ w⊤ 
+
+> j
+
+x
+
+√n − θj
+
+!
+
+, (14) where x ∈ Rn is the state or measurement vector, m is the hidden width, σ is a sign-type or ReLU-type primitive, 
+
+aj ∈ R are second-layer coefficients, θj ∈ R is the bias (threshold) of the j-th hidden neuron, and w⊤ 
+
+> j
+
+= ( wjk )nk=1 ,where wjk ∈ {− 1, +1 } are quantized first-layer weights. 
+
+Theorem 9. Fix a hidden unit j and a quantization step ∆ > 0. For each input dimension n, suppose that: (1) the layer weights are deterministic and binary, w(n) 
+
+> jk
+
+∈{− 1, +1 }, and the threshold θ(n) 
+
+> j
+
+∈ R is deterministic; (2) the input vector x(n) = ( x(n)1 , . . . , x (n) 
+
+> n
+
+)⊤ ∈ Rn is deterministic; (3) the componentwise quantization residuals are mod-eled via the additive-noise surrogate 
+
+Q∆(x(n) 
+
+> k
+
+) = x(n) 
+
+> k
+
++ δk,n ,
+
+where δ1,n , . . . , δ n,n are i.i.d. with the centered uni-form law on [ −∆/2, ∆/2], consistent with the re-quired assumptions in the classical quantization model (Lipshitz et al., 1992). Define ¯zj,n = 1
+
+√n
+
+> n
+
+X
+
+> k=1
+
+w(n) 
+
+> jk
+
+x(n) 
+
+> k
+
+− θ(n) 
+
+> j
+
+,δz j,n = 1
+
+√n
+
+> n
+
+X
+
+> k=1
+
+w(n) 
+
+> jk
+
+δk,n ,
+
+ˆzj,n = ¯ zj,n + δz j,n .
+
+Then the preactivation perturbation satisfies 
+
+E[δz j,n ] = 0 , Var( δz j,n ) = ∆2
+
+12 ,
+
+and 
+
+δz j,n d
+
+−→ N 
+
+
+
+0, ∆2
+
+12 
+
+
+
+as n → ∞ .
+
+Consequently, if ¯ zj,n → zj along the same sequence, then ˆzj,n d
+
+−→ N 
+
+
+
+zj , ∆2
+
+12 
+
+
+
+.
+
+Proof. Set Yk,n = w(n) 
+
+> jk
+
+δk,n . Since w(n) 
+
+> jk
+
+∈ {− 1, +1 }
+
+is deterministic and the uniform law on [ −∆/2, ∆/2] is symmetric, each Yk,n has the same law as δk,n . Hence, for each n, the variables Y1,n , . . . , Y n,n are i.i.d. with 
+
+E[Yk,n ] = 0 , Var( Yk,n ) = ∆2
+
+12 .
+
+Therefore 
+
+E[δz j,n ] = 1
+
+√n
+
+> n
+
+X
+
+> k=1
+
+E[Yk,n ] = 0 and, by independence, Var( δz j,n ) = 1
+
+n
+
+> n
+
+X
+
+> k=1
+
+Var( Yk,n ) = ∆2
+
+12 .
+
+Because the Yk,n are i.i.d. with finite variance, the classical central limit theorem gives 1
+
+√n
+
+> n
+
+X
+
+> k=1
+
+Yk,n d
+
+−→ N 
+
+
+
+0, ∆2
+
+12 
+
+
+
+,
+
+which is the stated convergence of δz j,n . If ¯ zj,n → zj , Slut-sky’s theorem, stated for example as Slutsky’s lemma by van der Vaart (1998, Lemma 2.8), gives the corresponding convergence of ˆ zj,n = ¯ zj,n + δz j,n . 2
+
+Theorem 9 makes the perturbation endogenous: it comes from componentwise input quantization. For any actual fixed input the residuals are deterministic; the theorem states an explicit i.i.d. additive-noise surrogate under which the layer preactivation satisfies a standard CLT. Thus the Gaussian object appears only after aggregation in the linear preactivation, not at the level of the scalar quantizer itself. 
+
+Remark 10. In a multilayer network, exact independence of internal perturbations is generally lost after the first nonlinearity without considering the geometry of the la-tent space. Accordingly, the Gaussian smoothing pic-ture should be read as a coarse-grained empirical surro-gate model, not as a literal layer-wise central-limit iden-tity; (Salishev et al., 2026) provides empirical support for this viewpoint in both training and inference. On the training side, smooth surrogate gradients give sta-ble low-bit optimization behavior. On the inference side, for smooth image-to-image super-resolution, the reported W4A4 RFDN experiments keep overlapping final PSNR confidence intervals deterministic rounding-noise variants. This suggests that, on the tested data distribution, harm-ful quantization events are rare or small enough to be absorbed by the reconstruction task. 
+
+Corollary 11. Under the conditions of Theorem 9, if σ is the sign function, the quantized layer activation σ(ˆ zj,n ) is replaced in the coarse-grained surrogate by the smoothed activation ˜σ(¯ zj,n ) = 2 Φ 
+
+ ¯zj,n 
+
+√s
+
+
+
+− 1,
+
+where s is the variance of the Gaussian approximation to δz j,n ; in the i.i.d. uniform sampling model above, 
+
+s = ∆ 2/12. For the ReLU function, the corresponding surrogate is ¯ zj,n Φ(¯ zj,n /√s) + √s ϕ (¯ zj,n /√s). This consti-tutes a coarse-grained surrogate architecture, not an exact equality for the full multilayer network. 
+
+Remark 12. The same limiting-envelope viewpoint also appears in training: batch losses average over data sam-ples, and the quantized version of (14) averages many small componentwise residuals inside each preactivation. The training-side analysis of noisy STE (Bengio et al., 2013) and noise-scale updates is developed in (Salishev et al., 2026). Applying continuous gradient descent to binary weights is implemented in GDNSQ (Salishev and Akhremchik, 2025) and is not a point of this paper. 
+
+Remark 13. The payoff for control is local surrogate use rather than exact equivalence. In inference, layer-wise ag-gregation yields the Gaussian envelope used in the surro-gate activations; in training, batch averaging yields the analogous averaged object. On operating regions where the perceptron has ( ϵ1, ϵ 2)-bounded local oscillation, The-orem 3 then controls the mismatch between that Gaussian-averaged proxy and the discrete model. 5. CONCLUSION Gaussian convolution supplies a C∞ surrogate for dis-continuous quantized models, while bounded local oscil-lation determines when that surrogate remains accurate and yields the local error bound of Theorem 3. In the high-dimensional perceptron example, Theorem 9 shows that, under an explicit i.i.d. additive-noise quantization surrogate, coordinatewise residuals aggregate into a Gaus-sian envelope for a layer preactivation. This produces the smoothed activations studied here and supplies the same 
+
+C∞ surrogate for inference-side analysis and training-side smooth surrogate gradients. Theorem 9 has only layer-wise reading without analyzing latent space geometry and thus has mostly empirical support for multilayer networks. Theorem 3 itself is depth-agnostic and applies to net-works of arbitrary depth wherever bounded local oscilla-tion holds. The resulting surrogate should be understood as a smooth probabilistic proxy whose local mismatch is controlled on trusted data-supported regions, while ex-cursions outside those regions are rare-event disturbances to be handled by control-specific robustness or chance-constrained analysis. Future work should include a theo-retical analysis of internal latent geometry beyond a single layer, as well as broader catalogs of smoothed primitives and control-oriented tools built on these surrogates. DECLARATION OF GENERATIVE AI AND AI-ASSISTED TECHNOLOGIES IN THE WRITING PROCESS During the preparation of this work, the authors used OpenAI ChatGPT in order to assist with language editing, formatting, and drafting of the abstract and keywords. After using this tool, the authors reviewed and edited the content as needed and take full responsibility for the content of the publication. REFERENCES Bengio, Y., L´ eonard, N., and Courville, A. (2013). Es-timating or propagating gradients through stochas-tic neurons for conditional computation. URL 
+
+https://arxiv.org/abs/1308.3432 .Cohen, J., Rosenfeld, E., and Kolter, Z. (2019). Certified adversarial robustness via randomized smoothing. In Proceedings of the 36th International Conference on Machine Learning (ICML), volume 97 of Proceedings of Machine Learning Research, 1310–1320. PMLR. Esser, S.K., McKinstry, J.L., Bablani, D., Appuswamy, R., and Modha, D.S. (2020). Learned step size quan-tization. In International Conference on Learning Representations (ICLR). ArXiv:1902.08153. Granichin, O., Volkovich, Z.V., and Toledano-Kitai, D. (2015). Randomized Algorithms in Automatic Control and Data Mining, volume 67 of Intelligent Systems Reference Library. Springer, Berlin, Heidelberg. doi: 10.1007/978-3-642-54786-7. Hendrycks, D. and Gimpel, K. (2016). Gaus-sian error linear units (gelus). URL 
+
+https://arxiv.org/abs/1606.08415 .Lipshitz, S.P., Wannamaker, R.A., and Vanderkooy, J. (1992). Quantization and dither: A theoretical survey. Journal of the audio engineering society, 40(5), 355–375. Salishev, S. and Akhremchik, I. (2025). Gdnsq: Gradual differentiable noise scale quantization for low-bit neural networks. URL https://arxiv.org/abs/2508.14004 .Salishev, S., Makarov, A., Tarasova, E., Shishin, K., and Granichin, O. (2026). Spsa view on the straight-through estimator in neural network quantization. IEEE Access, 1–1. doi:10.1109/ACCESS.2026.3683267. Slotine, J.J.E. and Li, W. (1991). Applied Nonlinear Control. Prentice Hall. Spall, J.C. (1992). Multivariate stochastic approximation using a simultaneous perturbation gradient approxima-tion. IEEE Transactions on Automatic Control, 37(3), 332–341. doi:10.1109/9.119632. Torop, M., Masoomi, A., Hill, D., Kose, K., Ioannidis, S., and Dy, J. (2023). Smoothhess: ReLU network feature interactions via stein’s lemma. In A. Oh, T. Naumann, A. Globerson, K. Saenko, M. Hardt, and S. Levine (eds.), Advances in Neural Information Processing Systems, volume 36, 50697–50729. Curran Associates, Inc. van der Vaart, A.W. (1998). Asymptotic Statistics, volume 3 of Cambridge Series in Statistical and Probabilistic Mathematics. Cambridge University Press, Cambridge. doi:10.1017/CBO9780511802256.
