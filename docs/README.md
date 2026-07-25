@@ -6,64 +6,52 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-24
-- 运行时间：2026-07-24 21:45:00 UTC
+- 最新运行日期：2026-07-25
+- 运行时间：2026-07-25 21:25:55 UTC
 - 运行状态：成功
-- 本次总论文数：14
-- 精读区：4
-- 速读区：10
+- 本次总论文数：10
+- 精读区：2
+- 速读区：8
 
 ### 今日简报（AI）
-今日聚焦14篇论文，精读解析了高效学习图像压缩与切比雪夫流形自适应两项前沿工作。  
-最值得关注的是波前并行化技术大幅提升学习图像压缩效率，以及切比雪夫流形自适应方法在模型适配中的潜力。  
-建议普通读者优先精读这两篇高分论文，并速览宽度依赖超参数与视频压缩优化等实用方向。
-- 详情：[/202607/24/README](/202607/24/README)
+今日精读两项分别提出高效低秩稀疏注意力近似（ELSAA）与混合线性注意力残差（SANA-Video 2.0），速读覆盖PIM加速器微调、非凸Langevin学习及RISC-V单核片上训练。  
+最值得关注的两个方向：高效注意力机制可提升Transformer训练与视频生成效率；硬件-软件协同设计正推动低成本边缘端深度学习部署。  
+建议普通读者优先尝试ELSAA或SANA-Video 2.0的注意力流水线，并关注FP16训练在RISC-V平台的实际落地方案。
+- 详情：[/202607/25/README](/202607/25/README)
 
 ### 精读区论文标签
-1. [Wavefront Parallelization for Efficient Learned Image Compression](/202607/24/2607.19082v1-wavefront-parallelization-for-efficient-learned-image-compression)  
-   标签：评分：9.0/10、query:compress
-   evidence：基于波前并行的自回归上下文模型加速用于学习图像压缩
-2. [Chebyshev Manifold Adaptation](/202607/24/2607.17377v2-chebyshev-manifold-adaptation)  
+1. [ELSAA: Efficient Low-Rank and Sparse Attention Approximation for Training Transformers](/202607/25/2607.20214v1-elsaa-efficient-low-rank-and-sparse-attention-approximation-for-training-transformers)  
    标签：评分：8.0/10、query:neural-arch
-   evidence：使用切比雪夫流形适应进行参数高效微调的模型优化策略
-3. [Multilevel Graph Wavelet Compressed Sensing with Scale-Aware Neural Recovery](/202607/24/2607.20857v1-multilevel-graph-wavelet-compressed-sensing-with-scale-aware-neural-recovery)  
-   标签：评分：8.0/10、query:compress
-   evidence：小波变换用于图信号压缩
-4. [KroQuant: Kronecker-Structured Block Transforms for Efficient Post-Training Quantization of Diffusion Transformers](/202607/24/2607.21446v1-kroquant-kronecker-structured-block-transforms-for-efficient-post-training-quantization-of-diffusion-transformers)  
+   evidence：针对Transformer的高效低秩稀疏注意力近似方法
+2. [SANA-Video 2.0: Hybrid Linear Attention with Attention Residuals for Efficient Video Generation](/202607/25/2607.21553v1-sana-video-20-hybrid-linear-attention-with-attention-residuals-for-efficient-video-generation)  
    标签：评分：8.0/10、query:neural-arch
-   evidence：提出Kronecker结构化块变换用于扩散变换器的高效后训练量化，属于模型优化策略
+   evidence：混合线性注意力提高视觉架构效率
 
 ### 速读区论文标签
-1. [Effects of width-dependent model hyperparameters and $\ell_2$-regularization on the loss landscape of two-layer ReLU networks](/202607/24/2607.16720v1-effects-of-width-dependent-model-hyperparameters-and-ell2-regularization-on-the-loss-landscape-of-two-layer-relu-networks)  
+1. [ADEPT: Architecture-Driven Energy-Efficient CNN Fine-Tuning on PIM Accelerators](/202607/25/2607.17371v1-adept-architecture-driven-energy-efficient-cnn-fine-tuning-on-pim-accelerators)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：分析宽度相关超参数和L2正则化对两层ReLU网络损失景观的影响
-2. [BLUE: Semantics-Preserving Video Compression for Efficient Vision-Language Surveillance Analytics](/202607/24/2607.19515v1-blue-semantics-preserving-video-compression-for-efficient-vision-language-surveillance-analytics)  
-   标签：评分：7.0/10、query:compress
-   evidence：基于背景抑制的语义保持视频压缩，与变换编码相关
-3. [EGRNet: A Lightweight Semantic Segmentation Network with Edge-Gated Refinement and Adversarial Sensing](/202607/24/2607.19617v1-egrnet-a-lightweight-semantic-segmentation-network-with-edge-gated-refinement-and-adversarial-sensing)  
+   evidence：硬件感知的CNN微调优化策略
+2. [RELTA-SGLD: Relative-Growth Localized Taming for Nonconvex Stochastic-Gradient Langevin Learning](/202607/25/2607.19544v1-relta-sgld-relative-growth-localized-taming-for-nonconvex-stochastic-gradient-langevin-learning)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：轻量分割网络使用深度可分离卷积和膨胀块
-4. [Toward Reliable RGB-D Semantic Segmentation: Handling Missing Modalities via Condition Dropout](/202607/24/2607.20326v1-toward-reliable-rgb-d-semantic-segmentation-handling-missing-modalities-via-condition-dropout)  
+   evidence：模型优化：随机梯度Langevin学习的驯化方案
+3. [Hardware-Software Co-Design for Float16 On-Device Training on RISC-V Single-Core](/202607/25/2607.21130v1-hardware-software-co-design-for-float16-on-device-training-on-risc-v-single-core)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：通过条件丢弃训练范式提升神经网络性能
-5. [Scaling Interpretable Transformers with Parity Bottleneck Layers](/202607/24/2607.20652v1-scaling-interpretable-transformers-with-parity-bottleneck-layers)  
-   标签：评分：7.0/10、query:neural-arch
-   evidence：使用奇偶瓶颈层扩展可解释Transformer，改进架构设计
-6. [Beyond Independent Optimization: Compression, MoE Routing, and Quantization Interactions in Multimodal Edge Intelligence](/202607/24/2607.20981v1-beyond-independent-optimization-compression-moe-routing-and-quantization-interactions-in-multimodal-edge-intelligence)  
-   标签：评分：7.0/10、query:compress
-   evidence：综述视觉token压缩和量化交互
-7. [SANA-Video 2.0: Hybrid Linear Attention with Attention Residuals for Efficient Video Generation](/202607/24/2607.21553v1-sana-video-20-hybrid-linear-attention-with-attention-residuals-for-efficient-video-generation)  
-   标签：评分：7.0/10、query:neural-arch
-   evidence：混合线性-软注意力与注意力残差用于高效视频生成，推进视觉架构设计
-8. [Pixel-Space Diffusion Transformers](/202607/24/2607.17585v1-pixel-space-diffusion-transformers)  
+   evidence：float16设备端训练优化
+4. [Rarity-Aware Discrete Diffusion with Spatially Consistent Decoding for Photo-Realistic Image Super-Resolution](/202607/25/2607.17612v2-rarity-aware-discrete-diffusion-with-spatially-consistent-decoding-for-photo-realistic-image-super-resolution)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：提出像素空间扩散变换器，直接在原始像素上建模，属于计算机视觉和深度学习的通用方法
-9. [Dual Adversarial Fine-tuning for Enhancing Robustness of Large Vision Language Model](/202607/24/2607.18958v1-dual-adversarial-fine-tuning-for-enhancing-robustness-of-large-vision-language-model)  
+   evidence：面向高效图像超分辨率的离散扩散架构
+5. [Packet-Loss Robust 3D Gaussian Compression via Atomic Packaging and GNN-based Error Concealment](/202607/25/2607.17916v1-packet-loss-robust-3d-gaussian-compression-via-atomic-packaging-and-gnn-based-error-concealment)  
+   标签：评分：6.0/10、query:compress
+   evidence：提出3D高斯压缩方案并包含错误隐藏，与压缩技术相关
+6. [Loss Landscape Topology Reveals Why Simple Baselines are Competitive at 3D Point Cloud Segmentation Under Class Imbalance](/202607/25/2607.21089v1-loss-landscape-topology-reveals-why-simple-baselines-are-competitive-at-3d-point-cloud-segmentation-under-class-imbalance)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：双对抗微调提升视觉语言模型鲁棒性，属于CV架构改进
-10. [Importance-Aware OBS Pruning for Diffusion Models](/202607/24/2607.20048v1-importance-aware-obs-pruning-for-diffusion-models)  
+   evidence：损失景观拓扑分析揭示了简单基线竞争力的原因
+7. [Flash EQ-Linear: Accelerating Equivariant Linear Layers via Group-wise Discrete Fourier Transform](/202607/25/2607.21271v1-flash-eq-linear-accelerating-equivariant-linear-layers-via-group-wise-discrete-fourier-transform)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：重要性感知剪枝用于扩散模型，一种模型优化策略
+   evidence：加速等变线性层，提升神经网络架构效率
+8. [Unified Video Dense Prediction from Disjoint Data](/202607/25/2607.21592v1-unified-video-dense-prediction-from-disjoint-data)  
+   标签：评分：6.0/10、query:neural-arch
+   evidence：利用蒸馏从不相交数据实现统一的视频密集预测
 
 
 <div class="dpr-home-promo-card">

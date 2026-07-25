@@ -1,0 +1,967 @@
+Title: Flash EQ-Linear: Accelerating Equivariant Linear Layers via Group-wise Discrete Fourier Transform
+
+URL Source: https://arxiv.org/pdf/2607.21271v1
+
+Published Time: Fri, 24 Jul 2026 00:54:44 GMT
+
+Number of Pages: 21
+
+Markdown Content:
+# Flash EQ-Linear: Accelerating Equivariant Linear Layers via Group-wise Discrete Fourier Transform 
+
+Zhongchen Zhao 1, Jixin Wang 1, Qi Xie 1,*, Hui Lin 1, Lei Zhang 2,3,Deyu Meng 1, Zongben Xu 11Xi’an Jiaotong University 2The Hong Kong Polytechnic University 3OPPO Research 
+
+zhongchenzhao@stu.xjtu.edu.cn, xie.qi@mail.xjtu.edu.cn 
+
+Abstract 
+
+Equivariant networks embed geometric symmetries as structural priors through weight sharing, achieving remarkable parameter efficiency across vision tasks. However, this parameter efficiency does not translate into compute efficiency: existing implementations unroll the structured weights into dense matrices and dispatch them to generic dense kernels, so the FLOPs of an equivariant layer are no smaller than those of a non-equivariant counterpart. In this paper, we observe that the equivariant linear (EQ-Linear) layer—the most fundamental and frequently used module in modern equivariant architectures—is essentially a circular convolution along the group dimension composed with a linear transform along the channel dimension. Building on this observation, we propose Flash EQ-Linear , an exact acceleration algorithm that reduces the complexity from O(N DC ) to O(N DC/T ) by combining the Fourier convolution theorem along the group dimension with the conjugate symmetry of the real DFT. We further provide dedicated CUDA kernels for Flash EQ-Linear, covering both forward and backward passes and both FP32 and FP16 precision. At the operator level, Flash EQ-Linear achieves up to 2×
+
+forward speedup over PyTorch’s F.linear ; at the network level, Flash EQ-ViT and Flash EQ-Swin achieve up to 1.7× end-to-end speedup over both equivariant and non-equivariant baselines. To our knowledge, this is the first time equivariant networks strictly dominate their non-equivariant counterparts along all three axes simultaneously: accuracy , parameter efficiency , and inference speed . Code is available at https://github.com/zhongchenzhao/FlashEQLinear .
+
+# 1 Introduction 
+
+Equivariant networks provide a principled way to explicitly embed geometric symmetry priors (e.g., trans-lation, rotation, reflection symmetry priors) into network architectures, yielding not only performance improvements but also fundamental robustness and generalization of visual models. By embedding geometric symmetries as explicit structural priors through weight sharing in the network module [Ravanbakhsh et al., 2017], equivariant architectures eliminate the need for costly data augmentation to learn these symmetries, substantially improve parameter efficiency, and provide a theoretical guarantee that a geometric transforma-tion on the input induces a predictable transformation on the output. Building on this principle, equivariant CNNs [Cohen and Welling, 2016a,b, Weiler et al., 2018, Kondor and Trivedi, 2018, Weiler and Cesa, 2019, Shen et al., 2020, 2021, Xie et al., 2022, 2025], equivariant Vision Transformers (EQ-ViTs) [He et al., 2021, Hutchinson et al., 2021, Fu et al., 2026], and the recent equivariant Visual Mamba [Zhao et al., 2026] can serve as plug-and-play replacements for their standard counterparts, consistently achieving stronger performance with substantially fewer learnable parameters across image classification, super-resolution, denoising, and restoration. 
+
+> *Corresponding author.
+
+1arXiv:2607.21271v1 [cs.CV] 23 Jul 2026 Shape: Cyclic Shift and Share Shape: 
+
+(a) Standard Linear Layer (b) Naive EQ-Linear Layer (c) Flash EQ-Linear Layer         
+
+> IDFT Conjugate Symmetry Redundancy removed Convolution Theroem real mults complex mults real mults real mults Equivariant Params # Efficient Practicality
+> DFT Equivariant Params # Efficient Practicality Equivariant Params # Efficient Practicality
+> Conj
+
+Figure 1: Illustration of the EQ-Linear. The weight matrix W is constructed by cyclically shifting and replicating a set of learnable parameters ˜W = [ ˜W0, ˜W1, · · · , ˜WT −1] along the group dimension. Despite their remarkable parameter efficiency and performance, equivariant networks suffer from a critical bottleneck in practice: this parameter efficiency has not translated into compute efficiency . The root cause lies in the group-dimensional parameter sharing mechanism itself. By its native realization, the shared weights are not directly computed in-place; instead, they are replicated, permuted, and tiled along the group dimension to assemble a large dense weight tensor, which is then passed to standard PyTorch dense kernels. This naive replication-and-dense-multiplication strategy introduces considerable operational overhead, increasing latency well beyond what the theoretical FLOPs would suggest. As a result, equivariant layers are often slower than their non-equivariant counterparts [Gerken et al., 2022], even when their FLOPs counts are identical. Compounding this problem, equivariant networks are still mostly used in academic research. They lack the highly optimized CUDA kernels [Chetlur et al., 2014] that standard network layers benefit from, which makes them even less computationally credible and harder to deploy in practice. Among the modules that constitute modern equivariant architectures, the key to improving computational efficiency lies in the equivariant linear (EQ-Linear) layer [Finzi et al., 2021, Xie et al., 2025], as it is the most fundamental and the most frequently used. Currently, EQ-Linear has already demonstrated an enviable combination of strong downstream performance when plugged into state-of-the-art architectures, and become one of the equivariant modules with the highest computational proportion. For instance, in EQ-ViT, EQ-Linear layers appear in every attention projection and in every FFN/MLP block, accounting for about 50% of both FLOPs and inference latency. In existing implementations, an EQ-Linear operation is performed by first replicating and cyclically shifting the shared weight matrix T times (where T is the group size) to obtain a 
+
+C × C (where CT is the channel size 1) dense matrix, and then multiplying it with the C-dimensional input feature (illustrated in Fig. 1 (b)). This approach suffers from repetitive memory movement and identical dense matrix-multiply FLOPs in both the forward and backward passes, dragging down the speed in both training and inference. A common workaround is to pre-assemble the weight matrix at inference. So EQ-Linear runs exactly as fast as a vanilla linear layer. This, however, merely hides the redundancy rather than utilizing it, the parameter efficiency is still not converted into compute efficiency. In fact, treating the EQ-Linear weight matrix as an ordinary dense matrix for multiplication overlooks the highly regular internal structure that can be exploited for computational gains. As visualized in Fig. 1(b), the parameters of an EQ-Linear form a group-circulant structure that naturally encodes cyclic symmetry in the data. This structural regularity provokes a pivotal question: can we exploit this very regularity to design an acceleration algorithm that makes EQ-Linear compute faster than a standard linear layer, thereby reversing the speed disadvantage of equivariant networks and achieving, for the first time, a simultaneous superiority in   
+
+> 1To keep the total channel count matched, equivariant networks set the per-group channel width to 1/T of that of their non-equivariant counterparts.
+
+2accuracy, parameter count, and inference speed? In this paper, we answer this question in the affirmative. Our key insight is that the computation of an EQ-Linear is not a generic dense matrix multiplication. It is actually a circular convolution along the group dimension, composed with a standard linear transformation along the channel dimension. As shown in Fig. 1, the EQ-Linear weight matrix has a group-circulant structure: the shared weights are cyclically shifted and replicated T times along the group axis. This is exactly a circular convolution. This observation suggests a much faster way for EQ-Linear computation. (i) Firstly, by the convolution theorem of the Discrete Fourier Transform (DFT), the group convolution in the original domain can be exactly computed as pointwise multiplication in the Fourier domain [Oppenheim and Schafer, 2009]. This reduces the main computation from C2 real multiplications to C2 
+
+> T
+
+complex multiplications. (ii) Moreover, we further exploit the conjugate symmetry of real DFT: since both the input and the weights are real, about half of the frequency components are complex conjugates of the other half and need not be computed independently. This brings the total cost down to roughly 2C2 
+
+> T
+
+real multiplications. Building on the above analysis, we propose Flash EQ-Linear , an exact acceleration algorithm that delivers an approximately 2× speedup for equivariant linear layers in the compute-bound regime. To the best of our knowledge, this is the first time an equivariant linear is made strictly faster than its non-equivariant counterpart (PyTorch’s F.linear ) in wall-clock terms. The implication is significant: equivariant networks, for the first time, surpass their non-equivariant counterparts along all three axes simultaneously— accuracy performance , parameter efficiency , and inference speed . The main contributions of this paper can be summarized as follows: • Algorithmic. We propose Flash EQ-Linear: an exact acceleration algorithm for the equivariant linear. It reformulates group convolution as pointwise multiplication in the frequency domain and further exploits the conjugate symmetry of the real DFT to remove redundant frequency-domain operations, reducing the theoretical complexity from O(C2T 2) to O(2 C2T ).• Exactness. Flash EQ-Linear is exact with theoretical guarantees: it relies only on the invertibility of the DFT and on the strict equivalence of the convolution theorem , and its outputs are identical to those of the naive EQ-Linear. Moreover, the algorithm is also training-free and plug-and-play, which can directly replace EQ-Linear layers in pretrained equivariant networks such as EQ-ViT, with no retraining, fine-tuning, or architectural change. • Implementation. We provide dedicated CUDA operators for Flash EQ-Linear, covering both forward and backward passes, and both FP32 and FP16 precision. The kernels apply system-level optimization to frequency-domain layout, complex multiplication, coalesced memory access, and parallelism granularity, and are open-sourced as an out-of-the-box library for the community. • Empirical validation. At the operator level, Flash EQ-Linear achieves up to 2× forward speedup over PyTorch’s F.linear . At the network level, Flash EQ-ViT and Flash EQ-Swin achieve up to 1.7×
+
+end-to-end speedup over standard ViT/Swin and the corresponding equivariant baselines. These results closely match our theoretical analysis. 
+
+# 2 Related Work 
+
+2.1 Group Equivariant Neural Networks 
+
+Group equivariant neural networks embed geometric symmetries into the architecture, ensuring that a geometric transformation of the input induces a predictable and corresponding transformation of the output. This idea was introduced by G-CNN [Cohen and Welling, 2016a], which generalizes standard convolution to group convolution by sharing weights across the group dimension. Subsequent work has extended this 3principle along three directions: (i) broadening the supported groups, e.g., from 90 ◦ rotations to finer rotations, reflections, and more general geometric groups [Cohen and Welling, 2016a, Weiler and Cesa, 2019]; 
+
+(ii) improving the parameterization of group representations, e.g., from polynomial basis to Fourier and bicubic base [Weiler and Cesa, 2019, Xie et al., 2022, 2025]; and (iii) introducing equivariance into modern architecture families, e.g., from equivariant CNNs to equivariant ViTs [He et al., 2021, Hutchinson et al., 2021, Fu et al., 2026] and equivariant VMamba [Zhao et al., 2026]. These works show that geometric symmetry is a powerful structural prior, enabling equivariant networks to match or surpass their non-equivariant counterparts with substantially fewer parameters. Existing research, however, focuses on expressivity, generalization, and parameter efficiency, while overlooking the run-time efficiency of equivariant operators. To our knowledge, this is the first work to accelerate equivariant operators at the system level with dedicated CUDA kernels. 
+
+2.2 Acceleration of Neural Networks 
+
+General neural network acceleration methods include pruning, quantization, knowledge distillation, sparsifica-tion, and low-rank factorization [Cheng et al., 2018, Han et al., 2016, Hinton et al., 2015, Denton et al., 2014, Frankle and Carbin, 2019]. These methods usually improve efficiency by removing redundant parameters, reducing numerical precision, enforcing sparse computation, approximating weight matrices with low-rank structures, or training smaller student networks [Han et al., 2016, Hinton et al., 2015, Denton et al., 2014]. However, they typically require retraining, fine-tuning, or specialized hardware support, and often incur a nontrivial accuracy–speed trade-off [Dong et al., 2020, Liu et al., 2019]. Moreover, theoretical reductions in FLOPs or parameters do not always translate into proportional wall-clock speedups [Ma et al., 2018, Williams et al., 2009], making it difficult to simultaneously satisfy the three goals of accuracy , speed , and usability .A complementary line pursues exact , lossless acceleration via the Fourier convolution theorem. Mathieu et al. [2013] first applied the Cooley–Tukey FFT [Cooley and Tukey, 1965] to CNN spatial convolutions, recasting them as pointwise multiplications in the frequency domain; Vasilache et al. [2014] subsequently engineered this into the cuDNN-FFT backend. These works operate on the spatial dimensions of image convolutions. In contrast, we apply the Fourier transform along the group dimension for equivariant linear layers, and combine the convolution theorem with the conjugate symmetry of the real DFT to obtain an exact ,
+
+training-free , plug-and-play acceleration algorithm. 
+
+# 3 Flash EQ-Linear: Principle, Algorithm, and Implementations 
+
+In this section, we develop Flash EQ-Linear, an exact algorithm that uses the discrete Fourier transform (DFT) to reduce the complexity of EQ-Linear from O(N DC ) to O(N DC/T ). We first present the underlying acceleration principle (Sec. 3.1), then derive the acceleration algorithm (Sec. 3.2), and analyze its complexity (Sec. 3.3) and properties (Sec. 3.4). Finally, we describe the CUDA kernel implementations (Sec. 3.5). 
+
+3.1 Acceleration Principle 
+
+Formulation of EQ-Linear. An equivariant linear layer maps between group-structured feature spaces while preserving equivariance under group actions. As illustrated in Fig. 1, its weight matrix W has a block-circulant structure formed by cyclically shifting a set of learnable parameter blocks ˜W = [ ˜W0, ˜W1, . . . , ˜WT −1]
+
+along the group dimension. Given a group-structured input X ∈ R CT ×T defined over a transformation group 4Algorithm 1 Flash EQ-Linear ▷ Total MACs ≈ N CT + DC + 2 N DC/T + N DT 
+
+Input: Real-valued input features X ∈ RN × CT ×T , parameters ˜W ∈ R DT × CT ×T , and bias ˜b ∈ R DT . 
+
+> 1:
+
+Compute the non-redundant frequency components 0, . . . , ⌊T / 2⌋ of the group-wise DFT for X and ˜W :
+
+ˆXGk = FG (X)Gk , ˆW Gk = FG ( ˜W )Gk , k = 0 , · · · , ⌊T / 2⌋. ▷ MACs = 2( N + DT )C(⌊T / 2⌋ + 1)  
+
+> 2:
+
+Perform the complex matrix multiplication independently at each non-redundant frequency: 
+
+ˆY Gk = ˆXGk · ˆW Gk ⊤, k = 0 , · · · , ⌊T / 2⌋. ▷ MACs = 4N DC T 2 (⌊T / 2⌋ + 1)  
+
+> 3:
+
+Recover the remaining frequency components using conjugate symmetry: 
+
+ˆY GT −k = ˆY Gk , k = 1 , · · · , ⌊(T −1) /2⌋. ▷ MACs = 0  
+
+> 4:
+
+Apply the group-wise inverse DFT and add the bias: Y = F−1 
+
+> G
+
+( ˆY ) + ˜b. ▷ MACs = N DT 
+
+Output: Y ∈ RN × DT ×T
+
+G = {Gt | t = 0 , 1, . . . , T − 1}, EQ-Linear maps it to an output Y ∈ R DT ×T as 
+
+Y = W × X⊤ + b, where 
+
+
+
+Y G0
+
+Y G1
+
+...
+
+Y GT −1
+
+=
+
+
+
+˜W0 ˜W1 · · · ˜WT −1
+
+˜WT −1 ˜W0 · · · ˜WT −2
+
+... ... . . . ...
+
+˜W1 ˜W2 · · · ˜W0
+
+
+
+XG0
+
+XG1
+
+...
+
+XGT −1
+
++
+
+
+
+˜b
+
+˜b
+
+...
+
+˜b
+
+. (1) 
+
+Here, XGt ∈ R CT and Y Gt ∈ R DT denote the t-th group components 2 of X and Y , respectively. The weight matrix W ∈ RD×C and bias b ∈ RD are tiled from the learnable parameters ˜W ∈ R DT ×C and ˜b ∈ R DT , where  
+
+> CT
+
+and DT are the numbers of input and output channels per group element. 
+
+MACs of Naive EQ-Linear. As shown in Eq. 1, the naive implementation ignores the block-circulant structure of W , explicitly expands ˜W into the dense matrix W , and computes Y using a general matrix multiplication kernel. Consequently, it requires N DC multiply–accumulate operations (MACs), matching the cost of a non-equivariant linear layer with the same input and output dimensions. 
+
+EQ-Linear as a group-circulant convolution. Our key observation is that EQ-Linear essentially performs a circular convolution between the input X and the parameters ˜W along the group dimension. Specifically, Eq. 1 can be equivalently written as 
+
+Y = X ⊛G ˜W + ˜b, where Y Gt = 
+
+> T−1
+
+X
+
+> s=0
+
+XGs · ˜W(s−t) mod T + ˜b, ∀Gt ∈ G , (2) which is precisely a circular convolution along the group dimension, composed with matrix multiplications along the channel dimension. 
+
+Acceleration principle. By applying the DFT convolution theorem along the group dimension, 3 the group-circulant convolution in Eq. 2, which requires N DC MACs in the original domain—can be equivalently transformed into an elementwise multiplication in the Fourier domain, reducing the dominant complexity to 
+
+N DC/T MACs: 
+
+FG
+
+
+
+X ⊛G ˜W
+
+
+
+= FG (X) ⊙G FG ( ˜W ) =⇒ X ⊛G ˜W = F−1
+
+> G
+
+
+
+FG (X) ⊙G FG ( ˜W )
+
+
+
+. (3) Furthermore, because both the input features X and parameters ˜W are real-valued, their Fourier coefficients               
+
+> 2Gt∈ G denotes both a group transformation (e.g., a rotation matrix) and an index along the group dimension.
+> 3The DFT convolution theorem states that circular convolution in the original domain becomes pointwise multiplication in the frequency domain: F(X⊛W) = F(X)⊙ F (W),where F(·),⊛, and ⊙denote the discrete Fourier transform, circular convolution, and pointwise multiplication, respectively.
+
+5exhibit conjugate symmetry. 4 We therefore need to compute only the nonredundant frequency components, nearly halving the frequency-domain computation. 
+
+3.2 Acceleration Algorithm 
+
+3.2.1 Flash EQ-Linear for General Finite Cyclic Groups 
+
+Building on the above principle, we develop Flash EQ-Linear, summarized in Alg. 1. The algorithm consists of four main steps: 
+
+Step 1: Group-wise DFT. Given group-structured input features X ∈ RN × CT ×T , parameters ˜W ∈
+
+R DT × CT ×T , and bias ˜b ∈ R DT , we first apply the DFT to X and ˜W along the group dimension: 
+
+ˆXGk = FG (X)Gk = 
+
+> T−1
+
+X
+
+> t=0
+
+XGt e−i2 πkt/T , ˆW Gk = FG ( ˜W )Gk , k = 0 , . . . , ⌊T / 2⌋. (4) where ˆX ∈ CN × CT ×T and ˆW ∈ C DT × CT ×T are complex-valued. Since X and ˜W are real-valued, only the first ⌊T / 2⌋ + 1 non-redundant frequency components of ˆX and ˆW need to be computed explicitly, while the remaining components are determined by conjugate symmetry. 
+
+Step 2: Per-frequency matrix multiplication. As established in Eq. 3, the group-circulant convolution decomposes into independent complex matrix multiplications across frequencies: 
+
+ˆY Gk = ˆXGk · ˆW Gk ⊤, k = 0 , . . . , ⌊T / 2⌋. (5) Each multiplication combines pointwise interaction at a fixed frequency with a projection across the channel dimension. Crucially, different frequencies are independent and can be processed in parallel. 
+
+Step 3: Conjugate-symmetric recovery. By the conjugate symmetry of the real DFT and the multi-plicative property of complex conjugation (i.e., x · y = x · y for any x, y ∈ C), the remaining frequency components of ˆY can be recovered without additional computation: 
+
+ˆY GT−k = ˆXGT−k · ˆW GT−k ⊤ = ˆXGk · ˆW Gk ⊤ = ˆXGk · ˆW Gk ⊤ = ˆY Gk , k = 1 , · · · , ⌊(T −1) /2⌋. (6) 
+
+Step 4: Group-wise IDFT. Finally, we apply the inverse DFT to ˆY along the group dimension and add the group-shared bias: 
+
+Y = F−1 
+
+> G
+
+( ˆY ) + ˜b, Y ∈ RN × DT ×T , (7) where ˜b is broadcast over the sample and group dimensions. 
+
+3.2.2 Flash EQ-Linear for the p4 Rotation Group 
+
+As illustrated in Fig. 2, for the widely used p4 rotation group [Cohen and Welling, 2016a], specializing Alg. 1 to T = 4 yields a substantially simplified form of Flash EQ-Linear. 
+
+Step 1: Group-wise DFT. For the p4 rotation group ( T = 4 ), the group-wise discrete Fourier transform of X specializes to the following explicit form: 
+
+
+
+ˆXG0
+
+ˆXG1
+
+ˆXG2
+
+ˆXG3
+
+=
+
+
+
+1 1 1 11 −i −1 i
+
+1 −1 1 −11 i −1 −i
+
+
+
+XG0
+
+XG1
+
+XG2
+
+XG3
+
+ =⇒
+
+
+
+ˆXG0
+
+Re( ˆXG1 )ˆXG2
+
+Im( ˆXG1 )
+
+=
+
+
+
+1 1 1 11 0 −1 01 −1 1 −10 −1 0 1
+
+
+
+XG0
+
+XG1
+
+XG2
+
+XG3
+
+ . (8)            
+
+> 4For a real-valued sequence X∈RT, its DFT satisfies F(X)T−k=F(X)k, where ·denotes complex conjugation.
+
+6𝑿𝑿 𝑮𝑮 𝟎𝟎 
+
+𝑿𝑿 𝑮𝑮 𝟐𝟐 
+
+𝑿𝑿 𝑮𝑮 𝟏𝟏 
+
+𝑿𝑿 𝑮𝑮 𝟑𝟑 
+
+> −𝟏𝟏
+
+�𝑿𝑿 𝑮𝑮 𝟎𝟎 
+
+�𝑿𝑿 𝑹𝑹𝑹𝑹 𝑮𝑮 𝟏𝟏 
+
+�𝑿𝑿 𝑮𝑮 𝟐𝟐 
+
+�𝑿𝑿 𝑰𝑰𝑰𝑰 𝑮𝑮 𝟏𝟏 
+
+𝑾𝑾 𝑮𝑮 𝟎𝟎 
+
+𝑾𝑾 𝑮𝑮 𝟏𝟏 
+
+𝑾𝑾 𝑮𝑮 𝟐𝟐 
+
+𝑾𝑾 𝑮𝑮 𝟑𝟑 
+
+> −𝟏𝟏
+
+× + ×
+
+�𝒀𝒀 𝑮𝑮 𝟎𝟎 
+
+�𝒀𝒀 𝑰𝑰𝑰𝑰 𝑮𝑮 𝟏𝟏 
+
+×�𝑾𝑾 𝑮𝑮 𝟎𝟎 
+
+�𝑾𝑾 𝑹𝑹𝑹𝑹 𝑮𝑮 𝟏𝟏 
+
+�𝑾𝑾 𝑮𝑮 𝟐𝟐 
+
+�𝑾𝑾 𝑰𝑰𝑰𝑰 𝑮𝑮 𝟏𝟏 
+
+𝒀𝒀 𝑮𝑮 𝟎𝟎 
+
+𝒀𝒀 𝑮𝑮 𝟑𝟑     
+
+> −𝟏𝟏
+> 𝟎𝟎 .𝟐𝟐𝟐𝟐
+> 𝟎𝟎 .𝟐𝟐
+> 𝟎𝟎 .𝟐𝟐𝟐𝟐
+> 𝟎𝟎 .𝟐𝟐
+
+× �𝒀𝒀 𝑹𝑹𝑹𝑹 𝑮𝑮 𝟏𝟏 
+
+�𝒀𝒀 𝑮𝑮 𝟐𝟐 
+
+Step 1: group-wise DFT ( �𝑿𝑿 𝑮𝑮 𝟑𝟑 = �𝑿𝑿 𝑮𝑮 𝟏𝟏 , �𝑾𝑾 𝑮𝑮 𝟑𝟑 = �𝑾𝑾 𝑮𝑮 𝟏𝟏 )
+
+[0 MACs] 
+
+Step 2: per-frequency matmul 
+
+[NDC  6/16 NDC MACs , 2.67 × speedup] 
+
+Step 4: group-wise IDFT 
+
+[0 MACs] 
+
+> ×
+> ×
+
+𝒀𝒀 𝑮𝑮 𝟐𝟐 
+
+𝒀𝒀 𝑮𝑮 𝟏𝟏 
+
+> ×
+> ×
+
+× − ×
+
+×           
+
+> Group-wise DFT
+> Group-wise DFT
+> −𝟏𝟏
+> ℝ𝐷𝐷 4×𝐶𝐶 4ℝ𝑁𝑁 ×𝐶𝐶 4ℝ𝑁𝑁 ×𝐶𝐶 4×ℝ𝐷𝐷 4×𝐶𝐶 4→ ℝ 𝑁𝑁 ×𝐷𝐷 4ℝ𝑁𝑁 ×𝐷𝐷 4
+
+Figure 2: Illustration of the Flash EQ-Linear Algorithm for the p4 Rotation Group. Since X is real-valued, the self-conjugate components ˆXG0 and ˆXG2 are real-valued, while the remaining pair satisfies ˆXG3 = ˆXG1 . The transform is therefore fully determined by four real-valued components: 
+
+ˆXG0 , Re( ˆXG1 ), ˆXG2 , and Im( ˆXG1 ). Moreover, the reduced transform matrix in Eq. 8 contains only 0 and 
+
+±1. Consequently, the group-wise DFT reduces entirely to additions and subtractions, requiring no nontrivial multiplications. The same simplification applies to the group-wise DFT of the real-valued parameters fW .
+
+Step 2: Per-frequency Fourier-domain matrix multiplication. Using the four real-valued Fourier components derived in Step 1, the per-frequency multiplication in Eq. 5 specializes to 
+
+ˆY G0 = ˆXG0 · ˆW G0⊤, ˆY G2 = ˆXG2 · ˆW G2⊤,
+
+Re( ˆY G1 ) = Re( ˆXG1 ) · Re( ˆW G1 )⊤ − Im( ˆXG1 ) · Im( ˆW G1 )⊤,
+
+Im( ˆY G1 ) = Re( ˆXG1 ) · Im( ˆW G1 )⊤ + Im( ˆXG1 ) · Re( ˆW G1 )⊤.
+
+(9) Step 2 thus reduces to six real-valued matrix multiplications, which can be executed in parallel. Since each multiplication maps CT input channels to DT output channels, the total cost is 616 N DC MACs. 
+
+Step 3: Recovery by conjugate symmetry. Since both inputs and weights are real-valued, the Fourier-domain output satisfies ˆY G3 = ˆY G1 . We therefore avoid materializing the redundant G3 component and reconstruct its contribution implicitly during the inverse transform. This step requires neither additional MACs nor storage for ˆY G3 .
+
+Step 4: Group-wise IDFT. Exploiting the conjugate symmetry from Step 3, the group-wise inverse DFT for the p4 rotation group can be expressed directly using four real-valued Fourier components: 
+
+
+
+Y G0
+
+Y G1
+
+Y G2
+
+Y G3
+
+
+
+=
+
+ 
+
+> 1414141414
+> i
+> 4
+
+− 14 − i 
+
+> 414
+
+− 1414 − 1414 − i 
+
+> 4
+
+− 14
+
+> i
+> 4
+
+
+
+ˆY G0
+
+ˆY G1
+
+ˆY G2
+
+ˆY G3
+
+
+
+=
+
+ 
+
+> 1414141414
+> i
+> 4
+
+− 14 − i 
+
+> 414
+
+− 1414 − 1414 − i 
+
+> 4
+
+− 14
+
+> i
+> 4
+
+
+
+ˆY G0
+
+ˆY G1
+
+ˆY G2
+
+ˆY G1
+
+
+
+=
+
+ 
+
+> 141214
+
+0 
+
+> 14
+
+0 − 14 − 1214 − 1214 0 
+
+> 14
+
+0 − 1412
+
+
+
+ˆY G0
+
+Re( ˆY G1 )ˆY G2
+
+Im( ˆY G1 )
+
+, (10) 
+
+The second equality substitutes ˆY G3 = ˆY G1 , while the final equality expands ˆY G1 into its real and imaginary parts. The resulting real-valued transform contains only the dyadic coefficients {0, ± 14 , ± 12 } and thus reduces to additions, subtractions, and power-of-two rescalings. Therefore, Step 4 incurs no additional MACs in the final implementation. 
+
+3.3 Complexity Analysis 
+
+We quantify the computational efficiency of Flash EQ-Linear by analyzing the MACs of each step in Alg. 1. The resulting complexity is summarized below, with full derivations in Appendix 6.1. 7Theorem 1 (Complexity of Flash EQ-Linear) Given an input X ∈ RN×CT ×T , and let the output Y ∈
+
+RN×DT ×T , the proposed Flash EQ-Linear algorithm incurs nearly 
+
+4N DC T 2 (⌊T / 2⌋ + 1) ≈ 2N DC T (11) 
+
+MACs. For the p4 rotation group ( T = 4 ), the complexity can be further reduced to 616 N DC MACs. 
+
+Speedup analysis. In contrast, both naive EQ-Linear and a standard non-equivariant linear layer with the same total channel dimensions require N DC MACs to compute a dense C × D projection. Flash EQ-Linear therefore achieves a theoretical speedup of 
+
+Speedup = MACs Naive 
+
+MACs Flash 
+
+≈ N DC 
+
+2N DC/T = T
+
+2 . (12) For T = 4 , the exact p4 specialization yields a theoretical speedup of 16 /6 ≈ 2.67 ×.
+
+3.4 Properties of Flash EQ-Linear 
+
+Exactness and equivariance preservation. Flash EQ-Linear is exact by construction: the invertibility of DFT and the convolution theorem make it algebraically equivalent to naive EQ-Linear. It therefore preserves the rotation equivariance of the original operator. As verified in Table 4, the relative L2 discrepancy between their FP32 outputs is on the order of 10 −7, consistent with numerical precision. 
+
+Speedup scales linearly with group size. As established in Eq. 12, the theoretical speedup of Flash EQ-Linear scales linearly with the group size T . Thus, as equivariant networks adopt finer groups (larger 
+
+T ) to capture richer geometric structure, Flash EQ-Linear becomes increasingly advantageous: stronger equivariance yields greater speedup .
+
+Training-free and plug-and-play. Flash EQ-Linear can be used to directly replace naive EQ-Linear in pretrained equivariant networks in a plug-and-play manner, requiring no retraining, fine-tuning, or architectural changes. Existing models such as EQ-ViT and EQ-Swin can therefore adopt Flash EQ-Linear without modifying their training or inference pipelines. 
+
+3.5 CUDA Kernel Implementations 
+
+A straightforward PyTorch implementation of Alg. 1 decomposes the computation into separate DFT, complex multiplication, and IDFT operators. The resulting kernel launches, layout transformations, and global-memory traffic can dominate runtime and diminish the algorithmic gains [Williams et al., 2009, Dao et al., 2022]. To translate the theoretical speedups into practical speedups, we develop dedicated CUDA kernels of Flash EQ-Linear for the p4 rotation group, supporting both forward and backward passes in FP32 and FP16. Our implementation fuses all stages of Alg. 1 into a single GEMM-like dataflow, eliminating costly intermediate round trips to global memory. For p4 with T = 4 , the DFT and IDFT are fully unrolled into additions, subtractions, and fixed rescalings, with intermediate Fourier-domain fragments retained in registers or shared memory. Weights are stored in frequency-domain planes, while input activations remain in their native layout, avoiding auxiliary packed tensors and additional GPU memory allocation. We further provide shape-specialized kernel optimization that tune tile sizes, shared-memory staging, persistence, Tensor Core utilization, and vectorized memory access across different (B, N, C, D ) regimes. Further implementation details are provided in Appendix 6.2. 8Table 1: Forward latency comparison of Flash EQ-Linear against Standard Linear and Naive EQ-Linear baselines under different channel numbers ( 64 → 2048 ). Speedup ratios (green) are measured against the standard Linear (PyTorch’s F.linear ) baseline.                                                                         
+
+> Method #Param. (M) ↓
+> FLOPs (G) ↓
+> Forward Latency (ms) ↓
+> 64 128 256 512 1024 2048
+> Single-Precision Floating-Point (FP32)
+> Standard Linear 0.066 0.134 0.11 0.43 1.52 6.05 24.48 104.96 Naive EQ-Linear 0.016 0.134 0.11 0.44 1.54 6.25 25.16 105.74
+> Flash EQ-Linear 0.016 0.052 0.07 0.25 0.79 3.03 11.92 49.14
+> Speedup/Reduction ↑75.8% 61.2% 1.6 ×1.7 ×1.9 ×2.0 ×2.1 ×2.1 ×
+> Half-Precision Floating-Point (FP16)
+> Standard Linear 0.066 0.134 0.05 0.11 0.44 1.70 6.79 30.08 Naive EQ-Linear 0.016 0.134 0.05 0.12 0.46 1.73 6.90 30.59
+> Flash EQ-Linear 0.016 0.052 0.04 0.09 0.31 1.04 3.23 14.07
+> Speedup/Reduction ↑75.8% 61.2% 1.3 ×1.2 ×1.5 ×1.6 ×2.1 ×2.1 ×
+
+# 4 Experiments 
+
+4.1 Operator-Level Acceleration 
+
+Experimental settings. We benchmark Flash EQ-Linear against two baselines: standard Linear (PyTorch’s 
+
+F.linear [Paszke et al., 2019]) and Naive EQ-Linear, which explicitly unrolls the equivariant weights. All methods receive the same input X ∈ RB×N × CT ×T , with batch size B = 32 , sequence length N = 1024 ,and group size T = 4 corresponding to the p4 rotation group. We vary the per-group channel width c = CT
+
+from 64 to 2048 and set the output width D equal to C. For a fair comparison, Standard Linear applies a dense C → C projection. Parameters and FLOPs are reported at c = 64 . We measure forward and backward latency under FP32 and FP16 on a single NVIDIA RTX 4090 GPU, averaging over 200 runs. All speedups are measured relative to Standard Linear. 
+
+Experimental results. Tables 1 and 2 report forward and backward latency across channel widths, respectively. (i) Forward latency. As the channel width C increases from 64 to 2048 , Flash EQ-Linear accelerates the forward pass by 1.6×–2.1× in FP32 and 1.3×–2.1× in FP16. At small channel widths, performance is dominated by memory traffic, layout transformations, and kernel-launch overhead. As the workload becomes compute-bound, the speedup increases toward the theoretical upper bound of 2.67 ×.Flash EQ-Linear also reduces the computational cost from 0.134 G to 0.052 G FLOPs, a 2.6× reduction consistent with our theoretical complexity analysis. (ii) Backward latency. In FP32, Flash EQ-Linear consistently accelerates the backward pass over Standard Linear, although by a smaller margin than that in the forward pass because gradient computation incurs additional arithmetic and memory traffic. In FP16, the gains are limited at small channel widths, with slight slowdowns in a few settings. This is due to insufficient engineering optimization rather than any algorithmic limitation: our backward kernels lack the heavily-tuned memory-access optimizations of PyTorch’s production F.linear backward. Overall. These results confirm that the theoretical reduction in computation translates into substantial wall-clock acceleration. In the compute-bound regime, Flash EQ-Linear achieves up to a 2.1× forward speedup over a highly optimized non-equivariant baseline while exactly preserving equivariance. 9Table 2: Backward latency comparison of Flash EQ-Linear against Standard Linear and Naive EQ-Linear baselines under different channel numbers ( 16 → 2048 ).                                                                                             
+
+> Method Backward Latency (ms) ↓
+> 16 32 64 128 256 512 1024 2048
+> Single-Precision Floating-Point (FP32)
+> Standard Linear 0.17 0.14 0.16 0.46 1.67 5.42 20.80 83.11 Naive EQ-Linear 0.34 0.33 0.33 0.53 1.80 5.68 22.35 89.34
+> Flash EQ-Linear 0.14 0.13 0.13 0.39 1.29 4.70 17.79 70.91
+> Speedup (vs. Standard) ↑1.2 ×1.1 ×1.3 ×1.2 ×1.3 ×1.2 ×1.2 ×1.2 ×
+> Speedup (vs. Naive) ↑2.5 ×2.6 ×2.6 ×1.4 ×1.4 ×1.2 ×1.3 ×1.3 ×
+> Half-Precision Floating-Point (FP16)
+> Standard Linear 0.18 0.14 0.14 0.30 1.06 3.90 14.67 59.48
+> Naive EQ-Linear 0.35 0.33 0.33 0.57 1.21 4.28 16.00 65.07
+> Flash EQ-Linear 0.12 0.13 0.23 0.33 1.28 3.90 12.84 45.02
+> Speedup (vs. Standard) ↑1.5 ×1.1 ×0.6 ×0.9 ×0.8 ×1.0 ×1.1 ×1.3 ×
+> Speedup (vs. Naive) ↑2.9 ×2.5 ×1.4 ×1.7 ×0.9 ×1.1 ×1.2 ×1.4 ×
+
+4.2 Network-Level Acceleration 
+
+Experimental settings. We integrate Flash EQ-Linear into EQ-ViT and EQ-Swin [Fu et al., 2026] by replacing every Naive EQ-Linear layer while leaving the remaining architecture unchanged. We compare Flash EQ-ViT/Swin with standard non-equivariant ViT/Swin [Dosovitskiy et al., 2021, Liu et al., 2021] and their naive equivariant counterparts across multiple model scales (Tiny/Small/Base/Large/Huge). Within each model scale, all methods use the same total channel width, batch size 128 , input resolution 224 × 224 ,and group size T = 4 corresponding to the p4 rotation group. We report Top-1 accuracy on ImageNet-100, a 100-class subset of ImageNet1K [Deng et al., 2009], together with parameter count, FLOPs, cumulative linear-layer latency, the linear-layer-to-network latency ratio, end-to-end latency, and throughput (imgs/s). Latency is measured on a single NVIDIA RTX 4090 GPU under FP32 and FP16 and averaged over 200 runs. Complete and experimental results are provided in Tables 7 and 8 of the Appendix 6.3. 
+
+Experimental results. Table 3 reports the inference performance of Flash EQ-ViT/Swin across model scales. (i) Linear-layer latency. Replacing Naive EQ-Linear with Flash EQ-Linear reduces cumulative linear-layer latency by approximately 2× across all scales, consistent with the compute-bound operator-level results in Table 1. These results demonstrate that the operator-level gains transfer directly to full-network execution. (ii) End-to-end speedup. At the network level, Flash EQ-Linear delivers 1.4×–1.7× end-to-end speedups in FP32 and 1.2×–1.3× in FP16. The gains increase with model scale because larger models spend a larger fraction of their runtime in linear layers—from 58 .4% for ViT-S to 77 .7% for ViT-H—precisely the component accelerated by Flash EQ-Linear. Moreover, Flash EQ-ViT/Swin preserves the ImageNet-100 Top-1 accuracy of the corresponding naive equivariant models, confirming lossless, training-free, and plug-and-play acceleration. Overall. Flash EQ-ViT/Swin retains the parameter efficiency of equivariant networks (∼ 4× fewer parameters than non-equivariant baselines for T = 4 ) while outperforming both naive equivariant models and highly optimized non-equivariant baselines in inference speed. These results demonstrate that the theoretical efficiency of Flash EQ-Linear translates into substantial end-to-end acceleration in practice. 
+
+4.3 Precision Validation of Flash EQ-Linear 
+
+We further validate the two properties established in Sec. 3.4: numerical equivalence to Naive EQ-Linear and preservation of rotation equivariance. 
+
+Exactness verification. We compare Flash EQ-Linear with Naive EQ-Linear on random inputs of 10 Table 3: Inference latency comparison of Flash EQ-ViT/Swin against standard non-EQ and naive EQ baselines. Speedup ratios (green) are measured against standard ViT/Swin baselines. 
+
+Method #Param. (M) ↓
+
+Top-1 (%) ↑
+
+All Linear Layers Total Network FLOPs (G) ↓
+
+Latency (ms) ↓
+
+Latency Ratio FLOPs (G) ↓
+
+Latency (ms) ↓
+
+Throughput (imgs/s) ↑
+
+Single-Precision Floating-Point (FP32) 
+
+ViT-S 33.8 76.5 13.1 0.352 58.4% 14.1 0.603 1658 Naive EQ-ViT-S 8.4 78.2 13.1 0.355 58.7% 14.1 0.604 1656 
+
+Flash EQ-ViT-S 8.4 78.2 5.0 0.183 42.6% 6.0 0.429 2332 (1.4 ×)
+
+ViT-B 85.9 77.1 33.5 0.761 67.1% 35.1 1.135 881 Naive EQ-ViT-B 21.4 80.1 33.5 0.757 67.1% 35.1 1.128 886 
+
+Flash EQ-ViT-B 21.4 80.1 12.7 0.400 52.3% 14.3 0.764 1309 (1.5 ×)
+
+ViT-L 303.4 78.4 119.0 2.672 71.9% 123.1 3.715 269 Naive EQ-ViT-L 75.8 80.6 119.0 2.672 71.9% 123.1 3.715 269 
+
+Flash EQ-ViT-L 75.8 80.6 44.8 1.336 56.7% 49.0 2.356 424 (1.6 ×)
+
+ViT-H 631.1 81.3 248.0 5.586 77.7% 254.7 7.192 139 Naive EQ-ViT-H 157.7 81.5 248.0 5.586 77.7% 254.7 7.192 139 
+
+Flash EQ-ViT-H 157.7 81.5 93.3 2.719 63.2% 100.1 4.304 232 (1.7 ×)
+
+Swin-H 655.1 87.2 228.6 5.232 70.4% 230.3 7.430 135 Naive EQ-Swin-H 164.0 88.3 228.6 5.232 70.4% 230.3 7.430 135 
+
+Flash EQ-Swin-H 164.0 88.3 84.3 2.474 52.8% 90.8 4.687 213 (1.6 ×)
+
+Half-Precision Floating-Point (FP16) 
+
+ViT-H 631.1 81.3 248.0 1.541 64.8% 254.7 2.379 420 Naive EQ-ViT-H 157.7 81.5 248.0 1.557 65.1% 254.7 2.392 418 
+
+Flash EQ-ViT-H 157.7 81.5 93.3 0.976 54.2% 100.1 1.801 555 (1.3 ×)
+
+Swin-H 655.1 87.2 228.6 1.428 59.2% 230.3 2.412 415 Naive EQ-Swin-H 164.0 88.3 228.6 1.406 58.4% 230.3 2.408 415 
+
+Flash EQ-Swin-H 164.0 88.3 84.3 0.958 49.0% 90.8 1.955 512 (1.2 ×)
+
+shape (32 , 1024 , 64 , 4) using four metrics: relative L2 error (the primary metric), maximum and mean absolute errors, and the 99th-percentile relative error. We evaluate all tensors in a complete training step: the forward output Y and gradients ∇X, ∇ ˜W , and ∇˜b. As shown in Table 4, their relative L2 errors are 10 −7–10 −6 in FP32 and approximately 10 −4 in FP16, consistent with floating-point rounding at the respective precisions [Goldberg, 1991]. All tensors satisfy the matching criterion, confirming that Flash EQ-Linear introduces no numerical error beyond finite-precision effects. 
+
+Equivariance verification. Under the p4 rotation group, rotating an input induces a cyclic shift along the group dimension on the output. Thus, an equivariant linear f (·) should satisfy f (G(X)) = G(f (X)) , ∀G ∈Gp4 . Following Xie et al. [2025], we quantify the FP32 equivariance error using the normalized mean squared error (NMSE) between f (G(X)) and G(f (X)) . As shown in Table 5, Standard Linear yields a large error (1.4), demonstrating that unconstrained linear layers do not preserve the group action. Flash EQ-Linear reduces the error to 4.0 × 10 −8, comparable to Naive EQ-Linear ( 1.3 × 10 −7), confirming that it preserves equivariance up to floating-point rounding. 11 Table 4: Validation of numerical equivalence between Flash EQ-Linear and Naive EQ-Linear. The relative 
+
+L2 error (Rel L2) is the primary metric. 
+
+Tensor Dtype Shape Rel L2 ↓ Max Abs ↓ Mean Abs ↓ p99 Rel ↓ Match Forward output Y FP32 B×N×D×T 2 .6×10 −7 1.2×10 −6 1.1×10 −7 1.7×10 −6 ✓
+
+Backward input grad ∇X FP32 B×N×C×T 2 .2×10 −7 8.3×10 −7 9.4×10 −8 1.1×10 −5 ✓
+
+Backward weight grad ∇W FP32 D×C×T 5.9×10 −7 2.7×10 −4 2.9×10 −5 3.2×10 −5 ✓
+
+Backward bias grad ∇b FP32 D 1.5×10 −7 2.3×10 −5 7.2×10 −6 4.5×10 −6 ✓
+
+Forward output Y FP16 B×N×D×T 5 .1×10 −4 2.0×10 −3 1.9×10 −4 2.8×10 −3 ✓
+
+Backward input grad ∇X FP16 B×N×C×T 4 .1×10 −4 2.0×10 −3 1.4×10 −4 1.8×10 −2 ✓
+
+Backward weight grad ∇W FP16 D×C×T 6.3×10 −4 2.5×10 −1 2.8×10 −2 3.0×10 −2 ✓
+
+Backward bias grad ∇b FP16 D×1 2.1×10 −4 6.3×10 −2 6.3×10 −3 9.2×10 −3 ✓
+
+Table 5: Equivariance verification of Flash EQ-Linear on the p4 rotation group. Method Rel L2 ↓ NMSE ↓ Max Abs ↓ Mean Abs ↓ p99 Rel ↓
+
+Standard Linear 1.4×10 0 1.4×10 0 4.1×10 0 6.5×10 −1 6.4×10 1
+
+Naive EQ-Linear 1.4×10 −7 1.3×10 −7 7.3×10 −7 6.0×10 −8 7.5×10 −6
+
+Flash EQ-Linear 5.4×10 −8 4.0×10 −8 3.2×10 −7 1.9×10 −8 2.4×10 −6
+
+# 5 Conclusion 
+
+In this paper, we identify a long-standing gap in equivariant linear: parameter efficiency does not translate into compute efficiency, because existing implementations unroll structured weights into dense matrices and dispatch them to generic kernels. To bridge this gap, we propose Flash EQ-Linear, an exact acceleration algorithm that leverages the Fourier convolution theorem and the conjugate symmetry of real DFT to reduce the complexity from N DC MACs to 2N DC/T MACs, yielding a T / 2 theoretical speedup. At the operator level, Flash EQ-Linear achieves up to 2× forward speedup over PyTorch’s F.linear ; at the network level, Flash EQ-ViT achieves up to 1.7× inference speedup over both equivariant and non-equivariant baselines. Furthermore, our work points to a broader insight: equivariance can deliver lossless compute acceleration, not just parameter efficiency .
+
+Limitations and future work. Our current CUDA implementation focuses on the widely used p4 rotation group (i.e., 90 ◦ rotation group). A natural extension is to generalize this algorithm to other transformation groups , such as reflection groups. Moreover, while this work targets the fundamental equivariant linear layer, the same algorithmic principle may extend to other equivariant operators, such as equivariant convolutions, enabling more comprehensive acceleration of equivariant networks. 
+
+# References 
+
+Yu Cheng, Duo Wang, Pan Zhou, and Tao Zhang. A survey of model compression and acceleration for deep neural networks. IEEE Signal Processing Magazine , 35(1):126–136, 2018. Sharan Chetlur, Cliff Woolley, Philippe Vandermersch, Jonathan Cohen, John Tran, Bryan Catanzaro, and Evan Shelhamer. cudnn: Efficient primitives for deep learning. arXiv preprint arXiv:1410.0759 , 2014. Taco S. Cohen and Max Welling. Group equivariant convolutional networks. In International Conference on Machine Learning , pages 2990–2999, 2016a. Taco S Cohen and Max Welling. Steerable cnns. arXiv preprint arXiv:1612.08498 , 2016b. 12 James W Cooley and John W Tukey. An algorithm for the machine calculation of complex fourier series. 
+
+Mathematics of computation , 19(90):297–301, 1965. Tri Dao, Daniel Y Fu, Stefano Ermon, Atri Rudra, and Christopher R ´e. Flashattention: Fast and memory-efficient exact attention with io-awareness. In Advances in Neural Information Processing Systems ,volume 35, pages 16344–16359, 2022. Jia Deng, Wei Dong, Richard Socher, Li-Jia Li, Kai Li, and Li Fei-Fei. Imagenet: A large-scale hierarchical image database. In IEEE Conference on Computer Vision and Pattern Recognition , pages 248–255, 2009. Emily L. Denton, Wojciech Zaremba, Joan Bruna, Yann LeCun, and Rob Fergus. Exploiting linear structure within convolutional networks for efficient evaluation. In Advances in Neural Information Processing Systems , 2014. Zhen Dong, Zhewei Yao, Yaohui Cai, Daiyaan Arfeen, Amir Gholami, Michael W. Mahoney, and Kurt Keutzer. Hawq-v2: Hessian aware trace-weighted quantization of neural networks. In Advances in Neural Information Processing Systems , 2020. Alexey Dosovitskiy, Lucas Beyer, Alexander Kolesnikov, Dirk Weissenborn, Xiaohua Zhai, Thomas Un-terthiner, Mostafa Dehghani, Matthias Minderer, Georg Heigold, Sylvain Gelly, Jakob Uszkoreit, and Neil Houlsby. An image is worth 16x16 words: Transformers for image recognition at scale. In International Conference on Learning Representations , 2021. Marc Finzi, Max Welling, and Andrew Gordon Wilson. A practical method for constructing equivariant multilayer perceptrons for arbitrary matrix groups. In Proceedings of the 38th International Conference on Machine Learning , volume 139 of Proceedings of Machine Learning Research , pages 3318–3328. PMLR, 2021. Jonathan Frankle and Michael Carbin. The lottery ticket hypothesis: Finding sparse, trainable neural networks. In International Conference on Learning Representations , 2019. Jiahong Fu, Qi Xie, Deyu Meng, and Zongben Xu. Vanilla group equivariant vision transformer: Simple and effective. arXiv preprint arXiv:2602.08047 , 2026. Jan Gerken, Oscar Carlsson, Hampus Linander, Fredrik Ohlsson, Christoffer Petersson, and Daniel Persson. Equivariance versus augmentation for spherical images. In Proceedings of the 39th International Confer-ence on Machine Learning , volume 162 of Proceedings of Machine Learning Research , pages 7404–7421. PMLR, 2022. David Goldberg. What every computer scientist should know about floating-point arithmetic. ACM Computing Surveys , 23(1):5–48, 1991. doi: 10.1145/103162.103163. Song Han, Huizi Mao, and William J. Dally. Deep compression: Compressing deep neural networks with prun-ing, trained quantization and huffman coding. In International Conference on Learning Representations ,2016. Lingshen He, Yuxuan Chen, Yiming Dong, Yisen Wang, Zhouchen Lin, et al. Efficient equivariant network. 
+
+Advances in Neural Information Processing Systems , 34:5290–5302, 2021. Geoffrey Hinton, Oriol Vinyals, and Jeff Dean. Distilling the knowledge in a neural network. arXiv preprint arXiv:1503.02531 , 2015. 13 Michael J Hutchinson, Charline Le Lan, Sheheryar Zaidi, Emilien Dupont, Yee Whye Teh, and Hyunjik Kim. Lietransformer: Equivariant self-attention for lie groups. In International conference on machine learning ,pages 4533–4543. PMLR, 2021. Risi Kondor and Shubhendu Trivedi. On the generalization of equivariance and convolution in neural networks to the action of compact groups. In International Conference on Machine Learning , pages 2747–2755. PMLR, 2018. Ze Liu, Yutong Lin, Yue Cao, Han Hu, Yixuan Wei, Zheng Zhang, Stephen Lin, and Baining Guo. Swin transformer: Hierarchical vision transformer using shifted windows. In Proceedings of the IEEE/CVF International Conference on Computer Vision , pages 10012–10022, 2021. Zhuang Liu, Mingjie Sun, Tinghui Zhou, Gao Huang, and Trevor Darrell. Rethinking the value of network pruning. In International Conference on Learning Representations , 2019. Ningning Ma, Xiangyu Zhang, Hai-Tao Zheng, and Jian Sun. Shufflenet v2: Practical guidelines for efficient cnn architecture design. In Proceedings of the European Conference on Computer Vision (ECCV) , pages 116–131, 2018. Michael Mathieu, Mikael Henaff, and Yann LeCun. Fast training of convolutional networks through ffts. 
+
+arXiv preprint arXiv:1312.5851 , 2013. Alan V Oppenheim and Ronald W Schafer. Discrete-Time Signal Processing . Pearson, 3 edition, 2009. Adam Paszke, Sam Gross, Francisco Massa, Adam Lerer, James Bradbury, Gregory Chanan, Trevor Killeen, Zeming Lin, Natalia Gimelshein, Luca Antiga, Alban Desmaison, Andreas Kopf, Edward Yang, Zachary DeVito, Martin Raison, Alykhan Tejani, Sasank Chilamkurthy, Benoit Steiner, Lu Fang, Junjie Bai, and Soumith Chintala. Pytorch: An imperative style, high-performance deep learning library. In Advances in Neural Information Processing Systems , volume 32, pages 8024–8035, 2019. Siamak Ravanbakhsh, Jeff Schneider, and Barnab ´as P ´oczos. Equivariance through parameter-sharing. In 
+
+International Conference on Machine Learning , pages 2892–2901. PMLR, 2017. Zhengyang Shen, Lingshen He, Zhouchen Lin, and Jinwen Ma. Pdo-econvs: Partial differential operator based equivariant convolutions. In International Conference on Machine Learning , pages 8697–8706. PMLR, 2020. Zhengyang Shen, Tiancheng Shen, Zhouchen Lin, and Jinwen Ma. Pdo-es2cnns: Partial differential operator based equivariant spherical cnns. In Proceedings of the AAAI conference on artificial intelligence ,volume 35, pages 9585–9593, 2021. Nicolas Vasilache, Jeff Johnson, Michael Mathieu, Soumith Chintala, Serkan Piantino, and Yann LeCun. Fast convolutional nets with fbfft: A gpu performance evaluation. arXiv preprint arXiv:1412.7580 , 2014. Maurice Weiler and Gabriele Cesa. General E(2)-equivariant steerable CNNs. In Advances in Neural Information Processing Systems , 2019. Maurice Weiler, Fred A Hamprecht, and Martin Storath. Learning steerable filters for rotation equivariant cnns. In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition , pages 849–858, 2018. Samuel Williams, Andrew Waterman, and David Patterson. Roofline: An insightful visual performance model for multicore architectures. Communications of the ACM , 52(4):65–76, 2009. 14 Qi Xie, Qian Zhao, Zongben Xu, and Deyu Meng. Fourier series expansion based filter parametrization for equivariant convolutions. IEEE Transactions on Pattern Analysis and Machine Intelligence , 45(4): 4537–4551, 2022. Qi Xie, Jiahong Fu, Zongben Xu, and Deyu Meng. Rotation equivariant arbitrary-scale image super-resolution. 
+
+IEEE Transactions on Pattern Analysis and Machine Intelligence , 2025. Zhongchen Zhao, Qi Xie, Keyu Huang, Lei Zhang, Deyu Meng, and Zongben Xu. Rotation equivariant mamba for vision tasks. arXiv preprint arXiv:2603.09138 , 2026. 15 6 Appendix 
+
+6.1 Detailed Complexity Analysis of Flash EQ-Linear 
+
+MACs of Step 1: Group-wise DFT. By definition, the group-wise DFT is a complex matrix multiplication along the group dimension and can be written as ˆX = XF , where F ∈ CT ×T is the DFT matrix. Computing the first ⌊T / 2⌋ + 1 non-redundant frequency components therefore amounts to multiplying X ∈ RN × CT ×T
+
+by the corresponding columns of F :
+
+ˆXk = X · F:,k , k = 0 , . . . , ⌊T / 2⌋, (13) which requires 2N C (⌊T / 2⌋ + 1) real-valued MACs. Similarly, transforming fW ∈ R DT × CT ×T requires  
+
+> 2DC T
+
+(⌊T / 2⌋ + 1) MACs. Thus, the total cost of Step 1 (Eq. 4) is 2  N + DT
+
+ C(⌊T / 2⌋ + 1) .
+
+MACs of Step 2: Per-frequency matrix multiplication (dominant). At each of the ⌊T / 2⌋ + 1 non-redundant frequencies, the channel-wise complex matrix multiplication 
+
+ˆY Gk = ˆXGk · ˆW Gk ⊤ (14) in Eq. 5 involves N DC T 2 complex multiplications. Since a complex multiplication (a + bi)( c + di) = (ac − bd ) + ( ad + bc )i requires four real multiplications, the per-frequency cost is 4N DC T 2 MACs. Summing over all non-redundant frequencies gives 4N DC T 2 (⌊T / 2⌋ + 1) ≈ 2N DC T , which dominates the overall cost of Flash EQ-Linear. 
+
+MACs of Step 3: Conjugate-symmetric recovery. The remaining frequency components of ˆY are recovered by conjugate copying according to Eq. 6. This step therefore incurs zero MACs. 
+
+MACs of Step 4: Group-wise IDFT. As in Step 1, the group-wise IDFT in Eq. 7 can be expressed as 
+
+Y = ˆY F −1, where F −1 ∈ CT ×T is the inverse DFT matrix. The conjugate symmetry established in Step 3, 
+
+ˆY GT −k = ˆY Gk , guarantees that Y is real-valued 5. Exploiting this symmetry, each pair of conjugate terms can be reduced to a real-valued expression: 
+
+ˆY Gk F −1 
+
+> t,k
+
++ ˆY GT−k F −1 
+
+> t,T −k
+
+= ˆY Gk F −1 
+
+> t,k
+
++ ˆY Gk F −1 
+
+> t,k
+
+= 2 Re( ˆY Gk )Re( F −1 
+
+> t,k
+
+)−2 Im( ˆY Gk )Im( F −1 
+
+> t,k
+
+), (15) 
+
+This computation requires only two real multiplications instead of eight, yielding a 4× reduction over naive complex arithmetic. Consequently, Step 4 incurs N DT MACs in the general case. 
+
+Total MACs. Combining the four steps, the total computational cost of Flash EQ-Linear is 
+
+MACs Flash = 2( N + DT )C(⌊T / 2⌋ + 1) 
+
+| {z }
+
+> group-wise DFT (Step 1)
+
++ 4N DC T 2 (⌊T / 2⌋ + 1) 
+
+| {z }
+
+> Complex matmul (Step 2)
+
++ N DT | {z } 
+
+> group-wise IDFT (Step 4)
+
+. (16) In typical equivariant networks, where N ≫ T and C, D ≫ T , the dominant term is 
+
+MACs Flash ≈ 4N DC T 2 (⌊T / 2⌋ + 1) ≈ 2N DC T , (17) while the group-wise DFT and IDFT contribute only lower-order overhead. For the common settings T = 2 and T = 4 , the DFT and IDFT reduce to fixed additions, subtractions, and dyadic rescalings. These rescalings can be folded into the kernel epilogue and incur no additional MACs under our counting convention. Steps 1 and 4 therefore contribute no multiplicative cost in these specialized implementations, leaving Step 2 as the sole source of MACs. 
+
+> 5By real-DFT duality, a signal is real-valued if and only if its DFT is conjugate symmetric.
+
+16 Speedup analysis. In contrast, both naive EQ-Linear and a standard non-equivariant linear layer with the same total channel dimensions require N DC MACs to compute a dense C × D projection. Flash EQ-Linear therefore achieves a theoretical speedup of 
+
+Speedup = MACs Naive 
+
+MACs Flash 
+
+≈ N DC 
+
+2N DC/T = T
+
+2 . (18) For T = 4 , the exact p4 specialization yields a theoretical speedup of 16 /6 ≈ 2.67 ×.
+
+Remark: why the conjugate symmetric recovery matters. Without Step 3, Step 2 alone would incur 
+
+4N DCT real multiplications across all T frequencies, which equals the naive cost of N DCT 2 when T = 4 
+
+and offers no speedup. The conjugate-symmetry reduction is therefore essential: it makes Flash EQ-Linear strictly faster than the naive baseline for the common p4 rotation group ( T = 4 ). 
+
+6.2 Detailed CUDA Kernel Implementations 
+
+A direct PyTorch implementation of Algorithm 1 would express the method as separate group-wise DFT, frequency-domain multiplication, and group-wise IDFT operators. Although this is mathematically faithful, it materializes intermediate frequency tensors and incurs additional layout conversion, memory traffic, and kernel-launch overhead. This overhead is particularly visible for the p4 group, where the group dimension is small and the transform itself contains only a few fixed additions. Our CUDA implementation therefore treats the FFT formulation in Sec. 3.2 as a vectorization rule for the original equivariant linear map rather than as a sequence of standalone library calls. The fixed transform along the group dimension, the channel-wise matrix product, and the inverse transform are fused into the same execution dataflow, so that the frequency-domain variables exist only as register/shared-memory fragments during the lifetime of a tile. 
+
+Vectorized group-wise DFT realization. For the p4 group used in our experiments, the group size is fixed to T = 4 . In this case, the group-wise DFT matrix in Eq. 4 reduces to a constant 4 × 4 transform whose entries are only signs and powers of the imaginary unit. After exploiting the conjugate symmetry of real signals, the non-redundant coordinates can be represented by four real scalars: the trivial-representation component, the self-conjugate order-two component, and the real and imaginary parts of the nontrivial conjugate representation pair. Consequently, no general-purpose FFT kernel, dynamic twiddle-factor table, or explicit complex tensor construction is required. Given the four group components of an input feature at one batch-token-channel location, (x0, x 1, x 2, x 3), the kernel computes the vectorized group-wise DFT coordinates as f0 = x0 + x1 + x2 + x3, f1 = x0 − x2,f2 = x0 − x1 + x2 − x3, f3 = x3 − x1. (19) These four expressions are the vectorized CUDA realization of the group-wise DFT step in Alg. 1. They are evaluated at load time for every input tile. Thus, the implementation realizes the FFT-based formula through four fixed arithmetic expressions that can be fully unrolled by the compiler. The frequency-domain feature is therefore an on-chip quantity held in registers or staged in shared memory, rather than a full tensor written to and reread from global memory. This is the main systems difference between our CUDA operator and a literal implementation of the mathematical algorithm. 
+
+Kernel mathematical form. Let n index the flattened batch-token dimension, c the input channel, and 
+
+d the output channel. For each output tile, the forward kernel streams over c and directly accumulates the 17 structured frequency-domain product: 
+
+a0,n,d = X
+
+> c
+
+f0,n,c w0,d,c ,a1,n,d = X
+
+> c
+
+ f1,n,c w1,d,c − f3,n,c w3,d,c 
+
+,a2,n,d = X
+
+> c
+
+f2,n,c w2,d,c ,a3,n,d = X
+
+> c
+
+ f1,n,c w3,d,c + f3,n,c w1,d,c 
+
+.
+
+(20) Here w0 corresponds to the trivial representation ( k = 0 ) component of the C4 Fourier basis, w2 corresponds to the self-conjugate order-two component ( k = 2 ), and (w1, w 3) parameterize the real and imaginary parts of the nontrivial conjugate pair ( k = 1 , 3). The second and fourth equations are therefore exactly the complex multiplication in Eq. 5, written as real-valued fused operations. Importantly, the kernel never builds the equivalent dense C × D matrix and never constructs the six-real-GEMM packed representation as a persistent intermediate. Instead, each CTA reads a tile of the original group-structured input, converts it to (f0, f 1, f 2, f 3) on the fly, and accumulates (a0, a 1, a 2, a 3) directly. After the reduction over c, the kernel applies the corresponding group-wise IDFT in the epilogue: 
+
+y0,n,d = 14 a0,n,d + 12 a1,n,d + 14 a2,n,d ,y1,n,d = 14 a0,n,d − 14 a2,n,d − 12 a3,n,d ,y2,n,d = 14 a0,n,d − 12 a1,n,d + 14 a2,n,d ,y3,n,d = 14 a0,n,d − 14 a2,n,d + 12 a3,n,d .
+
+(21) The epilogue is also a fixed vectorized transform. It only uses constants {1/4, 1/2} and additions/subtractions, and therefore can be fused with the final global store. Thus, the CUDA kernel implements exactly the same equations as the method section, but avoids explicit construction of the unfolded dense EQ-Linear matrix, the packed input tensor, and the packed frequency-domain output tensor. The computational path is still the FFT-derived Flash EQ-Linear path; the difference is that the Fourier transform is realized as a local vectorized basis change around the GEMM-like channel reduction. 
+
+Memory layout and vectorization. The external tensor layout is kept as [B, N, CT , T ], with the group dimension contiguous. This layout makes the four group components for one row-channel pair adjacent in memory, so the kernel can load the group tuple as a compact vector, apply the four group-wise DFT formulas immediately, and later store the four output components contiguously. The batch and token/spatial dimensions are flattened into a row dimension, and the channel reduction is tiled in a GEMM-like manner over the row dimension and the output-channel dimension. Weights are stored in the corresponding frequency-domain planes, so the kernel can issue the structured products in Eq. 5 without changing the mathematical representation exposed to the user. Within each tile, input fragments and weight fragments are staged to match coalesced global access and efficient matrix-multiply consumption. For FP16 execution, input and weight tiles are stored in half precision and consumed by Tensor-Core-oriented main loops, with mixed-accumulation variants used when additional numerical stability is required. This design keeps the high-throughput GEMM core while removing the global-memory round trips that would otherwise appear between group-wise DFT, multiplication, and group-wise IDFT. 
+
+Shape-specialized acceleration. Different (B, N, CT , DT ) regimes expose different bottlenecks, ranging from launch overhead and insufficient tile occupancy at small channel widths to arithmetic throughput at large channel widths. Therefore, we provide shape-specialized CUDA variants and route each benchmark shape to the fastest validated implementation. These variants preserve the same mathematical kernel above, 18 Table 6: Configuration details, parameter counts, and total FLOPs of the ViT and Swin Transformer variants used in our experiments. Model Scale Patch Size Embed Dim. Depth/Depths Num. Heads #Param. (M) ↓
+
+FLOPs (G) ↓
+
+ViT Tiny 16 384 12 3 21.7 9.2 Small 16 480 12 6 33.8 14.1 Base 16 768 12 12 85.9 35.1 Large 16 1024 24 16 303.4 123.1 Huge 16 1280 32 16 631.1 254.7 Swin Tiny 4 96 [2 , 2, 6, 2] [3 , 6, 12 , 24] 27.6 8.99 Small 4 96 [2 , 2, 18 , 2] [3 , 6, 12 , 24] 48.9 17.5 Base 4 128 [2 , 2, 18 , 2] [4 , 8, 16 , 32] 86.9 30.9 Large 4 192 [2 , 2, 18 , 2] [6 , 12 , 24 , 48] 195.2 69.0 Huge 4 352 [2 , 2, 18 , 2] [11 , 22 , 44 , 88] 655.1 230.3 while tuning tile sizes, persistence, shared-memory staging, vectorized memory access, and Tensor Core usage to accelerate the computation across diverse shapes. In other words, shape specialization is an implementation-level optimization; it does not change the FFT-based equations or the parameterization of EQ-Linear. 
+
+Forward and backward passes. The forward pass follows the fused formulation above. The backward pass uses the same Fourier-domain decomposition in reverse and keeps gradients defined with respect to the original input tensor and the original EQ-Linear parameters, rather than any backend-specific packed layout. Concretely, gradients are first represented in the same four-coordinate frequency basis, multiplied by the corresponding transposed structured weights, and then mapped back through the inverse fixed transform. This preserves the plug-and-play semantics of the layer: optimized CUDA layouts are internal execution details, while the mathematical operator and its gradients remain those of Flash EQ-Linear. 
+
+6.3 More Experimental Results 
+
+Configuration details of ViT and Swin. Table 6 lists the architectural configurations of the ViT and Swin Transformer variants used in our experiments (Sec. 4.2). For each model family, we follow the standard scale conventions of the original papers [Dosovitskiy et al., 2021, Liu et al., 2021], instantiating five scales (Tiny / Small / Base / Large / Huge). ViT variants increase capacity by scaling the embedding dimension and number of attention heads, ranging from 21 .7M parameters for ViT-T to 631 .1M parameters for ViT-H. Swin variants employ the four-stage hierarchical depth pattern, scaling the embedding dimension and per-stage head counts, ranging from 27 .6M parameters for Swin-T to 655 .1M parameters for Swin-H. The Naive EQ-ViT/Swin and Flash EQ-ViT/Swin variants share the same architectural configurations as their non-equivariant counterparts but operate on the p4 rotation group ( T = 4 ), with per-group channel width set to 1/T of the non-equivariant baseline to keep the total channel count matched. 
+
+Flash EQ-ViT and Flash EQ-Swin. In the main text (Sec. 4.2, Table 3), due to space constraints, we report inference efficiency at representative model scales. Here we provide the complete results across all model scales evaluated in our experiments (Tiny/Small/Base/Large/Huge for both ViT and Swin), under both FP32 (Table 7) and FP16 (Table 8) precision. These extended results reinforce two observations from the main text. (i) Across all model scales and both precisions, Flash EQ-Linear consistently reduces the linear-layer latency by ∼ 2× over the Naive EQ baseline, translating to 1.1×–1.7× end-to-end speedup at the network level. (ii) The end-to-end speedup 19 Table 7: Inference efficiency comparison of Flash EQ-ViT/Swin against standard non-EQ and naive EQ baselines on FP32 . Speedup ratios (green) are measured against standard baselines. 
+
+Method #Param. (M) ↓
+
+Top-1 (%) ↑
+
+All Linear Layers Total Network FLOPs (G) ↓
+
+Latency (ms) ↓
+
+Latency Ratio FLOPs (G) ↓
+
+Latency (ms) ↓
+
+Throughput (imgs/s) ↑
+
+Single-Precision Floating-Point (FP32) 
+
+ViT-T 21.7 76.5 8.4 0.218 60.8% 9.2 0.358 2796 Naive EQ-ViT-T 5.4 77.3 8.4 0.218 60.8% 9.2 0.358 2796 
+
+Flash EQ-ViT-T 5.4 77.3 3.2 0.115 46.2% 4.0 0.249 4012 (1.4 ×)
+
+ViT-S 33.8 76.5 13.1 0.352 58.4% 14.1 0.603 1658 Naive EQ-ViT-S 8.4 78.2 13.1 0.355 58.7% 14.1 0.604 1656 
+
+Flash EQ-ViT-S 8.4 78.2 5.0 0.183 42.6% 6.0 0.429 2332 (1.4 ×)
+
+ViT-B 85.9 77.1 33.5 0.761 67.1% 35.1 1.135 881 Naive EQ-ViT-B 21.4 80.1 33.5 0.757 67.1% 35.1 1.128 886 
+
+Flash EQ-ViT-B 21.4 80.1 12.7 0.400 52.3% 14.3 0.764 1309 (1.5 ×)
+
+ViT-L 303.4 78.4 119.0 2.672 71.9% 123.1 3.715 269 Naive EQ-ViT-L 75.8 80.6 119.0 2.672 71.9% 123.1 3.715 269 
+
+Flash EQ-ViT-L 75.8 80.6 44.8 1.336 56.7% 49.0 2.356 424 (1.6 ×)
+
+ViT-H 631.1 81.3 248.0 5.586 77.7% 254.7 7.192 139 Naive EQ-ViT-H 157.7 81.5 248.0 5.586 77.7% 254.7 7.192 139 
+
+Flash EQ-ViT-H 157.7 81.5 93.3 2.719 63.2% 100.1 4.304 232 (1.7 ×)
+
+Swin-T 27.6 87.1 8.68 0.288 43.9% 8.99 0.657 1521 Naive EQ-Swin-T 6.9 87.3 8.68 0.285 43.3% 8.99 0.657 1522 
+
+Flash EQ-Swin-T 6.9 87.3 3.20 0.142 27.5% 3.85 0.515 1942 (1.3 ×)
+
+Swin-S 48.9 87.6 17.0 0.514 47.2% 17.5 1.088 919 Naive EQ-Swin-S 12.3 87.7 17.0 0.505 46.4% 17.5 1.088 920 
+
+Flash EQ-Swin-S 12.3 87.7 6.70 0.256 30.7% 7.20 0.834 1200 (1.3 ×)
+
+Swin-B 86.9 87.8 30.2 0.792 50.4% 30.9 1.570 637 Naive EQ-Swin-B 21.8 88.6 30.2 0.772 49.4% 30.9 1.563 640 
+
+Flash EQ-Swin-B 21.8 88.6 11.8 0.415 34.6% 12.5 1.198 835 (1.3 ×)
+
+Swin-L 195.2 87.5 68.0 1.630 56.3% 69.0 2.894 346 Naive EQ-Swin-L 48.9 88.2 68.0 1.630 56.3% 69.0 2.894 346 
+
+Flash EQ-Swin-L 48.9 88.2 25.2 0.812 40.3% 27.6 2.015 496 (1.4 ×)
+
+Swin-H 655.1 87.2 228.6 5.232 70.4% 230.3 7.430 135 Naive EQ-Swin-H 164.0 88.3 228.6 5.232 70.4% 230.3 7.430 135 
+
+Flash EQ-Swin-H 164.0 88.3 84.3 2.474 52.8% 90.8 4.687 213 (1.6 ×)
+
+grows monotonically with model scale: smaller models (e.g., ViT-T) see modest gains since linear layers occupy a smaller fraction of the total latency budget, while larger models (e.g., ViT-H) approach the operator-level ∼ 2× speedup as linear layers dominate the runtime. Importantly, Flash EQ-ViT/Swin preserves the ImageNet-100 Top-1 accuracy of the Naive EQ-ViT/Swin counterparts across all scales, confirming that the acceleration is lossless by construction. 20 Table 8: Inference efficiency comparison of Flash EQ-ViT/Swin against standard non-EQ and naive EQ baselines on FP16 . Speedup ratios (green) are measured against standard baselines. 
+
+Method #Param. (M) ↓
+
+Top-1 (%) ↑
+
+All Linear Layers Total Network FLOPs (G) ↓
+
+Latency (ms) ↓
+
+Latency Ratio FLOPs (G) ↓
+
+Latency (ms) ↓
+
+Throughput (imgs/s) ↑
+
+Half-Precision Floating-Point (FP16) 
+
+ViT-T 21.7 76.5 8.4 0.074 57.4% 9.2 0.128 7794 Naive EQ-ViT-T 5.4 77.3 8.4 0.074 57.4% 9.2 0.128 7794 
+
+Flash EQ-ViT-T 5.4 77.3 3.2 0.058 51.3% 4.0 0.113 8848 (1.1 ×)
+
+ViT-S 33.8 76.5 13.1 0.105 52.6% 14.1 0.199 5030 Naive EQ-ViT-S 8.4 78.2 13.1 0.109 54.5% 14.1 0.200 5010 
+
+Flash EQ-ViT-S 8.4 78.2 5.0 0.084 48.4% 6.0 0.174 5750 (1.1 ×)
+
+ViT-B 85.9 77.1 33.5 0.215 57.6% 35.1 0.372 2688 Naive EQ-ViT-B 21.4 80.1 33.5 0.218 58.3% 35.1 0.374 2676 
+
+Flash EQ-ViT-B 21.4 80.1 12.7 0.147 49.1% 14.3 0.300 3330 (1.2 ×)
+
+ViT-L 303.4 78.4 119.0 0.742 59.0% 123.1 1.258 795 Naive EQ-ViT-L 75.8 80.6 119.0 0.752 59.6% 123.1 1.262 792 
+
+Flash EQ-ViT-L 75.8 80.6 44.8 0.497 49.5% 49.0 1.004 996 (1.3 ×)
+
+ViT-H 631.1 81.3 248.0 1.541 64.8% 254.7 2.379 420 Naive EQ-ViT-H 157.7 81.5 248.0 1.557 65.1% 254.7 2.392 418 
+
+Flash EQ-ViT-H 157.7 81.5 93.3 0.976 54.2% 100.1 1.801 555 (1.3 ×)
+
+Swin-T 27.6 87.1 8.68 0.091 39.1% 8.99 0.232 4305 Naive EQ-Swin-T 6.9 87.3 8.68 0.089 38.8% 8.99 0.230 4350 
+
+Flash EQ-Swin-T 6.9 87.3 3.20 0.085 38.5% 3.85 0.220 4554 (1.1 ×)
+
+Swin-S 48.9 87.6 17.0 0.173 47.8% 17.5 0.362 2766 Naive EQ-Swin-S 12.3 87.7 17.0 0.174 48.1% 17.5 0.361 2770 
+
+Flash EQ-Swin-S 12.3 87.7 6.70 0.150 45.0% 7.20 0.332 3009 (1.1 ×)
+
+Swin-B 86.9 87.8 30.2 0.240 45.5% 30.9 0.527 1899 Naive EQ-Swin-B 21.8 88.6 30.2 0.238 45.2% 30.9 0.526 1902 
+
+Flash EQ-Swin-B 21.8 88.6 11.8 0.185 39.4% 12.5 0.470 2129 (1.1 ×)
+
+Swin-L 195.2 87.5 68.0 0.454 47.7% 69.0 0.952 1051 Naive EQ-Swin-L 48.9 88.2 68.0 0.448 47.2% 69.0 0.949 1053 
+
+Flash EQ-Swin-L 48.9 88.2 25.2 0.317 38.8% 27.6 0.817 1224 (1.2 ×)
+
+Swin-H 655.1 87.2 228.6 1.428 59.2% 230.3 2.412 415 Naive EQ-Swin-H 164.0 88.3 228.6 1.406 58.4% 230.3 2.408 415 
+
+Flash EQ-Swin-H 164.0 88.3 84.3 0.958 49.0% 90.8 1.955 512 (1.2 ×)
+
+21

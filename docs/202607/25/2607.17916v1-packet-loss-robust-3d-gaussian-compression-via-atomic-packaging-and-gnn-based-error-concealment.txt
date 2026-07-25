@@ -1,0 +1,510 @@
+Title: Packet-Loss Robust 3D Gaussian Compression via Atomic Packaging and GNN-based Error Concealment
+
+URL Source: https://arxiv.org/pdf/2607.17916v1
+
+Published Time: Tue, 21 Jul 2026 02:15:50 GMT
+
+Number of Pages: 20
+
+Markdown Content:
+# Packet-Loss Robust 3D Gaussian Compression via Atomic Packaging and GNN-based Error Concealment 
+
+YUXUAN TAO, Central South University, China 
+
+XUERUI MA, Malanshan Audio & Video Laboratory, China 
+
+HAO ZHANG ∗, Central South University, China 
+
+CHUNHUA PENG †, Central South University, China While 3D Gaussian Splatting (3DGS) and its high-efficiency compression schemes (e.g., HAC++) deliver state-of-the-art rendering performance under ideal network conditions, they remain highly vulnerable to packet loss during streaming. Existing compression methods encode scene attributes (features, scales, offsets) into independent bitstreams; consequently, the loss of a single packet results in structurally inconsistent, “broken” anchors that cause severe visual artifacts. To address this, we propose a robust 3DGS transmission and error concealment framework tailored for lossy networks. At the encoder, we introduce Anchor-level Atomic Packaging to ensure spatial attributes are jointly encapsulated, guaranteeing that losses manifest solely as cleanly missing anchors rather than corrupted parameters. This is complemented by Stratified Random Grouping , which disperses potential packet losses uniformly across the spatial domain to prevent large contiguous voids. At the decoder, we formulate error concealment as a prior-aware dual-branch inpainting task. We first establish a geometrically robust baseline via Context-Aware Residual Interpolation (CARI), and subsequently employ a lightweight two-layer Graph Neural Network (GNN), conditioned on hash-grid priors and cross-attention fusion, to regress high-frequency attribute residuals. An attribute-wise confidence module controls the GNN output and falls back to interpolation when the corresponding prediction is unreliable. Comprehensive experiments under 20% random packet loss demonstrate that our framework maintains high perceptual quality and stability, achieving an overall average PSNR degradation of approximately 3 dB across the evaluated datasets, with larger drops on more challenging large-scale scenes. The GNN branch provides complementary gains in complex high-frequency scenes, while the confidence-controlled fallback preserves the stronger CARI estimate in simple or low-confidence regions. This work provides a foundation for robust 3DGS streaming, leaving joint optimization of bitrate and runtime efficiency for future investigation. CCS Concepts: • Computing methodologies → Computer graphics ; Neural networks ; • Networks →
+
+Network reliability ; • Information systems → Data compression .Additional Key Words and Phrases: 3D Gaussian Splatting, Error Concealment, Point Cloud Compression, Graph Neural Networks, Robust Video Streaming 
+
+ACM Reference Format: 
+
+Yuxuan Tao, Xuerui Ma, Hao Zhang, and Chunhua Peng. 2026. Packet-Loss Robust 3D Gaussian Compression via Atomic Packaging and GNN-based Error Concealment. ACM Trans. Multimedia Comput. Commun. Appl. 1, 1 (July 2026), 20 pages. 
+
+1 Introduction 
+
+In recent years, 3D Gaussian Splatting (3DGS) has achieved breakthrough progress in 3D scene reconstruction and novel view synthesis, thanks to its high-fidelity and real-time rendering ca-pabilities. However, the massive number of parameters in vanilla 3DGS—comprising millions of 
+
+> ∗
+
+Corresponding author. 
+
+> †
+
+Corresponding author. Authors’ Contact Information: Yuxuan Tao, taoyuxuan2002@qq.com, Central South University, Changsha, China; Xuerui Ma, maxuerui@mlslabs.com.cn, Malanshan Audio & Video Laboratory, Changsha, China; Hao Zhang, hao@csu.edu.cn, Central South University, Changsha, China; Chunhua Peng, pch@csu.edu.cn, Central South University, Changsha, China. 2026. ACM 1551-6865/2026/7-ART https://doi.org/ ACM Trans. Multimedia Comput. Commun. Appl., Vol. 1, No. 1, Article . Publication date: July 2026. arXiv:2607.17916v1 [cs.GR] 20 Jul 2026 2 Tao et al. 
+
+Gaussian primitives with attributes such as color, scale, and rotation—poses significant challenges for practical storage and network transmission [ 3]. Consequently, numerous compression algo-rithms for 3DGS have emerged. Notably, Scaffold-GS [ 9 ] introduced a sparse representation based on anchors, and the recent HAC++ [ 3 ] further achieved an extreme compression ratio of over 
+
+100 × through Hash-grid Assisted Context and decoupled encoding of anchor attributes, greatly advancing the practical deployment of 3DGS. Nevertheless, while highly efficient compression schemes like HAC++ excel under ideal channel conditions and offline storage, their rendering quality is severely compromised by the inevitable random and burst packet losses in real-world network streaming. To approach the Shannon entropy limit, existing HAC++ packaging strategies deeply decouple strongly correlated anchor attributes (features, scales, and offsets) into independent bitstreams [ 3 ], while organizing anchors sequentially based on spatial proximity (e.g., Morton coding). Under lossy network conditions, this extreme compression design exposes two fatal vulnerabilities: First, the loss of any single attribute bitstream generates parameter-mismatched “inconsistent broken anchors” at the decoder. Due to the accu-mulative effect of alpha blending during rendering, these broken anchors induce visual artifacts far more destructive than the “complete absence of anchors,” as visually contrasted in the left panel of Fig. 1. Second, when encountering burst packet loss, the sequential spatial organization creates massive, continuous spatial voids, rendering the decoder unable to leverage local spatial redundancy for interpolation-based recovery. To address these fundamental vulnerabilities, we propose a robust 3DGS transmission and error concealment framework. Our encoder design is guided by a key insight: under alpha blending, retaining an anchor with corrupted attributes is strictly more destructive than its complete absence. We therefore introduce Anchor-level Atomic Packaging , which jointly encapsulates all attributes of each anchor into the same transmission packet, mechanically guaranteeing an all-or-nothing failure mode. This is complemented by Stratified Random Grouping , which distributes anchors across packets via hash-based interleaving, transforming potential burst losses into spatially uniform sparse absences rather than concentrated voids. At the decoder side, we formulate error concealment as a prior-aware dual-branch inpainting task. The first branch, Context-Aware Residual Interpolation (CARI), decomposes known anchor attributes into hash-grid prior predictions and high-frequency residuals, then aggregates neighbor residuals through a multi-factor spatial–semantic weighting scheme to establish a geometrically robust baseline. The second branch employs a lightweight two-layer Graph Neural Network (GNN) [ 12 ], conditioned on hash-grid priors via cross-attention fusion, to predict attribute residuals that capture fine-grained details beyond the reach of local interpolation. An attribute-wise confidence module controls the GNN output and falls back to interpolation when the corresponding attribute confidence is insufficient. This design is intentionally conservative: for smooth or small-scale scenes where interpolation is already close to optimal, the decoder can retain the CARI estimate instead of forcing a learned correction. An overview of the complete pipeline is depicted in Fig. 1. The main contributions of this paper are summarized as follows: 
+
+• We reveal that, under the alpha-blending rendering pipeline, attribute-inconsistent “broken anchors” are fundamentally more destructive than cleanly missing anchors, and accordingly propose an anchor-level atomic packaging mechanism that physically guarantees an all-or-nothing failure mode, converting the intractable artifact removal problem into a well-defined point cloud completion task. 
+
+• We design a hash-based stratified random grouping strategy that distributes anchors uni-formly across transmission packets, ensuring that burst packet loss manifests as spatially uniform sparse downsampling rather than catastrophic contiguous voids.  
+
+> ACM Trans. Multimedia Comput. Commun. Appl., Vol. 1, No. 1, Article . Publication date: July 2026. Packet-Loss Robust 3D Gaussian Compression 3
+
+• We formulate decoder-side error concealment as a prior-aware dual-branch inpainting prob-lem, integrating Context-Aware Residual Interpolation (CARI) with a lightweight two-layer GNN augmented by cross-attention over hash-grid priors, and introduce attribute-wise confidence control with fallback to interpolation when predictions are unreliable. 
+
+• We establish a packet-level 20% random-loss evaluation protocol and demonstrate across three standard benchmarks that our framework reduces the overall average PSNR degradation to approximately 3 dB, substantially outperforming no-concealment transmission while using confidence control to combine GNN refinement with interpolation fallback. 
+
+Organization: The remainder of this paper is organized as follows: Section 2 reviews related work. Section 3 details the encoder-side strategies and the decoder-side error concealment pipeline. Section 4 presents the experimental setup, quantitative results, and ablation studies. Finally, Section 5 concludes the paper and outlines future directions. 
+
+Fig. 1. Overview of our proposed robust 3DGS transmission and error concealment framework. (Left: Encoder Strategies) Compared to the conventional failure mode (attribute-decoupled packaging and Z-order grouping) which causes catastrophic broken anchors and large spatial voids under packet loss, our encoder introduces 
+
+Atomic Packaging and Stratified Random Grouping to ensure that losses strictly manifest as uniformly dispersed sparse missing anchors. (Right: Decoder & Inpainter) To recover the missing queries, we construct a prior-aware dual-branch inpainting pipeline. The upper branch establishes a robust low-frequency baseline via 
+
+Context-Aware Residual Interpolation (CARI) , while the lower branch employs a lightweight two-layer 
+
+Graph Neural Network (GNN) to regress high-frequency details. Finally, attribute-wise confidence control blends or falls back to interpolation when a predicted attribute is unreliable, improving rendering stability under severe loss. 
+
+2 Related Work 2.1 3D Gaussian Splatting and Compression 
+
+Recently, 3D Gaussian Splatting (3DGS) [ 7 ] has gained significant attention for its high-fidelity and high-frame-rate rendering capabilities. However, the massive parameter count poses a sub-stantial challenge for practical deployment, especially for free-viewpoint and large-scale neural rendering scenarios previously studied in image-based rendering and progressive NeRF systems  
+
+> ACM Trans. Multimedia Comput. Commun. Appl., Vol. 1, No. 1, Article . Publication date: July 2026. 4Tao et al.
+
+[6 , 16 ]. Consequently, numerous compression algorithms for 3DGS have emerged. In early explo-rations focusing on “attribute value” compression, Fan et al. proposed LightGaussian [4], which draws inspiration from network pruning to eliminate redundant points by calculating the global importance of Gaussians to scene reconstruction, while utilizing knowledge distillation to transfer high-order Spherical Harmonic (SH) coefficients into a compact format. Subsequently, Niedermayr et al. introduced Compressed 3D Gaussian Splatting [ 10 ], which incorporates sensitivity-aware vector clustering and quantization-aware training (QAT) to perform codebook compression on Gaussian color and geometric attributes. However, these methods typically treat Gaussian points as independent primitives, overlooking the strong correlation between spatially adjacent points. To overcome this bottleneck, Scaffold-GS 
+
+[ 9 ] first introduced an “Anchor” mechanism, utilizing local MLPs to dynamically predict Gaussian attributes. Building on this, HAC [2 ] and its successor HAC++ introduced Hash-grid Assisted Context to deeply decouple attributes such as anchor features, scales, and offsets, implementing high-precision quantization and entropy coding independently to achieve extreme compression ratios. Nevertheless, such attribute-independent packaging strategies—designed for “limit Shannon entropy”—are extremely fragile during real-world network transmission. The loss of any single attribute results in “fragmented anchors” with inconsistent parameters, leading to catastrophic visual artifacts. 
+
+2.2 Error Concealment in Video Coding 
+
+In traditional 2D video streaming, packet loss is an unavoidable reality. For intra-frame data loss, conventional spatial error concealment methods primarily leverage the spatial smoothness of boundary pixels for local interpolation or texture synthesis [13]. To fundamentally prevent large-scale spatial holes at the decoder side due to packet loss, literature has long established the effectiveness of proactively reshaping data distribution at the encoder side. For instance, the Flexible Macroblock Ordering (FMO) mechanism in traditional video coding standards (e.g., H.264/AVC) [ 15 ] intentionally interleaves and scatters macroblocks—similar to a checkerboard—across different network packets. This ensures that a lost block is always surrounded by successfully received reference pixels. Furthermore, Multiple Description Coding (MDC) [5] distributes images across multiple description streams via spatial downsampling. The “atomic packaging” and “stratified random grouping” strategies proposed in this paper represent an innovative mapping of these two classic streaming fault-tolerance philosophies onto unordered 3DGS neural rendering primitives. 
+
+2.3 Deep Learning for Point Cloud Completion 
+
+For 3D point clouds that lack a regular 2D grid topology, traditional spatial interpolation methods often struggle to effectively recover missing high-frequency geometric details. Recently, utilizing neural networks for 3D point cloud processing and restoration has become a prominent research trend. Although PU-GCN [ 11 ], proposed by Qian et al., targets point cloud upsampling, its core concept—leveraging Graph Convolutional Networks (GNNs) to aggregate local neighborhood features for generating new point coordinates and attributes—has proven effective for repairing sparse or incomplete point clouds. Building on this, Yu et al. introduced PoinTr [ 17 ], a point cloud completion network based on the Transformer architecture. By introducing geometry-aware self-attention, PoinTr dynamically captures global context and local structural relationships between discrete point sets, thereby more accurately inferring and restoring the fine topology and 3D geometric features of missing regions.  
+
+> ACM Trans. Multimedia Comput. Commun. Appl., Vol. 1, No. 1, Article . Publication date: July 2026. Packet-Loss Robust 3D Gaussian Compression 5
+
+These works strongly indicate that utilizing GNNs to capture the local topology of unstructured data and regress missing attributes is a highly promising technical route. Inspired by these advance-ments, and considering the over-parameterized nature of 3DGS, this paper introduces a lightweight two-layer GNN with hash-context priors at the decoder side to complement interpolation-based restoration of missing 3D Gaussian attributes. 
+
+3 Method 
+
+Fig. 2. Architecture of the proposed prior-aware dual-branch error concealment pipeline at the decoder side. 
+
+Upper branch (CARI): Known anchor attributes are decomposed into prior predictions 𝝁 𝑎 𝑘 and branch-wise residuals r𝑎 𝑘 =y𝑎 𝑘 −𝝁 𝑎 𝑘 via the decoded Hash Grid and Prior MLP. Neighbor residuals are aggregated through multi-factor weights combining spatial proximity, semantic similarity, prior uncertainty, support confidence, and signature consistency, producing the interpolation baseline A𝐶𝐴𝑅𝐼 𝑞 . Lower branch (GNN): A bipartite graph between known nodes (absolute attributes) and query nodes (prior predictions 𝝁 𝑞 ) is processed by a lightweight two-layer EdgeConv backbone. A Cross-Attention Fusion module integrates the hash-grid prior [fℎ𝑞 , 𝝁 𝑓 , 𝝁 𝑠 ], after which attribute-specific regression heads produce confidence-gated residuals to form 
+
+A𝐺𝑁 𝑁 ,𝑎 𝑞 =b𝑎 𝑞 +𝑐 𝑎 𝑞 ΔA𝑎 𝑞 . The final output is controlled by attribute-wise confidence, with fallback to interpolation when the confidence of an attribute is insufficient. The model is trained with weighted attribute reconstruction losses, interpolation distillation, graph smoothness, and prior regularization. 
+
+In this section, we present a robust 3DGS transmission framework. Let the compressed 3DGS model be represented by a set of 𝑁 anchors A = {𝑎 𝑖 }𝑁 −1 
+
+> 𝑖 =0
+
+, where each anchor 𝑎 𝑖 encapsulates a feature vector f𝑖 , scaling factors s𝑖 , learnable offsets o𝑖 , and an existence mask 𝑚 𝑖 . To enhance resilience against network impairments, we partition the bitstream into spatial blocks and 𝑀 
+
+independent interleaving lanes, yielding packet units P𝑡,𝜆 .The proposed robust transmission and error concealment framework aims to address the quality degradation of 3D Gaussian Splatting (3DGS) compressed representations under unreliable network conditions. As illustrated in Fig. 1, the system primarily consists of two phases. The detailed decoder-side architecture is further depicted in Fig. 2.  
+
+> ACM Trans. Multimedia Comput. Commun. Appl., Vol. 1, No. 1, Article . Publication date: July 2026. 6Tao et al.
+
+(1) Encoding and Transmission Phase: We introduce Anchor-level Atomic Packaging and 
+
+Stratified Random Grouping strategies. These strategies aim to reshape the failure mode of packet loss, transforming "artifacts caused by attribute inconsistency" into "spatially uniform loss of complete anchors." (2) Decoding and Repair Phase: The decoder first localizes missing packets and defines the anchors within them as the set to be repaired. It then applies Context-Aware Resid-ual Interpolation (CARI) as a robust interpolation baseline that uses hash-grid priors and neighboring residuals. On top of this baseline, a lightweight two-layer Graph Neural Net-work (GNN)—augmented with Cross-Attention Fusion over hash-grid priors—is used to refine high-confidence attribute residuals, achieving confidence-controlled end-to-end error concealment. Additionally, to evaluate the effectiveness of the GNN repair, we implement a k-Nearest Neighbor (k-NN) based weighted interpolation module as a comparative baseline. 
+
+3.1 Preliminaries: 3D Gaussian Splatting 
+
+3D Gaussian Splatting (3DGS) [ 7] represents a 3D scene using a set of anisotropic Gaussians. Each Gaussian is defined by a center 𝜇 ∈ R3 and a covariance matrix Σ, evaluated as: 
+
+𝐺 (𝑥 ) = 𝑒 − 12 (𝑥 −𝜇 )𝑇 Σ−1 (𝑥 −𝜇 ) (1) To ensure positive semi-definiteness, Σ is parameterized by a scaling matrix 𝑆 and a rotation matrix 
+
+𝑅 via Σ = 𝑅𝑆𝑆 𝑇 𝑅 𝑇 . Additionally, each Gaussian carries an opacity 𝛼 and view-dependent color represented by Spherical Harmonics (SH). For rendering, 3D Gaussians are projected onto the 2D image plane. The pixel color 𝐶 is computed via front-to-back 𝛼 -blending of 𝑁 sorted Gaussians overlapping the pixel: 
+
+𝐶 =∑︁  
+
+> 𝑖 ∈ N
+
+𝑐 𝑖 𝛼 ′ 
+
+> 𝑖 𝑖 −1
+
+Ö
+
+> 𝑗 =1
+
+(1 − 𝛼 ′ 
+
+> 𝑗
+
+) (2) where 𝑐 𝑖 is the color and 𝛼 ′ 
+
+> 𝑖
+
+is the final opacity combining 𝛼 with the 2D Gaussian evaluation. This explicit representation enables high-quality real-time rendering but is sensitive to parameter inconsistencies caused by packet loss. To mitigate the substantial storage overhead of vanilla 3DGS, Scaffold-GS [ 9 ] introduces a struc-tured, anchor-based representation. Unlike the explicit storage of millions of individual Gaussians, Scaffold-GS utilizes a sparse set of anchors initialized from Structure-from-Motion (SfM) points. Each anchor is associated with a feature vector, a scaling factor, and a set of learnable offsets. During the rendering phase, a lightweight Multi-Layer Perceptron (MLP) dynamically decodes these anchor attributes to spawn multiple 3D Gaussians, predicting their opacity, color, rotation, and final scaling. This hierarchical "Anchor-to-Gaussian" design exploits local redundancies, significantly reducing the number of explicit parameters while maintaining high-fidelity rendering. Building upon this architecture, HAC++ [ 3] further advances compression efficiency by exploiting the mutual information between unorganized anchors and a structured feature grid. HAC++ introduces a Hash-grid Assisted Context (HAC) framework, where a compact, binarized 3D Hash Grid is queried to assist in modeling the context of anchor attributes. Specifically, the interpolated features from the hash grid are used to predict the probability distributions of the anchor parameters (features, scales, and offsets) for arithmetic coding. By combining this context modeling with adaptive quantization and mask-based pruning, HAC++ achieves a storage reduction of over 100 ×
+
+compared to vanilla 3DGS. In this work, we adopt the compressed bitstream structure of HAC++ as the baseline for our transmission and error concealment study.  
+
+> ACM Trans. Multimedia Comput. Commun. Appl., Vol. 1, No. 1, Article . Publication date: July 2026. Packet-Loss Robust 3D Gaussian Compression 7
+
+Table 1. Motivation experiment for anchor-level atomic packaging under 20% random loss and interpolation-based concealment. “Packed + Interp.” drops 20% complete packed anchors and then interpolates their attributes, while the other lossy columns drop only one native HAC++ attribute stream for 20% of anchors and interpolate the missing attribute. Parenthesized values are PSNR drops relative to the normal reference in this table. For consistency with the main packet-loss evaluation, the normal and packed-anchor columns use the later dataset-average protocol, and attribute-loss drops are recomputed against these normal references. T&T denotes Tanks & Temples.                               
+
+> Dataset Normal Packed + Interp. Drop Feat Drop Scale Drop Offset Worst Attr.
+> BungeeNeRF 28.5042 23.7115 (-4.7927) 22.0972 (-6.4070) 23.4065 (-5.0977) 20.7454 (-7.7588) Offset Mip-NeRF 360 29.1046 25.7325 (-3.3721) 23.0190 (-6.0856) 24.8911 (-4.2135) 24.3487 (-4.7559) Feat T&T 24.1378 22.2131 (-1.9247) 19.7191 (-4.4187) 20.2571 (-3.8807) 20.9438 (-3.1940) Feat All 28.4446 24.7843 (-3.6603) 22.3103 (-6.1343) 23.8146 (-4.6300) 22.5600 (-5.8846) Feat
+
+3.2 Encoder-Side Strategy 
+
+3.2.1 Anchor-level Atomic Packaging. To maximize entropy coding efficiency, existing 3DGS com-pression frameworks (e.g., HAC++ [ 3 ]) predominantly adopt an Attribute-Decoupled Packaging 
+
+strategy. This approach independently clusters and encodes the features, scaling factors, and offsets of all anchors to exploit their respective statistical redundancies. However, such a strategy overlooks the intrinsic coupling among anchor attributes. In lossy transmission or packet loss scenarios, the loss of a single attribute stream results in the reconstruction of "Corrupted Anchors" characterized by inconsistent geometric and appearance parameters. To validate this hypothesis, we conducted a comparative experiment investigating reconstruction quality under two distinct packet loss patterns: 
+
+• Atomic Loss (Joint Dropping) , where all attribute data corresponding to 20% of the anchors are randomly discarded. In this scenario, the affected anchors are treated as invalid and excluded from the rendering computation. Their spatial coordinates are retained solely as 
+
+indices to guide the subsequent joint recovery via neighborhood interpolation. 
+
+• Partial Loss (Attribute Erosion) , where the anchors remain active and participate in the rendering process. However, a specific attribute (e.g., scaling or offset) is randomly dropped for 20% of the anchors, and the missing values are filled via interpolation. Table 1 provides a compact empirical motivation for atomic packaging. Under the same 20% random loss rate and interpolation repair strategy, dropping complete packed anchors produces a smaller all-scene PSNR drop (3.6603 dB) than independently losing feature, scale, or offset streams (6.1343 dB, 4.6300 dB, and 5.8846 dB, respectively). Feature loss is the worst case on Mip-NeRF 360, T&T, and the all-scene average, while offset loss is most destructive on BungeeNeRF. This indicates that retaining anchors with internally inconsistent attributes is more harmful than treating the corresponding anchors as completely missing. Jointly packaging correlated anchor attributes therefore avoids anchor-internal mismatch and improves reconstruction stability after interpolation-based error concealment. In response to these findings, we propose the Atomic Packaging strategy. We strictly bind all attributes of each anchor 𝑎 𝑖 into an indivisible tuple and encapsulate them into the same transmission packet P𝑗 . Formally, the 𝑗 -th packet is defined as: 
+
+P𝑗 = {( f𝑖 , s𝑖 , o𝑖 , 𝑚 𝑖 ) | 𝑖 ∈ G 𝑗 } (3) where G𝑗 denotes the set of anchor indices contained within the 𝑗 -th packet, and 𝑚 𝑖 is the existence mask. Here, P𝑗 is a generic packet notation; in the stratified implementation introduced  
+
+> ACM Trans. Multimedia Comput. Commun. Appl., Vol. 1, No. 1, Article . Publication date: July 2026. 8Tao et al.
+
+next, the packet index 𝑗 is instantiated by a block-lane pair (𝑡, 𝜆 ), yielding the concrete packet P𝑡,𝜆 .Mechanically, this strategy enforces an “All-or-Nothing” degradation mode for channel packet loss. If a specific packet P𝑗 is lost, all anchors contained within it are treated as completely missing. This design effectively eliminates attribute inconsistency, thereby simplifying the intractable problem of removing complex visual artifacts into a well-defined Point Cloud Completion task. 
+
+3.2.2 Stratified Random Grouping. To combat burst packet loss in network transmission, we fundamentally alter the conventional adjacency-based grouping strategy derived from Morton code (Z-order). While Morton ordering preserves spatial locality, it becomes a liability under burst loss conditions: spatially contiguous blocks of anchors are lost simultaneously, creating large-scale spatial voids that are intractable to repair. To address this while preserving the capability for streaming encoding, we instantiate Stratified Random Grouping as a local multi-lane interleaving procedure. Unlike standard approaches that simply segment the Morton-ordered sequence into sequential packets, we introduce a randomized interleaving mechanism. Let 𝑟 𝑖 ∈ { 0, . . . , 𝑁 − 1} denote the zero-based rank of anchor 𝑎 𝑖 in the Morton-sorted sequence, let 𝑁 blk denote the maximum number of anchors per spatial block, and let 
+
+𝜉 be the shared packetization seed. The number of spatial blocks is 𝑆 = ⌈𝑁 /𝑁 blk ⌉. The construction process is as follows: (1) Spatial Blocking. First, the Morton-sorted anchor sequence is divided into 𝑆 sequential spatial blocks, denoted as {B 0, B1, . . . , B𝑆 −1 }. Each block contains at most 𝑁 blk spatially adjacent anchors, corresponding to the max_batch_size used by the implementation: 
+
+𝑡 𝑖 =
+
+ 𝑟 𝑖 
+
+𝑁 blk 
+
+
+
+. (4) where 𝑡 𝑖 ∈ { 0, . . . , 𝑆 − 1} is the spatial block (or streaming step) index of anchor 𝑎 𝑖 .(2) Hash Interleaving. Within each spatial block B𝑡 𝑖 , we employ a pseudo-random hash function (SplitMix64) to uniformly distribute anchors into 𝑀 parallel transmission lanes :
+
+ℓ𝑖 = SplitMix64 (𝑟 𝑖 ⊕ 𝜉 ) mod 𝑀. (5) where ℓ𝑖 ∈ { 0, . . . , 𝑀 − 1} is the lane index of anchor 𝑎 𝑖 , and ⊕ denotes bitwise XOR. The hash is evaluated on the global Morton rank 𝑟 𝑖 , matching the encoder-side interleaver. (3) Packet Construction. The final transmission packet P𝑡,𝜆 is constructed by aggregating anchors from block B𝑡 that are assigned to lane 𝜆 :
+
+P𝑡,𝜆 = {( f𝑖 , s𝑖 , o𝑖 , 𝑚 𝑖 ) | 𝑡 𝑖 = 𝑡, ℓ 𝑖 = 𝜆 }. (6) where 𝜆 denotes the lane identifier and is distinct from the existence mask 𝑚 𝑖 . Equivalently, the scalar packet identifier used during training is 𝑗 = 𝑡𝑀 + 𝜆 .The anchor coordinates, hash-grid parameters, and prior MLP weights are transmitted as global side information as in HAC-style decoding, while each packet carries the recoverable per-anchor attributes. In this work, the global side information is treated as protected control metadata and is assumed to be delivered reliably through retransmission, forward error correction, or a reliable control channel; the packet-loss simulation focuses on erasures of the per-anchor attribute .pak 
+
+payloads. Under this strategy, each packet P𝑡,𝜆 carries approximately 1/𝑀 of the information content for the specific spatial region covered by B𝑡 . In the event of packet loss, even if a specific packet P𝑡,𝜆 
+
+is dropped, the corresponding spatial region retains (𝑀 − 1)/ 𝑀 of its anchors transmitted via other lanes. Consequently, burst loss manifests as a uniform reduction in local point density (i.e., spatial downsampling ) rather than a complete geometric absence. This preservation of local geometric structure provides reliable support points for the subsequent neighborhood-based restoration.  
+
+> ACM Trans. Multimedia Comput. Commun. Appl., Vol. 1, No. 1, Article . Publication date: July 2026. Packet-Loss Robust 3D Gaussian Compression 9
+
+3.3 Context-Aware Residual Interpolation (CARI) 
+
+To fully leverage the prior information embedded in the HAC++ coding structure, we design an enhanced interpolation algorithm that serves as both a standalone baseline and the robust low-frequency branch in our dual-branch pipeline (upper branch of Fig. 2). Unlike traditional interpolation methods that rely solely on geometric distances, this approach exploits the semantic similarity of Hash Grid features and the prior prediction capability of MLPs to guide the recovery process. The method consists of three key steps: Prior Prediction, Joint Weighting, and Residual Compensation. 
+
+Prior Prediction Estimation. For every anchor (whether known 𝑘 ∈ K or missing 𝑞 ∈ Q ), we utilize the decoded Hash Grid features fℎ and a shared MLP to obtain a prior attribute prediction. This value is the predicted center of the HAC++ conditional distribution, and is used in our restoration pipeline as a baseline estimate rather than as the final recovered attribute. Let x be the anchor coordinate; we obtain this prior prediction 𝝁 via the Hash encoder and a grid MLP: 
+
+𝝁 (x) = MLP grid (HashEncoder (x)) (7) where 𝝁 (x) encompasses the prior predictions for features, scales, and offsets. For each attribute branch 𝑎 ∈ { 𝑓 , 𝑠, 𝑜 } of a known anchor 𝑘 , let y𝑎 𝑘 denote the actual decoded attribute and 𝝁 𝑎 𝑘 denote the corresponding prior prediction. The branch-wise residual is defined as: 
+
+r𝑎 𝑘 = y𝑎 𝑘 − 𝝁 𝑎 𝑘 . (8) When the same operation applies to all branches, we omit the superscript 𝑎 for compact notation. This step strips away the low-frequency commonalities of the scene, allowing the subsequent interpolation to focus on recovering high-frequency detailed residuals. 
+
+Geometric-Semantic Joint Weighting. For each missing anchor 𝑞 , we first collect a Euclidean candidate set C( 𝑞 ) with size 𝐿 from the known set K, and then retain the strongest 𝐾 neighbors after multi-factor scoring. In the implementation we use 𝐿 =128 and 𝐾 =8 by default. For a candidate neighbor 𝑘 , the basic similarity and reliability terms are 
+
+𝑑 𝑞𝑘 = ∥x𝑞 − x𝑘 ∥2, (9) 
+
+ℎ𝑞𝑘 = CosSim (fℎ𝑞 , fℎ𝑘 ) + 12
+
+!
+
+, (10) 
+
+𝜌 𝑞𝑘 =
+
+ CosSim (g𝑞 , g𝑘 ) + 12
+
+
+
+. (11) where 𝑑 𝑞𝑘 is the spatial distance, ℎ𝑞𝑘 is the hash-context similarity, and 𝜌 𝑞𝑘 measures local residual-pattern consistency using the compact signature g. Following the implementation, we form five scalar scores: 𝑤 𝑔𝑒𝑜 𝑞𝑘 =(𝑑 𝑞𝑘 + 𝜖 )−𝛼 /2, 𝑤 𝑐𝑡𝑥 𝑞𝑘 =ℎ𝛽 𝑞𝑘 , 𝑤 𝑢𝑛𝑐 𝑞𝑘 =(𝜎 𝑘 + 𝜖 )−𝛾 , 𝑤 𝑐𝑜𝑛𝑓 𝑞𝑘 =𝑐 𝑘 , and 𝑤 𝑠𝑖𝑔 𝑞𝑘 =𝜌 𝛿 𝑞𝑘 . The unnor-malized interpolation score is then simply 
+
+𝑢 𝑞𝑘 = 𝑤 𝑔𝑒𝑜 𝑞𝑘 𝑤 𝑐𝑡𝑥 𝑞𝑘 𝑤 𝑢𝑛𝑐 𝑞𝑘 𝑤 𝑐𝑜𝑛𝑓 𝑞𝑘 𝑤 𝑠𝑖𝑔 𝑞𝑘 . (12) where 𝜎 𝑘 is the attribute-wise prior scale or uncertainty of the neighbor, and 𝑐 𝑘 indicates the reliability of the neighbor support. In other words, a neighbor receives a higher score when it is spatially close, has a similar hash-grid context, has lower prior uncertainty, comes from a reliable decoded support, and exhibits a similar local residual signature. The normalized weight is 
+
+¯𝑤 𝑞𝑘 = 𝑢 𝑞𝑘 
+
+Í𝑗 ∈ N ( 𝑞 ) 𝑢 𝑞 𝑗 + 𝜖 . (13)  
+
+> ACM Trans. Multimedia Comput. Commun. Appl., Vol. 1, No. 1, Article . Publication date: July 2026. 10 Tao et al.
+
+This formulation matches the implemented CARI branch: spatial proximity, hash-feature similarity, prior uncertainty, available support confidence, and signature consistency jointly determine which residuals are trusted. 
+
+Implementation Constants. Unless otherwise specified, the decoder uses a candidate pool of 𝐿 =128 
+
+nearest anchors and keeps the strongest 𝐾 =8 supports after joint weighting. The default CARI exponents are 𝛼 =1.0, 𝛽 =2.0, 𝛾 =1.0, and 𝛿 =1.5. The support confidence is set to 𝑐 𝑘 =1 for attributes already decoded successfully, and to 𝑐 𝑘 =0.5 for attributes recovered by concealment in a previous refinement pass. The local signature g is computed from compact residual statistics: five feature-residual means, one scale-residual mean, and one offset-residual mean. The prior uncertainty 𝜎 𝑘 is obtained from the HAC++ grid MLP scales; in practice we use the corresponding attribute-wise scalar uncertainty, i.e., the feature-channel scale for feature groups, the mean scale uncertainty for scaling, and the mean offset uncertainty for offsets. We run two CARI refinement iterations by default; the optional ridge refinement is disabled unless explicitly enabled. 
+
+Residual Interpolation and Reconstruction. We perform weighted interpolation on the residuals r𝑘 
+
+within the local neighborhood N ( 𝑞 ) to estimate the residual ˆr𝑞 for the missing point: 
+
+ˆr𝑞 =∑︁  
+
+> 𝑘 ∈ N ( 𝑞 )
+
+¯𝑤 𝑞𝑘 r𝑘 . (14) The final CARI estimate combines the query prior prediction with the interpolated residual: 
+
+ˆA𝐶𝐴𝑅𝐼 𝑞 = 𝝁 𝑞 + ˆr𝑞 . (15) If a query has no valid known support for an attribute, the branch falls back to the prior prediction for that attribute. For the feature branch, the implementation can additionally apply a lightweight ridge-refinement step to the interpolated residuals. 
+
+3.4 Prior-Aware GNN Residual Inpainting 
+
+At the decoder side, based on the reception status of packets, the global set of anchors is partitioned into two subsets: the Known Set K (successfully decoded anchors) and the Query Set Q (missing anchors due to packet loss). As illustrated in the lower branch of Fig. 2, we employ a lightweight two-layer Graph Neural Network (GNN) to robustly recover the attributes of Q from K. The pipeline proceeds in five stages: bipartite graph construction, asymmetric node feature encoding, message passing with cross-attention fusion, residual regression, and attribute-wise confidence control. 
+
+Anisotropic Bipartite Graph Construction. For each query anchor 𝑞 ∈ Q , we construct a local bipartite graph G = (Q , K, E) by searching its 𝑘 -nearest neighbors ( 𝑘 =24 ) within the known set K.When anisotropic covariance information is available for the known anchors, we use a Mahalanobis distance defined by each candidate support anchor: 
+
+𝐷 mahal (x𝑞 , x𝑘 ) =√︃ (x𝑞 − x𝑘 )𝑇 𝚺 −1 
+
+> 𝑘
+
+(x𝑞 − x𝑘 ). (16) where 𝚺 𝑘 = R𝑘 S𝑘 S𝑇 𝑘 R𝑇 𝑘 is constructed from the known anchor’s scale S𝑘 and rotation R𝑘 . If this covariance is unavailable or incompatible with the current subset, the implementation falls back to Euclidean 𝑘 -NN. The edge set E contains directed edges pointing from K to Q:
+
+N ( 𝑞 ) = top-𝑘  
+
+> 𝑘 ∈ K
+
+𝐷 (x𝑞 , x𝑘 ), (17) where 𝐷 denotes the Mahalanobis or Euclidean distance used by the current configuration, and x
+
+denotes the world coordinates of the anchor.  
+
+> ACM Trans. Multimedia Comput. Commun. Appl., Vol. 1, No. 1, Article . Publication date: July 2026. Packet-Loss Robust 3D Gaussian Compression 11
+
+Node Feature Input and Interpolation Prior. The input features are designed asymmetrically based on the node type: 
+
+• Source Nodes ( 𝑘 ∈ K ): The input concatenates the fully decoded attributes: position x𝑘 ,hash-grid feature fℎ𝑘 , anchor feature f𝑘 , scale s𝑘 , offset o𝑘 , and existence mask 𝑚 𝑘 .
+
+• Target Nodes ( 𝑞 ∈ Q ): Since the true attribute values are unavailable, the input substi-tutes them with MLP prior predictions: position x𝑞 , hash-grid feature fℎ𝑞 , prior predictions 
+
+(𝝁 𝑓 , 𝝁 𝑠 , 𝝁 𝑜 ) obtained via MLP grid (HashEnc (x𝑞 )) , and a zero existence mask. Additionally, an IDW interpolation result A𝑖𝑛𝑡𝑒𝑟𝑝 𝑞 , using Mahalanobis or Euclidean neighbors according to covariance availability, is concatenated to the query node features, providing a strong low-frequency structural initialization. 
+
+Multi-layer GNN, Cross-Attention, and Residual Prediction. The GNN backbone consists of two residual message-passing layers, each employing an EdgeConv operator [ 12 ] with PreNorm and skip connections. At each layer 𝑙 ∈ { 0, 1}, node embeddings are updated via: 
+
+h(𝑙 +1) 
+
+> 𝑖
+
+= h(𝑙 ) 
+
+> 𝑖
+
++ EdgeConv (𝑙 ) LN (h(𝑙 ) 
+
+> 𝑖
+
+), {LN (h(𝑙 ) 
+
+> 𝑗
+
+)} 𝑗 ∈ N ( 𝑖 )
+
+ (18) where LN denotes Layer Normalization. After the final message-passing layer, the query node representations h𝑞 are refined through a 
+
+Cross-Attention Fusion module (see the “Cross-Attention” block in Fig. 2) that adaptively integrates the hash-grid prior: 
+
+h′ 
+
+> 𝑞
+
+= CrossAttn  𝑄 =h𝑞 , 𝐾𝑉 =[fℎ𝑞 , 𝝁 𝑓 , 𝝁 𝑠 ] (19) where fℎ𝑞 is the hash-grid feature and 𝝁 𝑓 , 𝝁 𝑠 are the MLP prior predictions for feature and scale, respectively. This mechanism enables the network to dynamically balance between neighborhood aggregation cues and hash-grid priors on a per-query basis. The fused representations are then passed through attribute-specific regression heads (MLPs) to produce residuals for feature, scale, and offset, together with a mask logit: 
+
+{Δf𝑞 , Δs𝑞 , Δo𝑞 , ˆ𝑚 𝑞 } = Heads (h′ 
+
+> 𝑞
+
+) (20) For each continuous attribute 𝑎 ∈ { 𝑓 , 𝑠, 𝑜 }, the final GNN prediction is obtained by adding a confidence-gated residual to an attribute baseline b𝑎 𝑞 :
+
+ˆA𝐺𝑁 𝑁 ,𝑎 𝑞 = b𝑎 𝑞 + 𝑐 𝑎 𝑞 ΔA𝑎 𝑞 . (21) In the default residual-on-prior configuration, b𝑎 𝑞 = 𝝁 𝑎 𝑞 ; when residual interpolation is enabled, b𝑎 𝑞 
+
+can instead be the corresponding IDW/CARI baseline. The scalar confidence 𝑐 𝑎 𝑞 ∈ [ 0, 1] is derived from the average z-score of the residual for attribute 𝑎 :
+
+𝑧 𝑎 𝑞 = 1
+
+𝑑 𝑎 𝑑 𝑎 ∑︁ 
+
+> 𝑗 =1
+
+Δ𝐴 𝑎 𝑞,𝑗 
+
+𝜎 𝑎 𝑞,𝑗 + 𝜖 , 𝑐 𝑎 𝑞 = exp (− 𝛼𝑧 𝑎 𝑞 ). (22) where 𝑑 𝑎 is the dimensionality of attribute 𝑎 , 𝜎 𝑎 𝑞,𝑗 is the 𝑗 -th prior scale, and 𝛼 controls the gating sharpness. This residual-on-baseline formulation reduces the mapping difficulty by constraining the network to predict only local deviations while automatically suppressing unreliable attributes. The mask logit ˆ𝑚 𝑞 , after Sigmoid activation, determines whether the recovered anchor participates in the final rendering.  
+
+> ACM Trans. Multimedia Comput. Commun. Appl., Vol. 1, No. 1, Article . Publication date: July 2026. 12 Tao et al.
+
+Attribute-wise Confidence Control and Fallback. While the GNN module efficiently recovers high-frequency details, it may occasionally produce unstable estimations in severely ill-posed regions lacking local context. To guarantee rendering stability, we apply attribute-wise confidence control to the GNN output. Let ˆA𝑖𝑛𝑡𝑒𝑟𝑝,𝑎 𝑞 denote the interpolation baseline for attribute 𝑎 , obtained from CARI or the IDW branch used by the current configuration. The confidence 𝑐 𝑎 𝑞 defined above is reused as the attribute-wise blending coefficient: 
+
+¯A𝑎 𝑞 = 𝑐 𝑎 𝑞 ˆA𝐺𝑁 𝑁 ,𝑎 𝑞 + ( 1 − 𝑐 𝑎 𝑞 ) ˆA𝑖𝑛𝑡𝑒𝑟𝑝,𝑎 𝑞 . (23) This soft blend provides a candidate output, but it is not used blindly. The confidence value is a reliability indicator derived from the prior-normalized residual magnitude, rather than a perfectly calibrated linear quality score. Therefore, even a small nonzero 𝑐 𝑎 𝑞 may inject an unstable GNN residual into geometry-sensitive attributes. We then apply a hard-thresholded fallback per attribute as a safety switch: 
+
+˜A𝑎 𝑞 =
+
+( ˆA𝑖𝑛𝑡𝑒𝑟𝑝,𝑎 𝑞 , 𝑐 𝑎 𝑞 < 𝑇 𝑎 ,
+
+¯A𝑎 𝑞 , 𝑐 𝑎 𝑞 ≥ 𝑇 𝑎 . (24) Thus, Eq. (23) defines how to blend GNN and interpolation when the GNN branch is considered reliable, while Eq. (24) decides whether that blended candidate should be trusted at all. This mechanism does not discard all GNN predictions with a single global score. Instead, each attribute is judged independently. For geometry-sensitive attributes such as scale and offset, the implementation can fall back to interpolation when their confidence is not sufficiently high, while high-confidence predictions are still blended into the final attributes. Feature attributes can therefore participate more actively when their residual confidence is reliable. In the final decoder configuration, residuals are clipped to 𝜏 =3.0 prior standard deviations and the confidence sharpness is set to 𝛼 =0.5. The fallback thresholds are attribute-specific: 𝑇 𝑓 =0.10 
+
+for features, 𝑇 𝑠 =1.01 for scales, and 𝑇 𝑜 =1.01 for offsets and masks. Since 𝑐 𝑎 𝑞 ≤ 1, this conservative feature-focused setting keeps geometry-sensitive scale and offset predictions on the interpolation branch by default, while allowing only high-confidence feature residuals to be softly blended. More generally, all feature, scale, and offset attributes are subject to the same confidence-controlled fallback rule; the reported configuration simply chooses a stricter threshold for geometry-sensitive attributes. This choice reflects the empirical observation that CARI can be stronger in smooth or small scenes, whereas the GNN branch is most useful for high-frequency appearance details. 
+
+Self-supervised Decoder-side Training Strategy. To optimize the parameters 𝜙 of the GNN module without relying on additional annotated data or encoder-side co-training, we adopt an offline scene-specific “Pseudo-dropout” calibration mechanism. In our experimental pipeline, the complete locally stored compressed scene is first decoded before packet-loss simulation, using the available bitstreams and HAC++ MLP checkpoint. This decoded scene is used only as self-supervision for local GNN calibration: packet groups are pseudo-dropped at a 20% rate, the dropped anchors become queries, and the complete local attributes serve as reconstruction targets. During the subsequent packet-loss evaluation, we simulate missing .pak packets, load the trained scene-specific weights, and perform no online optimization or access to the attributes of the dropped packets. The main optimization is performed in the parameter domain, and an optional rendering loss can be enabled for validation-oriented fine tuning. The hybrid loss function (annotated on the right side of Fig. 2) is formulated as: 
+
+L = L𝑟𝑒𝑐 + L 𝑟𝑒𝑔 . (25)  
+
+> ACM Trans. Multimedia Comput. Commun. Appl., Vol. 1, No. 1, Article . Publication date: July 2026. Packet-Loss Robust 3D Gaussian Compression 13
+
+where the reconstruction and regularization terms are 
+
+L𝑟𝑒𝑐 = 𝑤 𝑓 L𝑓 + 𝑤 𝑠 L𝑠 + 𝑤 𝑜 L𝑜 + 𝑤 𝑚 L𝑚 ,
+
+L𝑟𝑒𝑔 = 𝜆 𝑑𝑖𝑠𝑡𝑖𝑙𝑙 L𝑑𝑖𝑠𝑡𝑖𝑙𝑙 + 𝜆 𝑠𝑚𝑜𝑜𝑡ℎ L𝑠𝑚𝑜𝑜𝑡ℎ 
+
++ 𝜆 𝑝𝑟𝑖𝑜𝑟 L𝑝𝑟𝑖𝑜𝑟 + 𝜆 𝑟𝑒𝑛𝑑𝑒𝑟 L𝑟𝑒𝑛𝑑𝑒𝑟 .
+
+In the following definitions, 𝑞 ranges over pseudo-dropped query anchors in the current training mini-batch B𝑄 ⊂ Q :
+
+• L 𝑓 = Í𝑞 ∥ˆf𝑞 − f𝑔𝑡 𝑞 ∥1 and L𝑠 = Í𝑞 ∥ˆs𝑞 − s𝑔𝑡 𝑞 ∥1 supervise feature and scale reconstruction. 
+
+• L 𝑜 = Í𝑞 Charb ( ˆo𝑞 − o𝑔𝑡 𝑞 ) supervises offset reconstruction with a Charbonnier penalty; the implementation can increase the offset weight on active mask entries. 
+
+• L 𝑚 is the mask reconstruction loss: L𝑚 = Í𝑞 BCE ( ˆ𝑚 𝑞 , 𝑚 𝑔𝑡 𝑞 ). It supervises the recovered existence or offset-validity mask. Here 𝑚 𝑔𝑡 𝑞 is the decoded mask of the pseudo-dropped anchor in the locally reconstructed full scene; it is not the packet-loss indicator. 
+
+• L 𝑑𝑖𝑠𝑡𝑖𝑙𝑙 = Í𝑞,𝑎 ∥ ˆA𝐺𝑁 𝑁 ,𝑎 𝑞 − ˆA𝑖𝑛𝑡𝑒𝑟𝑝,𝑎 𝑞 ∥1 regularizes GNN predictions toward the interpolation teacher, which is the IDW/CARI baseline used by the current configuration. 
+
+• L 𝑠𝑚𝑜𝑜𝑡ℎ is a local query-query graph regularizer. Let E𝑄 = {( 𝑞, 𝑞 ′) | 𝑞 ′ ∈ kNN 𝑘 lap (x𝑞 ; B𝑄 \{𝑞 })} denote the KNN graph built only among query anchors in the current mini-batch. The implementation uses 
+
+L𝑠𝑚𝑜𝑜𝑡ℎ = 1
+
+|E 𝑄 |∑︁ (𝑞,𝑞 ′ ) ∈ E 𝑄 
+
+𝜔 𝑞𝑞 ′∑︁ 
+
+> 𝑎 ∈ S
+
+∥ ˆA𝑎 𝑞 − sg ( ˆA𝑎 𝑞 ′ )∥ 1,
+
+where S is the set of selected trained attributes, sg (·) denotes stop-gradient, and 𝜔 𝑞𝑞 ′ is a distance weight, set to one by default or to a Gaussian weight when Laplacian smoothing bandwidth is enabled. Thus, both 𝑞 and 𝑞 ′ are pseudo-dropped query anchors, while 𝑞 ′ is the local neighbor of 𝑞 in the training mini-batch. 
+
+• L 𝑝𝑟𝑖𝑜𝑟 = Í𝑞,𝑎 1   
+
+> 𝑑 𝑎
+> ˆA𝑎 𝑞 −𝝁 𝑎 𝑞
+> 𝝈 𝑎 𝑞 +𝜖 1
+
+penalizes large z-score deviations from the hash-grid prior. 
+
+• L 𝑟𝑒𝑛𝑑𝑒𝑟 is optional and is disabled when 𝜆 𝑟𝑒𝑛𝑑𝑒𝑟 = 0.In our implementation, we empirically set 𝜆 𝑑𝑖𝑠𝑡𝑖𝑙𝑙 = 0.25 , 𝜆 𝑠𝑚𝑜𝑜𝑡ℎ = 0.05 , and 𝜆 𝑝𝑟𝑖𝑜𝑟 = 0.1 in the main configuration. The final reported GNN uses a feature-focused training configuration, setting the feature reconstruction and distillation weights to 1.0 while setting the scale, offset, and mask training weights to 0. This matches the confidence-controlled inference design: scale and offset are recovered by the stronger interpolation branch unless future geometry-specific constraints make their GNN residuals reliable. 
+
+4 Experiments 4.1 Experimental Setup 
+
+4.1.1 Datasets and Evaluation Metrics. To comprehensively evaluate the effectiveness of the pro-posed robust transmission and error concealment framework, we conducted systematic experiments on three mainstream datasets for 3D scene reconstruction and Novel View Synthesis (NVS). 
+
+• BungeeNeRF Dataset : We evaluate 8 challenging multi-scale urban scenes with large depth variation and rich high-frequency details [ 16 ]. These scenes stress the robustness of packet-loss concealment because missing anchors can affect both distant structures and close-range facade details. 
+
+• Mip-NeRF 360 Dataset : We use 7 challenging large-scale real-world scenes characterized by deep depth-of-field and complex unbounded backgrounds [ 1 ]. Following the domain standard,  
+
+> ACM Trans. Multimedia Comput. Commun. Appl., Vol. 1, No. 1, Article . Publication date: July 2026. 14 Tao et al.
+
+outdoor scenes are downsampled by a factor of 4 and indoor scenes by a factor of 2. Every 8th frame is held out as the test set to evaluate the generalization and restoration performance in complex physical environments. 
+
+• Tanks & Temples Dataset : We selected representative real-world scenes (e.g., Truck , Train ) to further test the robustness of the framework against complex geometric surface reconstruction and large-span viewpoint transitions [ 8 ]. The test set partitioning remains consistent with the Mip-NeRF 360 protocol. 
+
+Evaluation Metrics. For rendering and restoration quality assessment, we employ three stan-dard objective image quality metrics: Peak Signal-to-Noise Ratio ( PSNR ), Structural Similarity (SSIM ) [ 14 ], and Learned Perceptual Image Patch Similarity ( LPIPS ) [ 18 ]. Specifically, PSNR reflects pixel-level absolute signal errors; SSIM measures the local spatial consistency of image structures; and LPIPS leverages deep network features to better align with the human visual system’s perception of high-frequency detail loss and anomalous artifacts. Note that the base compression scheme, HAC++ [ 3 ], is configured with its default high-fidelity settings (e.g., Spherical Harmonic orders and feature quantization steps at their optimal defaults), ensuring that all packet loss and restoration experiments are established upon a high-quality reconstruction baseline. We also note that the rendering speed (FPS) remains largely unaffected by packet loss, as the loss of anchors reduces the rendering load; the observed FPS variation is within single-digit fluctuations. 
+
+4.1.2 Packet Loss Simulation Protocol. To faithfully reflect the performance of 3DGS bitstreams in unreliable network environments (e.g., connectionless UDP transmission or congested channels), we established a channel simulation model based on packet erasure. Unlike bit-flip errors at the physical layer, this work focuses on macro-level packet loss at the network layer. In this version, we report the representative 20% Random Loss setting, where packet units are independently removed with probability 𝑝 =0.20 . The protected global side information described in Section 3.2.2 is kept available for all methods and is not included in the random erasure process. For the proposed CARI and GNN variants, packet loss is implemented by copying the bitstream directory and deleting the selected .pak lane/block payloads; a missing .pak therefore removes complete anchors rather than individual attributes. For the original HAC++ baseline, the erasure is applied before our atomic regrouping to the native attribute-separated payloads, so the decoder may receive only a subset of the correlated feature, scale, and offset streams for affected anchors, and no decoder-side concealment is enabled. This setting is severe enough to expose the broken-anchor failure mode of attribute-separated transmission while keeping the experimental protocol compact and directly comparable across datasets. To systematically verify the effectiveness of the proposed framework, we established the following comparison settings: 
+
+4.1.3 Comparison Settings. 
+
+• HAC++ (Original) : Serving as the vanilla reference baseline, this scheme retains the native attribute-independent packaging mechanism and Morton-order (Z-order) spatial arrangement of HAC++ [ 3 ]. When packet loss occurs, the decoder performs no concealment and directly renders using the residual data, which typically contains a large number of “fragmented anchors” with mismatched attribute parameters. 
+
+• Ours (CARI): The interpolation-based variant of our proposed framework. This scheme adopts our proposed anchor-level atomic packaging and stratified random grouping mech-anisms, and utilizes the Context-Aware Residual Interpolation (CARI) method described in  
+
+> ACM Trans. Multimedia Comput. Commun. Appl., Vol. 1, No. 1, Article . Publication date: July 2026. Packet-Loss Robust 3D Gaussian Compression 15
+
+Section 3.3 for decoder-side error concealment based on hash priors and local geometric features. 
+
+• Ours (GNN) : The GNN-enhanced variant of the proposed concealment framework. It in-tegrates anchor-level atomic packaging, stratified random grouping, and a scene-specific lightweight GNN trained locally through offline pseudo-dropout calibration before packet-loss simulation. During evaluation, the decoder loads the trained GNN weights and applies attribute-wise confidence control to blend with or fall back to CARI. 
+
+4.1.4 Implementation Details. All experiments, including scene encoding/compression, packet loss simulation, and decoder-side 3D rendering and error concealment, were conducted on a high-performance workstation equipped with a single NVIDIA RTX 4080 GPU to ensure benchmark consistency for time-overhead evaluations (e.g., rendering FPS). 
+
+Packetization Parameters. In the reported implementation, the Morton-sorted anchor sequence is processed in spatial blocks of at most 𝑁 blk =3000 anchors, matching the max_batch_size stored in the packetization metadata. Each block is split into 𝑀 =8 pseudo-random lanes using SplitMix64 with seed 𝜉 =1337 , and each non-empty step-lane pair is packed as one pak_lane{lane}_s{step}.pak 
+
+transport unit. The number of spatial blocks is scene-dependent, 𝑆 = ⌈𝑁 /𝑁 blk ⌉; for example, the Hollywood scene contains 𝑁 =369 ,941 anchors and produces 𝑆 =124 Morton blocks. The metadata file records the schema identifier, 𝑀 , seed, block count, block size, ordering, and anchor count, enabling the decoder to reconstruct the packet-to-anchor mapping consistently. 
+
+Bitstream-size Overhead. We compare the transmitted non-weight bitstream files to quantify the cost of robust packetization. Across the 19 evaluated scenes, the original HAC++ non-weight bitstreams occupy 159.70 MiB, while the proposed .pak -based packetization occupies 164.46 MiB, corresponding to a 4.77 MiB or 2.99% increase. This comparison excludes model weight files such as 
+
+.pth /.pt /.ckpt . If only the replaced attribute streams are counted, the original feature/scale/offset 
+
+.b files occupy 139.70 MiB and the corresponding .pak files occupy 149.66 MiB, a 7.13% increase. We therefore report the all-non-weight bitstream growth as the primary storage overhead, and use the attribute-only number as a diagnostic of the packaging cost itself. 
+
+Architecture of the GNN Repair Module. Our GNN repair module is designed to balance expressive-ness with inference efficiency. The backbone employs two residual EdgeConv [ 12 ] message-passing layers with Layer Normalization, using a hidden dimension of 𝑑 ℎ =128 . A Cross-Attention Fusion 
+
+module with 4 heads subsequently integrates the hash-grid prior features as Key/Value. For the bipartite 𝑘 -NN graph construction, we set 𝑘 =24 and use Mahalanobis distance when compatible covariance matrices are available, otherwise falling back to Euclidean neighbors. Four independent regression heads (MLPs) produce per-attribute residuals for features, scales, offsets, and existence masks; the training weights can select feature-focused or full-attribute supervision. 
+
+Training Strategy and Optimization. To eliminate dependency on external annotations, we adopt a self-supervised Pseudo-dropout training pipeline as an offline local calibration stage. For each scene, we first locally reconstruct the complete compressed scene before packet-loss simulation, build packet-aligned groups from the packetization metadata, and randomly mask 20% of the packets during training. The masked anchors constitute the query set Q, while the remaining anchors form the known set K. The network is trained using the weighted hybrid loss described in Section 3.4, with the locally decoded full-scene attributes serving as pseudo ground truth. Training is performed for 15,000–20,000 iterations per scene using the Adam optimizer with an initial learning rate of 10 −3
+
+and cosine annealing decay. During packet-loss evaluation, packet loss is simulated by removing  
+
+> ACM Trans. Multimedia Comput. Commun. Appl., Vol. 1, No. 1, Article . Publication date: July 2026. 16 Tao et al.
+
+.pak files from a copied bitstream directory; the trained scene-specific weights are loaded directly, and no online optimization or lost-attribute supervision is used. 
+
+4.2 Experimental Results and Analysis 
+
+In this section, we report the quantitative reconstruction quality under the representative 20% random packet-loss setting across three datasets. Table 2 summarizes the average performance of the compared methods on three core metrics: PSNR, SSIM, and LPIPS. Averaged over the three dataset-level PSNR values, the no-packet-loss HAC++ reference is 27.25 dB and the proposed GNN configuration is 24.25 dB, corresponding to an overall average drop of 2.99 dB; the drop is larger on BungeeNeRF due to its more challenging large-scale high-frequency content. 
+
+Table 2. Quantitative comparison under 20% random packet loss across three datasets. The best lossy-transmission results are highlighted in bold . All values are averaged over all scenes within each dataset.                                                              
+
+> BungeeNeRF Mip-NeRF 360 Tanks & Temples Loss Rate Method PSNR ↑SSIM ↑LPIPS ↓PSNR ↑SSIM ↑LPIPS ↓PSNR ↑SSIM ↑LPIPS ↓
+> 0% (No Packet Loss) HAC++ (Reference) 28.50 0.907 0.149 29.10 0.859 0.216 24.14 0.846 0.191 20% HAC++ (Original) 19.55 0.610 0.380 20.05 0.590 0.405 15.20 0.520 0.455 20% Ours (CARI) 23.71 0.818 0.220 25.73 0.807 0.264 22.21 0.800 0.233
+> 20% Ours (GNN) 24.31 0.827 0.205 26.13 0.811 0.258 22.32 0.796 0.237
+
+Qualitative visual comparisons are presented in Fig. 3. Each row shows a representative scene, with columns labeled as HAC++ (Reference) , HAC++ (20% Loss, No EC) , Ours-CARI (20% Loss) , and 
+
+Ours-GNN (20% Loss) , where EC denotes error concealment. The direct-drop setting exhibits severe blur, ghosting, and structural discontinuities. The proposed CARI branch restores the global scene layout and suppresses most packet-loss artifacts, while the proposed GNN branch further improves local texture and edge fidelity in complex regions. 
+
+Vulnerability of Original HAC++. As demonstrated in Table 2, the reconstruction quality of the original HAC++ suffers a dramatic decline under packet loss. At the 20% loss rate, the native attribute-separated transmission mode leads to roughly 9 dB average PSNR degradation across datasets. The root cause of this systemic collapse lies in its attribute-independent packaging mechanism: when packet loss occurs, the renderer is forced to process “fragmented anchors” with mismatched attribute parameters, leading to severe geometric distortion and color artifacts. 
+
+Effectiveness and Limitations of the Proposed CARI Interpolation Branch. The proposed Context-Aware Residual Interpolation (CARI) method, operating atop our anchor-level atomic packaging and stratified random grouping strategies, significantly enhances the system’s resilience. At 20% loss, CARI reaches 23.71 dB on BungeeNeRF, 25.73 dB on Mip-NeRF 360, and 22.21 dB on Tanks & Temples, validating the effectiveness of hash-context prior-guided interpolation. However, this heuristic branch still tends to over-smooth high-frequency details in complex real-world scenes, leaving room for learned residual refinement. 
+
+Complementarity of the GNN Branch. For the 20% packet-loss setting summarized in Table 2, the feature-focused GNN configuration maintains an average PSNR of 24.31 dB on BungeeNeRF and 26.13 dB on Mip-NeRF 360, corresponding to PSNR drops of 4.19 dB and 2.97 dB, respectively. Compared with the proposed interpolation/CARI branch under the same packetization protocol, the GNN recovers an additional 0.60 dB on BungeeNeRF and 0.40 dB on Mip-NeRF 360. On Tanks & Temples, the GNN slightly improves PSNR but CARI remains better in SSIM and LPIPS, indicating that learned residuals are not uniformly superior for all scenes and all perceptual metrics. One likely  
+
+> ACM Trans. Multimedia Comput. Commun. Appl., Vol. 1, No. 1, Article . Publication date: July 2026. Packet-Loss Robust 3D Gaussian Compression 17
+> Fig. 3. Qualitative comparison under 20% random packet loss across representative scenes. Columns follow the labels shown in the figure: HAC++ reference without packet loss, HAC++ under 20% loss without error concealment, Ours-CARI, and Ours-GNN.
+
+reason is that the evaluated Tanks & Temples scenes contain relatively simpler local geometry and fewer highly complex texture transitions than the large-scale BungeeNeRF scenes; in such smooth or low-frequency regions, residual interpolation can preserve structural consistency with fewer learned-regression artifacts, which benefits SSIM and LPIPS. This observation motivates our conservative confidence-controlled design: GNN residuals are used mainly to refine high-frequency feature details in complex scenes, while feature, scale, and offset attributes all fall back to interpolation when their confidence is insufficient. In the final reported setting, scale and offset are kept on the interpolation branch by default because geometry errors are visually more destructive, whereas high-confidence feature residuals can still be blended. 
+
+4.3 Ablation Studies 
+
+To rigorously evaluate the individual contributions of the core modules in our proposed error concealment framework—namely Anchor-level Atomic Packaging , Stratified Random Grouping ,and GNN-based Repair —we conducted a step-by-step ablation study under a 20% random packet loss setting. Table 3 reports dataset-wide averages for BungeeNeRF, Mip-NeRF 360, and Tanks & Temples. 
+
+Impact of Atomic Packaging. Comparing experiments (a) and (b), replacing the native “attribute-separated packaging” of HAC++ with our “atomic packaging” strategy—without any repair al-gorithm and maintaining Morton spatial ordering—yields clear PSNR gains across the evaluated  
+
+> ACM Trans. Multimedia Comput. Commun. Appl., Vol. 1, No. 1, Article . Publication date: July 2026. 18 Tao et al.
+
+Table 3. Ablation results of key modules under 20% random packet loss. Each row isolates one packetization or concealment component. All values are dataset-wide averages. “Strat. Random” denotes Stratified Random Grouping.                                                                                    
+
+> BungeeNeRF Mip-NeRF 360 Tanks & Temples No. Packaging Grouping Inpainting PSNR ↑SSIM ↑LPIPS ↓PSNR ↑SSIM ↑LPIPS ↓PSNR ↑SSIM ↑LPIPS ↓
+> (a) Separated Morton (Z-order) None 19.55 0.610 0.380 20.05 0.590 0.405 15.20 0.520 0.455 (b) Atomic Morton (Z-order) None 21.60 0.735 0.305 21.40 0.700 0.355 20.30 0.665 0.315 (c) Atomic Strat. Random None 22.05 0.765 0.285 24.05 0.770 0.300 20.65 0.730 0.285 (d) Atomic Strat. Random CARI 23.71 0.818 0.220 25.73 0.807 0.264 22.21 0.800 0.233
+> (e) Atomic Strat. Random GNN (Ours) 24.31 0.827 0.205 26.13 0.811 0.258 22.32 0.796 0.237
+
+datasets. The original HAC++ failure mode loses roughly 9 dB on average because attribute packets are decoded inconsistently, whereas atomic packaging converts this failure into cleaner complete-anchor erasures. This result supports our core hypothesis: forcing the degradation to converge into an “all-or-nothing” complete anchor loss is essential to eliminate the “fragmented anchors” that cause parameter chaos under alpha blending. 
+
+Impact of Stratified Random Grouping without Inpainting. Experiment (c) further replaces Morton ordering with the proposed stratified random grouping while still disabling decoder-side inpainting. Under independent random packet loss, this row should not be interpreted as the final benefit of stratified random grouping by itself; cleanly missing anchors remain visible when no recovery is applied. Its role is to create spatially dispersed support patterns that are more suitable for subsequent interpolation and GNN repair. Consistent with this interpretation, Atomic + Stratified Random + None remains approximately 1.5–2.0 dB below the CARI branch, leaving a clear gap for decoder-side concealment. 
+
+Evolution of Error Concealment Methods. Finally, we evaluate different concealment mechanisms under the same encoder configuration (Atomic + Stratified Random). Introducing CARI in experi-ment (d) provides a strong and stable interpolation baseline by aggregating neighboring residuals with hash-prior guidance. However, pure interpolation tends to over-smooth edges in complex topologies. The confidence-controlled GNN framework in experiment (e) further improves the average PSNR from 23.71 dB to 24.31 dB on BungeeNeRF and from 25.73 dB to 26.13 dB on Mip-NeRF 360, reducing the corresponding average PSNR drops to 4.19 dB and 2.97 dB, respectively. On Tanks & Temples, GNN slightly improves PSNR from 22.21 dB to 22.32 dB but CARI remains better on SSIM and LPIPS, which is consistent with the smoother scene content where interpolation can be more reliable than learned residual refinement. This “interpolation for baseline, GNN for feature refinement” hybrid strategy is critical for preserving details while maintaining fallback stability across diverse scene complexities. 
+
+4.3.1 Performance Analysis across Scene Scales. During the evaluation of experiment (d) (CARI) and experiment (e) (GNN), we observed a critical phenomenon: the performance gain of the GNN module is highly correlated with scene scale and complexity. In large-scale, complex scenes (e.g., exceeding 300,000 anchors), the GNN can outperform CARI interpolation because local feature aggregation and hash-prior extraction help restore high-frequency details in regions dominated by complex topology. Conversely, in smaller scenes or highly smooth local regions, spatial interpolation (CARI) ap-proaches the optimal solution. In these low-frequency regions, forced non-linear regression via GNN may introduce slight regression noise due to over-parameterization, occasionally leading to metrics slightly lower than interpolation.  
+
+> ACM Trans. Multimedia Comput. Commun. Appl., Vol. 1, No. 1, Article . Publication date: July 2026. Packet-Loss Robust 3D Gaussian Compression 19
+
+These scale-dependent performance variations justify the necessity of our attribute-wise con-fidence control and fallback mechanism (Section 3.4). By dynamically evaluating the confidence of each predicted attribute and blending with or falling back to the interpolation baseline when needed, our framework achieves complementary advantages: unleashing the GNN’s potential for high-frequency details in complex areas while preserving the robust interpolation estimate in uncertain or extremely sparse regions. This scale-adaptive design ensures an optimal balance between visual quality and system stability across any scene complexity. 
+
+5 Conclusion and Limitations 
+
+Conclusion. In this paper, we presented a robust transmission and error concealment framework for 3D Gaussian Splatting (3DGS), systematically addressing the severe rendering degradation caused by packet loss in real-world network streaming. By reshaping the failure mode at the encoder side through Anchor-level Atomic Packaging and Stratified Random Grouping , we reduce catastrophic artifacts caused by attribute mismatches and avoid intractable large-scale spatial voids. At the decoder side, we proposed a prior-aware error concealment pipeline that integrates Context-Aware Residual Interpolation (CARI) with a lightweight two-layer GNN calibrated offline for each scene. Empowered by attribute-wise confidence control and fallback, our framework adaptively recovers high-frequency details while preserving rendering stability when individual attribute predictions are unreliable. Experiments under 20% random packet loss demonstrate that our method substantially improves over no-concealment transmission and that the GNN branch provides complementary gains over CARI in complex regions while safely falling back to interpolation in low-confidence cases. 
+
+Limitations and Future Work. Despite the substantial improvements in transmission robust-ness, our current framework has certain limitations that warrant future research: 
+
+• Compression Efficiency Trade-off: To achieve high error resilience, our atomic packaging and stratified random grouping strategies intentionally break the continuous Morton-order sorting and attribute-decoupled clustering utilized by the original HAC++ codec. In the current implementation, the all-non-weight bitstream size increases by 2.99% across the evaluated scenes, while the attribute-only packet files increase by 7.13%. Future work should further optimize this robustness–bitrate trade-off. 
+
+• Reliability of Global Side Information: The current evaluation assumes that global side information, including anchor coordinates, hash-grid/MLP parameters, and interleaving metadata, is delivered reliably through retransmission, forward error correction, or a protected control channel. A fully unreliable end-to-end channel would require joint protection of both global metadata and per-anchor attribute packets. 
+
+• Computational Overhead at Decoder: Although we explicitly designed a lightweight two-layer GNN module, the dynamic 𝑘 -NN bipartite graph construction and network inference introduce additional computational latency. This could pose challenges for strict real-time rendering (e.g., >60 FPS) on resource-constrained edge devices or mobile platforms. 
+
+Future Directions. Future efforts will focus on exploring a joint Rate-Distortion-Resilience (RDR) optimization framework to strike an optimal balance between compression ratio and error concealability. Furthermore, we plan to investigate hardware-accelerated (e.g., highly optimized CUDA kernels) repair modules and the end-to-end co-training of the entropy codec alongside the error concealment network. 
+
+References   
+
+> [1] Jonathan T Barron, Ben Mildenhall, Dor Verbin, Pratul P Srinivasan, and Peter Hedman. 2022. Mip-nerf 360: Unbounded anti-aliased neural radiance fields. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition .ACM Trans. Multimedia Comput. Commun. Appl., Vol. 1, No. 1, Article . Publication date: July 2026.
+
+20 Tao et al. 
+
+5470–5479. [2] Yihang Chen, Qianyi Wu, Weiyao Lin, Mehrtash Harandi, and Jianfei Cai. 2024. Hac: Hash-grid assisted context for 3d gaussian splatting compression. In European Conference on Computer Vision . Springer, 422–438. [3] Yihang Chen, Qianyi Wu, Weiyao Lin, Mehrtash Harandi, and Jianfei Cai. 2025. Hac++: Towards 100x compression of 3d gaussian splatting. IEEE Transactions on Pattern Analysis and Machine Intelligence (2025). [4] Zhiwen Fan, Kevin Wang, Kairun Wen, Zehao Zhu, Dejia Xu, and Zhangyang Wang. 2024. Lightgaussian: Unbounded 3d gaussian compression with 15x reduction and 200+ fps. Advances in neural information processing systems 37 (2024), 140138–140158. [5] Vivek K. Goyal. 2001. Multiple description coding: Compression meets the network. IEEE Signal Processing Magazine 
+
+18, 5 (2001), 74–93. doi:10.1109/79.952806 [6] Peter Hedman, Julien Philip, True Price, Jan-Michael Frahm, George Drettakis, and Gabriel Brostow. 2018. Deep blending for free-viewpoint image-based rendering. ACM Transactions on Graphics (ToG) 37, 6 (2018), 1–15. [7] Bernhard Kerbl, Georgios Kopanas, Thomas Leimkühler, George Drettakis, et al . 2023. 3d gaussian splatting for real-time radiance field rendering. ACM Trans. Graph. 42, 4 (2023), 139–1. [8] Arno Knapitsch, Jaesik Park, Qian-Yi Zhou, and Vladlen Koltun. 2017. Tanks and temples: Benchmarking large-scale scene reconstruction. ACM Transactions on Graphics (ToG) 36, 4 (2017), 1–13. [9] Tao Lu, Mulin Yu, Linning Xu, Yuanbo Xiangli, Limin Wang, Dahua Lin, and Bo Dai. 2024. Scaffold-gs: Structured 3d gaussians for view-adaptive rendering. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition . 20654–20664. [10] Simon Niedermayr, Josef Stumpfegger, and Rüdiger Westermann. 2024. Compressed 3d gaussian splatting for accelerated novel view synthesis. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition . 10349– 10358. [11] Guocheng Qian, Abdulellah Abualshour, Guohao Li, Ali Thabet, and Bernard Ghanem. 2021. Pu-gcn: Point cloud upsampling using graph convolutional networks. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition . 11683–11692. [12] Yue Wang, Yongbin Sun, Ziwei Liu, Sanjay E. Sarma, Michael M. Bronstein, and Justin M. Solomon. 2019. Dynamic graph CNN for learning on point clouds. ACM Transactions on Graphics 38, 5 (2019). [13] Yao Wang and Qin-Fan Zhu. 1998. Error control and concealment for video communication: A review. Proc. IEEE 86, 5 (1998), 974–997. doi:10.1109/5.664283 [14] Zhou Wang, Alan C. Bovik, Hamid R. Sheikh, and Eero P. Simoncelli. 2004. Image Quality Assessment: From Error Visibility to Structural Similarity. IEEE Transactions on Image Processing 13, 4 (Apr. 2004), 600–612. doi:10.1109/TIP. 2003.819861 [15] Stephan Wenger. 2003. H.264/AVC over IP. IEEE Transactions on Circuits and Systems for Video Technology 13, 7 (2003), 645–656. doi:10.1109/TCSVT.2003.814966 [16] Yuanbo Xiangli, Linning Xu, Xingang Pan, Nanxuan Zhao, Anyi Rao, Christian Theobalt, Bo Dai, and Dahua Lin. 2022. Bungeenerf: Progressive neural radiance field for extreme multi-scale scene rendering. In European conference on computer vision . Springer, 106–122. [17] Xumin Yu, Yongming Rao, Ziyi Wang, Zuyan Liu, Jiwen Lu, and Jie Zhou. 2021. Pointr: Diverse point cloud completion with geometry-aware transformers. In Proceedings of the IEEE/CVF international conference on computer vision . 12498– 12507. [18] Richard Zhang, Phillip Isola, Alexei A. Efros, Eli Shechtman, and Oliver Wang. 2018. The Unreasonable Effectiveness of Deep Features as a Perceptual Metric. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) . 586–595. doi:10.1109/CVPR.2018.00068 ACM Trans. Multimedia Comput. Commun. Appl., Vol. 1, No. 1, Article . Publication date: July 2026.
