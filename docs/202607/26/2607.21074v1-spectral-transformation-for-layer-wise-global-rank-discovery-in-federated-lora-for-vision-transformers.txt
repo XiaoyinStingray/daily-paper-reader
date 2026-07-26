@@ -1,0 +1,765 @@
+Title: Spectral Transformation for Layer-wise Global Rank Discovery in Federated LoRA for Vision Transformers
+
+URL Source: https://arxiv.org/pdf/2607.21074v1
+
+Published Time: Fri, 24 Jul 2026 00:41:44 GMT
+
+Number of Pages: 13
+
+Markdown Content:
+# Spectral Transformation for Layer-wise Global Rank Discovery in Federated LoRA for Vision Transformers 
+
+Hariharan Ramesh Jyotikrishna Dass 
+
+Department of Electrical and Computer Engineering University of Arizona, Tucson, AZ 85719 
+
+{hariharanr, jdass}@arizona.edu 
+
+## Abstract 
+
+Fine-tuning Vision Transformers (ViTs) with low-rank adapters (LoRA) promises better communication efficiency under federated setup, yet existing aggregation strategies face fundamental limitations. Independently averaging these LoRA fac-tors is mathematically inconsistent, introducing cross-term aggregation error. In contrast, approaches that preserve heterogeneous client ranks by concatenating local adapters on the server substantially increase download cost and often require merging global LoRA updates into pretrained weights on the clients, leading to reinitialization lag, and unstable convergence. Other approaches further increase server-side overhead by reconstructing dense weight updates or training auxiliary models for refinement of aggregation error on the server. In this work, we pro-pose SpecTraL , spectral transformation for layer-wise global rank discovery, that resolves these challenges within a unified design. SpecTraL stacks local LoRA modules from clients and performs orthonormal Householder Transformation of the stacked adapters directly in the low-rank latent space, eliminating the need for dense reconstruction of global model update and any additional refinement or auxillary training on the server. By leveraging the Spiked Covariance Model from Random Matrix Theory, SpecTraL analytically separates the global consensus signal from non-IID noise, discovering optimal layer-wise global ranks without manual hy-perparameter tuning. To match local ranks and encourage stable fine-tuning for subsequent rounds of local updates on the clients, we introduce a padding-aware initialization framework that allows them to incorporate residual LoRA dimensions without re-merging those into pre-trained base model. Experiments on federated fine-tuning of ViT-B/16 and ViT-L/16 over DomainNet and NICO++ demonstrate improved accuracy–communication trade-offs, reduced server computation, and elimination of hyperparameter search for rank selection. Our code is publicly available at https://github.com/DASS-Lab-Group/SpecTraL .
+
+## 1 Introduction 
+
+Vision Transformers (ViTs) [ 1] pre-trained on large-scale datasets [ 2, 3] have become the dominant paradigm for visual recognition, yet adapting them to downstream tasks through full fine-tuning remains computationally expensive. Parameter-efficient fine-tuning (PEFT) methods [ 4, 5] address this by updating only a small number of additional parameters while keeping the backbone frozen. Among them, Low-Rank Adaptation (LoRA) [ 5] is widely adopted: it injects trainable low-rank matrices B ∈ Rm×r and A ∈ Rr×n into frozen Transformer layers, greatly reducing memory and compute requirements. When training data is distributed across institutions or edge devices, Federated Learning (FL) [ 6] enables collaborative fine-tuning by training locally on clients and aggregating updates at a central server. Combining LoRA with FL provides a communication-efficient solution for distributed fine-tuning, but introduces new challenges arising from data heterogeneity [ 7, 8, 9, 10 ]
+
+> Preprint. This is the submitted version, prior to peer review. Accepted at ECML-PKDD 2026 (Research Track). arXiv:2607.21074v1 [cs.LG] 23 Jul 2026 Upload
+> Local
+> LoRA
+> r
+> C
+
+U 0 0
+
+> Layer-wise Rank Discovery via Random Matrix Theory 1
+> stack
+
+AQR (  )
+
+> B
+
+R 
+
+> r
+> r
+> Spectral Transformation via Householder QR
+> QR ( )stack
+
+B
+
+> B
+
+Q
+
+> m
+> n
+> Householder Reflectors
+> A
+
+RT AQ T
+
+> (memory-efficient representation of Q)
+> Scree Plot Index
+> Singular
+> Values of C r*
+> C
+> r
+> B
+
+R
+
+> r
+> r
+
+0 0r r
+
+> r
+> A
+
+RT 
+
+> r
+
+C
+
+Client 1 
+
+> r
+
+A1
+
+> 1
+
+B
+
+> n
+> m
+> 1
+
+Client 2 
+
+A2
+
+> 2
+
+B
+
+> n
+> m
+> r2
+
+A0
+
+> 0
+
+B
+
+Client 0 
+
+> m
+> n
+> C
+> T
+
+V 
+
+> r
+> Tr* g
+
+A
+
+> r
+> m
+> g
+
+B
+
+r* 
+
+r* BQ
+
+r* 
+
+r* m n
+
+> C
+
+U* 
+
+> r
+> m
+> Implicit (Qx) calculation using Householder Reflectors
+
+SpecTraL Server  
+
+> mn
+> No padding
+> No truncation
+
+r* 
+
+> m
+> Zero-pad B g
+> Normal-pad for A g
+
+r*      
+
+> 0
+> n
+> N(0,1)
+> mn
+> If r* > r 0
+> Truncate B and A gg
+> to match client rank
+
+r*     
+
+> r0{
+> Download Global LoRA 6
+> If r* < r 1
+> If r* == r 27
+> Local fine-tuning Local fine-tuning Local fine-tuning 88877
+> r0{{
+> r24511
+> r
+
+# (BQ ) r
+
+> n
+> A
+
+Q T
+
+> r
+> stack
+
+A 
+
+> r1r2r0
+> stack
+
+B
+
+> m
+> n
+> r
+> rk
+> Stack local adapters 2
+
+r*  r
+
+V * C
+
+> T3
+> r
+> n
+> A
+
+Q T 
+
+> Construct Global LoRA Construct Global LoRA 5{
+> r1
+
+Figure 1: Overview of SpecTraL: spectral transformation and layer-wise rank discovery for federated LoRA aggregation. (differences in local data distributions) and computational heterogeneity [ 11 , 12 , 13 ] (differences in client resources). Recent work has begun integrating LoRA into FL frameworks [ 14 , 15 , 16 , 17 , 18 ], but effective aggregation of LoRA adapters remains challenging. An effective federated LoRA aggregation mechanism must simultaneously satisfy five requirements: (1) exact aggregation , recovering the true update ∆W ∗ = P 
+
+> k
+
+pkBkAk; (2) support for computa-tional heterogeneity via different client ranks; (3) communication efficiency through compact global adapters; (4) tractable server computation ; and (5) spectral noise suppression , since non-IID client drift introduces spurious directions in the aggregated spectrum. Existing methods satisfy only subsets of these requirements. FedIT [ 14 ] averages B and A in-dependently, producing ¯B ¯ A̸ = 1
+
+> K
+
+P 
+
+> k
+
+BkAk and introducing cross-term noise. FFA-LoRA [ 15 ]restores exact aggregation by freezing A, but halves the trainable parameter space and eliminates rank heterogeneity. FLoRA [ 16 ] preserves the exact update via stacking ( ∆W ∗ = Bstack Astack )and supports heterogeneous ranks, but broadcasts the full stacked adapters to all clients, inflating communication and requiring reinitialization of local adapters. LoRA-FAIR [ 19 ] attempts to correct averaging bias by optimizing a residual ∆B at the server, increasing computation and abandoning rank heterogeneity while leaving signal and noise entangled in the spatial domain. FlexLoRA [ 17 ]reconstructs the dense update ∆W ∈ Rm×n and applies SVD to redistribute components according to client ranks, incurring prohibitive server cost and truncating singular values to match capacity rather than remove noise. FLoRIST [ 18 ] improves efficiency by performing SVD in a compact stacked space and applying energy-based thresholding, revealing that the intrinsic dimensionality of aggregated updates is far smaller than the stacked rank. However, its empirically tuned threshold τ
+
+varies across models and datasets, leaving principled noise separation unresolved. We propose Spec tral Tra nsformation for Layer-wise global rank discovery ( SpecTraL ), a federated LoRA aggregation framework that satisfies all five requirements. SpecTraL builds upon stacking-based aggregation, preserving exact updates and heterogeneous ranks. To recover the spectral structure of the aggregated update efficiently, it performs Householder QR decompositions of stacked factors (Bstack = QBRB, Astack T = QARA) and computes a single SVD of the compact interaction matrix C = RBRAT , yielding the exact singular values of ∆W ∗ at substantially lower cost than SVD on the stacked matrices. 2SpecTraL then applies the ScreeNOT estimator [ 20 ], a random-matrix-theory-based method that identifies the MSE-optimal cutoff between signal and noise in the singular spectrum without manual tuning. The resulting threshold separates consensus directions shared across clients from incoherent components introduced by heterogeneous data. Because this procedure operates per layer and per weight matrix, SpecTraL naturally discovers layer-adaptive ranks reflecting the intrinsic dimension-ality of each aggregated update. The resulting adapters are compact, improving communication efficiency as a consequence of principled denoising. When thresholding produces global adapters smaller than a client’s local rank, a padding-aware initialization strategy introduces exploratory directions in the orthogonal complement of the retained signal subspace, enabling stable local optimization. 
+
+Contributions. Our main contributions are: 1. QR-accelerated spectral aggregation. We introduce an efficient aggregation pipeline that replaces SVD on stacked adapters with Householder QR decompositions followed by a compact SVD. 2. Principled spectral denoising. We apply the ScreeNOT estimator to federated LoRA aggregation, replacing manually tuned energy thresholds with statistically grounded noise separation. 3. Layer-adaptive rank discovery. We demonstrate that ViT layers exhibit distinct intrinsic dimen-sionalities and automatically determine per-layer ranks from the aggregated spectrum. 4. Adapter re-initialization strategies: We conduct a systematic study of five initialization methods for mapping compressed global updates back to client capacities. Our findings identify Gaussian 
+
+as superior for maintaining exploratory capacity efficiently, while demonstrating that the standard 
+
+Zero-padding approach significantly bottlenecks convergence. 5. Extensive federated evaluation. We evaluate SpecTraL on ViT-B/16 and ViT-L/16 across DomainNet and NICO++ under realistic non-IID heterogeneity, outperforming FedIT, FFA-LoRA, FLoRA, FlexLoRA, FLoRIST, and LoRA-FAIR. 
+
+## 2 Preliminaries and Motivation 
+
+2.1 Federated Fine-Tuning with LoRA LoRA. Given a pre-trained weight matrix W0 ∈ Rm×n, Low-Rank Adaptation [ 5] freezes W0 and introduces a trainable update ∆W = BA , where B ∈ Rm×r , A ∈ Rr×n, and r ≪ min( m, n ).The forward pass becomes y = ( W0 + BA )x, reducing trainable parameters from mn to r(m + n).By convention, B is initialized to zero and A is drawn from a Gaussian distribution. 
+
+Federated LoRA. In a federation of K clients, each client k holds a dataset Dk and trains local adapters (Bk, Ak) with rank rk. After local training, clients upload their adapters to a server, which must produce a global update representing the collective learning. The ideal aggregated update is 
+
+∆W ∗ =
+
+> K
+
+X
+
+> k=1
+
+pk BkAk, pk = |D k|
+
+PKj=1 |D j | (1) The server then broadcasts global adapters for the next round. The challenge is to compute ∆W ∗
+
+accurately, represent it compactly, and distribute it efficiently under heterogeneous client ranks. 
+
+2.2 Federated LoRA Aggregation Methods (i) Independent Averaging (FedIT [ 14 ]). FedIT averages LoRA factors independently: ¯B =P 
+
+> k
+
+pkBk and ¯A = P 
+
+> k
+
+pkAk. The resulting update ¯B ¯A = P 
+
+> k
+
+p2
+
+> k
+
+BkAk + P 
+
+> i̸=j
+
+pipj BiAj
+
+contains cross-term noise that introduces spurious directions accumulating across rounds. FedIT also assumes uniform ranks; heterogeneous ranks require zero-padding [ 11 ], increasing communication cost. 3(ii) Freezing (FFA-LoRA [ 15 ]). FFA-LoRA removes cross-terms by fixing A to its initialization 
+
+Ainit , so averaging B alone exactly recovers ∆W ∗. However, freezing A halves the trainable parameter space and prevents heterogeneous ranks. 
+
+(iii) Stacking (FLoRA [ 16 ]). FLoRA avoids cross-term noise by stacking adapters: Bstack =[B1| · · · | BK ], Astack =
+
+
+
+p1A1
+
+...
+
+pK AK
+
+ with r = P 
+
+> k
+
+rk. This guarantees Bstack Astack = ∆W ∗,enabling exact aggregation with heterogeneous rank support. However, the full stacked adapters are broadcast to all clients, so download cost grows linearly with K. Because no spectral mixing occurs in this representation, clients cannot truncate adapters to their local rank and must merge them into base weights, W0 ← W0 + Bstack Astack , before reinitializing local adapters. 
+
+(iv) Reconstruction + SVD (FlexLoRA [ 17 ]). FlexLoRA reconstructs the dense update ∆W ∈
+
+Rm×n and applies SVD to redistribute truncated adapters to each client. This incurs O(min( m, n ) ·
+
+mn ) cost and requires storing the full matrix. More importantly, truncation matches client capacity (rk) rather than the intrinsic dimensionality of the update. 
+
+(v) Efficient SVD + Energy Thresholding (FLoRIST [ 18 ]). FLoRIST retains stacking but recovers singular values in a compact space. It then selects the smallest rank r∗ satisfying   
+
+> Pr∗
+> i=1 σ2
+> iPri=1 σ2
+> i
+
+≥ τ
+
+producing compact global adapters. While this reveals that the intrinsic dimensionality is far smaller than the stacked rank, τ must be manually tuned and varies widely across models, datasets, and heterogeneity levels. 
+
+(vi) Residual Correction (LoRA-FAIR [ 19 ]). LoRA-FAIR stays within the averaging framework but learns a residual correction 
+
+min  
+
+> ∆B
+
+S ∆W ∗, ( ¯B + ∆B ) ¯A + ϑ∥∆B ∥ (2) where S(·, ·) denotes cosine similarity. While this reduces aggregation bias and initialization lag, it introduces iterative server optimization, increases computation, and abandons heterogeneous rank support. 
+
+The missing piece. The progression from averaging (FedIT) to stacking (FLoRA) to spectral compression (FLoRIST) has steadily improved federated LoRA aggregation, yet one key question remains: given the singular value spectrum of the aggregated update, where does the task-relevant signal end and the noise begin? FLoRIST shows that aggressive rank reduction can improve performance, suggesting that trailing singular values correspond to harmful directions, but relies on manually tuned thresholds and provides no principled way to identify the signal–noise boundary. Moreover, this spectral structure varies across layers and weight matrices, while existing methods enforce a fixed rank or global threshold. SpecTraL is designed to close these gaps. 
+
+## 3 Proposed Method: SpecTraL 
+
+We present SpecTraL in three parts: a motivating empirical observation (§3.1), the full methodology (§3.2), and a complexity analysis (§3.3). 
+
+3.1 Motivating Observation 
+
+To understand why principled rank selection is necessary, we examine the singular value spectrum of the aggregated update ∆W ∗ across different layers and weight types. Figure 2 plots the singular values of the core matrix C for attention and MLP weight matrices at two layers of ViT-L/16 on Nico++. Three observations motivate our design. 
+
+Different layers and weight types exhibit significantly different intrinsic dimensionalities. As shown in Figure 2, the rank required to capture a specific amount of signal variance fluctuates substantially across the model. For instance, at an energy threshold of τ = 0 .90 , the attention matrix in Layer 1 requires a rank of r∗ = 10 , whereas the same component in Layer 8 requires only r∗ = 7 , a 30% reduction in necessary parameters for the same relative information. Across the 4entire grid for τ = 0 .90 , the optimal rank varies from r∗ = 7 to 18 . Even the automated ScreeNOT selector identifies non-uniform dimensionalities (e.g., r∗ = 15 for Layer 1 Attention vs. r∗ = 12 
+
+for Layer 8 MLP). These fluctuations confirm that a fixed rank applied uniformly to all layers, the default strategy for nearly all existing methods, inevitably leads to a sub-optimal trade-off: it either wastes communication bandwidth on over-parameterized layers or discards critical signal in layers with higher intrinsic dimensionality. 0 20 40 60 80                                                                
+
+> 10 6
+> 10 5
+> 10 4
+> 10 3
+> 10 2
+> Singular value
+> r*= 10
+> r*= 18
+> r*= 15
+> min rank
+> (4) max rank
+> (64)
+> Attention
+> 020 40 60 80
+> 10 6
+> 10 5
+> 10 4
+> 10 3
+> 10 2
+> r*= 9
+> r*= 17
+> r*= 14
+> min rank
+> (4) max rank
+> (64)
+> MLP
+> 020 40 60 80
+> Singular value index
+> 10 7
+> 10 6
+> 10 5
+> 10 4
+> 10 3
+> 10 2
+> Singular value
+> r*= 7
+> r*= 17
+> r*= 13
+> min rank
+> (4) max rank
+> (64)
+> 020 40 60 80
+> Singular value index
+> 10 7
+> 10 6
+> 10 5
+> 10 4
+> 10 3
+> 10 2
+> r*= 8
+> r*= 18
+> r*= 12
+> min rank
+> (4) max rank
+> (64)
+> Layer 1
+> Layer 1
+> Layer 8
+> Layer 8
+> Core matrix C
+> Energy 0.90
+> Energy 0.99
+> ScreeNOT
+> Min client rank (4)
+> Max client rank (64)
+
+Figure 2: Singular value spectrum of the core matrix C (which shares the singular values of ∆W ∗; see §3.2) for two represen-tative layers of ViT-L/16 on Nico++ under heterogeneous client ranks. Columns correspond to attention and MLP weight matrices; rows to layers 1 and 8. Vertical lines mark the ranks selected by energy thresholds τ = 0 .90 (orange, dashed) and τ = 0 .99 (red, dash-dot), ScreeNOT (purple, dashed), the minimum client rank (green, 4), and the maximum client rank (blue, 64). ScreeNOT consistently identifies the elbow between signal and noise without manual tuning. 
+
+Fixed energy thresholds are un-reliable. At τ = 0 .90 , the at-tention matrix in Layer 8 retains only r∗ = 7 components, cut-ting well into the signal region and losing information. At τ =0.99 , the same layer retains r∗ =17 , preserving noise components that degrade accuracy. No sin-gle τ works well across all layers simultaneously: FLoRIST’s re-ported optimal threshold varies from 0.80 to 0.99 depending on the model, dataset, and hetero-geneity level [ 18 ], requiring ex-haustive search for each configu-ration. 
+
+ScreeNOT identifies the signal–noise boundary au-tomatically. Across all four panels, ScreeNOT places its threshold at the elbow where dominant singular values tran-sition into a slowly decaying tail. This elbow corresponds to the boundary between directions of inter-client consensus (the task-relevant signal) and inco-herent, client-specific directions amplified by non-IID data heterogeneity. The effectiveness of this automatic separation is validated empirically: SpecTraL with ScreeNOT achieves the highest average accuracy across all model–dataset combinations in our experiments (Table 1). 
+
+3.2 Methodology 
+
+SpecTraL operates in four steps per communication round: (1) spectral transformation of hetero-geneous local LoRA updates via Householder QR, (2) discovery of layer-wise global ranks via ScreeNOT, (3) efficient construction and broadcast of compact global adapters, and (4) residual initialization of local LoRA to match client ranks for subsequent rounds. 
+
+Step 1: Spectral Transformation via Householder QR. 
+
+Like FLoRA [ 16 ] and FLoRIST [ 18 ], SpecTraL begins with noise-free stacking-based aggregation, producing Bstack ∈ Rm×r and Astack ∈ Rr×n with r = P 
+
+> k
+
+rk, where r ≪ max {m, n }. Our goal is to recover the singular values of the true aggregated update ∆W ∗ = Bstack Astack without forming the full m × n matrix. FLoRIST achieves this by performing thin SVD on Bstack and Astack 
+
+independently. We observe that SVD is more expensive than necessary: QR decomposition suffices to extract orthonormal bases at lower cost. 5We compute thin QR decompositions via Householder reflectors [21]: 
+
+Bstack = QB RB , AT 
+
+> stack
+
+= QARA, (3) where QB ∈ Rm×r and QA ∈ Rn×r have orthonormal columns, and RB , RA ∈ Rr×r are upper triangular. The Householder variant stores the orthonormal factors implicitly as products of r
+
+reflectors, never forming Q explicitly. Each thin QR costs O(mr 2) and O(nr 2) flops, respectively. We then form the core matrix: 
+
+C = RB RTA ∈ Rr×r. (4) This r × r matrix captures all the spectral information of ∆W ∗. To see why, substitute Eq. 3 into the aggregated update: 
+
+∆W ∗ = QB RB (QARA)T = QB (RB RTA)
+
+| {z }
+
+> C
+
+QTA. (5) Since QB and QA have orthonormal columns, the singular values of ∆W ∗ are exactly the singular values of C. We compute the SVD of this small matrix: 
+
+C = UC ΣC VTC , (6) where ΣC = diag( σ1, . . . , σ r ) with σ1 ≥ · · · ≥ σr ≥ 0. This SVD costs O(r3), independent of the model dimensions m and n. The diagonal entries σi are the exact singular values of the aggregated LoRA update ∆W ∗, computed without ever forming ∆W ∗ itself. 
+
+Step 2: Discovering Layer-wise Global LoRA Rank via ScreeNOT. 
+
+The singular values {σi}ri=1 of C reflect a superposition of two components: a low-rank signal matrix ∆W signal encoding the directions of inter-client consensus (the task-relevant update), and a perturbation matrix ∆W noise comprising incoherent, client-specific directions amplified by non-IID data heterogeneity. In random matrix theory, this structure is formalized as the spiked covariance model [ 22 ]: the observed matrix C is modeled as a low-rank signal corrupted by noise whose singular values follow a compactly supported distribution (e.g., Marchenko–Pastur). The leading singular values of C that “spike” above this noise distribution correspond to the signal, while the bulk corresponds to noise. The challenge is to identify the cutoff ˆθ that separates the two. In our federated setting, the noise in 
+
+C is not white: heterogeneous clients with different data distributions, training durations, and local ranks produce correlated perturbations whose covariance structure is unknown. ScreeNOT [ 20 ] is designed precisely for this scenario. Given the observed singular values σ1 ≥ · · · ≥ σr of C, the matrix dimensions, and a loose upper bound k on the signal rank, ScreeNOT returns the MSE-optimal hard threshold ˆθSN . The resulting rank: 
+
+r∗ = {i : σi > ˆθSN } (7) is the number of singular components to retain. ScreeNOT guarantees that the reconstructed signal 
+
+ˆ∆W signal = Pr∗ 
+
+> i=1
+
+σi uivTi achieves the lowest possible MSE among all hard-threshold estimators: 
+
+ˆ∆W signal − ∆W signal  
+
+> 2
+> F
+
+= min 
+
+> θ
+
+X
+
+> i:σi>θ
+
+σi uivTi − ∆W signal 
+
+> 2
+> F
+
+, (8) with probability tending to 1 as the matrix dimensions grow [ 20 ]. The computational cost of ScreeNOT is O(r log r) (dominated by sorting), negligible compared to the QR and SVD steps. Because ScreeNOT operates on the singular values of C independently at each layer l and each weight matrix type ( Wattn , Wmlp ) at every communication round t, SpecTraL automatically produces a layer-specific rank r∗ 
+
+> l
+
+(t) that reflects the intrinsic dimensionality of that layer’s aggregated update at that round. No global rank hyperparameter is needed. This is the layer-wise global rank discovery 
+
+that gives SpecTraL its name. 
+
+Step 3: Efficient Construction and Broadcast of Global LoRA. 
+
+6Having identified the optimal rank r∗, we construct compact global adapters without explicitly forming the orthonormal matrices QB or QA. Let ˜U = ( UC ):,1: r∗ ∈ Rr×r∗
+
+and ˜V = ( VC ):,1: r∗ ∈ Rr×r∗
+
+denote the leading r∗ columns of the SVD factors from Step 1. The global adapters are: 
+
+Bg = QB ( ˜U) · (ΣC )1: r∗, 1: r∗ ∈ Rm×r∗
+
+, Ag =  QA( ˜V)T ∈ Rr∗×n, (9) where QB (·) denotes the application of the stored Householder reflectors from Bstack ’s QR factor-ization to a given matrix (i.e., computing QB ˜U implicitly), and QA(·) is defined analogously for 
+
+AT
+
+> stack
+
+. In practice, this corresponds to a call to DORMQR , which applies the reflectors to the r × r∗
+
+matrix ˜U at a cost of O(mr · r∗), significantly cheaper than forming the full m × r matrix QB at 
+
+O(mr 2) when r∗ ≪ r.The resulting adapters satisfy Bg Ag ≈ ∆W ∗, with the approximation error consisting precisely of the thresholded noise components. The server broadcasts the compact pair (Bg , Ag ) to all clients. Because r∗ reflects the true signal complexity rather than an arbitrary hyperparameter, the broadcast cost is naturally minimized: communication efficiency improves as a direct consequence of principled denoising. 
+
+Step 4: Residual Initialization of Local LoRA. 
+
+After receiving the global adapters (Bg , Ag ) of rank r∗, each client k must resume local training at its full rank rk. Since typically r∗ ≪ rk after aggressive spectral denoising, the client pads the received adapters with rk − r∗ additional dimensions. We initialize the padded rows of A with random Gaussian vectors while zero-padding B:
+
+Bk = [ Bg | 0m×(rk −r∗)], Ak =
+
+ Ag
+
+Anew 
+
+
+
+, Anew ∼ N (0 , σ 2
+
+> A
+
+), (10) where σA is set to match the standard deviation of the existing rows of Ag . This design has two important properties. First, the initial forward-pass contribution ∆W = BkAk = Bg Ag remains unchanged because the zero columns in Bk annihilate the Gaussian rows in Ak, preserving the denoised global signal exactly. Second, unlike zero-padding (which provides no gradient signal to the new dimensions), the Gaussian rows in Ak provide diverse exploratory directions that receive immediate gradient updates through Bk, enabling the client to adapt locally beyond the global signal subspace from the first step of training. We refer to this as residual initialization because the padded dimensions represent the residual capacity available for client-specific exploration on top of the globally shared signal. Alternative initialization strategies (zero-padding, orthogonal complement, pretrained-SVD) are compared in the ablation study (§4.3). 
+
+3.3 Complexity Analysis 
+
+The full SpecTraL pipeline for one communication round is summarized in Algorithm 1. We analyze the per-round server-side cost below. 
+
+Step 1 (QR + core matrix + SVD). Two thin Householder QR factorizations (without forming Q)cost 2( m + n)r2 − 43 r3 flops. Forming C = RB RTA costs O(r3). The SVD of the r × r matrix C
+
+costs O(r3).
+
+Step 2 (ScreeNOT). Computing the threshold costs O(r log r), dominated by sorting the singular values. 
+
+Step 3 (Reconstruction). Applying stored Householder reflectors to the r × r∗ matrices ˜U and ˜V
+
+costs O(( m + n)r · r∗).
+
+Total server cost per layer. Summing the dominant terms: 
+
+2( m + n)r2 − 43 r3
+
+| {z }
+
+> QR factorization
+
++ O(r3)
+
+| {z } 
+
+> core SVD
+
++ O (m + n)r · r∗| {z }
+
+> reconstruction
+
+. (11) For comparison, FLoRIST’s server cost is dominated by two thin SVDs on the stacked factors at 
+
+14( m + n)r2 + 16 r3 flops plus O(r3) for the interaction matrix SVD. The QR factorization step 7Algorithm 1 SpecTraL: One Communication Round 
+
+Require: Clients {1, . . . , K } with adapters {(Bk, Ak)}, ScreeNOT upper bound k
+
+Ensure: Global adapters (Bg , Ag ) for each adapted layer  
+
+> 1:
+
+for each adapted layer l do  
+
+> 2:
+
+Stack: Bstack ← [B1 | · · · | BK ], Astack ← [p1A1; . . . ; pK AK ] 
+
+> 3:
+
+QR: Bstack 
+
+> Householder
+
+−−−−−−→ RB , AT
+
+> stack
+> Householder
+
+−−−−−−→ RA (reflectors stored implicitly)  
+
+> 4:
+
+Core: C ← RB RTA 
+
+> 5:
+
+SVD: C = UC ΣC VTC , singular values σ1 ≥ · · · ≥ σr 
+
+> 6:
+
+ScreeNOT: ˆθ ← ScreeNOT( σ1, . . . , σ r ; r, k ), r∗ ← |{ i : σi > ˆθ}|  
+
+> 7:
+
+Reconstruct: Bg ← Q B
+
+ (UC ):,1: r∗
+
+ · (ΣC )1: r∗,1: r∗ , Ag ←  QA
+
+ (VC ):,1: r∗
+
+ T (apply reflectors)  
+
+> 8:
+
+end for  
+
+> 9:
+
+Broadcast (Bg , Ag ) per layer to all clients  
+
+> 10:
+
+for each client k do  
+
+> 11:
+
+Pad: Bk ← [Bg | 0], Ak ← [Ag ; Anew ] with Anew ∼ N (0 , σ 2
+
+> A
+
+) (Gaussian init)  
+
+> 12:
+
+Train: (Bk, Ak) ← LocalUpdate( W0, Bk, Ak, Dk, E ) 
+
+> 13:
+
+end for 
+
+alone is over 7× cheaper in the leading (m + n)r2 term, and the reconstruction cost is further reduced when r∗ ≪ r (as is typical after ScreeNOT thresholding). FlexLoRA’s cost of O(min( m, n ) · mn )
+
+for full dense SVD is orders of magnitude higher. Since r = P 
+
+> k
+
+rk is typically ≪ min( m, n ) for LoRA configurations and r∗ ≪ r after thresholding, SpecTraL’s server computation remains tractable even for large Vision Transformers. 
+
+## 4 Experiments 
+
+We evaluate SpecTraL on federated fine-tuning of Vision Transformers across two large-scale benchmarks under realistic non-IID heterogeneity. We first describe the experimental setup (§4.1), present the main performance comparison (§4.2), report ablation studies on initialization strategies (§4.3) and evaluate SpecTraL under computational heterogeneity (§4.4). 
+
+4.1 Experimental Setup 
+
+Table 1 reports per-domain accuracy on DomainNet and NICO++ with ViT-B/16 and ViT-L/16. A
+
+Models. We use two Vision Transformer architectures: ViT-B/16 and ViT-L/16 [ 1], both pre-trained on ImageNet-21k and loaded from the timm library [ 23 ]. LoRA adapters are applied to all attention projection matrices ( Wq , Wk, Wv , Wo) and MLP layers ( Wfc1 , Wfc2 ) in each Transformer block. All clients train LoRA adapters at rank r = 32 .
+
+Datasets. We evaluate on two real-world image classification benchmarks used in prior federated LoRA studies [ 19 ]: DomainNet [ 24 ], a large-scale multi-domain dataset containing ∼600 k images across 345 categories distributed over six visual domains (clipart, infograph, painting, quickdraw, real, sketch), where we use the first 100 categories following [ 19 ]; and NICO++ [ 25 ], an enhanced non-IID image classification dataset containing ∼90 k images across 60 categories representing six visual styles (autumn, dim, grass, outdoor, rock, water). 
+
+Federated configuration. Our setup consists of 100 clients, with 10 randomly sampled each round. We use a feature and label non-IID partition following [ 19 ]: clients are grouped by domain (or style), with approximately 16–17 clients per domain. Within each group, label distributions are further skewed using a Dirichlet distribution with concentration parameter α = 0 .5 [ 26 ]. All experiments run for 75 communication rounds with 1 local epoch per round, using SGD with learning rate 0.01 and mini-batch size 128. 
+
+Baselines. We compare against six methods that represent the major paradigms in federated LoRA aggregation: FedIT [14 ] (independent averaging of B and A), FFA-LoRA [ 15 ] (freezes A, averages 8Table 1: Per-domain accuracy (%) under feature and label non-IID with client rank r = 32 (100 clients, 75 rounds). Best in bold , second-best underlined . SpecTraL uses ScreeNOT + Gaussian initialization. 
+
+Model Dataset Method Per-Domain Accuracy (%) Avg. 
+
+Clipart Infograph Painting Quickdraw Real Sketch 
+
+> ViT-B/16
+> DomainNet
+
+FFA-LoRA 70.18 39.41 74.50 40.28 87.85 60.59 62.13 FedIT 82.01 51.91 79.88 72.64 90.86 77.34 75.77 FLoRA 73.02 40.50 75.58 53.45 88.69 66.73 66.33 FlexLoRA 81.98 51.64 79.60 74.10 90.63 78.27 76.04 LoRA-FAIR 53.02 21.94 47.96 55.61 68.62 42.09 48.21 FLoRIST 81.80 50.20 79.10 72.69 90.35 77.34 75.25 
+
+SpecTraL 82.29 51.94 79.74 74.14 90.72 77.61 76.21 
+
+Autumn Dim Grass Outdoor Rock Water 
+
+> NICO++
+
+FFA-LoRA 89.33 83.46 91.26 88.04 87.52 87.34 87.83 FedIT 90.65 88.39 93.16 89.99 89.78 90.60 90.43 FLoRA 89.49 83.94 91.39 88.31 88.34 87.50 88.16 FlexLoRA 91.03 88.91 93.67 90.71 89.56 90.60 90.75 LoRA-FAIR 74.71 69.61 79.56 77.53 74.64 76.07 75.35 FLoRIST 91.14 88.83 93.77 90.44 89.83 89.76 90.63 
+
+SpecTraL 91.58 88.19 93.65 90.86 89.92 90.96 90.86 
+
+Clipart Infograph Painting Quickdraw Real Sketch 
+
+> ViT-L/16
+> DomainNet
+
+FFA-LoRA 77.75 45.18 79.82 55.87 88.86 71.45 69.82 FedIT 84.23 58.06 84.30 76.35 91.11 81.50 79.26 FLoRA 77.96 44.74 80.11 59.95 89.27 71.68 70.62 FlexLoRA 84.88 58.32 84.25 76.54 91.31 81.58 79.48 LoRA-FAIR 84.41 57.88 84.22 76.16 91.11 81.37 79.19 FLoRIST 84.60 57.09 84.25 75.51 91.11 80.92 78.91 
+
+SpecTraL 85.07 58.97 84.36 76.64 91.32 81.74 79.68 
+
+Autumn Dim Grass Outdoor Rock Water 
+
+> NICO++
+
+FFA-LoRA 91.20 87.79 92.62 90.53 89.60 89.22 90.16 FedIT 93.51 90.75 94.56 91.82 92.27 91.69 92.43 FLoRA 91.42 87.87 92.69 90.44 89.24 88.88 90.09 FlexLoRA 94.00 92.51 95.17 92.48 92.36 92.58 93.18 LoRA-FAIR 90.87 85.94 93.26 88.94 88.79 88.96 89.46 FLoRIST 93.73 92.03 94.44 92.24 92.45 92.11 92.83 
+
+SpecTraL 93.73 92.39 95.13 92.86 92.95 93.02 93.35 
+
+only B), FLoRA [16 ] (stacking-based exact aggregation), FlexLoRA [ 17 ] (full dense reconstruc-tion + SVD), LoRA-FAIR [ 19 ] (averaging with server-side residual correction, λ = 0 .01 ), and 
+
+FLoRIST [ 18 ] (efficient SVD on stacked adapters with energy threshold τ = 0 .95 and zero-padding initialization). 
+
+SpecTraL configuration. All SpecTraL results use ScreeNOT thresholding with Gaussian initializa-tion of padded A rows, which we identify as the strongest combination in our ablation study (§4.3). ScreeNOT requires no hyperparameter tuning; it takes only the observed singular values and matrix dimensions as input. 9Evaluation. We report per-domain (or per-style) classification accuracy on held-out test sets, follow-ing the protocol of [19]. 
+
+4.2 Main Results SpecTraL consistently achieves the best average accuracy. Across all four model–dataset com-binations, SpecTraL outperforms prior methods and achieves the highest average accuracy while maintaining strong performance across nearly every individual domain. These gains demonstrate that spectral denoising improves aggregation quality rather than favoring a subset of domains. As shown in Figure 3, SpecTraL also maintains the highest accuracy throughout training, indicating faster and more stable convergence compared to existing aggregation methods. 
+
+Principled thresholding improves over empirical energy thresholds. The comparison with FLoRIST isolates the effect of rank selection, as both methods use stacking-based aggregation. FLoRIST applies a fixed energy threshold (τ = 0.95 ) selected via bi-nary search, whereas SpecTraL uses ScreeNOT to automatically determine the signal–noise boundary from the singular value spectrum. SpecTraL consistently outperforms FLoRIST across all settings without any threshold tuning, indicating that random-matrix-theory-based thresholding separates signal from noise more effectively than a fixed energy criterion. 
+
+Figure 3: Training convergence on Domain-Net with ViT-B/16 under homogeneous rank settings. SpecTraL consistently achieves higher accuracy throughout training and con-verges faster than existing federated LoRA aggregation methods. 
+
+Benefits increase with model scale. The perfor-mance gap between SpecTraL and FLoRIST widens on ViT-L/16 compared to ViT-B/16. Larger models produce richer singular value spectra across more adapted layers, making principled spectral denoising increasingly important. 
+
+Averaging-based methods degrade under large heterogeneous federations. LoRA-FAIR collapses on ViT-B/16 DomainNet and remains below Spec-TraL even on ViT-L/16, suggesting that server-side residual optimization cannot fully correct aggrega-tion bias at scale. FFA-LoRA also underperforms across settings due to freezing half of the trainable parameters. 
+
+Stacking alone is insufficient. While FLoRA avoids cross-term noise through stacking, its lack of spectral processing leads to weaker performance. Because the stacked representation lacks spectral mixing, clients must reinitialize local adapters each round, slowing convergence. SpecTraL instead broadcasts compact spectrally denoised adapters that clients directly use for initialization. 
+
+4.3 Ablation Study: Initialization Strategies 
+
+We ablate the client-side initialization strategy for padded adapter dimensions using ScreeNOT [ 20 ]for rank discovery. After thresholding, the global rank r∗ is often smaller than the client rank rk.While columns of B are zero-padded, we investigate five strategies for the rk − r∗ additional rows of 
+
+A: (i) Zero-padding : provides no exploratory directions; (ii) Gaussian : N (0 , σ 2
+
+> A
+
+) noise to provide random exploration; (iii) Orthogonal complement : projects noise onto the orthogonal complement of Ag for non-redundant directions; (iv) Pretrained-SVD : samples from the trailing right singular vectors of W0 to leverage pretrained structure; and (v) Trained-A: reuses the client’s previous local 
+
+A for continuity. 
+
+Analysis. Table 2 shows that Pretrained-SVD achieves the highest accuracy (91.08%), likely by leveraging task-relevant directions from the foundation model. However, Gaussian initialization (90.86%) is a close second and offers a more practical default as it requires no access to W0 or stale local state and no additional compute cost. Conversely, Zero-padding is consistently the weakest (89.86%), confirming that exploratory directions are vital when aggressive thresholding yields low-rank global updates. Notably, all initialization strategies except zero-padding outperform 10 Table 2: Ablation of initialization strategies with ScreeNOT thresholding on NICO++ (ViT-B/16, 
+
+r = 32 , 75 rounds). Best and second-best results are bolded and underlined. 
+
+## Initialization Autumn Dim Grass Outdoor Rock Water Avg. 
+
+## Zero-padding 90.76 86.86 93.26 89.81 89.15 89.29 89.86 Gaussian 91.58 88.19 93.65 90.86 89.92 90.96 90.86 Trained-A 91.20 88.91 93.48 90.68 89.74 90.60 90.77 Pretrained-SVD 91.75 89.27 93.63 90.62 90.60 90.62 91.08 
+
+## Orthogonal compl. 90.81 88.79 93.97 90.53 90.19 90.23 90.75 
+
+FLoRIST (90.63%), demonstrating that principled rank discovery via ScreeNOT is the primary driver of SpecTraL’s performance. 
+
+4.4 Computational Heterogeneity 
+
+Figure 4: Convergence on DomainNet (ViT-L/16, heterogeneous ranks, 100 clients). SpecTraL matches or exceeds all baselines throughout training, while FLoRA lags due to reinitialization. To evaluate SpecTraL under computational hetero-geneity, we adopt the heavy-tail–light rank distribu-tion of [ 18 ]: among 100 clients, 40 use rank 4, 20 use rank 8, 20 use rank 16, 10 use rank 32, and 10 use rank 64. We compare against methods that natively support rank heterogeneity: HetLoRA [ 11 ], FLoRA, FlexLoRA, and FLoRIST. Figure 4 shows the convergence of average top-1 ac-curacy on ViT-L/16 DomainNet. SpecTraL tracks the leading methods from early rounds onward and matches or slightly exceeds HetLoRA, FLoRIST, and FlexLoRA at convergence ( ∼77 –78% ). FLoRA lags throughout, reaching only ∼71% by round 40, a con-sequence of its reinitialization strategy that discards learned adapter states each round. The results confirm that SpecTraL’s spectral denoising pipeline general-izes to the heterogeneous setting: even when client ranks vary by a factor of 16, principled thresholding produces global adapters that support effective local training across all capacity levels. Further gains may be achievable through heterogeneity-aware rank redistribution, which we leave as future work. 
+
+## 5 Conclusion 
+
+In this work, we presented SpecTraL , a principled framework for federated LoRA fine-tuning that optimizes the trade-off between aggregation exactness and communication efficiency. By introducing a QR-accelerated spectral pipeline , we enable the server to recover the exact singular value spectrum of global updates at a fraction of the computational cost required by dense reconstruction or full SVD. Through the first application of the ScreeNOT estimator to this domain, SpecTraL replaces manual, heuristic energy thresholds with an automated, statistically grounded mechanism that adapts to the unique spectral signature of each transformer layer. Our extensive evaluation on vision benchmarks confirms that SpecTraL consistently achieves a superior accuracy compared to state-of-the-art baselines. Ultimately, our findings suggest that the intrinsic dimensionality of model updates is a dynamic, layer-dependent property; by treating federated aggregation as an adaptive spectral denoising problem, SpecTraL provides a robust and scalable foundation for the collaborative fine-tuning of large-scale foundation models. 11 Acknowledgment 
+
+This work was supported by the NVIDIA Academic Grant Program using NVIDIA A100 (80 GiB) GPUs accessed via the NVIDIA Brev cloud. 
+
+## References 
+
+[1] Alexey Dosovitskiy, Lucas Beyer, Alexander Kolesnikov, Dirk Weissenborn, Xiaohua Zhai, Thomas Unterthiner, Mostafa Dehghani, Matthias Minderer, Georg Heigold, Sylvain Gelly, Jakob Uszkoreit, and Neil Houlsby. An image is worth 16x16 words: Transformers for image recognition at scale. In ICLR , 2021. [2] Alec Radford, Jong Wook Kim, Chris Hallacy, Aditya Ramesh, Gabriel Goh, Sandhini Agarwal, Girish Sastry, Amanda Askell, Pamela Mishkin, Jack Clark, et al. Learning transferable visual models from natural language supervision. In ICML , 2021. [3] Maxime Oquab, Timothée Darcet, Théo Moutakanni, Huy Vo, Marc Szafraniec, Vasil Khalidov, Pierre Fernandez, Daniel Haziza, Francisco Massa, Alaaeldin El-Nouby, et al. Dinov2: Learning robust visual features without supervision. TMLR , 2024. [4] Neil Houlsby, Andrei Giurgiu, Stanislaw Jastrzebski, Bruna Morrone, Quentin De Laroussilhe, Andrea Gesmundo, Mona Attariyan, and Sylvain Gelly. Parameter-efficient transfer learning for nlp. In ICML , 2019. [5] Edward J Hu, Yelong Shen, Phillip Wallis, Zeyuan Allen-Zhu, Yuanzhi Li, Shean Wang, Lu Wang, and Weizhu Chen. Lora: Low-rank adaptation of large language models. arXiv preprint arXiv:2106.09685 , 2021. [6] Brendan McMahan, Eider Moore, Daniel Ramage, Seth Hampson, and Blaise Aguera y Arcas. Communication-efficient learning of deep networks from decentralized data. In Artificial Intelligence and Statistics , pages 1273–1282. PMLR, 2017. [7] Tian Li, Anit Kumar Sahu, Manzil Zaheer, Maziar Sanjabi, Ameet Talwalkar, and Virginia Smith. Federated optimization in heterogeneous networks. MLSys , 2:429–450, 2020. [8] Sai Praneeth Karimireddy, Satyen Kale, Mehryar Mohri, Sashank Reddi, Sebastian Stich, and Ananda Theertha Suresh. Scaffold: Stochastic controlled averaging for federated learning. In 
+
+ICML , pages 5132–5143, 2020. [9] Qinbin Li, Bingsheng He, and Dawn Song. Model-contrastive federated learning. In CVPR ,pages 10713–10722, 2021. [10] Durmus Alp Emre Acar, Yue Zhao, Ramon Matas, Matthew Mattina, Paul Whatmough, and Venkatesh Saligrama. Federated learning based on dynamic regularization. In ICLR , 2021. [11] Yae Jee Cho, Luyang Liu, Zheng Xu, Akhil Fahrezi, and Gauri Joshi. Heterogeneous lora for federated fine-tuning of on-device foundation models. In EMNLP , 2024. [12] John Nguyen, Kshitiz Malik, Hongyuan Zhan, Ashkan Yousefpour, Mike Rabbat, Mani Malek, and Dzmitry Huba. Federated learning with buffered asynchronous aggregation. In AISTATS ,pages 3581–3607, 2022. [13] Enmao Diao, Jie Ding, and Vahid Tarokh. Heterofl: Computation and communication efficient federated learning for heterogeneous clients. In ICLR , 2021. [14] Jianyi Zhang, Saeed Vahidian, Martin Kuo, Chunyuan Li, Ruiyi Zhang, Tong Yu, Guoyin Wang, and Yiran Chen. Towards building the federatedgpt: Federated instruction tuning. In 
+
+FL@NeurIPS Workshop , 2023. [15] Youbang Sun, Zitao Li, Yaliang Li, and Bolin Ding. Improving lora in privacy-preserving federated learning. In ICLR , 2024. 12 [16] Yue He, Aofan Li, Lingjuan Lyu, Zhaopeng Shen, Guangyu Sun, Hao Wang, and Zhenguo Wang. Flora: Federated fine-tuning large language models with heterogeneous low-rank adaptations. 2024. [17] Jiamu Bai, Daoyuan Chen, Bingchen Qian, Liuyi Yao, and Yaliang Li. Federated fine-tuning of large language models under heterogeneous tasks and client resources. In NeurIPS , 2024. [18] Hariharan Ramesh and Jyotikrishna Dass. Florist: Singular value thresholding for efficient and accurate federated fine-tuning of large language models. arXiv preprint arXiv:2506.09199 ,2025. [19] Jieming Bian, Lei Wang, Letian Zhang, and Jie Xu. Lora-fair: Federated lora fine-tuning with aggregation and initialization refinement. In ICCV , 2025. [20] David Donoho, Matan Gavish, and Elad Romanov. Screenot: Exact mse-optimal singular value thresholding in correlated noise. Annals of Statistics , 2023. [21] Gene H. Golub and Charles F. Van Loan. Matrix Computations - 4th Edition . Johns Hopkins University Press, Philadelphia, PA, 2013. [22] Iain M Johnstone. On the distribution of the largest eigenvalue in principal components analysis. 
+
+Annals of Statistics , 29(2):295–327, 2001. [23] Ross Wightman. Pytorch image models. https://github.com/rwightman/ pytorch-image-models , 2019. [24] Xingchao Peng, Qinxun Bai, Xide Xia, Zijun Huang, Kate Saenko, and Bo Wang. Moment matching for multi-source domain adaptation. In ICCV , pages 1406–1415, 2019. [25] Yue He, Zheyan Shen, and Peng Cui. Towards non-iid image classification: A dataset and baselines. Pattern Recognition , 110:107383, 2021. [26] Qinbin Li, Yiqun Diao, Quan Chen, and Bingsheng He. Federated learning on non-iid data silos: An experimental study. In ICDE , pages 965–978, 2022. 13

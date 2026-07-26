@@ -6,52 +6,49 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-25
-- 运行时间：2026-07-25 21:25:55 UTC
+- 最新运行日期：2026-07-26
+- 运行时间：2026-07-26 21:24:53 UTC
 - 运行状态：成功
-- 本次总论文数：10
-- 精读区：2
-- 速读区：8
+- 本次总论文数：9
+- 精读区：4
+- 速读区：5
 
 ### 今日简报（AI）
-今日精读两项分别提出高效低秩稀疏注意力近似（ELSAA）与混合线性注意力残差（SANA-Video 2.0），速读覆盖PIM加速器微调、非凸Langevin学习及RISC-V单核片上训练。  
-最值得关注的两个方向：高效注意力机制可提升Transformer训练与视频生成效率；硬件-软件协同设计正推动低成本边缘端深度学习部署。  
-建议普通读者优先尝试ELSAA或SANA-Video 2.0的注意力流水线，并关注FP16训练在RISC-V平台的实际落地方案。
-- 详情：[/202607/25/README](/202607/25/README)
+今日精读2篇高分论文，速读3篇，涵盖核化线性注意力与无损隐式神经表示两大突破。
+最值得关注的方向：Kernelized Linear Attention通过对称锥突破容量上限，Lossless-INR实现无损体积神经隐式表示。
+后续可重点跟进高效音视频识别与压缩神经高斯溅射等实用技术，并关注对齐方法的稳定性。
+- 详情：[/202607/26/README](/202607/26/README)
 
 ### 精读区论文标签
-1. [ELSAA: Efficient Low-Rank and Sparse Attention Approximation for Training Transformers](/202607/25/2607.20214v1-elsaa-efficient-low-rank-and-sparse-attention-approximation-for-training-transformers)  
+1. [Kernelized Linear Attention: Breaking the Capacity Wall with Symmetric Cones](/202607/26/2607.17419v1-kernelized-linear-attention-breaking-the-capacity-wall-with-symmetric-cones)  
    标签：评分：8.0/10、query:neural-arch
-   evidence：针对Transformer的高效低秩稀疏注意力近似方法
-2. [SANA-Video 2.0: Hybrid Linear Attention with Attention Residuals for Efficient Video Generation](/202607/25/2607.21553v1-sana-video-20-hybrid-linear-attention-with-attention-residuals-for-efficient-video-generation)  
+   evidence：线性注意力改进用于高效Transformer架构
+2. [Lossless-INR: Lossless Volumetric Implicit Neural Representations](/202607/26/2607.18150v1-lossless-inr-lossless-volumetric-implicit-neural-representations)  
+   标签：评分：8.0/10、query:compress
+   evidence：基于位平面分解的无损体积压缩，类似于位平面变换编码
+3. [Convolution for Large Language Models](/202607/26/2607.18413v1-convolution-for-large-language-models)  
    标签：评分：8.0/10、query:neural-arch
-   evidence：混合线性注意力提高视觉架构效率
+   evidence：向LLM添加深度卷积以提升性能而不增加模型大小
+4. [Recti-Q: Feature-Space Rectification for Out-of-Distribution-Robust Quantized Perception in Edge Robotics](/202607/26/2607.18540v1-recti-q-feature-space-rectification-for-out-of-distribution-robust-quantized-perception-in-edge-robotics)  
+   标签：评分：8.0/10、query:compress
+   evidence：提出特征空间校正解决量化导致的鲁棒性下降问题，与图像压缩中的量化策略直接相关
 
 ### 速读区论文标签
-1. [ADEPT: Architecture-Driven Energy-Efficient CNN Fine-Tuning on PIM Accelerators](/202607/25/2607.17371v1-adept-architecture-driven-energy-efficient-cnn-fine-tuning-on-pim-accelerators)  
-   标签：评分：7.0/10、query:neural-arch
-   evidence：硬件感知的CNN微调优化策略
-2. [RELTA-SGLD: Relative-Growth Localized Taming for Nonconvex Stochastic-Gradient Langevin Learning](/202607/25/2607.19544v1-relta-sgld-relative-growth-localized-taming-for-nonconvex-stochastic-gradient-langevin-learning)  
-   标签：评分：7.0/10、query:neural-arch
-   evidence：模型优化：随机梯度Langevin学习的驯化方案
-3. [Hardware-Software Co-Design for Float16 On-Device Training on RISC-V Single-Core](/202607/25/2607.21130v1-hardware-software-co-design-for-float16-on-device-training-on-risc-v-single-core)  
-   标签：评分：7.0/10、query:neural-arch
-   evidence：float16设备端训练优化
-4. [Rarity-Aware Discrete Diffusion with Spatially Consistent Decoding for Photo-Realistic Image Super-Resolution](/202607/25/2607.17612v2-rarity-aware-discrete-diffusion-with-spatially-consistent-decoding-for-photo-realistic-image-super-resolution)  
-   标签：评分：6.0/10、query:neural-arch
-   evidence：面向高效图像超分辨率的离散扩散架构
-5. [Packet-Loss Robust 3D Gaussian Compression via Atomic Packaging and GNN-based Error Concealment](/202607/25/2607.17916v1-packet-loss-robust-3d-gaussian-compression-via-atomic-packaging-and-gnn-based-error-concealment)  
+1. [Efficient Audio-Visual Event Recognition via Knowledge Distillation and Dynamic INT8 Quantization of a Hybrid Cross-Attention Network](/202607/26/2607.16980v1-efficient-audio-visual-event-recognition-via-knowledge-distillation-and-dynamic-int8-quantization-of-a-hybrid-cross-attention-network)  
    标签：评分：6.0/10、query:compress
-   evidence：提出3D高斯压缩方案并包含错误隐藏，与压缩技术相关
-6. [Loss Landscape Topology Reveals Why Simple Baselines are Competitive at 3D Point Cloud Segmentation Under Class Imbalance](/202607/25/2607.21089v1-loss-landscape-topology-reveals-why-simple-baselines-are-competitive-at-3d-point-cloud-segmentation-under-class-imbalance)  
+   evidence：动态INT8量化应用于音视频识别模型压缩
+2. [ECoNGS: Efficient Compressive Neural Gaussian Splats for Volume Visualization](/202607/26/2607.18466v1-econgs-efficient-compressive-neural-gaussian-splats-for-volume-visualization)  
+   标签：评分：6.0/10、query:compress
+   evidence：压缩神经表示用于体数据，可迁移至图像压缩
+3. [KALE: Kernel Alignment with Loss Equilibration for Stable CLIP-DINOv2 Alignment at Web Scale](/202607/26/2607.18885v1-kale-kernel-alignment-with-loss-equilibration-for-stable-clip-dinov2-alignment-at-web-scale)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：损失景观拓扑分析揭示了简单基线竞争力的原因
-7. [Flash EQ-Linear: Accelerating Equivariant Linear Layers via Group-wise Discrete Fourier Transform](/202607/25/2607.21271v1-flash-eq-linear-accelerating-equivariant-linear-layers-via-group-wise-discrete-fourier-transform)  
+   evidence：损失均衡实现CLIP-DINOv2稳定对齐
+4. [GATE-3D: Geometry-Aware Test-time Adaptive Reranking for Open-Set 3D Shape Retrieval](/202607/26/2607.19111v1-gate-3d-geometry-aware-test-time-adaptive-reranking-for-open-set-3d-shape-retrieval)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：加速等变线性层，提升神经网络架构效率
-8. [Unified Video Dense Prediction from Disjoint Data](/202607/25/2607.21592v1-unified-video-dense-prediction-from-disjoint-data)  
+   evidence：几何感知重排序用于三维形状检索，改进计算机视觉
+5. [Spectral Transformation for Layer-wise Global Rank Discovery in Federated LoRA for Vision Transformers](/202607/26/2607.21074v1-spectral-transformation-for-layer-wise-global-rank-discovery-in-federated-lora-for-vision-transformers)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：利用蒸馏从不相交数据实现统一的视频密集预测
+   evidence：面向视觉Transformer联邦LoRA的谱变换秩发现，直接涉及高效视觉架构
 
 
 <div class="dpr-home-promo-card">

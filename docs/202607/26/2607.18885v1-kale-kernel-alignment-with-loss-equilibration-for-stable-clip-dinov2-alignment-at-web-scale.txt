@@ -1,0 +1,612 @@
+Title: KALE: Kernel Alignment with Loss Equilibration for Stable CLIP-DINOv2 Alignment at Web Scale
+
+URL Source: https://arxiv.org/pdf/2607.18885v1
+
+Published Time: Wed, 22 Jul 2026 00:45:15 GMT
+
+Number of Pages: 13
+
+Markdown Content:
+# KALE: Kernel Alignment with Loss Equilibration for Stable CLIP–DINOv2 Alignment at Web Scale 
+
+Michał Pawłowicz 1
+
+## Abstract 
+
+Kernel-based alignment of CLIP toward a vision-centric teacher such as DINOv2 (KUEA) im-proves CLIP’s visual representations while pre-serving text-encoder compatibility, using a fixed trade-off weight tuned on curated ImageNet-1K. We ask whether this transfers to noisy, web-scale data (CC12M) and find that it does not: the align-ment term’s weighted contribution falls to about 0.2% of the clean term, so under any fixed weight its gradient is effectively inert. We introduce KALE, a loss-equilibration controller that tracks both losses and adaptively rescales the alignment weight toward a target ratio, restoring the sig-nal with no per-dataset tuning; reaching balance requires increasing the weight by roughly four orders of magnitude, and the required value is configuration-dependent, so no fixed scalar suf-fices. We characterize the resulting regime: a bounded high learning rate and a decaying sched-ule with a moderate floor are needed for stability, and the controller equilibrates rather than diverg-ing. On a 3.3M-image CC12M subset, the aligned model preserves image–text retrieval and repro-ducibly improves SVHN linear probing; zero-shot improves by +2.00 over CLIP on the standard 11-dataset average, exceeding KUEA’s +1.29. We report all results with explicit run-to-run variance and base our conclusions on the metrics that are stable across runs. 
+
+## 1. Introduction 
+
+Vision–language models such as CLIP (Radford et al., 2021) offer strong zero-shot performance but can struggle on tasks requiring fine-grained visual discrimination (Tong et al., 2024). Recent work on kernel-based CLIP →DINOv2 align-ment (Gong et al., 2025) showed that aligning the CLIP visual encoder towards a DINOv2 teacher (Oquab et al., 2024) improves zero-shot accuracy and especially linear probing performance on curated ImageNet-scale data, while preserving compatibility with CLIP’s text encoder. How-ever, it remains unclear whether this alignment approach can be made stable and effective at web-scale on noisy, het-erogeneous data such as CC12M (Changpinyo et al., 2021). KUEA optimizes a combination of a kernel-alignment loss between student and teacher embeddings and a “clean” loss that penalizes deviation from the original CLIP features, balanced by a fixed scalar weight. On curated ImageNet-1K, the authors report that performance is relatively insensitive to this trade-off coefficient (Gong et al., 2025). At the scale of web-crawled data, we find that this apparent robustness does not hold: the losses become highly imbalanced, the alignment signal can effectively vanish, and naïvely reusing a fixed weight leads to unstable or ineffective training. In this work we revisit kernel-based CLIP →DINOv2 align-ment at CC12M scale and introduce a KALE controller that adaptively balances the alignment and clean losses dur-ing training. The controller increases alignment pressure when the alignment loss is too small relative to the clean loss, and prevents it from dominating once the model has moved sufficiently far from the original CLIP features. We apply this controller to CLIP ViT-L/14, train on a 3.3M sub-set of CC12M, and systematically study how learning rate, learning-rate schedule, and controller parameters interact to determine stability and downstream performance. KALE alignment improves over the original CLIP model, preserving image–text retrieval, improving zero-shot classi-fication, and reproducibly improving SVHN linear probing. Training on noisy CC12M rather than curated ImageNet yields a different downstream operating point from KUEA: retrieval is preserved, SVHN linear probing is improved, and the standard zero-shot average rises +2.00 over CLIP, exceeding KUEA’s +1.29 (Gong et al., 2025). The contri-bution is making kernel-based alignment trainable at this scale without per-dataset weight tuning. We also charac-terize the optimization regime: a high peak learning rate is needed for the controller to track the alignment signal, training collapses if it is too high, and a cosine schedule with a moderate floor (rather than a flat or fully decayed one) keeps the representation’s drift from CLIP bounded. 1arXiv:2607.18885v1 [cs.LG] 21 Jul 2026 KALE: Kernel Alignment with Loss Equilibration for Web-Scale CLIP–DINOv2 Alignment CLIP ViT-L/14 strong zero-shot                       
+
+> misses spatial detail
+> DINOv2 ViT-L/14 rich spatial features
+> no text grounding
+> Inputs KALE
+> Kernel alignment + adaptive λa
+> on 3.3M CC12M images
+> Fixed λa= 0 .5: alignment ≈0.2% of loss KALE escalates λaby ∼10 4×to restore balance
+> Aligned CLIP
+> spatial + language compatible
+> Output Gains over CLIP
+> Zero-shot +2.00%
+> Retrieval +1.54%
+> LP SVHN +5.73%
+> align
+> teach
+> Lclean
+> Figure 1: Overview of this work. We take a pre-trained CLIP visual encoder and align it toward a frozen DINOv2 teacher in kernel space, using a KALE controller that adaptively rescales the alignment loss weight on web-crawled CC12M data. A fixed weight ( λa=0 .5)is inert at this scale — the alignment term is ≈0.2% of the clean loss; the controller escalates λaby up to 47 ,000 ×to restore balance. The resulting encoder retains text compatibility and improves zero-shot, retrieval, and linear-probing performance (gains over CLIP shown; see Table 1).
+
+Contributions. 
+
+• We extend kernel-based CLIP →DINOv2 alignment from curated ImageNet-1K to noisy, web-scale CC12M training data by introducing a KALE controller that keeps the alignment loss influential throughout train-ing. • We conduct a detailed training-dynamics study of KALE alignment, showing that web-scale alignment requires a high peak learning rate within a bounded stability envelope and a decaying schedule with a mod-erate floor (not a flat one), and characterizing how the controller equilibrates. • On a 3.3M subset of CC12M, the aligned model reaches a different downstream operating point from the ImageNet-trained KUEA checkpoint — retrieval preserved, SVHN linear probing improved, and the standard zero-shot average improved over CLIP — without per-dataset weight tuning, reported with an explicit run-to-run variance analysis. 
+
+## 2. Related Work 
+
+Vision–language pretraining and CLIP finetuning. 
+
+CLIP (Radford et al., 2021) trains joint image–text en-coders on web-scale data and serves as the backbone for a wide range of downstream vision and language tasks. A large body of work adapts CLIP to specific tasks or do-mains: prompt tuning (Zhou et al., 2022) and adapter-based methods (Zhang et al., 2022; Gao et al., 2024) modify how CLIP’s frozen features are used without altering the encoder. Recent work shows that CLIP’s visual encoder has system-atic fine-grained discrimination failures (Tong et al., 2024), motivating direct improvements to the visual representation. KUEA (Gong et al., 2025) and our work take this route, modifying the visual encoder via unsupervised alignment to a DINOv2 teacher while keeping the text encoder and its language grounding intact. 
+
+Kernel-based CLIP–DINOv2 alignment. Gong et al. (2025) propose aligning the CLIP visual encoder toward DI-NOv2 by minimizing the discrepancy between their kernel similarity matrices over batches of images, while penalizing deviation from the original CLIP embeddings via an L2 regularization term. Trained on ImageNet-1K with a fixed trade-off weight between the two losses, KUEA improves zero-shot classification and linear probing without breaking compatibility with CLIP’s text encoder. Our work takes KUEA as its starting point and asks whether this alignment can be made effective on noisy, web-crawled data at much larger scale — a different training regime with a larger batch, a higher learning rate, and substantially noisier data. We find that the fixed-weight formulation fails in this regime due to loss imbalance, and address it with the dynamic penalty-weight controller of subsection 3.2. 
+
+DINOv2 and dense visual features. DINOv2 (Oquab et al., 2024) produces dense visual features that perform strongly on both global and local tasks, complementing CLIP’s language grounding with stronger spatial represen-tations. AM-RADIO (Ranzinger et al., 2024) distills CLIP, DINOv2, and SAM jointly into a single student trained on DataComp-1B (Gadre et al., 2024), unifying their capabili-ties in one model. Our work is complementary and far more lightweight: rather than training a new backbone, we adapt an existing CLIP ViT-L/14 checkpoint toward a DINOv2 teacher on a 3.3M-sample CC12M subset, aiming to im-prove fine-grained visual representations while preserving text compatibility. 2KALE: Kernel Alignment with Loss Equilibration for Web-Scale CLIP–DINOv2 Alignment ZS    
+
+> (w/ PCAM)
+> Retrieval LP SVHN LP GTSRB LP
+> CLEVR-Dist
+> LP
+> CLEVR-Count
+
+0
+
+2
+
+4
+
+6
+
+8
+
+10 
+
+12 
+
+14 
+
+16   
+
+> Gain over CLIP (%)
+> high variance
+> (45%)
+
+Downstream performance gains over CLIP ViT-L/14  
+
+> KUEA (ImageNet-1K)
+> KALE (ours, CC12M-3.3M)
+> Figure 2: Overview of downstream gains over CLIP ViT-L/14. Bars show the gain over CLIP in percentage points, grouped into zero-shot, retrieval, and linear-probing tasks. KUEA (blue) trains on curated ImageNet-1K with a fixed loss weight; our KALE (orange) trains on noisy CC12M-3.3M with the adaptive controller. Error bars on KALE show run-to-run standard deviation across seven replicates; CLEVR tasks are high-variance (section 6). KALE preserves retrieval, matches or exceeds KUEA on SVHN, and improves the standard zero-shot average — a distinct operating point reached without per-dataset weight tuning.
+
+Dynamic loss weighting. Balancing competing objectives in multi-loss training is a well-studied problem. GradNorm (Chen et al., 2018) reweights task losses by normalizing gradient magnitudes to equalize task learning rates. Kendall et al. (2018) learn loss weights as homoscedastic uncer-tainty parameters. Dynamic Weight Averaging (Liu et al., 2019) adjusts weights based on the relative rate of change of each task’s loss. These approaches operate on gradient norms or introduce additional learned parameters, and are designed for multi-task settings where tasks compete on separate data. Our KALE controller addresses a different problem: at CC12M scale the alignment and clean losses are computed on the same data but differ in magnitude by orders of magnitude, so their weighted ratio rather than their gradient balance is what must be controlled. The con-troller tracks exponential moving averages of both losses and adjusts a single penalty weight every ∆ steps to drive their ratio toward a target τ , with no additional parameters. We quantify the imbalance and the controller’s response in subsection 5.1. 
+
+Web-scale training and learning-rate schedule. Train-ing on web-crawled data introduces noise and domain diver-sity far exceeding curated datasets, which changes the opti-mization landscape for alignment objectives. Our secondary finding concerns the learning-rate schedule: at CC12M scale with a dynamic controller, the schedule matters more than in standard fine-tuning. A flat learning rate lets CLIP drift grow unchecked throughout training, degrading downstream performance; a cosine schedule that decays to zero is also harmful, as the late-stage step size becomes too small for the controller to maintain balance. A decaying schedule with a moderate non-zero floor keeps drift bounded and the dual-loss system stable. We analyze the stability envelope — including the collapse regime at high peak learning rates — in subsection 5.1. 
+
+## 3. Method 
+
+Figure 3 summarises the setup: a trainable CLIP visual encoder aligned to a frozen DINOv2 teacher in kernel space, regularised toward the frozen original CLIP encoder by a clean loss, with the KALE controller setting the alignment weight λa from the running loss ratio. 
+
+3.1. Kernel-based CLIP →DINOv2 alignment (KUEA recap) 
+
+We build on the kernel-based unsupervised embedding align-ment (KUEA (Gong et al., 2025)) framework, which aligns the CLIP visual encoder towards a DINOv2 visual teacher by matching their similarity structure over batches of im-ages. Given a batch of images, KUEA computes student embeddings using CLIP’s visual encoder and teacher em-beddings using DINOv2, forms kernel similarity matrices in each embedding space, and minimises a discrepancy be-tween these matrices. In parallel, it penalises the deviation of the student embeddings from the original CLIP embed-3KALE: Kernel Alignment with Loss Equilibration for Web-Scale CLIP–DINOv2 Alignment  
+
+> CLIP visual (trainable)
+> CLIP 0(frozen)
+> DINOv2 (frozen)
+
+image batch     
+
+> Lclean
+> ∥z−z0∥2
+> KALE controller
+> λa←λa
+
+√τ /ρ    
+
+> Lalign
+> kernel match
+> λa
+> Figure 3: KALE alignment setup: trainable CLIP student, frozen DINOv2 teacher and frozen CLIP 0reference, the kernel-alignment and clean losses, and the KALE controller updating λa.
+
+dings via a “clean” loss. The total objective is a weighted sum of the kernel-alignment loss and the clean loss, con-trolled by a fixed scalar weight that trades off alignment against preserving CLIP’s original visual–text grounding. 
+
+Notation. Let fθ denote the CLIP visual encoder being fine-tuned, f0 the frozen original CLIP encoder, and g the frozen DINOv2 teacher. For a batch of n images {xi}ni=1 ,let zi = fθ (xi), z0 
+
+> i
+
+= f0(xi), and vi = g(xi) denote the student, original CLIP, and teacher embeddings respectively. 
+
+Kernel matrices. KUEA matches the similarity structure of the student and teacher embedding spaces via kernel ma-trices. We use a normalised polynomial kernel of degree 3. For a set of embeddings {ui}, the (i, j ) entry of the kernel matrix is 
+
+Aij (u) = 
+
+( u⊤  
+
+> iuj
+> d
+
++ 1 
+
+)3
+
+, Kij (u) = Aij (u)
+
+√Aii (u) · Ajj (u) ,
+
+(1) where A is the unnormalised polynomial kernel and d is the embedding dimension. This normalisation ensures Kii = 1 
+
+and the matrix is scale-invariant. 
+
+Kernel alignment loss. The alignment loss minimises the mean squared difference between the student and teacher kernel matrices over the batch: 
+
+Lalign (θ) = 1
+
+n2
+
+∑
+
+> i,j
+
+(Kij (z) − Kij (v))2. (2) 
+
+Clean loss. To prevent the student from drifting too far from the original CLIP representations (which would de-grade zero-shot and retrieval performance), KUEA adds a clean loss penalising the L2 distance between student and original CLIP embeddings: 
+
+Lclean (θ) = 1
+
+n
+
+∑
+
+> i
+
+∥zi − z0 
+
+> i
+
+∥2. (3) 
+
+Total objective. The full training objective is a weighted combination: 
+
+L(θ) = λc · L clean (θ) + λa · L align (θ), (4) where λc is the clean weight (fixed at 1.0 in our experi-ments) and λa is the penalty weight controlling alignment strength. In the original KUEA, λa is a fixed scalar; in our work, we replace it with the KALE controller described in subsection 3.2. 
+
+3.2. KALE controller 
+
+At CC12M scale the kernel-alignment loss is much smaller than the clean loss, so its gradient effectively vanishes under a fixed scalar weight (quantified in subsection 5.1); naïvely raising the weight instead lets the alignment term dominate late in training and push the model too far from CLIP’s orig-inal representations. We replace the fixed trade-off weight with a KALE controller that adjusts alignment strength dur-ing training. The controller updates the penalty weight from the run-ning ratio of the two loss contributions: it raises the weight when the alignment loss is too small relative to the clean loss, and stops raising it (with an optional cap) once the alignment term is large enough to risk overwhelming the CLIP-consistency signal. 
+
+EMA tracking. The controller maintains exponential moving averages of both losses to smooth out per-batch noise: 
+
+ˆℓ(t) 
+
+> align
+
+= α ˆℓ(t−1)  
+
+> align
+
++ (1 − α) L(t)
+
+> align
+
+,
+
+ˆℓ(t) 
+
+> clean
+
+= α ˆℓ(t−1)  
+
+> clean
+
++ (1 − α) L(t)
+
+> clean
+
+, (5) with decay α = 0 .99 ; the EMAs are initialised to the first batch’s loss values. 
+
+Loss ratio. At each update step (every ∆ training steps, with ∆ = 100 in our experiments), the controller computes 4KALE: Kernel Alignment with Loss Equilibration for Web-Scale CLIP–DINOv2 Alignment 
+
+Algorithm 1 KALE training (one configuration) 
+
+Input: student fθ , frozen teacher g, frozen reference f0,data D
+
+Params: clean weight λc, initial λa, target τ , interval ∆,EMA decay α, warmup W
+
+Initialise EMAs ˆℓalign , ˆℓclean to the first batch’s losses 
+
+for t = 1 to T do 
+
+sample batch; compute Lalign , Lclean (Eq. 2, 3) update fθ on λcLclean + λaLalign (Eq. 4) 
+
+ˆℓalign ← α ˆℓalign + (1 − α) Lalign (Eq. 5) 
+
+ˆℓclean ← α ˆℓclean + (1 − α) Lclean 
+
+if t > W and t mod ∆ = 0 then 
+
+ρ ← (λa ˆℓalign )/(λc ˆℓclean ) (Eq. 6) 
+
+λa ← λa
+
+√τ /ρ (Eq. 7) 
+
+end if end for return fθ
+
+the current ratio of the alignment contribution to the clean contribution: 
+
+ρ(t) = λ(t) 
+
+> a
+
+· ˆℓ(t)
+
+> align
+
+λc · ˆℓ(t)
+
+> clean
+
+. (6) 
+
+Weight update. The penalty weight is updated to drive ρ
+
+toward a target value τ :
+
+λ(t+1)  
+
+> a
+
+= λ(t) 
+
+> a
+
+·
+
+√ τρ(t) . (7) The square-root dampening prevents overcorrection: if the alignment contribution is half the target, the weight is multi-plied by √2 rather than 2, giving the optimiser time to adapt before the next update. The controller is inactive during warmup steps. 
+
+Intuition. When the alignment loss is small relative to the clean loss ( ρ ≪ τ ), the controller increases λa to amplify the alignment signal. When the alignment loss dominates (ρ ≫ τ ), the controller reduces λa to protect the CLIP-consistency signal. This creates a feedback loop that keeps both losses contributing meaningfully throughout training, without requiring manual tuning of the trade-off coefficient for each new dataset or scale. 
+
+Fixed point and stability. The update admits a sim-ple analysis under timescale separation: because the con-troller fires only every ∆ steps on EMA-smoothed losses (α = 0.99 ), the losses are approximately constant be-tween updates. Writing κ = ˆℓalign /(λc ˆℓclean ) for the (quasi-static) unweighted loss ratio, the effective ratio is 
+
+ρ(t) = κ λ (t) 
+
+> a
+
+and the update becomes 
+
+λ(t+1)  
+
+> a
+
+= λ(t)
+
+> a
+
+√ τκ λ (t)
+
+> a
+
+=
+
+√ τκ
+
+(λ(t)
+
+> a
+
+)1/2. (8) In log-weight coordinates u = log λa this is the linear re-currence u(t+1) = 12 u(t) + 12 log( τ /κ ), with a unique fixed point 
+
+λ⋆a = τκ = τ λc ˆℓclean 
+
+ˆℓalign 
+
+, ρ⋆ = τ. (9) The controller’s equilibrium sets the alignment contribution to exactly τ times the clean contribution — its design target. Deviations contract as u(t+1) − u⋆ = 12 (u(t) − u⋆), so λa
+
+converges geometrically to λ⋆a from any positive initiali-sation, at rate 12 per update and without oscillation. The square-root exponent sets this rate: with a general exponent 
+
+p in λ(t+1)  
+
+> a
+
+= λ(t) 
+
+> a
+
+(τ /ρ (t))p the contraction factor is |1 − p|,so p = 1 converges in a single step under static losses but overshoots once the losses drift or the ratio estimate is noisy, and p > 2 diverges ( p = 2 is marginally stable, oscillating); 
+
+p = 12 trades one-step convergence for a monotone, robust approach under the moving, EMA-smoothed losses. This analysis is local: it treats the losses as fixed between updates. In practice ˆℓalign falls as the student aligns and 
+
+ˆℓclean first rises (as the representation drifts from CLIP) and later recedes, so λ⋆a is a moving target the controller tracks rather than a constant. The contraction is consistent with the equilibration observed in subsection 5.1; it does not char-acterise the fully coupled system of controller, optimiser, and learning-rate schedule, whose stability envelope (the collapse at high learning rate, subsection 5.1) lies outside this fixed-point argument. 
+
+3.3. Training at web scale on CC12M 
+
+Unlike KUEA (Gong et al., 2025), which trains on cu-rated ImageNet-1K, we train on noisy web-crawled CC12M (Changpinyo et al., 2021) (images only, with CLIP’s text encoder frozen so zero-shot capability is preserved). It is at this scale — with far greater domain variation than the Ima-geNet label space — that the fixed trade-off weight proves insufficient, motivating the controller of subsection 3.2. 
+
+## 4. Experiments 
+
+4.1. Experimental setup 
+
+We evaluate our approach by fine-tuning the CLIP ViT-L/14 (openai) visual encoder towards a DINOv2 teacher using our KALE-augmented kernel-alignment objective. The teacher is a DINOv2 model with dense visual features, and the CLIP text encoder remains frozen so that zero-shot prompting remains valid. Training is performed on a 3.3M random subset of CC12M, using large-batch distributed training. As baselines, we compare against the original CLIP ViT-L/14 model and the publicly released KUEA checkpoint trained on ImageNet-1K. 5KALE: Kernel Alignment with Loss Equilibration for Web-Scale CLIP–DINOv2 Alignment 0 2000 4000 6000 
+
+> Training step
+
+0.0 
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1.0 
+
+1.2    
+
+> Loss ratio  = a align / clean
+> alignment
+> inert
+> (a) Alignment contribution over training
+> Fixed weight ( a= 0.5)
+> KALE (ours)
+> Target = 0.8
+
+0 2000 4000 6000 
+
+> Training step
+
+10 0
+
+10 1
+
+10 2
+
+10 3
+
+10 4                    
+
+> Penalty weight  a
+> peak
+> 16749×
+> (b) Controller escalates ato restore balance
+> Initial (0)
+> a= 0.5
+> Figure 4: Why KALE is needed. (a) Under a fixed weight ( λa=0 .5, blue), the loss ratio ρcollapses to near zero within the first steps and stays there — the alignment gradient is effectively inert throughout training. The KALE controller (orange) drives ρto the target τ=0 .8
+> and maintains it. (b) To achieve this, the controller escalates λaby ∼10 4×before it equilibrates (subsection 5.1). The counterfactual fixed-weight ρis derived analytically from the logged KALE run (see subsection 5.1).
+
+Models. We fine-tune the CLIP ViT-L/14 visual encoder (OpenAI pretrained) using DINOv2 ViT-L/14 with registers (Darcet et al., 2024; Oquab et al., 2024) as the frozen teacher. The CLIP text encoder is kept frozen throughout. Both student and teacher use a normalised polynomial kernel of degree 3, consistent with KUEA (Gong et al., 2025). The CLIP kernel parameters ( γ, c0) are initialised to values pre-computed by minimising the L2 distance between CLIP and DINOv2 kernel matrices on a small sample of ImageNet images ( γ = 0 .0032 , c0 = 0 .1916 ) and treated as learnable during fine-tuning. 
+
+Training data. We train on a 3.3M random subset of CC12M (Changpinyo et al., 2021), using images only. To avoid loading three large models simultaneously during training, we precompute and cache the CLIP and DINOv2 embeddings for all 3.3M images before training. The same fixed subset and precomputed embeddings are used across all experiments, ensuring that differences in results reflect hyperparameter choices rather than data sampling. 
+
+Training setup. We train with AdamW (Loshchilov & Hutter, 2019) ( β1 = 0 .9, β2 = 0 .999 , weight decay 10 −4)using distributed data parallel across 8× H100 80 GB GPUs (AWS p5.48xlarge). Per-GPU batch size is 128, giving an effective batch size of 1024. The learning rate follows a cosine decay schedule with a 10% linear warmup and a minimum LR floor of 10% of peak LR by default (varied in subsection 4.3). Training runs for 2 epochs unless otherwise noted. All experiments use bfloat16 mixed precision. 
+
+KALE configuration. For runs with the dynamic penalty-weight controller, we set the update interval ∆ = 100 steps, target ratio τ = 0 .8, EMA decay α = 0 .99 , and initial penalty weight λ(0)  
+
+> a
+
+= 0 .5. The clean weight is fixed at 
+
+λc = 1 .0 throughout. 
+
+Baselines. We compare against (1) the original CLIP ViT-L/14 (OpenAI), and (2) KUEA (Gong et al., 2025) — CLIP ViT-L/14 aligned on ImageNet-1K with the original fixed trade-off weight. For zero-shot and linear-probing com-parisons we use KUEA’s published results (Gong et al., 2025, Tables 1 and 3); our evaluation pipeline reproduces their published CLIP baseline exactly on every zero-shot and linear-probing dataset (zero-shot average 65.26, linear-probing average 50.59), so gains over CLIP are directly comparable across the two works. For retrieval we instead report KUEA reproduced in our identical pipeline, because the paper reports per-recall (R@k) breakdowns under a re-trieval protocol that our pipeline does not match, leaving no single comparable published figure. 
+
+Evaluation. We follow the CLIP_benchmark (LAION-AI, 2022) evaluation suite used in KUEA. For zero-shot classification we evaluate on 11 datasets: CIFAR-10/100 (Krizhevsky & Hinton, 2009), Caltech-101 (Fei-Fei et al., 2004), OxfordPets (Parkhi et al., 2012), DTD (Cimpoi et al., 2014), FER2013 (Goodfellow et al., 2013), PCAM (Veel-ing et al., 2018), RESISC45 (Cheng et al., 2017), EuroSAT (Helber et al., 2018), ImageNet-Sketch (Wang et al., 2019), and ImageNet-O (Hendrycks et al., 2021); ImageNet-1K itself is used only as an in-training selection signal (subsec-tion 5.1), not in the reported average (Deng et al., 2009). Table 1 reports the standard zero-shot average over these datasets and the mean linear-probing gain. For linear prob-6KALE: Kernel Alignment with Loss Equilibration for Web-Scale CLIP–DINOv2 Alignment 
+
+ing we evaluate on CLEVR Distance and CLEVR Counts (Johnson et al., 2017), GTSRB (Stallkamp et al., 2012), and SVHN (Netzer et al., 2011). For image–text retrieval we report Recall@1/5/10 on Flickr30K (Young et al., 2014) and MSCOCO (Chen et al., 2015). 
+
+Checkpoint selection. For every run we report the check-point chosen by a fixed controller-convergence rule: the first checkpoint at which the EMA-smoothed loss ratio 
+
+ρ reaches the target τ (the headline run converges at ≈
+
+step 4025, about 60% through the two-epoch budget), sub-ject to a validity filter that rejects collapsed states (CLIP drift ≤ 8, embedding effective rank ≥ 90 ). Here CLIP drift is the mean L2 distance of the student embeddings from the frozen CLIP reference, and the embedding effective rank is 
+
+exp of the Shannon entropy of the batch embeddings’ nor-malised singular-value spectrum (Roy & Vetterli, 2007) — a continuous count of active dimensions that drops sharply under collapse. The rule uses only training-side signals, with ImageNet-1K as an in-training monitor; it is applied identically to all runs, so no per-run test-set tuning enters checkpoint choice. 
+
+Run-to-run variance. We quantify variance over seven replicates of the recommended configuration that differ only in the minimum learning-rate floor (0–25% of peak). Cosine decay sits above all these floors until ≈ step 4300 — after the reported checkpoint (step 4025) — and we verified the learning rate is identical ( 3.57 × 10 −5) across all seven at that step. Data order is fixed (deterministic sampler, seed 0), so the only uncontrolled source of variation through the checkpoint is GPU nondeterminism. We therefore treat the spread as run-to-run noise of a single configuration, not a hyperparameter sweep. 
+
+4.2. Main results 
+
+We compare KALE-aligned CLIP (trained on CC12M-3.3M) against the original CLIP ViT-L/14 and the KUEA checkpoint (trained on ImageNet-1K), using the identical evaluation pipeline (subsection 4.1). We report KALE as our best single run — the recommended configuration (learning rate 1×10 −4, τ = 0 .8, two epochs), with the checkpoint chosen by the controller-convergence rule of sub-section 5.1 — matching KUEA’s single-run reporting. Be-cause linear probing exhibits substantial run-to-run variance, we report alongside it the run-to-run standard deviation across seven replicates of the recommended configura-tion (§4.1); the spread reflects training nondeterminism, not a hyperparameter sweep (Figure 5). Zero-shot is reported on the standard 11-dataset average (Table 1). 
+
+Zero-shot and retrieval. These are the stable metrics: across the seven replicates retrieval varies by σ = 0 .10 
+
+and zero-shot by σ = 0 .41 , so the single-run numbers are representative. On retrieval, KALE trained on noisy web data essentially matches KUEA’s curated-ImageNet result (+1.54 vs. KUEA’s +1.63 (Gong et al., 2025)). On the standard 11-dataset average, zero-shot improves by +2.00 over CLIP, exceeding KUEA’s +1.29 (Gong et al., 2025). We base our conclusions on retrieval and zero-shot, the metrics that are stable across runs. 
+
+Linear probing. Our best run improves SVHN by +5.73, above KUEA’s published +4.19 (Gong et al., 2025); this gain is reproducible — all seven replicates land between +4.0 and +6.7 ( σ = 0 .99 ). On the CLEVR tasks the best run also exceeds KUEA (+12.32 vs. +7.85 on distance; +9.71 vs. +8.42 on counting) (Gong et al., 2025), but these tasks carry large run-to-run variance ( σ = 4 .3 and 5.3). GTSRB is within run-to-run noise (+1.42, σ = 1 .16 ). 
+
+Summary. The kernel-alignment objective, made train-able at web scale by the controller (subsection 5.1), reaches a distinct operating point on noisy CC12M without per-dataset weight tuning: it preserves retrieval (+1.54 vs. +1.63), im-proves the standard zero-shot average (+2.00 vs. +1.29), and improves SVHN linear probing (+5.73 vs. +4.19), with the structured CLEVR tasks dominated by run-to-run variance. Table 2 breaks the comparison down per dataset. On zero-shot, our best run exceeds KUEA on the 11-dataset average and on Caltech-101, OxfordPets, ImageNet-O, and PCAM; it trails on several of the remaining datasets (e.g., CIFAR-10/100, RESISC45) and regresses on EuroSAT, which falls below CLIP. On linear probing it exceeds KUEA on SVHN and both CLEVR tasks and is level on GTSRB. The run-to-run spread behind these single-run numbers is shown in Figure 5, with the CLEVR tasks especially high-variance (section 6). 
+
+4.3. Learning rate and schedule ablations 
+
+In this subsection we study how learning-rate magnitude and schedule affect the stability of KALE alignment. A high peak learning rate is needed for the controller to track the alignment signal, but there is a sharp upper bound — at 2×10 −4 training collapses — and a decaying schedule with a moderate floor, rather than a flat one, keeps the CLIP drift bounded (subsection 5.1). We frame these as stability findings; per-dataset downstream rankings across learning rates fall within the run-to-run variance of section 6. 
+
+4.4. KALE and clean-weight ablations 
+
+Here we ablate the KALE target ratio and the clean-loss weight. Increasing the clean-loss weight does not improve retrieval, indicating that the linear-probing/retrieval balance is not controllable through that term alone. We interpret the 7KALE: Kernel Alignment with Loss Equilibration for Web-Scale CLIP–DINOv2 Alignment Table 1: Downstream gains over CLIP ViT-L/14 (higher is better); bold marks the better result in each column. KUEA zero-shot and linear-probing values are the published results (Gong et al., 2025, Tables 1 and 3); KUEA retrieval ( †) is reproduced in our identical pipeline (subsection 4.1). The zero-shot column averages the same 11 datasets for both methods (ImageNet-1K excluded, used only as an in-training selection signal); LP is the mean linear-probing gain over the four LP datasets (SVHN, GTSRB, CLEVR-Dist, CLEVR-Count; per dataset in Table 2). KALE is our best single run (recommended configuration; checkpoint by subsection 5.1); the σ row is the run-to-run standard deviation across seven identically-configured replicates. Model (train data) ZS Ret LP KUEA (ImageNet-1K) +1 .29 +1.63 † +5 .51 
+
+KALE (CC12M-3.3M), best run +2.00 +1 .54 +7.30 
+
+run-to-run σ 0.41 0.10 2.03 
+
+ZS = zero-shot (standard 11-dataset average, KUEA-comparable); Ret = retrieval; LP = mean linear-probing gain over SVHN, GTSRB, CLEVR-Dist, CLEVR-Count (per dataset in Table 2). CLIP retrieval reference (absolute): 55.5. † KUEA retrieval reproduced in our pipeline; paper reports R@k under a different protocol. ZS Retrieval LP 
+
+> SVHN
+> LP
+> GTSRB
+> LP
+> CLEVR-D
+> LP
+> CLEVR-C
+> 5
+> 0
+> 5
+> 10
+> 15
+> gain over CLIP
+
+Run-to-run variance across seven replicates (selected checkpoint) 
+
+Figure 5: Run-to-run variance across the seven identically-configured replicates (gain over CLIP at the selected checkpoint; bars mark the mean, points the individual runs). Zero-shot and retrieval are tightly clustered, whereas the CLEVR linear-probing tasks scatter by 13–16 points — motivating the run-to-run σ reported alongside the best run and the conclusions of section 6. 
+
+controller and clean-weight effects on linear probing cau-tiously, as the per-configuration differences are comparable to the run-to-run variance reported in section 6. 
+
+4.5. Training duration and checkpoint sensitivity 
+
+Finally, we analyse how performance evolves over training. Metrics rise and then plateau, and the best checkpoints typ-ically occur well before the maximum number of epochs; we therefore select reported checkpoints by the controller-convergence rule of subsection 5.1. Per-checkpoint com-parisons on linear probing are limited by the run-to-run variance discussed in section 6 (Figure 6). 
+
+## 5. Analysis 
+
+5.1. Controller dynamics and learning-rate stability A fixed weight is inert at web scale. The KALE con-troller exists to correct a loss imbalance that emerges specif-ically at CC12M scale. Under the initial weight λ(0)  
+
+> a
+
+= 0 .5
+
+(the value KUEA uses on ImageNet (Gong et al., 2025)), the alignment term contributes only about 0.2% of the clean term during warmup ( ρ ≈ 2×10 −3), falling to ∼10 −5 at individual steps. At this magnitude the alignment gradient is effectively negligible and fine-tuning reduces to merely preserving the original CLIP features. This imbalance is far milder on curated ImageNet-1K, which is why a fixed weight suffices there but not on noisy web-scale data. 
+
+Rebalancing requires a large, non-transferable weight. 
+
+To drive the weighted ratio ρ toward its target τ ≈ 0.8, the 8KALE: Kernel Alignment with Loss Equilibration for Web-Scale CLIP–DINOv2 Alignment Table 2: Per-dataset accuracy (%) for CLIP, KUEA, and our best KALE run at the controller-selected checkpoint; bold marks the higher of KUEA and KALE in each row. Zero-shot and linear-probing values for CLIP and KUEA are the published numbers (subsection 4.1). Run-to-run spread across the seven replicates is shown in Figure 5. Family Dataset CLIP KUEA KALE ZS CIFAR-10 95.20 96 .27 95.25 ZS CIFAR-100 71.08 77 .04 75.54 ZS Caltech-101 83.30 84.32 85 .21 
+
+ZS FER2013 50.00 50 .31 49.87 ZS OxfordPets 93.21 93.40 93 .59 
+
+ZS DTD 55.21 55 .74 55.69 ZS RESISC45 63.35 63 .83 63.48 ZS EuroSAT 62.65 63 .83 59.52 ZS PCAM 52.00 52.68 67 .12 
+
+ZS ImageNet-Sketch 59.59 59 .67 59.49 ZS ImageNet-O 32.25 34.90 35 .05 
+
+ZS Average 65.26 66.54 67 .26 
+
+LP SVHN 65.20 69.39 70 .93 
+
+LP GTSRB 72.94 74 .51 74.36 LP CLEVR-Dist 22.97 30.82 35 .29 
+
+LP CLEVR-Count 41.25 49.67 50 .96 
+
+Table 3: Gains over CLIP and peak CLIP drift across learning rates (single run per LR; 1×10 −4 is the headline configuration). Training is stable up to 1×10 −4 and collapses at 2×10 −4 (drift runaway). Peak drift is the maximum L2 distance of the student embeddings from the frozen CLIP reference during training. Zero-shot and retrieval vary modestly across stable learning rates; LP is the mean gain over the four LP datasets (Table 2). LR ZS Retrieval LP peak drift status 
+
+4×10 −5 +1 .42 +1 .09 +5 .02 2.9 stable 
+
+8×10 −5 +1 .32 +1 .64 +5 .38 5.1 stable 
+
+1×10 −4 +2 .00 +1 .54 +7 .30 5.3 stable 
+
+2×10 −4 collapsed collapsed collapsed 18.1 collapse 1000 2000 3000 4000 5000 6000 
+
+> training step
+> 2
+> 0
+> 2
+> 4
+> 6
+> 8
+> gain over CLIP
+> KALE (headline run): metrics vs. checkpoint
+> ZS
+> Retrieval
+> LP
+> selected (convergence)
+
+Figure 6: Gains over CLIP versus checkpoint for the headline run (ntKBz): retrieval and zero-shot rise and plateau, linear probing climbs and levels off, and the reported checkpoint (dashed line, controller convergence) lies on the early plateau rather than at the peak. 
+
+controller increases λa by roughly 7,000 × to 47 ,000 × over training (from 0.5 to ∼3×10 3–2×10 4), and the required magnitude varies with learning rate and schedule. No single fixed weight reproduces this behaviour: the balancing value is several orders of magnitude larger than the ImageNet setting and is configuration-dependent, which motivates an adaptive controller rather than a hand-tuned constant. 
+
+The controller equilibrates rather than diverging. In stable runs, λa rises steeply, peaks early (around step 2,400), and then declines as the student aligns and the alignment loss shrinks. The L2 drift from the original CLIP embeddings follows the same arc, peaking at ≈ 4–6 before receding to ≈ 3, so the representation remains bounded rather than being pushed monotonically away from CLIP. This matches the fixed-point analysis of subsection 3.2: the controller tracks λ⋆a ∝ ˆℓclean /ˆℓalign , which peaks when the clean loss (CLIP drift) peaks and then falls as drift recedes — so the penalty weight tracking it peaks and declines in step with the drift, rather than accumulating without bound. 
+
+Learning rate sets the stability envelope. A high peak learning rate ( 1×10 −4) is needed for the optimiser to track the escalating alignment pressure, but the regime has a sharp upper boundary: at 2×10 −4 training collapses, with drift running away ( ≳ 15 ), the embedding effective rank crashing (from ≈ 106 to ≈ 27 ), and zero-shot accuracy falling far below the CLIP baseline. The schedule matters in the oppo-site direction: a flat learning rate lets drift grow unchecked throughout training (L2 rising from 3.6 to 6.2) and degrades downstream performance, whereas cosine decay with a mod-9KALE: Kernel Alignment with Loss Equilibration for Web-Scale CLIP–DINOv2 Alignment Table 4: Learning-rate floor vs. end-of-training CLIP drift (L2) at the headline peak LR ( 1×10 −4); single run per floor. As the floor rises and the schedule flattens, end-of-training drift grows monotonically across this single-run sweep — a correlation we report as such, not a variance-bounded effect; moderate floors (0–25%) differ by less than the run-to-run noise of section 6. The embedding effective rank — a continuous measure of how many embedding dimensions carry variance, with low values signalling collapse — stays healthy ( ≈ 107 ) for every floor, so none collapse: collapse arises only from excessive peak LR (Table 3), not from the floor. We omit transient peak drift here, as it is dominated by run-to-run nondeterministic spikes rather than the floor. LR floor (% of peak) end-of-training drift eff. rank 0 (cosine → 0) 2.9 107 10–25 (moderate) 2.9–3.3 107 50 3.9 107 75 4.9 107 100 (flat) 6.2 107                 
+
+> Table 5: KALE target ratio and clean weight (gains over CLIP, headline learning rate). Raising the clean weight to 1.5 does not improve retrieval; the zero-shot and LP differences are within the run-to-run variance of section 6. Setting ZS Retrieval LP
+> τ= 0 .8(default) +2 .00 +1 .54 +7 .30
+> τ= 1 .0+1 .05 +1 .77 +7 .23
+> clean weight 1.5 +0 .97 +1 .21 +6 .74
+
+erate floor reins drift back in. In this single-run sweep, a decaying schedule with a non-zero floor — not a flat one — is associated with the most stable dual-loss optimisation (Table 4). We do not claim a single optimal floor value: across configurations, differences between moderate floors fall within the run-to-run variance reported in section 6. 
+
+5.2. Domain breadth 
+
+We had anticipated that the broader domain coverage of CC12M, relative to curated ImageNet, might yield gains on structured or out-of-distribution tasks such as remote sensing, texture recognition, and spatial reasoning. The evaluation does not support this. Relative to the ImageNet-trained KUEA baseline, web-scale training does not produce broad-domain improvement: remote sensing (EuroSAT) regresses consistently (subsection 4.2), the CLEVR tasks are high-variance (section 6), and the per-dataset picture is mixed rather than uniformly broader. We therefore make no claim of improved domain breadth from web-scale training; the contribution of KALE is in making web-scale alignment feasible and stable (subsection 5.1), not in delivering wider downstream competence than a curated-data baseline.           
+
+> Table 6: Training duration (gains over CLIP). Extending from 2 to 4 epochs does not improve performance — zero-shot and linear probing decline, while retrieval is unchanged within run-to-run noise — so we train for 2 epochs by default. Epochs ZS Retrieval LP 2+2 .00 +1 .54 +7 .30
+> 4+0 .03 +1 .59 +3 .78
+
+5.3. PCAM 
+
+PCAM (Veeling et al., 2018) is a balanced binary histopathology task (patch-level detection of metastatic tis-sue) far from natural-image distributions, where CLIP sits near the 50% chance floor ( 52 .0% ). KALE improves it con-sistently — every selected checkpoint beats CLIP — though the gain is highly volatile, swinging more than ten points between adjacent checkpoints and across runs, so we treat its magnitude cautiously. We hypothesise that any genuine component reflects DINOv2’s texture-rich features transfer-ring to CLIP — PCAM is a tissue-texture and morphology task — rather than medical content in the web-crawled CC12M data, which contains negligible histopathology; this is consistent with KUEA’s attribution of its own gains to DINOv2’s fine-grained perception. A controlled test, correlating the per-checkpoint PCAM gain with alignment strength, is left to future work. 
+
+## 6. Limitations and Future Work 
+
+Our headline numbers come from our best single train-ing run, and linear probing shows substantial run-to-run variance. Across seven identically-configured replicates — which share an identical learning-rate schedule through the reported checkpoint (verified) — the linear-probing average has a standard deviation of roughly two points, concentrated almost entirely in the CLEVR tasks (Figure 5), while zero-shot and retrieval are stable (standard deviation below half a point). We trace this to a training pipeline run without a fixed random seed or deterministic kernels, so run-to-run nondeterminism is uncontrolled. We therefore report the best run together with the run-to-run standard deviation over these replicates, and base our conclusions on the metrics that are stable across runs (retrieval, zero-shot, and SVHN linear probing); the CLEVR numbers in particular should be read as high-variance. Establishing CLEVR effects firmly would require multiple seeded runs per configuration, which we leave to future work. Our comparison to KUEA also isolates the method only partially. We show directly that the alignment term is inert under a fixed weight at CC12M scale and that the controller restores it (subsection 5.1), but the fixed-weight baseline was not evaluated downstream at this scale, so we cannot report a head-to-head downstream comparison between fixed-weight 10 KALE: Kernel Alignment with Loss Equilibration for Web-Scale CLIP–DINOv2 Alignment 0 2000 4000 6000          
+
+> step
+> 10 0
+> 10 1
+> 10 2
+> 10 3
+> 10 4
+> a (log)
+> (a) penalty weight + ratio
+> 01000 2000 3000 4000 5000 6000
+> step
+> 1
+> 2
+> 3
+> 4
+> 5
+> CLIP drift (L2)
+> (b) drift: peak then recede
+> 02000 4000 6000
+> step
+> 2.5
+> 5.0
+> 7.5
+> 10.0
+> 12.5
+> 15.0
+> 17.5
+> CLIP drift (L2)
+> (c) lr 2e-4 collapse
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> emb. effective rank
+
+Figure 7: Controller dynamics for the headline run. (a) The penalty weight λa (log scale) escalates by ∼10 4× and ratio ρ converges to target τ =0 .8, then λa peaks and declines. (b) CLIP drift peaks early and recedes. (c) At learning rate 2×10 −4 training collapses — drift runs away and the embedding effective rank crashes. 
+
+and KALE training on identical web-scale data. An eval-only experiment on fixed-weight CC12M checkpoints would close this gap and let us attribute downstream differences to the controller rather than to the change in training data relative to KUEA. Our KALE controller is sensitive to the choice of learning rate and controller hyperparameters: small deviations from the effective operating regime can lead to meaningful perfor-mance regressions. Future work could explore controllers parametrised in terms of relative training progress or loss ratios rather than raw step counts, which may yield more robust behaviour across different dataset sizes and batch configurations. We observe a persistent trade-off between linear probing and retrieval performance across checkpoints and configurations. No single model simultaneously maximises both objectives, suggesting that the alignment and clean losses encode par-tially competing pressures. A natural extension would be to investigate multi-objective optimisation formulations or Pareto-aware checkpoint selection strategies that explicitly balance these downstream goals. Our experiments focus on a 3.3M random subset of CC12M, which, while larger and noisier than ImageNet-1K, is still a fraction of the data available for web-scale training. Scaling to the full CC12M or larger datasets such as DataComp (Gadre et al., 2024) or LAION (Schuhmann et al., 2022) would test whether the KALE controller remains effective and whether performance continues to improve with data scale. We have not explored alternative kernel functions, loss for-mulations, or teacher models beyond the polynomial kernel and DINOv2 used in KUEA (Gong et al., 2025). Different kernels may offer better gradient properties at scale, and stronger or domain-specialised teachers could further im-prove alignment quality. We leave systematic exploration of these design axes to future work. Finally, our evaluation is limited to zero-shot classification, linear probing, and image–text retrieval. Extending the analysis to dense prediction tasks, visual question answer-ing, or integration with multimodal LLMs would provide a more complete picture of how KALE alignment affects downstream utility. 
+
+## 7. Conclusion 
+
+Kernel-based CLIP →DINOv2 alignment works with a fixed loss weight on curated ImageNet (Gong et al., 2025) but breaks down on noisy, web-scale data, where the alignment term becomes too small to influence training. A dynamic penalty-weight controller that adaptively rebalances the two losses restores it, making alignment on a multi-million-sample CC12M subset stable. Relative to the original CLIP model, the aligned encoder preserves image–text retrieval, improves zero-shot classifi-cation, and reproducibly improves SVHN linear probing; rel-ative to the ImageNet-trained KUEA checkpoint it reaches a different downstream operating point — retrieval preserved, SVHN linear probing improved, the standard zero-shot av-erage improved over CLIP (+2.00 vs. KUEA +1.29 (Gong et al., 2025)) — achieved on noisy CC12M without per-dataset weight tuning. The contribution is making kernel-based alignment trainable at this scale. The accompanying training-dynamics analysis shows that the alignment term is effectively inert under a fixed weight at this scale, and that stable optimisation requires a bounded learning rate and a decaying schedule with a moderate floor. More broadly, the same control may help wherever a small-magnitude auxil-iary objective must stay influential against a dominant loss, beyond vision–language alignment. 
+
+## References 
+
+Changpinyo, S., Sharma, P., Ding, N., and Soricut, R. Con-ceptual 12M: Pushing web-scale image-text pre-training to recognize long-tail visual concepts. In Proceedings of the IEEE/CVF Conference on Computer Vision and 
+
+11 KALE: Kernel Alignment with Loss Equilibration for Web-Scale CLIP–DINOv2 Alignment 
+
+Pattern Recognition (CVPR) , 2021. Chen, X., Fang, H., Lin, T.-Y., Vedantam, R., Gupta, S., Dollar, P., and Zitnick, C. L. Microsoft COCO cap-tions: Data collection and evaluation server. arXiv , 2015. arXiv:1504.00325. Chen, Z., Badrinarayanan, V., Lee, C.-Y., and Rabinovich, A. GradNorm: Gradient normalization for adaptive loss balancing in deep multitask networks. In Proceedings of the International Conference on Machine Learning (ICML) , 2018. arXiv:1711.02257. Cheng, G., Han, J., and Lu, X. Remote sensing image scene classification: Benchmark and state of the art. Proceed-ings of the IEEE , 105(10):1865–1883, 2017. Cimpoi, M., Maji, S., Kokkinos, I., Mohamed, S., and Vedaldi, A. Describing textures in the wild. In Proceed-ings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , 2014. Darcet, T., Oquab, M., Mairal, J., and Bojanowski, P. Vision transformers need registers. In International Conference on Learning Representations (ICLR) , 2024. Deng, J., Dong, W., Socher, R., Li, L.-J., Li, K., and Fei-Fei, L. ImageNet: A large-scale hierarchical image database. In Proceedings of the IEEE/CVF Conference on Com-puter Vision and Pattern Recognition (CVPR) , 2009. Fei-Fei, L., Fergus, R., and Perona, P. Learning generative visual models from few training examples. In CVPR Workshop on Generative-Model Based Vision , 2004. Gadre, S. Y. et al. DataComp: In search of the next gen-eration of multimodal datasets. In Advances in Neural Information Processing Systems (NeurIPS) , volume 36, 2024. Gao, P., Geng, S., Zhang, R., Ma, T., Fang, R., Zhang, Y., Li, H., and Qiao, Y. CLIP-Adapter: Better vision-language models with feature adapters. International Journal of Computer Vision (IJCV) , 2024. arXiv:2110.04544. Gong, X. et al. Kernel-based unsupervised embed-ding alignment for enhanced visual representation in vision-language models. In Proceedings of the Inter-national Conference on Machine Learning (ICML) , 2025. arXiv:2506.02557. Goodfellow, I. J. et al. Challenges in representation learn-ing: A report on three machine learning contests. In 
+
+International Conference on Neural Information Process-ing (ICONIP) , 2013. Helber, P., Bischke, B., Dengel, A., and Borth, D. In-troducing EuroSAT: A novel dataset and deep learning benchmark for land use and land cover classification. In 
+
+IEEE International Geoscience and Remote Sensing Sym-posium (IGARSS) , 2018. Hendrycks, D., Zhao, K., Basart, S., Steinhardt, J., and Song, D. Natural adversarial examples. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , 2021. Johnson, J., Hariharan, B., van der Maaten, L., Fei-Fei, L., Zitnick, C. L., and Girshick, R. CLEVR: A diagnostic dataset for compositional language and elementary visual reasoning. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) ,2017. Kendall, A., Gal, Y., and Cipolla, R. Multi-task learning using uncertainty to weigh losses for scene geometry and semantics. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) ,2018. arXiv:1705.07115. Krizhevsky, A. and Hinton, G. Learning multiple layers of features from tiny images. Technical report, University of Toronto, 2009. LAION-AI. CLIP benchmark. https://github.com/ LAION-AI/CLIP_benchmark , 2022. Liu, S., Johns, E., and Davison, A. J. End-to-end multi-task learning with attention. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recogni-tion (CVPR) , 2019. arXiv:1803.10704. Dynamic Weight Averaging introduced in §3.1. Loshchilov, I. and Hutter, F. Decoupled weight decay regu-larization. International Conference on Learning Repre-sentations (ICLR) , 2019. arXiv:1711.05101. Netzer, Y., Wang, T., Coates, A., Bissacco, A., Wu, B., and Ng, A. Y. Reading digits in natural images with unsu-pervised feature learning. In NIPS Workshop on Deep Learning and Unsupervised Feature Learning , 2011. Oquab, M., Darcet, T., Moutakanni, T., Vo, H. V., Szafraniec, M., Khalidov, V., Fernandez, P., Haziza, D., Massa, F., El-Nouby, A., Howes, R., Huang, P.-Y., Xu, H., Sharma, V., Li, S.-W., Galuba, W., Rabbat, M., As-sran, M., Ballas, N., Synnaeve, G., Misra, I., Jegou, H., Mairal, J., Labatut, P., Joulin, A., and Bojanowski, P. DINOv2: Learning robust visual features without su-pervision. Transactions on Machine Learning Research (TMLR) , 2024. Parkhi, O. M., Vedaldi, A., Zisserman, A., and Jawahar, C. V. Cats and dogs. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , 2012. 12 KALE: Kernel Alignment with Loss Equilibration for Web-Scale CLIP–DINOv2 Alignment 
+
+Radford, A., Kim, J. W., Hallacy, C., Ramesh, A., Goh, G., Agarwal, S., Sastry, G., Askell, A., Mishkin, P., Clark, J., Krueger, G., and Sutskever, I. Learning transferable visual models from natural language supervision. In 
+
+Proceedings of the International Conference on Machine Learning (ICML) , 2021. Ranzinger, M., Heinrich, G., Kautz, J., and Molchanov, P. AM-RADIO: Agglomerative vision foundation model — reduce all domains into one. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , 2024. arXiv:2312.06709. Roy, O. and Vetterli, M. The effective rank: A measure of effective dimensionality. In 15th European Signal Processing Conference (EUSIPCO) . IEEE, 2007. Schuhmann, C. et al. LAION-5B: An open large-scale dataset for training next generation image-text mod-els. In Advances in Neural Information Processing Sys-tems (NeurIPS) Datasets and Benchmarks Track , 2022. arXiv:2210.08402. Outstanding Paper Award. Stallkamp, J., Schlipsing, M., Salmen, J., and Igel, C. Man vs. computer: Benchmarking machine learning algo-rithms for traffic sign recognition. Neural Networks , 32: 323–332, 2012. Tong, S., Liu, Z., Zhai, Y., Ma, Y., LeCun, Y., and Xie, S. Eyes wide shut? Exploring the visual shortcomings of multimodal LLMs. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , 2024. arXiv:2401.06209. Veeling, B. S., Linmans, J., Winkens, J., Cohen, T., and Welling, M. Rotation equivariant CNNs for digital pathol-ogy. In International Conference on Medical Image Com-puting and Computer-Assisted Intervention (MICCAI) ,2018. Wang, H., Ge, S., Lipton, Z., and Xing, E. P. Learning ro-bust global representations by penalizing local predictive power. In Advances in Neural Information Processing Systems (NeurIPS) , 2019. Young, P., Lai, A., Hodosh, M., and Hockenmaier, J. From image descriptions to visual denotations: New similarity metrics for semantic inference over event descriptions. 
+
+Transactions of the Association for Computational Lin-guistics (TACL) , 2:67–78, 2014. Zhang, R., Fang, R., Zhang, W., Gao, P., Li, K., Dai, J., Qiao, Y., and Li, H. Tip-adapter: Training-free CLIP-adapter for better vision-language modeling. In Proceedings of the European Conference on Computer Vision (ECCV) ,2022. arXiv:2111.03930. Zhou, K., Yang, J., Loy, C. C., and Liu, Z. Learning to prompt for vision-language models. International Jour-nal of Computer Vision (IJCV) , 2022. arXiv:2109.01134. 13
