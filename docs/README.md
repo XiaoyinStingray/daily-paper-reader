@@ -6,49 +6,61 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-26
-- 运行时间：2026-07-26 21:24:53 UTC
+- 最新运行日期：2026-07-27
+- 运行时间：2026-07-27 20:44:45 UTC
 - 运行状态：成功
-- 本次总论文数：9
-- 精读区：4
-- 速读区：5
+- 本次总论文数：13
+- 精读区：2
+- 速读区：11
 
 ### 今日简报（AI）
-今日精读2篇高分论文，速读3篇，涵盖核化线性注意力与无损隐式神经表示两大突破。
-最值得关注的方向：Kernelized Linear Attention通过对称锥突破容量上限，Lossless-INR实现无损体积神经隐式表示。
-后续可重点跟进高效音视频识别与压缩神经高斯溅射等实用技术，并关注对齐方法的稳定性。
-- 详情：[/202607/26/README](/202607/26/README)
+今日13篇论文，聚焦视觉基础模型适配与高效表示学习。
+最值得关注：视觉基础模型适配中的分层信息分配策略，以及多分支交叉骨干融合在车辆重识别中的应用。
+建议普通读者优先精读这两篇8分论文，以理解当前视觉模型微调与融合的最优方法。
+- 详情：[/202607/27/README](/202607/27/README)
 
 ### 精读区论文标签
-1. [Kernelized Linear Attention: Breaking the Capacity Wall with Symmetric Cones](/202607/26/2607.17419v1-kernelized-linear-attention-breaking-the-capacity-wall-with-symmetric-cones)  
+1. [Rethinking Layer-Wise Information Allocation for Vision Foundation Model Adaptation](/202607/27/2607.21973v1-rethinking-layer-wise-information-allocation-for-vision-foundation-model-adaptation)  
    标签：评分：8.0/10、query:neural-arch
-   evidence：线性注意力改进用于高效Transformer架构
-2. [Lossless-INR: Lossless Volumetric Implicit Neural Representations](/202607/26/2607.18150v1-lossless-inr-lossless-volumetric-implicit-neural-representations)  
-   标签：评分：8.0/10、query:compress
-   evidence：基于位平面分解的无损体积压缩，类似于位平面变换编码
-3. [Convolution for Large Language Models](/202607/26/2607.18413v1-convolution-for-large-language-models)  
+   evidence：视觉模型层间信息分配，与神经网络架构设计相关
+2. [Rethinking Multi-Branch and Cross-Backbone Fusion for Vehicle Re-Identification in the Foundation-Model Era](/202607/27/2607.22068v1-rethinking-multi-branch-and-cross-backbone-fusion-for-vehicle-re-identification-in-the-foundation-model-era)  
    标签：评分：8.0/10、query:neural-arch
-   evidence：向LLM添加深度卷积以提升性能而不增加模型大小
-4. [Recti-Q: Feature-Space Rectification for Out-of-Distribution-Robust Quantized Perception in Edge Robotics](/202607/26/2607.18540v1-recti-q-feature-space-rectification-for-out-of-distribution-robust-quantized-perception-in-edge-robotics)  
-   标签：评分：8.0/10、query:compress
-   evidence：提出特征空间校正解决量化导致的鲁棒性下降问题，与图像压缩中的量化策略直接相关
+   evidence：重新思考用于视觉架构的多分支和跨骨干融合
 
 ### 速读区论文标签
-1. [Efficient Audio-Visual Event Recognition via Knowledge Distillation and Dynamic INT8 Quantization of a Hybrid Cross-Attention Network](/202607/26/2607.16980v1-efficient-audio-visual-event-recognition-via-knowledge-distillation-and-dynamic-int8-quantization-of-a-hybrid-cross-attention-network)  
+1. [Test-Time Training for Modality Order Consistency in Vision-Language Models](/202607/27/2607.20351v1-test-time-training-for-modality-order-consistency-in-vision-language-models)  
+   标签：评分：7.0/10、query:neural-arch
+   evidence：测试时训练优化模型
+2. [Recurrent Sinusoidal INRs for Efficient High-Fidelity Representation](/202607/27/2607.21485v1-recurrent-sinusoidal-inrs-for-efficient-high-fidelity-representation)  
+   标签：评分：7.0/10、query:neural-arch
+   evidence：利用正弦循环丰富网络架构
+3. [Parameter-free Adaptive Sparse Attention via Compression-Based Content Selection](/202607/27/2607.21752v1-parameter-free-adaptive-sparse-attention-via-compression-based-content-selection)  
+   标签：评分：7.0/10、query:neural-arch
+   evidence：利用压缩比实现数据自适应稀疏注意力
+4. [ThRIve: Thermally Robust CNN Inference via Low-Rank Adaptation in Heterogeneous PIM Architectures](/202607/27/2607.17091v1-thrive-thermally-robust-cnn-inference-via-low-rank-adaptation-in-heterogeneous-pim-architectures)  
+   标签：评分：6.0/10、query:neural-arch
+   evidence：基于低秩适应的噪声感知训练
+5. [Decoder-Preserving Sparse Autoencoders: Which Readouts Survive Sparse Compression?](/202607/27/2607.17425v1-decoder-preserving-sparse-autoencoders-which-readouts-survive-sparse-compression)  
    标签：评分：6.0/10、query:compress
-   evidence：动态INT8量化应用于音视频识别模型压缩
-2. [ECoNGS: Efficient Compressive Neural Gaussian Splats for Volume Visualization](/202607/26/2607.18466v1-econgs-efficient-compressive-neural-gaussian-splats-for-volume-visualization)  
+   evidence：稀疏自编码器用于表示压缩，方法可迁移至图像压缩
+6. [Beyond Objective Expressivity: Geometry Preservation in Multimodal Contrastive Learning](/202607/27/2607.17673v1-beyond-objective-expressivity-geometry-preservation-in-multimodal-contrastive-learning)  
+   标签：评分：6.0/10、query:neural-arch
+   evidence：几何保持编码器稳定训练
+7. [Fluid-SDF: Ultra-Lightweight and Editable Implicit Shape Representation via Differentiable Primitives](/202607/27/2607.18646v1-fluid-sdf-ultra-lightweight-and-editable-implicit-shape-representation-via-differentiable-primitives)  
+   标签：评分：6.0/10、query:neural-arch
+   evidence：极少数参数的表示，模型优化适用于部署
+8. [Mage-Flow: An Efficient Native-Resolution Foundation Model for Image Generation and Editing](/202607/27/2607.19064v2-mage-flow-an-efficient-native-resolution-foundation-model-for-image-generation-and-editing)  
    标签：评分：6.0/10、query:compress
-   evidence：压缩神经表示用于体数据，可迁移至图像压缩
-3. [KALE: Kernel Alignment with Loss Equilibration for Stable CLIP-DINOv2 Alignment at Web Scale](/202607/26/2607.18885v1-kale-kernel-alignment-with-loss-equilibration-for-stable-clip-dinov2-alignment-at-web-scale)  
+   evidence：Mage-VAE作为轻量级自动编码器分词器用于图像生成
+9. [Point-Selection Fine-Tuning Framework for Robust Point Cloud Classification](/202607/27/2607.19711v1-point-selection-fine-tuning-framework-for-robust-point-cloud-classification)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：损失均衡实现CLIP-DINOv2稳定对齐
-4. [GATE-3D: Geometry-Aware Test-time Adaptive Reranking for Open-Set 3D Shape Retrieval](/202607/26/2607.19111v1-gate-3d-geometry-aware-test-time-adaptive-reranking-for-open-set-3d-shape-retrieval)  
+   evidence：点选择微调增强鲁棒性
+10. [FAIR: Feature-Augmented Implicit Regularization for AI-generated Fake Image Detection](/202607/27/2607.22087v1-fair-feature-augmented-implicit-regularization-for-ai-generated-fake-image-detection)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：几何感知重排序用于三维形状检索，改进计算机视觉
-5. [Spectral Transformation for Layer-wise Global Rank Discovery in Federated LoRA for Vision Transformers](/202607/26/2607.21074v1-spectral-transformation-for-layer-wise-global-rank-discovery-in-federated-lora-for-vision-transformers)  
+   evidence：利用场景组成先验的隐式正则化
+11. [LayoutLite: Token-Level Implicit Layout Analysis for Efficient Document OCR](/202607/27/2607.22200v1-layoutlite-token-level-implicit-layout-analysis-for-efficient-document-ocr)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：面向视觉Transformer联邦LoRA的谱变换秩发现，直接涉及高效视觉架构
+   evidence：通过Token压缩和隐式布局分析提升文档OCR性能
 
 
 <div class="dpr-home-promo-card">
