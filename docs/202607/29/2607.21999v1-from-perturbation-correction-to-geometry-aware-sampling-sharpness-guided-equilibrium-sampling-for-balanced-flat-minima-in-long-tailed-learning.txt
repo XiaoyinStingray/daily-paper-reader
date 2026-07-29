@@ -1,0 +1,435 @@
+Title: From Perturbation Correction to Geometry-Aware Sampling: Sharpness-Guided Equilibrium Sampling for Balanced Flat Minima in Long-Tailed Learning
+
+URL Source: https://arxiv.org/pdf/2607.21999v1
+
+Published Time: Mon, 27 Jul 2026 00:25:11 GMT
+
+Number of Pages: 9
+
+Markdown Content:
+# From Perturbation Correction to Geometry-Aware Sampling: Sharpness-Guided Equilibrium Sampling for Balanced Flat Minima in Long-Tailed Learning 
+
+# Jiaxin Deng 1, Junbiao Pang 1* 
+
+> 1
+
+School of Information Science and Technology, Beijing University of Technology, Beijing, China dengjiaxin@emails.bjut.edu.cn, junbiao pang@bjut.edu.cn 
+
+Abstract 
+
+Long-tailed learning couples two sources of poor generaliza-tion: head classes dominate training exposure, while under-represented classes often converge to sharper regions of the loss landscape. Conventional re-sampling addresses the for-mer without considering geometry, whereas existing long-tailed sharpness-aware minimization (SAM) methods modify losses or perturbations only after biased mini-batches have been drawn. We introduce Sharpness-Guided Equilibrium Sampling (SGS), which treats the sampling distribution as an active control variable for optimization geometry. SGS dy-namically adjusts subsequent mini-batches by increasing the sampling probability of less frequently sampled classes while suppressing classes with large SAM-induced loss changes, using only cumulative class counts and EMA sharpness es-timates obtained from the standard SAM update, without class-wise perturbations or additional backward passes. We characterize this sampling process through a continuous-time stochastic differential equation and a sampling-dependent PAC-Bayes analysis, explaining how frequency-sharpness feedback can move training toward a more balanced flatness profile. On CIFAR-100 LT with an imbalance ratio of 100, SGS-SAM improves Focal-SAM by 10.85 points in tail ac-curacy and 3.56 points overall. On ImageNet-LT, it improves ImbSAM by 6.59 points on tail classes and 1.20 points over-all. Its training time is only 1.02 × that of vanilla SAM. Beyond these gains, SGS establishes a sampling-side route to loss-landscape control, suggesting that future long-tailed methods can jointly regulate data exposure and optimization geometry rather than treating either as fixed. 
+
+# Introduction 
+
+Deep neural networks have achieved remarkable success in visual recognition tasks such as image classification (Wang et al. 2023a) and object detection (Wang et al. 2024). How-ever, their performance often relies on balanced and well-curated training data, whereas real-world visual data com-monly follows a long-tailed distribution, with a few head classes containing abundant samples and many tail classes being severely underrepresented. Training with standard em-pirical risk minimization on such imbalanced data can bias 
+
+> *
+
+Corresponding authors. Copyright © 2026, Association for the Advancement of Artificial Intelligence (www.aaai.org). All rights reserved. 
+
+the model toward head classes and degrade overall gen-eralization (Cao et al. 2019). To address this issue, exist-ing methods mainly focus on re-sampling (Buda, Maki, and Mazurowski 2018), re-balancing (Wang et al. 2023b; Li et al. 2025), robust representation learning (Cui et al. 2023), and foundation-model fine-tuning (Shi et al. 2024). Existing approaches address different parts of this prob-lem. Re-sampling and class-prior correction improve tail exposure, but they are geometry-agnostic: oversampling can repeatedly reuse scarce tail examples and amplify gradient variance, whereas undersampling discards infor-mative head data (Buda, Maki, and Mazurowski 2018). Sharpness-Aware Minimization (SAM) (Foret et al. 2021) and its long-tailed variants, including ImbSAM (Zhou et al. 2023a), CC-SAM (Zhou et al. 2023b), and Focal-SAM (Li et al. 2025), instead regulate optimization geometry through class-dependent perturbations or penalties. However, these corrections are applied after a biased mini-batch has been drawn. The original long-tailed distribution therefore con-tinues to decide which classes and geometric regions domi-nate training. This separation leaves a central question unan-swered: can data exposure and optimization geometry be controlled jointly through the sampler itself? We answer this question with Sharpness-Guided Equilib-rium Sampling (SGS), which shifts geometry control from post-sampling perturbation correction to mini-batch con-struction. SGS reuses the perturbed loss gap already pro-duced by standard SAM as an efficient sharpness signal. After each update, SGS records the cumulative exposure and EMA sharpness of each class, uses these statistics to recompute the sampling probabilities, and constructs the next mini-batches accordingly. Under-sampled classes re-ceive more optimization opportunities, whereas classes with large perturbation responses are temporarily down-weighted to avoid repeatedly emphasizing unstable regions. The re-sulting mini-batches update the model and produce new fre-quency and sharpness statistics, which are then used for the next sampling decision. Thus, the sampling distribution evolves jointly with the model rather than remaining fixed throughout optimization, without requiring class-wise per-turbations or additional backward passes. We characterize this adaptive sampling process through continuous-time stochastic dynamics and a sampling-dependent PAC-Bayes analysis. The stochastic view sep-arXiv:2607.21999v1 [cs.LG] 24 Jul 2026 arates the deterministic competition induced by class fre-quency and sharpness from the fluctuations caused by mini-batch sampling. The PAC-Bayes analysis further identifies conditions under which the resulting distribution improves class balance and yields a tighter generalization bound than ordinary long-tailed SAM. Experiments on CIFAR-LT and ImageNet-LT show consistent improvements for medium and tail classes under severe imbalance, while experiments with foundation-model fine-tuning demonstrate the applica-bility of SGS to a different adaptation pipeline. Importantly, SGS preserves the standard SAM optimization procedure and introduces only lightweight class-statistic and sampling-probability updates, resulting in nearly the same training cost as vanilla SAM. Our contributions are • We propose SGS, a geometry-aware sampling method that uses the cumulative exposure and SAM-induced loss response of each class to update future mini-batch com-position. SGS reallocates optimization opportunities be-fore parameter updates without class-wise perturbations or additional backward passes. • We connect the discrete sampling process to continuous-time stochastic dynamics and a sampling-dependent PAC-Bayes bound, explaining how frequency-sharpness competition, mini-batch noise, and adaptive class expo-sure jointly affect long-tailed generalization. • We validate SGS on CIFAR-LT, ImageNet-LT, and foundation-model fine-tuning. SGS substantially im-proves medium- and tail-class performance under severe imbalance while retaining nearly the same training effi-ciency as vanilla SAM, with only approximately 2% ad-ditional training time on CIFAR-LT. 
+
+# Related Works 
+
+Long-Tailed Learning 
+
+Long-tailed learning has been widely studied to mitigate the bias induced by imbalanced class distributions. Exist-ing methods can be roughly divided into data re-balancing, data augmentation, loss and logit adjustment, representation learning, decoupled training, and ensemble learning. Data re-balancing methods adjust the sampling frequency of dif-ferent classes, while augmentation methods synthesize or enrich tail samples to alleviate data scarcity (Kang et al. 2019; Ren et al. 2020; Wang et al. 2020). Loss and logit adjustment methods incorporate class priors into the train-ing objective, such as margin-based losses (Cao et al. 2019), balanced softmax (Ren et al. 2020), and logit correction (Menon et al. 2020). Representation learning methods im-prove feature separability for tail classes through contrastive objectives (Cui et al. 2021), prototypes (Wei et al. 2022), or feature augmentation (Hong et al. 2022). Decoupled training methods separate representation learning from classifier cal-ibration, showing that balanced classifier learning is crucial for long-tailed recognition (Zhong et al. 2021). Although these methods have achieved promising results, most of them are driven by class frequency or class pri-ors. Such quantity-based correction is effective for reduc-ing head-class dominance, but it does not explicitly describe whether the sampled instances lie in sharp regions of the loss landscape. SGES complements existing long-tailed learning paradigms by connecting sampling control with local curva-ture, dynamically allocating optimization effort according to both class imbalance and sharpness information. 
+
+Sharpness-Aware Minimization in Long-Tailed Learning 
+
+SAM (Foret et al. 2021) improves generalization by seek-ing flat minima, which is particularly relevant in long-tailed learning because rare and difficult classes often suffer from compressed decision regions and poor robustness. Several long-tailed SAM variants have therefore been proposed. ImbSAM (Zhou et al. 2023a) adopts a coarse-grained strat-egy by restricting SAM perturbations to tail classes. While this partially protects the tail, it may sharpen the head-class landscape and degrade overall performance when paired with standard rebalancing algorithms. CC-SAM (Zhou et al. 2023b) introduces class-conditional perturbation radii for fine-grained control, but it requires costly class-wise per-turbation computations. Focal-SAM (Li et al. 2025) im-proves the efficiency-control trade-off by applying focal-like weights to class-wise sharpness penalties, thereby strength-ening tail-class smoothness without the burden of extra class-wise backpropagation. These methods provide important evidence that optimiza-tion geometry matters for long-tailed recognition. However, they mainly intervene after mini-batches have been drawn, by changing perturbation directions, perturbation radii, or sharpness penalties. In contrast, SGES shifts the control point from the loss/perturbation rule to the sampling distri-bution itself. SGES reshapes the mini-batch stream accord-ing to both frequency and curvature, without requiring class-wise perturbations or additional backward passes. 
+
+# Method 
+
+Frequency and Sharpness Guided Sampling 
+
+Let Nc be the number of training samples in class c, N =
+
+PCj=1 Nj , and P base c = Nc/N be the empirical class prior. In long-tailed training, P base c makes head classes dominate both gradient updates and SAM perturbations. SGS con-structs a dynamic sampling distribution by combining fre-quency feedback and sharpness feedback. 
+
+Frequency sampling indicator. Let mc(t) denote the cu-mulative number of sampled instances from class c up to step t. We define the empirical sampling share as pc(t) = 
+
+mc(t)/(P 
+
+> j
+
+mj (t) + ξ), where ξ > 0 is a small constant introduced for numerical stability and to avoid division by zero. A smaller pc(t) indicates that class c has contributed less often to optimization updates. We therefore define the inverse-frequency indicator as follows: 
+
+wf req c = 1 /(pc(t) + ξ), (1) which assigns larger scores to classes with small cumulative sampling shares. 
+
+Sharpness proxy. Direct Hessian estimation or class-wise SAM perturbation is expensive. SGS instead reuses the perturbation from the standard SAM step. For instance xi
+
+and model weights w, we define: 
+
+∆Lxi = |Lxi (w + ϵ) − Lxi (w)|. (2) A large ∆Lxi indicates high sensitivity to the SAM adver-sarial direction. A local Taylor expansion gives Lxi (w +
+
+ϵ) − Lxi (w) ≈ ∇Lxi (w)⊤ϵ + 12 ϵ⊤∇2Lxi (w)ϵ, where the quadratic term captures directional curvature around w.Thus, ∆Lxi serves as an efficient update-aware sharpness proxy. 
+
+Sharpness sampling indicator. Although tail classes require additional exposure, repeatedly sampling samples from sharp regions may amplify gradient noise and harm generalization. Therefore, SGS uses the sharpness proxy in Eq. (2) to construct a stable class-level sharpness indicator. For a mini-batch B at step t, let Bc denote the samples of class c. When |Bc| > 0, we compute the batch-level class sharpness as 
+
+∆Lc = 1
+
+|Bc|
+
+X
+
+> xi∈Bc
+
+∆Lxi . (3) To reduce the stochasticity of mini-batch estimates, we maintain an exponential moving average for each class: 
+
+h(t) 
+
+> c
+
+=
+
+(
+
+βh (t−1)  
+
+> c
+
++ (1 − β)∆ Lc, |Bc| > 0,h(t−1)  
+
+> c
+
+, |Bc| = 0 , (4) where β = 0 .9 or 0.99 . The EMA reduces the noise caused by infrequent tail-class observations. We then normalize the class-wise estimates as ˜hc =
+
+hc/(PCj=1 hj + ξ) and define the sharpness sampling weight by 
+
+wsharp  
+
+> c
+
+= 1 /(˜hκc + ξ), (5) where κ > 0 controls the strength of sharpness feedback and ξ > 0 avoids division by zero. The inverse form as-signs lower sampling weight to classes with larger pertur-bation responses, thereby preventing the sampler from over-emphasizing sharp and unstable regions. 
+
+Joint sampling weight. The joint class score ˜wc com-bines both sampling indicators: 
+
+˜wc = wf req c · wsharp c (6) We apply mean normalization to ensure numerical stability, yielding the normalized class sampling weight wc:
+
+wc = ˜wc
+
+> 1
+> C
+
+PCj=1 ˜wj + ξ (7) where C represents the total number of classes. 
+
+Instance-Level Probability Allocation. The calibrated class score is Sc = P base c wc = ( Nc/N )wc. To preserve intra-class fairness, every instance in class c shares this score equally. Thus an instance xi with yi = c has unnormalized score sxi = Sc/N c = wc/N . The final probability is 
+
+Pxi = sxi
+
+PNj=1 sxj
+
+= wyi
+
+N PCc=1 P base c wc
+
+. (8) Algorithm 1: SGS Training 
+
+Require: Training set D, model fθ , epochs T , batch size B,warm-up ratio rw, mixing schedule α(e), maximum ra-tio αmax , SAM radius ρ, EMA momentum β, sharpness exponent κ, constant ξ
+
+Ensure: Trained model parameters θT 
+
+> 1:
+
+Initialize mc ← 1, hc ← 1, Pxi ← P base xi , and Ew =
+
+⌊rwT ⌋ 
+
+> 2:
+
+for e = 1 to T do  
+
+> 3:
+
+Set α(e) according to the warm-up schedule  
+
+> 4:
+
+for each mini-batch do  
+
+> 5:
+
+By Eq. (9), draw Bbase (e) samples from P base xi and 
+
+BSGS (e) samples from Pxi to form Bt 
+
+> 6:
+
+Perform the SAM ascent–descent update and record ∆Lxi = |ℓi(θ + ϵt) − ℓi(θ)| 
+
+> 7:
+
+Update class counts mc ← mc + |Bt,c | 
+
+> 8:
+
+If e > Ew, update hc ← βh c + (1 −
+
+β)|Bt,c |−1 P 
+
+> xi∈Bt,c
+
+∆Lxi 
+
+> 9:
+
+If e > E w, update Pxi by Eqs. (7) and (8)  
+
+> 10:
+
+end for  
+
+> 11:
+
+end for  
+
+> 12:
+
+return θT
+
+Equation (8) specifies how the dynamic class weight is trans-lated into the target sampling distribution. SGS reweights the long-tailed prior by the frequency-sharpness score. The frequency term raises qc(t) for classes that have been sam-pled less often, while the sharpness term lowers qc(t) for classes whose perturbation response is currently large, pre-venting the next mini-batches from being dominated by un-stable high-sharpness updates. After each mini-batch, mc(t)
+
+and hc(t) are updated, so the sampler forms a closed-loop control: under-sampled classes are pulled back into the batch stream, whereas classes with excessive perturbation sen-sitivity are temporarily relaxed. The factor 1/N c assigns this class-level probability uniformly to instances within the class, preserving intra-class fairness. To maintain stable training, SGS constructs each mini-batch from the original long-tailed distribution P base xi and the current SGS distribution Pxi defined in Eq. (8). We use a warm-up ratio rw ∈ [0 , 1] and set Ew = ⌊rwT ⌋. For a mini-batch of size B, the numbers assigned to the two dis-tributions at epoch e are 
+
+Bbase (e) = round((1 − α(e)) B) ,BSGS (e) = B − Bbase (e) (9) respectively. We first draw Bbase (e) samples from P base xi ,then draw BSGS (e) samples from Pxi after excluding the se-lected indices, and concatenate the two subsets into a mini-batch of size B. During warm-up, α(e) = 0 , so the en-tire mini-batch follows the original sampler. After warm-up, 
+
+α(e) gradually increases toward αmax , increasing the SGS portion without abruptly changing the training distribution. Unless otherwise specified, we set αmax = 1 . Algorithm 1 summarizes the procedure. A Stochastic Dynamics Perspective of SGS 
+
+We further interpret SGS as a continuous distributional dy-namics. This view characterizes how frequency-curvature feedback moves the empirical long-tailed distribution to-ward a flatness-aware target distribution. 
+
+Theorem 1 (Continuous-Time Dynamics of SGS) . Let qi(t)
+
+be the instance-level sampling probability and qc(t) =P 
+
+> i:yi=c
+
+qi(t) be the class-level probability. Define the frequency-curvature drive gc(t) = log( pc(t) + ξ) + log( ˜hc(t)κ + ξ), so the class score is proportional to 
+
+exp( −gc(t)) . Assume gc(t) admits the Stratonovich limit 
+
+dg c(t) = μc(t)dt + σc(t) ◦ dW c(t). Then, for an instance zi
+
+with label yi, the induced sampling probability satisfies 
+
+dq i(t) = −qi(t) [ μyi (t) − ¯μ(t)] dt 
+
+− qi(t)
+
+h
+
+σyi (t) ◦ dW yi (t) −
+
+> C
+
+X
+
+> c=1
+
+qc(t)σc(t) ◦ dW c(t)
+
+i
+
+.
+
+(10) 
+
+where ¯μ(t) = PCc=1 qc(t)μc(t).
+
+Remark. This SDE explicitly decouples the sampling evolution into a deterministic relative competition (the drift term) and a stochastic fluctuation (the diffusion term). The drift establishes a self-regulating mechanism: probability mass intrinsically flows to classes whose evolution rate 
+
+μyi (t) is below the global baseline ¯μ(t). This ensures a con-tinuous transfer of sampling weights from over-represented head classes to tail classes. Crucially, the curvature compo-nent acts as a geometry-aware ”thermostat”—if a tail class enters an excessively sharp minimum, its curvature penalty spikes, triggering immediate negative feedback to suppress its sampling rate. Simultaneously, the diffusion term for-mally models the destructive variance caused by sparse tail-class mini-batch sampling. This motivates the use of EMA to smooth class-level estimates and obtain a more stable curvature-aware sampling distribution. 
+
+Theorem 2 (Stationary Density for a Fixed Class) . Con-sider the sampling probability of a fixed class c, denoted by 
+
+q = qc(t). In a local time window, freeze the slowly varying coefficients and write ac = μc − ¯μ, where ¯μ = PCj=1 qj μj .Assume the remaining class-wise noise can be represented by an effective volatility ˜σc and the one-dimensional dynam-ics are 
+
+dq = −acq dt + q˜σc ◦ dW t. (11) 
+
+On a compact positive-probability support q ∈
+
+[qmin , q max ] ⊂ (0 , 1) with zero probability flux at the boundaries, the stationary density satisfies 
+
+φ(c) 
+
+> ∞
+
+(q) = 1
+
+zc
+
+q−γc , γc = 1 + 2ac
+
+˜σ2
+
+> c
+
+= 1 + 2( μc − ¯μ)˜σ2
+
+> c
+
+,
+
+(12) 
+
+where zc = R qmax  
+
+> qmin
+
+q−γc dq normalizes the density. 
+
+Remark. The equilibrium is governed by the relative drift 
+
+ac = μc − ¯μ. When μc < ¯μ, we have γc < 1, so the station-ary density is less concentrated near the lower-probability boundary and the class tends to retain larger exposure. When 
+
+μc > ¯μ, γc increases and the density shifts toward smaller sampling probabilities, suppressing over-sampled or sharper classes. Since φ(c) 
+
+> ∞
+
+(q) ∝ exp( −γc log q), changes in the frequency-curvature drive affect the sampling density in a nonlinear way. Thus SGS does not behave as naive tail over-sampling: it favors classes with insufficient exposure or moderate curvature, while reducing the probability of classes whose frequency-curvature drive is already high. A balanced fixed point corresponds to aligning the class-wise drive with the population average, yielding a frequency-curvature balanced sampling target. 
+
+Theorem 3 (Tighter PAC-Bayes Bound under SGS Sam-pling) . Let u be the class-balanced prior, π be the empir-ical long-tailed prior, and q⋆ be the stationary SGS distri-bution from theorem 2. Let bLρ 
+
+> q,S
+
+(w) denote the SAM sharp empirical risk under class-level distribution q. We write 
+
+B(q) for the sampling-dependent PAC penalty, consisting of the balanced-prior mismatch and the class-wise effective-sample complexity: 
+
+B(q) = ∥q − u∥1 + 1
+
+C
+
+> C
+
+X
+
+> c=1
+
+Φ( qc), (13) 
+
+where Φ( qc) denotes the PAC complexity term for class c
+
+and decreases as the effective class sample size nq c in-creases. Assume the sharp loss is bounded and each class has positive effective sample size. Suppose that the move-ment from π to q⋆ admits an equalizing-transfer decompo-sition in the effective-sample region, that q⋆ is closer to the balanced prior, 
+
+∥q⋆ − u∥1 < ∥π − u∥1, (14) 
+
+and that any increase in sharp empirical risk is smaller than the resulting reduction in B. Then, with probability at least 
+
+1 − δ, SGS has a tighter PAC-Bayes right-hand side than ordinary long-tailed SAM: 
+
+bLρ 
+
+> q⋆,S
+
+(w) + B(q⋆) < bLρ 
+
+> π,S
+
+(w) + B(π). (15) 
+
+Remark. Compared with the standard SAM PAC-Bayes analysis under the empirical training distribution, ordinary SAM on long-tailed data suffers from two coupled effects. First, the empirical SAM objective is optimized under the imbalanced prior π, whereas long-tailed recognition is eval-uated by the class-balanced risk, yielding the mismatch term 
+
+∥π − u∥1. Second, tail classes have nπ c ≪ n/C , so their class-wise PAC complexity scales roughly as O(( nπ c)−1/2)
+
+rather than the balanced O(( n/C )−1/2). Thus, even if SAM encourages flat minima locally, its bound can remain loose because rare classes have insufficient effective samples. The stationary law in theorem 2 explains how SGS reduces this looseness: it shifts probability away from over-exposed or high-curvature classes and toward classes with lower frequency-curvature drive. As a result, ∥q⋆ −u∥1 is reduced, the effective denominators nQ ⋆c − 1 for tail classes become larger, and the sharp empirical term is less dominated by over-represented sharp regions. Table 1: Effect of the warm-up ratio rw on CIFAR-100 LT. IR100 reports Head, Medium, Tail, and All accuracy; IR200 reports overall accuracy. 
+
+rw
+
+IR100 IR200 Head Med. Tail All All 0.9 73.47 44.59 12.83 44.94 39.47 0.8 71.88 45.06 19.31 46.75 42.37 0.7 71.91 44.82 20.76 47.06 41.67 0.6 73.06 44.82 19.69 46.86 42.31 0.5 70.97 43.50 20.38 46.03 42.13 0.4 70.88 44.56 20.07 46.38 42.84 
+
+0.3 69.71 45.15 19.66 46.17 41.75 0.2 69.94 43.68 19.52 45.52 41.70 0.1 70.03 43.91 18.79 45.42 41.28 
+
+# Experiments 
+
+Hyperparameter Analysis 
+
+Warm-Up Ratio rw. Table 1 studies the warm-up ratio rw,which controls when SGES starts to use frequency-curvature feedback. A too large rw delays geometry-aware sampling and leaves insufficient time for tail correction. For example, on CIFAR-100 LT with IR100, rw = 0 .9 achieves the best head accuracy but only obtains 12.83 tail accuracy and 44.94 overall accuracy. In contrast, activating SGES too early can be unstable because early sharpness estimates are noisy. The best IR100 performance is achieved at rw = 0 .7, improving tail accuracy to 20.76 and overall accuracy to 47.06. Un-der the more severe IR200 setting, the best result appears at rw = 0 .4, indicating that stronger imbalance requires earlier intervention. Overall, a moderate warm-up is impor-tant: it preserves stable representation learning at the begin-ning while leaving enough epochs for SGES to reshape the sampling trajectory toward tail- and curvature-balanced op-timization. In practice, we use a larger rw for milder imbal-ance and a smaller rw for more severe imbalance. 
+
+Sharpness Exponent κ. Table 2 studies the sharpness ex-ponent κ, which controls the strength of the curvature term in the sampling score. On CIFAR-100 LT with IR100, de-creasing κ from 1.0 to 0.6 improves the overall accuracy from 47.56 to 48.19 and gives the best medium-class accu-racy. This indicates that smoothing the curvature signal with 
+
+κ = 0 .6 improves the balance between representation sta-bility and tail exposure. In contrast, κ = 0 .9 gives the best tail accuracy but lower overall accuracy, while κ = 0 .1 and 
+
+κ = 0 .3 weaken the sharpness signal and reduce tail per-formance. For the milder IR10 setting, performance is less sensitive to κ. Based on this analysis, we set κ = 0 .6 unless otherwise specified. 
+
+Long-Tailed Classification 
+
+Datasets & Evaluation. We evaluate our method on four standard long-tailed (LT) recognition benchmarks: CIFAR-10 LT, CIFAR-100 LT (Cao et al. 2019) (with imbalance ratios IR in {10 , 50 , 100 , 200 }), ImageNet-LT (Liu et al. 2019). CIFAR100-LT and ImageNet-LT are artificially trun-cated from the balanced CIFAR100 (Krizhevsky, Hinton Table 2: Effect of the sharpness exponent κ on CIFAR-100 LT. IR100 reports Head, Medium, Tail, and All accuracy; IR10 reports overall accuracy. 
+
+κ IR100 IR10 Head Med. Tail All All 1.0 72.65 44.18 20.62 46.94 61.62 0.9 70.91 44.82 23.62 47.52 62.43 0.8 71.79 46.41 22.41 47.87 62.33 0.7 71.32 46.85 21.17 47.45 62.41 0.6 71.24 48.88 20.83 48.19 63.03 0.5 70.15 48.41 16.14 46.31 63.46 
+
+0.4 71.47 47.97 16.97 46.62 62.72 0.3 71.50 47.41 15.35 46.15 62.79 0.2 72.32 47.65 17.76 47.13 62.64 0.1 72.47 46.00 13.90 45.42 62.49 et al. 2009) and ImageNet (Liu et al. 2019) datasets. Per-formance is measured using top-1 balanced accuracy across the overall test set, as well as on three disjoint subset splits: Head, Medium, and Tail. 
+
+Architectures & Training. We employ ResNet-32 (He et al. 2016) for the CIFAR datasets and ResNet-50 (He et al. 2016) for ImageNet-LT and iNaturalist, optimizing all models for 200 epochs. We set SGD optimizer with mo-mentum 0.9 as the base optimizer and train all models for 200 epochs, with a batch size of 64 for CIFAR100-LT and 256 for ImageNet-LT. Besides the Cross-Entropy loss (CE) setting, we also evaluate SGS with Logit Adjustment loss (LA) (Menon et al. 2021). LA adds the empirical class-prior offset to the logits and can be applied either as a post-hoc correction or as a training loss for balanced error. However, SGS itself changes the mini-batch sampling distribution, so directly applying LA throughout SGS training would couple two class-prior corrections. We therefore adopt a deferred LA protocol: first train SGS-SAM for 180 epochs to learn the representation and geometry-aware sampling trajectory, then freeze the backbone and fine-tune only the classifier for 20 epochs with the LA loss and SAM under the origi-nal long-tailed training set. More details about datasets, net-works, and training settings are presented in Appendix. 
+
+Compared Methods. We compare against a broad spec-trum of state-of-the-art approaches. On ResNet architec-tures, we integrate standard LT loss functions with vanilla SAM (Foret et al. 2021), ImbSAM (Zhou et al. 2023a), and CC-SAM (Zhou et al. 2023b), Focal-SAM (Li et al. 2025) alongside other representative LT baselines. 
+
+Comparison on CIFAR10/100-LT. Table 3 summarizes the CIFAR-LT results under different imbalance ratios. SGS-SAM consistently improves overall accuracy in high-imbalance regimes. For IR100, it improves CIFAR-10 LT from 77.2 to 77.96 under CE and from 82.9 to 84.06 under LA; on CIFAR-100 LT, it improves from 44.0 to 47.56 under CE and from 50.7 to 51.99 under LA. Similar gains are ob-served for IR200 and IR50, where SGS-SAM achieves the best overall accuracy across both datasets and loss settings. The gains mainly come from medium and tail classes, Table 3: Performance comparison on CIFAR-LT datasets with various imbalance ratios (IR). For IR100, we report accuracy on Head, Medium, Tail, and All classes; for other IRs, we report overall accuracy. Dataset Method IR100 IR200 IR50 IR10 Head Med Tail All All All All CIFAR-10 LT CE 87.0 73.6 54.0 73.1 68.6 78.3 87.4 CE+SAM 89.5 73.9 56.7 75.0 69.8 79.6 88.8 CE+ImbSAM 88.0 79.0 60.1 76.9 72.6 81.1 89.3 CE+CC-SAM 88.9 74.1 61.3 76.2 71.3 80.0 89.2 CE+Focal-SAM 89.3 75.4 62.9 77.2 71.7 82.0 90.0 CE+SGS-SAM 93.93 ±0.47 76.62 ±0.85 64.70 ±1.78 77.96 ±0.15 73.53 ±0.67 82.39 ±0.10 89.87 ±0.21 
+
+LA 87.6 72.6 70.1 77.9 74.3 81.6 87.8 LA+SAM 86.7 80.6 78.2 82.3 78.9 85.4 90.2 LA+ImbSAM 84.1 81.6 80.1 82.2 78.6 84.7 89.5 LA+CC-SAM 86.6 80.8 78.5 82.5 79.1 85.5 90.2 LA+Focal-SAM 86.9 81.2 79.2 82.9 79.6 85.5 90.5 LA+SGS-SAM 83.97 ±1.07 83.29 ±0.31 84.96 ±0.71 84.06 ±0.28 81.65 ±0.14 86.56 ±0.19 90.39 ±0.18 
+
+> CIFAR-100 LT
+
+CE 69.2 41.6 9.0 41.5 37.5 45.6 58.1 CE+SAM 72.7 41.8 7.0 42.2 38.9 46.8 59.7 CE+ImbSAM 68.5 46.0 9.6 43.0 38.7 47.8 60.1 CE+CC-SAM 70.1 44.2 9.0 42.7 39.1 47.4 60.0 CE+Focal-SAM 73.8 44.2 8.9 44.0 39.6 48.1 60.9 
+
+CE+SGS-SAM 72.97 ±0.40 46.58 ±1.57 19.75 ±0.57 47.56 ±0.79 42.99 ±0.61 52.46 ±0.16 62.77 ±0.31 
+
+LA 61.3 42.3 28.6 44.9 41.8 50.3 59.4 LA+SAM 63.1 52.2 32.2 50.0 45.5 52.8 62.6 LA+ImbSAM 57.4 51.1 31.0 47.3 43.4 52.2 62.4 LA+CC-SAM 63.7 51.9 32.3 50.1 45.6 53.0 63.0 LA+Focal-SAM 63.9 53.0 32.5 50.7 46.0 54.5 63.8 LA+SGS-SAM 62.24 ±0.53 53.53 ±0.26 38.22 ±0.28 51.99 ±0.28 46.69 ±0.27 56.05 ±0.36 63.16 ±0.27 
+
+which are typically under-trained in long-tailed recogni-tion. On CIFAR-10 LT with IR100, CE+SGS-SAM im-proves tail accuracy over CE+Focal-SAM by 1.80 points, and LA+SGS-SAM improves medium/tail accuracy from 81.2/79.2 to 83.29/84.96. On CIFAR-100 LT, CE+SGS-SAM raises tail accuracy from 8.9 to 19.75, while LA+SGS-SAM raises it from 32.5 to 38.22. These results support the motivation of SGS: reallocating training exposure by both class frequency and local sharpness gives under-represented classes more effective optimization opportunities. SGS also remains compatible with deferred logit-adjusted calibration. LA adjusts the decision boundary through class-prior logits, while SGS shapes the training trajectory through geometry-aware exposure; applying LA only in the final fine-tuning stage avoids disturbing the SGS sampling dy-namics. When the imbalance becomes mild (IR10), the ad-vantage of SGS-SAM becomes smaller and is generally comparable to Focal-SAM, indicating that geometry-aware sampling is most useful when the training distribution is severely skewed. 
+
+ImageNet-LT Results. Table 4 further evaluates SGS-SAM on the large-scale ImageNet-LT benchmark. Under CE train-ing, vanilla SAM does not improve the overall accuracy over CE and leaves tail accuracy almost unchanged, sug-Table 4: Performance comparison on ImageNet-LT. We re-port top-1 accuracy on Head, Medium, Tail, and All classes. The CE block follows ImbSAM (Zhou et al. 2023a), and the LA block follows Focal-SAM (Li et al. 2025). Method Head Med Tail All CE 69.3 41.7 10.3 48.2 CE+SAM 70.0 41.1 10.2 48.2 CE+ImbSAM 68.5 47.5 21.6 52.2 
+
+CE+SGS-SAM 66.33 ±0.05 50.17 ±0.16 28.19 ±0.12 53.40 ±0.11 
+
+LA 62.8 49.0 31.8 52.0 LA+SAM 63.1 51.7 33.1 53.6 LA+ImbSAM 62.6 50.3 32.6 52.6 LA+Focal-SAM 63.9 52.2 34.4 54.3 
+
+LA+SGS-SAM 63.11 ±0.90 52.90 ±0.20 36.26 ±2.83 54.57 ±0.05 
+
+gesting that class-agnostic flatness optimization is still dom-inated by head-class exposure. ImbSAM improves tail ac-curacy to 21.6 by modifying the perturbation strategy, while CE+SGS-SAM further increases tail accuracy to 28.19 and overall accuracy to 53.40. Under the deferred LA protocol, Table 5: Foundation-model fine-tuning results on ImageNet-LT and iNaturalist. Results of compared methods are re-ported by Focal-SAM (Li et al. 2025). We report top-1 ac-curacy. Method ImageNet-LT iNaturalist Head Med Tail All Head Med Tail All 
+
+Full fine-tuning (FFT) 
+
+Base 79.9 70.5 51.0 71.5 69.7 71.9 71.7 71.6 SAM 80.9 72.9 54.3 73.5 69.5 74.4 74.4 73.8 ImbSAM 80.6 72.6 52.2 72.9 68.5 73.4 73.8 73.1 CC-SAM 80.6 73.6 54.2 73.6 69.2 74.1 74.2 73.6 Focal-SAM 80.8 73.9 54.4 73.9 69.1 74.7 74.3 74.0 
+
+SGS-SAM 80.0 74.5 64.9 75.3 69.2 73.8 74.7 73.7 
+
+SGS-SAM 25 – – – – 69.6 74.2 75.1 74.1 
+
+LIFT fine-tuning (LIFT) 
+
+Base 79.7 76.2 72.8 77.1 74.1 79.4 81.5 79.7 SAM 79.9 76.4 72.7 77.2 73.5 79.7 81.6 79.8 ImbSAM 79.8 76.4 72.5 77.2 73.2 79.5 81.4 79.6 CC-SAM 79.8 76.4 73.3 77.3 74.0 79.4 81.5 79.7 Focal-SAM 79.7 76.6 73.6 77.4 73.9 79.8 81.7 80.0 
+
+SGS-SAM 79.7 76.6 73.4 77.4 72.9 79.6 81.6 79.7 
+
+SGS-SAM 25 – – – – 74.0 80.2 82.1 80.3 
+
+LA+SGS-SAM also improves over LA+Focal-SAM, raising tail accuracy from 34.4 to 36.26 and overall accuracy from 54.3 to 54.57. The head accuracy is slightly lower because SGS deliberately reallocates training exposure from head-dominated batches toward medium and tail classes. These results are consistent with the CIFAR-LT observations and show that geometry-aware sampling remains effective on a larger-scale long-tailed benchmark. 
+
+Large-Scale Long-Tailed Fine-Tuning 
+
+Fine-Tuning Protocol. We further evaluate SGS for foundation-model fine-tuning on ImageNet-LT and iNatu-ralist (Van Horn et al. 2018), following the experimental pro-tocols of Focal-SAM (Li et al. 2025) and LIFT (Shi et al. 2024). Specifically, we fine-tune the CLIP (Radford et al. 2021) image encoder with a ViT-B/16 backbone (Dosovit-skiy et al. 2021) under two fine-tuning paradigms, namely full fine-tuning (FFT) and LIFT. The default training sched-ule consists of 20 epochs. Since this setting employs the LA loss defined according to the original long-tailed class distribution, we set the maximum SGS mixing coefficient to αmax = 0 .1 to prevent an excessive shift in the effec-tive sampling distribution. Considering the short fine-tuning schedule, we set rw = 0 to activate SGS from the beginning and use κ = 2 to strengthen the sharpness feedback. On iNaturalist, the SGS variants continue to improve beyond the default schedule. We therefore additionally report their results after 25 epochs, denoted by SGS-SAM 25 in Table 5. 
+
+Fine-Tuning Results. Table 5 summarizes the results un-der the CLIP/ViT-B/16 fine-tuning protocol. Under FFT on ImageNet-LT, SGS-SAM achieves the best medium-, tail-, and overall accuracies of 74.5%, 64.9%, and 75.3%, re-Table 6: Relative training time per epoch on CIFAR-LT datasets. Ratios are measured with respect to vanilla SAM. Method CIFAR-10 LT CIFAR-100 LT SAM 1.00 × 1.00 ×
+
+ImbSAM 1.37 × 1.39 ×
+
+CC-SAM 2.05 × 4.10 ×
+
+Focal-SAM 1.36 × 1.40 ×
+
+SGS-SAM 1.02 × 1.02 ×
+
+spectively. Compared with Focal-SAM, it improves tail ac-curacy by 10.5 percentage points and overall accuracy by 1.4 points, showing that geometry-aware sampling substantially benefits underrepresented classes. Under LIFT, SGS-SAM achieves 77.4% overall accuracy, matching the best result in this group, while obtaining the best medium-class accuracy of 76.6% and maintaining competitive head- and tail-class performance. On iNaturalist, the 20-epoch SGS-SAM variants remain competitive but have not fully converged. Extending FFT with SGS-SAM to 25 epochs increases tail and overall ac-curacy to 75.1% and 74.1%, respectively, outperforming the corresponding 20-epoch result and yielding the best tail ac-curacy within the FFT group. More substantial gains are observed under LIFT: LIFT with SGS-SAM ∗25 achieves head, medium, tail, and overall accuracies of 74.0%, 80.2%, 82.1%, and 80.3%, respectively. It obtains the best medium-, tail-, and overall results in the LIFT group and ties the best head-class accuracy. Although SGS-SAM ∗25 uses five ad-ditional epochs, its total training time is only 1.26 × that of vanilla SAM, remaining below the 1.29 × cost of Focal-SAM (the reasons why SGS needs more epoch for better re-sults is discussed in Appendix). These results demonstrate that SGS can improve long-tailed foundation-model fine-tuning while preserving favorable training efficiency. 
+
+Training Speed 
+
+To reduce the influence of hardware and implementation de-tails, we report relative training time with respect to vanilla SAM instead of absolute seconds. The comparison ratios in Table 6 are taken from the Focal-SAM (Li et al. 2025). SGS-SAM follows the same optimization pipeline as vanilla SAM. The sharpness signal is directly obtained from the loss gap produced by the original SAM ascent– descent steps, while the sampler only maintains class-level frequency and EMA sharpness statistics. Therefore, SGS does not introduce additional class-wise perturbations or ex-tra backward passes. Its overhead is limited to updating a (C)-dimensional sampling distribution and drawing mini-batches accordingly, which is negligible compared with the forward/backward computation of deep networks. 
+
+# Conclusion 
+
+In this paper, we presented Sharpness-Guided Equilibrium Sampling (SGES), a geometry-aware sampling framework for long-tailed recognition. Different from existing SAM-based methods that mainly modify the loss or perturba-tion rule after biased mini-batches are drawn, SGES di-rectly reshapes the training trajectory by coupling class-frequency feedback with local sharpness estimates. The re-sulting sampler assigns more effective optimization opportu-nities to under-represented classes while avoiding excessive updates from unstable high-sharpness regions. We further introduced a warm-up and progressive mixing strategy to stabilize early training, and provided a stochastic-dynamics view that explains how the discrete sampler evolves toward a frequency-curvature balanced distribution. Extensive exper-iments on CIFAR-LT and ImageNet-LT show that SGES-SAM consistently improves medium and tail performance under severe imbalance, and remains compatible with de-ferred logit-adjusted calibration. We also extend the proto-col to long-tailed instance segmentation through decoupled classifier training on LVIS. Since SGES reuses the sharp-ness information already produced by SAM and only up-dates lightweight class-level statistics, it offers an efficient alternative to class-wise perturbation methods. A limitation is that the sampler depends on reliable class-level sharpness statistics, so the warm-up ratio and sharpness exponent still require mild tuning under different imbalance ratios. Over-all, our results suggest that controlling the sampling process with optimization geometry is a promising direction for scal-able long-tailed learning. 
+
+# References 
+
+Buda, M.; Maki, A.; and Mazurowski, M. A. 2018. A sys-tematic study of the class imbalance problem in convolu-tional neural networks. Neural networks , 106: 249–259. Cao, K.; Wei, C.; Gaidon, A.; Arechiga, N.; and Ma, T. 2019. Learning imbalanced datasets with label-distribution-aware margin loss. Advances in neural information processing sys-tems , 32. Cui, J.; Zhong, Z.; Liu, S.; Yu, B.; and Jia, J. 2021. Paramet-ric contrastive learning. In Proceedings of the IEEE/CVF international conference on computer vision , 715–724. Cui, J.; Zhong, Z.; Tian, Z.; Liu, S.; Yu, B.; and Jia, J. 2023. Generalized parametric contrastive learning. IEEE Transac-tions on Pattern Analysis and Machine Intelligence , 46(12): 7463–7474. Dosovitskiy, A.; Beyer, L.; Kolesnikov, A.; Weissenborn, D.; Zhai, X.; Unterthiner, T.; Dehghani, M.; Minderer, M.; Heigold, G.; Gelly, S.; et al. 2021. An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale. In In-ternational Conference on Learning Representations .Foret, P.; Kleiner, A.; Mobahi, H.; and Neyshabur, B. 2021. Sharpness-aware Minimization for Efficiently Improving Generalization. In International Conference on Learning Representations .He, K.; Zhang, X.; Ren, S.; and Sun, J. 2016. Deep resid-ual learning for image recognition. In Proceedings of the IEEE conference on computer vision and pattern recogni-tion , 770–778. Hong, Y.; Zhang, J.; Sun, Z.; and Yan, K. 2022. Safa: Sample-adaptive feature augmentation for long-tailed image classification. In European conference on computer vision ,587–603. Springer. Kang, B.; Xie, S.; Rohrbach, M.; Yan, Z.; Gordo, A.; Feng, J.; and Kalantidis, Y. 2019. Decoupling representation and classifier for long-tailed recognition. arXiv preprint arXiv:1910.09217 .Krizhevsky, A.; Hinton, G.; et al. 2009. Learning multiple layers of features from tiny images.(2009). Li, S.; Xu, Q.; Yang, Z.; Wang, Z.; Zhang, L.; Cao, X.; and Huang, Q. 2025. Focal-SAM: Focal Sharpness-Aware Min-imization for Long-Tailed Classification. In International Conference on Machine Learning , 36624–36651. PMLR. Liu, Z.; Miao, Z.; Zhan, X.; Wang, J.; Gong, B.; and Yu, S. X. 2019. Large-scale long-tailed recognition in an open world. In Proceedings of the IEEE/CVF conference on com-puter vision and pattern recognition , 2537–2546. Menon, A. K.; Jayasumana, S.; Rawat, A. S.; Jain, H.; Veit, A.; and Kumar, S. 2020. Long-tail learning via logit adjust-ment. arXiv preprint arXiv:2007.07314 .Menon, A. K.; Jayasumana, S.; Rawat, A. S.; Jain, H.; Veit, A.; and Kumar, S. 2021. Long-tail learning via logit adjust-ment. In International Conference on Learning Representa-tions .Radford, A.; Kim, J. W.; Hallacy, C.; Ramesh, A.; Goh, G.; Agarwal, S.; Sastry, G.; Askell, A.; Mishkin, P.; Clark, J.; et al. 2021. Learning transferable visual models from nat-ural language supervision. In International conference on machine learning , 8748–8763. PmLR. Ren, J.; Yu, C.; Ma, X.; Zhao, H.; Yi, S.; et al. 2020. Bal-anced meta-softmax for long-tailed visual recognition. Ad-vances in neural information processing systems , 33: 4175– 4186. Shi, J.-X.; Wei, T.; Zhou, Z.; Shao, J.-J.; Han, X.-Y.; and Li, Y.-F. 2024. Long-tail learning with foundation model: heavy fine-tuning hurts. In Proceedings of the 41st International Conference on Machine Learning , 45014–45039. Van Horn, G.; Mac Aodha, O.; Song, Y.; Cui, Y.; Sun, C.; Shepard, A.; Adam, H.; Perona, P.; and Belongie, S. 2018. The inaturalist species classification and detection dataset. In Proceedings of the IEEE conference on computer vision and pattern recognition , 8769–8778. Wang, A.; Chen, H.; Liu, L.; Chen, K.; Lin, Z.; Han, J.; and Ding, G. 2024. Yolov10: Real-time end-to-end object de-tection. Advances in neural information processing systems ,37: 107984–108011. Wang, T.; Li, Y.; Kang, B.; Li, J.; Liew, J.; Tang, S.; Hoi, S.; and Feng, J. 2020. The devil is in classification: A simple framework for long-tail instance segmentation. In European conference on computer vision , 728–744. Springer. Wang, W.; Dai, J.; Chen, Z.; Huang, Z.; Li, Z.; Zhu, X.; Hu, X.; Lu, T.; Lu, L.; Li, H.; et al. 2023a. Internimage: Explor-ing large-scale vision foundation models with deformable convolutions. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , 14408–14419. Wang, Z.; Xu, Q.; Yang, Z.; He, Y.; Cao, X.; and Huang, Q. 2023b. A unified generalization analysis of re-weighting and logit-adjustment for imbalanced learning. Advances in Neural Information Processing Systems , 36: 48417–48430. Wei, X.-S.; Xu, S.-L.; Chen, H.; Xiao, L.; and Peng, Y. 2022. Prototype-based classifier learning for long-tailed visual recognition. Science China Information Sciences ,65(6): 160105. Zhong, Z.; Cui, J.; Liu, S.; and Jia, J. 2021. Improving calibration for long-tailed recognition. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , 16489–16498. Zhou, Y.; Qu, Y.; Xu, X.; and Shen, H. 2023a. Imbsam: A closer look at sharpness-aware minimization in class-imbalanced recognition. In Proceedings of the IEEE/CVF International Conference on Computer Vision , 11345– 11355. Zhou, Z.; Li, L.; Zhao, P.; Heng, P.-A.; and Gong, W. 2023b. Class-conditional sharpness-aware minimization for deep long-tailed recognition. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition ,3499–3509.
