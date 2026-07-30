@@ -1,0 +1,434 @@
+Title: Exploring Budgeted Image Classification with Content-Sensitive Resource Allocation
+
+URL Source: https://arxiv.org/pdf/2607.23997v1
+
+Published Time: Tue, 28 Jul 2026 01:55:04 GMT
+
+Number of Pages: 12
+
+Markdown Content:
+# Exploring Budgeted Image Classification with Content-Sensitive Resource Allocation 
+
+# Athanasios G. Papadopoulos Tandon School of Engineering, New York University 
+
+> tpapadop@nyu.edu
+
+# Abstract 
+
+The ever-growing adoption of Artificial Intelligence (AI) creates the need to deploy Deep Neural Networks in a va-riety of computational environments. We consider dynamic environments, where computational requirements are sub-ject to change, and we pose the following question: How do we adjust the complexity of an AI classification system, in order to maximize its accuracy, while meeting changing computational constraints? We call this problem Budgeted Image Classification, and we formally formulate it as a re-source allocation integer program. Given a computational budget, a batch of images, and a classification system that can make decisions with varying complexity (it has multiple decision points), we explore strategies to allocate images to decision points, in order to maximize accuracy within the available budget. The original integer program is NP-Hard, so, we propose a continuous relaxation, leading to a content-agnostic allocation strategy which assigns images to decision points without considering their particular con-tent. We address this issue by proposing a content-sensitive strategy, that we experimentally show it leads to superior performance. We theoretically study the behavior of our strategies, deriving conditions that must be satisfied by de-cision points to be suitable for budgeted classification. We analyze fails cases, offering insights for future research di-rections. 
+
+# 1. Introduction 
+
+The widespread use of Artificial Intelligence (AI) creates the need for training and deployment of deep models in a wide range of computational environments, which vary from highly distributed data centers, to mobile phone de-vices [7, 9, 10]. A straightforward way to address this problem, is to design families of models that have differ-ent computational complexity, and are suitable for different environments [1, 19, 20, 22]. This has become a trend in generative AI, where models like GPT and LLaMA are re-leased in a range of sizes [3, 23]. However, computational environments may be dynamic, meaning that requirements may not be fixed, but subject to change. This can be the case when a mobile phone enters to energy-saving mode, or its processor experiences high utilization and available resources are scarce. As another example, computational requirements may change due to financial or environmen-tal policies, since processing load is connected to monetary and environmental costs [18]. In such scenarios, we would like an AI system to adjust its processing in such a way, that the new computational re-quirements are respected, while performance is maximized. This assumes that our system has the ability to adjust its processing, and that we have a resource allocation strategy which dictates how to adjust the processing for optimal per-formance. For example, given an ensemble of image classi-fication models with different sizes, a computational budget 
+
+B, and a batch of images I, we would like to determine how to allocate the images across the models of the ensemble, in order to not exceed B, and maximize accuracy in I. It is fair to assume that the smaller the size of a model, the less accurate it is expected to be, so, in an ideal scenario, we would classify all images with the largest model available. However, our budget B may not allow for this, so we need to decide which images will be assigned to which model. In this work, we focus on the problem of budgeted image classification, since classification is one of the most gen-eral and common computer vision tasks. We generalize the concept of adjustable processing beyond model ensembles, by considering any processing system with multiple deci-sion points. Decision points (DPs) correspond to differ-ent processing paths that lead to a classification decision, and vary in computational cost and expected accuracy. In the previous example, each model of the ensemble corre-sponds to a different decision point. We experiment with two types of adjustable processing systems, an ensemble of models that operate on inputs of different resolution, and a hard-attention model which attends to a varying number of image regions. Our goal is to use these adjustable clas-sification systems to explore the behavior of different allo-arXiv:2607.23997v1 [cs.AI] 27 Jul 2026 cation strategies, meaning different ways to distribute im-ages to decision points under various computational bud-gets. To this end, we develop a content-agnostic, and a content-sensitive strategy. The content-agnostic strategy determines how many im-ages should be assigned to each DP in order to respect the available budget, but it doesn’t specify which images should be assigned to each DP. We experimentally demonstrate that it leads to suboptimal performance. The development of our content-sensitive strategy is based on the simple, but impor-tant observation, that correct classification of certain images may be harder than others, e.g., due to partial occlusion of a salient object. Based on that, easier images can be assigned to less accurate and less expensive DPs, while more difficult images can be assigned to more expensive, but more ac-curate DPs. Following this principle, our content-sensitive strategy estimates the difficulty of correctly classifying dif-ferent images, and assigns them to DPs according to their accuracy-computational efficiency trade-off. We formally formulate budgeted image classification as a resource allocation optimization problem, we develop two different allocation strategies to approximate its optimal so-lution, and we study their behavior, both experimentally and theoretically. Our goal is not to develop a state-of-the-art solution for a particular setting of budgeted classification, instead, we aim to provide a general formal view of the problem, and offer insights about the behavior of potential solutions. The contributions of our work are the following: • We formulate budgeted image classification as an integer program, which is NP-Hard. We offer a continuous re-laxation of the program to derive a tractable, but content-agnostic, solution. We enhance the content-agnostic so-lution with content-sensitive heuristics to provide a better approximation to the solution of the original integer pro-gram. • We use two different adjustable processing systems, a multi-resolution ensemble and a hard-attention model, to experimentally demonstrate the performance benefits of our content-sensitive approximate solution. • We study the conditions that must be satisfied by DPs in terms of their accuracy-computational efficiency trade-off, in order to be suitable for budgeted classification. • We experimentally demonstrate limitations of content-sensitive heuristics. Importantly, we show that more ex-pensive and more accurate DPs may not always be the optimal allocation choice, due to their specialization on different modes of the data distribution. 
+
+# 2. Related Work 
+
+Budgeted classification requires an AI system with multi-ple decision points of different complexity, to accommodate adjustable processing. Existing solutions include ensem-bles of networks with different inference costs [2, 16], mod-els with classification heads attached to layers of different depth [2, 11, 12, 21], models that dynamically change their depth [5, 24, 26] or width [6, 30], ensembles of models that process inputs of different size [28, 29], models that employ various gating mechanisms to create processing paths of dif-ferent cost [8, 14, 17, 25], and hard-attention models which take sequences of glimpses of variable length [13, 15, 27]. In addition to adjustable processing, budgeted classifi-cation requires an allocation mechanism that decides how to distribute images among the decision points. A popular approach is to create an allocation strategy with trainable parameters, that learns to make decisions based on the con-tent of individual images [2, 5, 13, 25]. For example, in networks with decision points at layers of different depth, the allocation mechanism consists of binary functions that decide after each convolutional block whether processing should stop, or continue [2]. In such cases, constraints on the budget are formulated as loss terms, leaving bud-get changes to require retraining of the allocation strategy. Trainable allocation methods can avoid retraining, by re-ceiving computational requirements as an additional input during inference [14]. However, computational require-ments are provided in the form of proxy variables, which don’t have an obvious correspondence with the actual bud-get measured, e.g., in floating point operations (FLOPs). Allocation strategies can also be non-trainable [11, 27– 29]. For example, the given budget can be used to set up an optimization problem, which calculates a threshold value for every decision point. During inference, processing stops at the first decision point that makes a prediction with con-fidence score (e.g., softmax probability) above the corre-sponding threshold [28]. A problem with such methods is that threshold values are specified based on a validation set, thus, do not guarantee that the budget constraint will be sat-isfied for the batch at hand. In addition, when the budget changes, a new optimization problem has to be solved, and its complexity may be a factor to consider. The allocation strategies that we follow are non-trainable, and we solve an optimization problem as well, though, we guarantee that the budget is respected, and the optimization complexity is polynomial to the practically small number of decision points. 
+
+# 3. Models 
+
+We use two different types of image classification ap-proaches, which both have the ability to make predictions at multiple decision points, with varying computational re-quirements. The first approach is an ensemble of mod-els which share the same architecture, but process im-ages at different resolution. The second approach is a hard attention-model, TNet [15], which gradually accumu-lates information from an image, by selectively processing patches in a coarse-to-fine fashion. Figure 1. Three unrolled processing levels of TNet [15]. Starting at level 1, the image is processed in the coarsest scale ( Feature Extraction Module ), and the extracted features are used to decide which image regions should be processed in a finer scale ( Loca-tion Module ). This process is repeated for each selected location to reach level 3, where features from the finest scale are extracted. All features are enriched with positional information ( Positional Encoding Module ), and then are averaged before the final classi-fication ( Classification Module ). Modules of the same name (and color) share weights. 
+
+3.1. Multi-Resolution Ensemble 
+
+The ensemble consists of 3 EfficientNet-B0 models [19], which are trained independently on images of different res-olutions. We denote the 3 models as EN-B 0-224 , EN-B 0-
+
+448 , and EN-B 0-896 , because they are trained on images of resolution 224 × 224 px, 448 × 448 px, and 896 × 896 
+
+px, respectively. Each model is a separate decision point, with different computational complexity due to the differ-ent input size. We can think of the ensemble as processing an image pyramid, where EN-B 0-224 is the least expensive DP with the lowest expected accuracy, while EN-B 0-896 is the most expensive DP, with the highest expected accuracy. 
+
+3.2. Traversal Network (TNet) 
+
+TNet is a multiscale hard-attention architecture, inspired by the way humans use saccades to explore the visual world [15]. Processing evolves in levels, where at each level, higher-resolution details become available to the model. In this work, we use TNet to process images of res-olution 896 × 896 px. We provide an overview of the TNet architecture in Figure 1. Processing starts at level 1 ( 1 ⃝), where we down-scale the full-resolution input to 224 × 224 
+
+px, and pass it through the feature extraction module , to ex-tract a feature vector V1 that contains a coarse description of the original image. To proceed to the next level, we feed an intermediate feature map, F1, from the feature extraction module, to the 
+
+location module . The location module considers a number of image regions as candidates to be processed in higher resolution, and predicts their importance. In the example of Fig. 1, the candidate locations form a 2×2 regular grid ( 2 ⃝), and we sample 2 locations ( 3 ⃝) based on their estimated importance. In the 2nd processing level, we crop the selected regions from the full-resolution image, resize them to 224 × 224 
+
+px, and feed them to the feature extraction module to obtain the corresponding feature vectors, V21 and V23 . Then, we feed F21 and F23 to the location module, leading to 2 new sampling grids. We sample 1 location from each one of them to get V35 and V39 in the 3rd processing level. Features extracted from all levels are passed through a positional encoding module , which injects information about the spatial position and scale of the image regions. We average all extracted features, {V ′ 
+
+> ∗
+
+}, into a single com-prehensive representation, V ′
+
+( 4 ⃝), and we feed it to the 
+
+classification module for the final prediction. TNet is flexible, and can be used to make predictions after each processing level, and with a varying number of attended locations. This way, we can define multiple deci-sion points, where DPs with more attended locations are ex-pected to be more accurate, but with higher computational cost. In this work, we use an EfficientNet-B0 backbone as the feature extraction module of TNet. The rest of the modules are defined according to [15]; more details are provided in Section 5.1. 
+
+# 4. Methods 
+
+We define the problem of budgeted image classification in the following way: Given a classification system M
+
+with K decision points of varying computational complex-ity, a computational budget B, and a batch of N images 
+
+I = {xi|i = 1 , 2, ..., N }, we want to maximize the classifi-cation accuracy in the batch, while the total computational cost does not exceed B. Different metrics can be used for 
+
+B. Without loss of generality, we use floating point opera-tions (FLOPs), and holds B ∈ R+.
+
+4.1. Budgeted Image Classification Formulation 
+
+We approach budgeted image classification as a resource allocation problem, and we seek its solution by solving the following integer program: 
+
+min 
+
+> p
+
+1
+
+N
+
+> N
+
+X
+
+> i=1
+> K
+
+X
+
+> k=1
+
+pik · Eik, (1) subject to 
+
+> N
+
+X
+
+> i=1
+> K
+
+X
+
+> k=1
+
+pik · Ck ≤ B, (1a) 
+
+> K
+
+X
+
+> k=1
+
+pik = 1 , ∀i ∈ { 1, 2, ..., N }, (1b) 
+
+pik ∈ { 0, 1}, ∀i ∈ { 1, 2, ..., N } ∧ ∀ k ∈ { 1, 2, ..., K }
+
+(1c) where pik is a binary variable that is equal to 1 when im-age xi is classified at decision point k, and 0 otherwise. 
+
+p = {pik|i = 1 , 2, ..., N, k = 1 , 2, ..., K } is the set of all pik,which constitute our optimization variables. p represents allocation decisions about all N images, and constraints 1b and 1c, guarantee that p assigns each image to exactly one decision point. Eik is the probability of misclassifying im-age xi at decision point k. The quantity minimized in ex-pression 1, is the expected classification error based on al-location p. Ck is the computational cost of classifying xi
+
+at decision point k; we assume that Ck does not depend on image xi. Inequality 1a, requires the total classification cost that stems from allocation p, to not be greater than B.The solution to program 1 is optimal allocation p∗, which assigns images to DPs in such a way, that the average ex-pected error is minimal within the available budget. In gen-eral, at decision points with lower cost, Ck, we expect eas-ier images to have lower misclassification probability, Eik,compared to harder ones. As we move to more expensive decision points, we expect Eik to drop for all images, but for harder ones the drop to be more significant, since for easier ones, Eik was already low. Based on that, we expect optimal allocation, p∗, to assign easier images to decision points of lower cost, and harder images to more costly ones. We note that more costly DPs may not always be preferable, mean-ing that for certain images, DPs of lower cost may have the lowest expected error, Eik. Program 1 accounts for that, by having a separate estimation Eik for each image across DPs. Linear program 1 is NP-Hard, with N · K variables. This means that batch size, N , could easily get big enough that we face a computational bottleneck. In addition, it is not straightforward how to estimate Eik for all images and all decision points, especially since we are in a budgeted classification setting where computational requirements are strictly defined. 
+
+4.2. Content-Agnostic (Random) Resource Alloca-tion 
+
+We simplify program 1, in 2 ways. First, we relax integrity constraint 1c, transforming NP-Hard integer program 1 into a linear program, solvable in polynomial time. Second, we simplify the estimation of misclassification probabilities 
+
+Eik, by using a method agnostic to image content, that is solely based on prior information. In particular, we process the images of a held-out validation set, and at each decision point k, we calculate the total classification error Ek. Then, for every image xi in I, we set Eik = Ek. Based on that, all images are identical for the purposes of resource allocation, and our N · K variables pik, reduce to K relaxed variables 
+
+pk. We get: 
+
+min 
+
+> pK
+
+X
+
+> k=1
+
+pk · Ek, (2) subject to N
+
+> K
+
+X
+
+> k=1
+
+pk · Ck ≤ B, (2a) 
+
+> K
+
+X
+
+> k=1
+
+pk = 1 , (2b) 
+
+0 ≤ pk ≤ 1, ∀k ∈ { 1, 2, ..., K } (2c) where pk is the probability of classifying an image at deci-sion point k, and p = {pk|k = 1 , 2, ..., K } is the set of all 
+
+pk. As in program 1, the objective function is the expected classification error, and constraint 2a enforces the total com-putational cost to not be greater than B. Constraints 2b and 2c, require p to parametrize a categorical probability dis-tribution over decision points. The way we interpret pk, is that approximately nk = pk · N images should be classified at decision point k. Based on that, we can have a content-agnostic allocation method, which solves linear program 2, and randomly assigns nk = ⌊pk · N ⌋ images 1 to each de-cision point k. We refer to this strategy either as content-agnostic allocation , or random allocation .
+
+4.3. Content-Sensitive Resource Allocation 
+
+We would like the decisions of our allocation strategy to be sensitive to image content. To this end, we solve linear program 2 to get content-agnostic allocation probabilities 
+
+p = {pk|k = 1 , 2, ..., K }, and we calculate the number nk
+
+of images that should be classified at each decision point 
+
+k, as we described in Section 4.2. Then, we make content-sensitive decisions about which images should be classified at each decision point. Decision points can be executed either in parallel or se-quentially. We represent processing dependencies between decision points by using a tree structure that we call pro-cessing tree . Each node in a processing tree corresponds to a different decision point, and for simplicity, we use the abbreviation DP to refer to both decision points and tree nodes. Nodes at a tree level, l, can be executed in parallel, but they have to be executed after parent nodes at level l −1,and before children nodes at level l + 1 .As an example, in Figure 2, we depict a processing tree of the TNet model (see Section 3.2). The root node ( DP 1)corresponds to the classification decision that is made at the 
+
+1st processing level, based on the down-scaled version of the whole image. The nodes at the next tree level corre-spond to decision points from TNet’s 2nd processing level.                                       
+
+> 1If nr=N−PKk=1 nk>0, we assign the remaining nrimages to the least expensive decision point, for which holds nk>0. This way, we ensure that constraint 2a is satisfied. Figure 2. Processing tree of the TNet model (see Section 3.2). The root node, DP 1, corresponds to the decision point at the 1st processing level, which uses the down-scaled version of the whole image ( 0attended locations). The nodes at the next tree level can be executed in parallel, and correspond to decision points from TNet’s 2nd processing level; DP 2corresponds to attending to
+> 1location, DP 3to 2locations, and DP 4to 3locations. DP 5
+> corresponds to a classification decision at TNet’s 3rd processing level, which is made by attending to 4locations; 2locations in the
+> 2nd processing level, and 1additional location within each one of them, in the 3rd processing level.
+
+In particular, DP 2 corresponds to attending to 1 location, 
+
+DP 3 to 2 locations, and DP 4 to 3 locations. There could be more decision points, since more locations could be at-tended, but the current processing tree is sufficient for our purposes. DP 5 represents a classification decision at TNet’s 
+
+3rd processing level, which is made by attending to 4 loca-tions. Its parent node is DP 3 because the 4 attended lo-cations result from attending to 2 locations in the 2nd pro-cessing level, and to 1 additional location within each one of them, in the 3rd level. A processing tree can be derived from any adjustable processing method, and it is at the core of our content-sensitive allocation strategy. In particular, our strategy is based on the following simple idea. When decision points are executed sequentially, a parent DP should process all images that may be assigned to its children DPs, and for-ward to them the images it is more uncertain about. That’s a heuristic to assign harder images (higher uncertainty) to more accurate DPs (children DPs are more expensive than their parents, so they are part of the solution to program 2 only if they are more accurate on average; lower Ek). Our strategy is summarized in Algorithm 1. We use the processing tree of Fig. 2 as an example to walk through the allocation algorithm. We remind that we first solve linear program 2 to calculate the number nk of images that should be classified at each DP k (lines 3-6 in Algorithm 1). Then, we make a random initial assignment of images to DPs. In particular, for each DP k we create a set Ik that contains 
+
+nk randomly selected images from I; each image in I is assigned to exactly one set Ik (lines 7-8 in Algorithm 1). Given processing tree T , we iterate over DPs in a breadth-first fashion, in order to update assignments Ik, and make final predictions P (lines 9-18 in Algorithm 1). At each DP k, we process all images assigned to DPs in sub-tree Tk; Tk is the subtree of T with DP k as its root. We also define ITk as the set of all images assigned to DPs that are part of Tk. For example, given the processing tree of Fig. 2, if we are at DP 1, subtree T1 is equivalent to the whole tree T , and we process all N images in I; T1 ≡ T ,and IT1 = I. If we are at DP 3, T3 consists of DP 3 and 
+
+DP 5, IT3 = I3 ∪ I5, and we process all n3 + n5 images in 
+
+IT3 (lines 10-12 in Algorithm 1). After all images in ITk are processed at DP k, they are sorted in decreasing order of top-1 classification probabil-ity; a content-based heuristic to sort images in order of in-creasing difficulty (line 13 in Algorithm 1). Then, we iterate over every DP i in Tk in order of increasing computational cost. We update Ii to contain the first ni sorted images in 
+
+ITk , we remove these images from ITk , and we move to the next DP (lines 14-16 in Algorithm 1). This is an attempt to assign images of greater difficulty, to more accurate DPs. After we update Ii for every DP i in Tk, we store at the set of final predictions, P , the predictions made by the root 
+
+DP k for the nk images in Ik, and we move to the next DP (line 17 in Algorithm 1). To put everything together for the processing tree of Fig 2, we start at DP 1, where we process all N images. Then, we assign the n1 images with the highest top-1 clas-sification probability to DP 1, the next n2 images to DP 2,the next n3 images to DP 3, the next n4 images to DP 4, and the next n5 images to DP 5. We store the predictions made for the images in I1 at the set of final predictions P , and we move to the next decision point, DP 2. Subtree T2 contains only DP 2, so, we just classify at DP 2 the images in I2, and we store the predictions in P . We move to DP 3, where we process all images assigned to I3 and I5. We store the n3
+
+most confident predictions in P , and we assign the rest n5
+
+images to I5. DP 4 and DP 5 are the next two DPs to visit, where we just classify the already assigned images, and we store the predictions to conclude the process. 
+
+# 5. Experimental Evaluation 
+
+5.1. Data and Models 
+
+Functional Map of the World (fMoW) [4] consists of high-resolution satellite images, from 62 classes. They are split in 363 , 572 training, 53 , 041 validation and 53 , 473 testing images. For the multi-resolution ensemble of EN-B 0-224 , EN-B0-448 , and EN-B 0-896 (see Section 3.1), we use models trained on fMoW, provided in [15]. All members of the Algorithm 1 Content-sensitive resource allocation. 
+
+Input: batch I with N images, budget B, system M with K decision points (DPs) and processing tree T , validation set Ivs ,computational cost Ck for every DP k
+
+Output: classification predictions P for the images in I 
+
+> 1:
+
+for k = 1 , 2, ..., K do ▷ offline processing  
+
+> 2:
+
+Ek ← classification error on Ivs at DP k 
+
+> 3:
+
+{pk|k = 1 , 2, ..., K } ← solve linear program 2  
+
+> 4:
+
+{nk|k = 1 , 2, ..., K } ← ⌊ pk · N ⌋ 
+
+> 5:
+
+r ← find index k of DP k with lowest Ck for which holds pk > 0 ▷ ensure PKk=1 nk = N 
+
+> 6:
+
+nr ← nr + N − PKk=1 nk 
+
+> 7:
+
+for k = 1 , 2, ..., K do ▷ initialize sets Ik with images assigned to every DP k 
+
+> 8:
+
+Ik ← sample nk images without replacement from uniform distribution over I 
+
+> 9:
+
+for DP k ∈ T in breadth-first order do  
+
+> 10:
+
+Tk ← subtree of T with root DP k 
+
+> 11:
+
+ITk ← ∪ i:DP i∈Tk Ii ▷ I Tk is the set of all images currently assigned to DPs in Tk 
+
+> 12:
+
+probs ← use DP k to calculate class probabilities of all images in ITk 
+
+> 13:
+
+ITk ← sort ITk in decreasing order of top-1 probability in probs  
+
+> 14:
+
+for DP i ∈ Tk in order of increasing cost Ci do  
+
+> 15:
+
+Ii ← overwrite Ii with the first ni images of ITk 
+
+> 16:
+
+ITk ← remove the first ni images of ITk 
+
+> 17:
+
+P ← add predictions for the images in Ik 
+
+> 18:
+
+return P
+
+Figure 3. Two processing trees of EN-B 0 ensemble, which con-sists of EN-B 0-224 , EN-B 0-448 , and EN-B 0-896 models (see Section 3.1). The 3 models constitute 3 different decision points. (a) In content-agnostic allocation, DPs are executed in parallel, since images are assigned randomly. (b) In content-sensitive allo-cation, DPs are executed sequentially, in order of increasing com-putational cost; first EN-B 0-224 , then EN-B 0-448 , and last EN-B0-896 .
+
+ensemble share the same architecture, and have 4.13 M pa-rameters. We consider two processing trees for EN-B 0 ensemble, one for the case of content-agnostic (random) allocation, and one for content-sensitive allocation. In both cases, the output of each model corresponds to a different decision 
+
+Table 1. Expected misclassification probability and computational cost of every DP in the processing trees of EN-B 0 ensemble. For the content-agnostic case, the DPs can be executed in parallel, as depicted in Fig. 3 (a), while for the content-sensitive case, the DPs are executed sequentially, as depicted in Fig. 3 (b). The sequen-tial execution leads DP 2 and DP 3 to have higher cost in content-sensitive allocation. 
+
+DP 1 DP 2 DP 3
+
+Content Agnostic Error −Ek (%) 36 .41 29 .39 28 .68 
+
+Cost −Ck (GFLOPs) 0.39 1.54 6.18 
+
+Content Sensitive Error −Ek (%) 36 .41 29 .39 28 .68 
+
+Cost −Ck (GFLOPs) 0.39 1.93 8.11 
+
+point. For content-agnostic allocation, images are assigned randomly to members of the ensemble, according to the so-lution to program 2. As a result, decision points can be executed in parallel, leading to the processing tree of Fig-ure 3 (a). For content-sensitive allocation, decision points are executed sequentially, in order of increasing computa-tional cost; first EN-B 0-224 , then EN-B 0-448 , and last EN-B0-896 , leading to the processing tree of Figure 3 (b). For both processing trees, the computational cost and expected misclassification probability of each DP are provided in Ta-ble 1. Table 2. Expected misclassification probability and computational cost of every DP in the processing tree of TNet (Fig. 2). 
+
+DP 1 DP 2 DP 3 DP 4 DP 5
+
+Error −Ek (%) 49 .94 29 .48 27 .84 27 .7 27 .07 
+
+Cost −Ck (GFLOPs) 0.39 0.77 1.16 1.55 1.94 
+
+Similar to EN-B 0 ensemble, we use the TNet model trained on fMoW that is provided in [15]. As we described in Section 3.2, TNet’s feature extraction module follows the EfficientNet-B 0 architecture, and has a total number of 
+
+4.56 M parameters; the exact architectures of all modules can be found in [15]. The processing tree that we use in our experiments is depicted in Figure 2, while the cost and expected misclassification probability of the corresponding DPs are provided in Table 2. For each DP, we estimate its expected misclassification probability by calculating its average classification error on the validation set of fMoW. The required FLOPs are calcu-lated according to [15]. 
+
+5.2. Results 
+
+We evaluate our models on the test set of fMoW, by using 
+
+2 resource allocation methods. We use the content-agnostic (random) allocation strategy described in Section 4.2, and the content-sensitive allocation strategy presented in Sec-tion 4.3 and Algorithm 1. For each classification approach (TNet and ensemble), we use 50 different computational budgets, which uniformly cover the range [Bmin , B max ].
+
+Bmin and Bmax are the computational costs of classifying all given images at the least, and most expensive decision point, respectively. 
+
+5.2.1. Allocation Probabilities 
+
+Both content-agnostic and content-sensitive strategy require solving linear program 2 to get allocation probabilities p =
+
+{pk, k = 1 , 2, ..., K }; for TNet holds K = 5 , and for the ensemble K = 3 . In Figure 4, we provide the alloca-tion probabilities of TNet’s 5 decision points under differ-ent budgets. For the minimum budget, Bmin , all images are classified at DP 1 (p1 = 1 ). As the budget increases, 
+
+p1 starts to decrease, and p2 to increase. This means that the extra budget is used to classify more images at DP 2, in-stead of DP 1. As the budget continues to increase, p1 goes to 0, and p2 gets equal to 1. Then, p2 starts to decrease, and 
+
+p3 starts to increase. The general behavior is that additional budget is used to classify images at more expensive decision points, since they are expected to be more accurate. This is the behavior that we observe in Figure 5 as well, where we provide the allocation probabilities of the EN-B 0 ensemble under different budgets. 
+
+5.2.2. Allocation Trade-Off 
+
+Interestingly, in Figure 4, the probability of DP 4 remains equal to 0 for all budgets. To understand why this is hap-pening, we explore how budget changes affect the objective function of linear program 2. Let’s assume that based on our budget B, the solution to program 2 is pr = 1 , meaning that we are classifying all images at DP r . For example, this is the case when our budget is equal to Bmin , and the allocation probability of the least expensive DP is equal to 1. To aid our analysis, we will call DP r the decision point of reference . Now, let’s assume that an additional small budget ∆B > 0 becomes available. Given ∆B, we have the option to increase the allocation probability of any DP k that is more costly than 
+
+DP r (Ck > C r ), while we have to decrease the allocation probability of the reference DP by the same amount 2. We get: 
+
+∆pk,r · (Ck − Cr ) = ∆ B ⇒ (3) 
+
+∆pk,r = ∆B
+
+(Ck − Cr ) (4) where ∆pk,r is the maximum possible increase of pk when 
+
+DP r is the decision point of reference. Equation 3 indi-cates that the increase in total classification cost due to the increase of pk and decrease of pr (left-hand side), has to be equal to the budget increase ∆B 3.The impact that the increase of pk will have on the ob-jective function of program 2, is the following: 
+
+∆Ek,r = ∆ pk,r · (Er − Ek) ⇒ (5) 
+
+∆Ek,r = ∆ B · Er − Ek
+
+Ck − Cr
+
+(6) where ∆Ek,r is the change in total expected classification error when pk is increased by ∆pk,r (and pr is decreased by the same amount). Ek and Er are the expected misclassifi-cation probabilities at DP k and DP r respectively. ∆Ek,r is positive when DP k is more accurate than DP r (Ek < E r ), and corresponds to the amount by which the objective func-tion of program 2 will decrease. The opposite holds for neg-ative ∆Ek,r , meaning that DP k has to be less accurate than 
+
+DP r , leading the objective function to increase by |∆Ek,r |.Based on this, the optimal use of extra budget ∆B, is to increase the allocation probability of DP k with the largest                                
+
+> 2For any DP kthat holds Ck≤Cr, if an increase in allocation proba-bility pkcould lead to a better solution to program 2, pkwould have been higher already, since the initial budget Bis sufficient to assign any number of images to DPs less costly than DP r.
+> 3We assume that ∆Bis small enough, such that pk≤1after it is increased by ∆pk,r , and pr≥0after it is decreased by ∆pk,r .We further assume that ∆Bcan be used in its entirety.
+
+Figure 4. Optimal allocation probabilities p = {pk , k = 1 , 2, ..., 5} of TNet’s decision points for the processing tree of Fig. 2, under different computational budgets. We get p by solving linear program 2; expected error and cost of each DP is provided in Table 2. For the lowest budget, all images are classified at DP 1 (p1 = 1 ). As the budget increases, p1 starts to decrease, and p2 to increase. This corresponds to a general trend, where additional budget is used to classify images at more expensive decision points, since they are expected to be more accurate. 
+
+Figure 5. Optimal allocation probabilities p = {pk , k = 1 , 2, 3} of EN-B 0 ensemble’s decision points for the processing tree of Fig. 3 (a), under different computational budgets. We get p by solving linear program 2; expected error and cost of each DP is provided in Table 1. For the lowest budget, all images are classified at DP 1 (p1 = 1 ). As the budget increases, p1 starts to decrease, and p2 to increase. This corresponds to a general trend, where additional budget is used to classify images at more expensive decision points, since they are expected to be more accurate. For the content-sensitive case (Fig. 3 (b)), the only difference is the cost of the DPs. 
+
+positive ∆Ek,r :argmax 
+
+> k
+
+∆Ek,r = argmax 
+
+> k
+
+αk,r (7) s.t. αk,r > 0 (7a) where αk,r := Er − Ek
+
+Ck − Cr
+
+(7b) Equation 7 follows from Eq. 6, by considering that the argmax operation is independent of ∆B. We introduce αk,r 
+
+to aid our analysis, and we call it the trade-off ratio between 
+
+DP k and DP r , since it represents the ratio between the re-duction in expected classification error ( Er − Ek), and the Table 3. Trade-off ratios, αk,r (Eq. 7b), of the TNet model, for                  
+
+> r∈[1 , K −1] , and k∈[r+1 , K ], where K= 5 . DPs correspond to the processing tree of Fig. 2. Dashes, −, correspond to cases where either Ck< C r, or Ek> E r; as we note in Section 5.2.2, these cases are ignored by the optimal solution to program 2 when additional budget becomes available. In bold is the largest value of each row. We observe that DP 4never has the largest trade-off ratio, thus, it is ignored by our allocation strategies.
+
+Ref DP Trade-off Ratio 
+
+DP 2 DP 3 DP 4 DP 5
+
+DP 1 53 .84 28 .7 19 .17 14 .75 
+
+DP 2 − 4.21 2.28 2.06 
+
+DP 3 − − 0.36 0.99 DP 4 − − − 1.62 
+
+increase in computational cost ( Ck − Cr ), when the alloca-tion probability pr is decreased in favor of pk.We can use problem 7 to better understand how allo-cation probabilities change in Figure 4. In particular, in Table 3, we calculate the trade-off ratio, αk,r , for r ∈
+
+[1 , K − 1] , and k ∈ [r + 1 , K ]. As we mentioned in Sec-tion 5.2.1, the lowest available budget, Bmin , corresponds to the case that every image is assigned to DP 1 (p1 = 1 ). In the first row of Table 3, we use DP 1 as the decision point of reference, and we calculate the trade-off ratio for every other DP. As we can see, α2,1 has the highest value, and as a result, the objective function of program 2 will be reduced the most when additional budget is used to increase p2. This is what we see happening in Figure 4, where p2 gradually increases to 1, as more budget becomes available. When 
+
+p2 = 1 , we can use DP 2 as the DP of reference, and based on the second row in Table 3, α3,2 has the highest positive value. Similar to what we observed before, in Figure 4, p3
+
+starts to increase until it gets equal to 1, becoming the next DP of reference. In the third row of Table 3, we see that 
+
+α5,3 > α 4,3 > 0, thus, DP 4 is ignored, and p5 starts to increase. Even if DP 5 is more costly than DP 4 (C5 > C 4), meaning that we can assign to it fewer additional images (∆p5,3 < ∆p4,3 based on Eq. 4), the decrease in expected classification error is more significant ( E5 < E 4), mak-ing the expected reduction in the overall classification error greater (this is what is expressed by α5,3 > α 4,3). As a result, it is preferable to increase p5 instead of p4.This explains why p4 remains equal to 0 under every budget in Fig. 4. In general, we can use problem 7 to find out in advance, if the DPs of our system are suitable for budgeted classification. In particular, we can calculate the trade-off ratios as in Table 3, and remove every DP that doesn’t have the highest positive trade-off ratio in at least one row; these are the DPs that will never be part of the solution to program 2. 
+
+5.2.3. Classification Accuracy 
+
+In Figure 6, we provide the classification accuracy of TNet and EN-B 0 ensemble on the test set of fMoW, under dif-ferent computational budgets. We use both the random and context-sensitive allocation strategy. We are not interested in the performance differences between the ensemble and TNet, we rather focus on the behavior of each model under the two allocation strategies. For both TNet and EN-B 0 ensemble, the content-agnostic allocation strategy leads to accuracy that increases linearly between decision points (red and blue lines); except for TNet’s DP 4, which constantly has 0 allocation proba-bility for reasons discussed in Section 5.2.2. The content-sensitive allocation strategy leads both TNet and EN-B 0 en-semble to higher accuracy under almost all budgets (ma-genta and green lines). Its impact is more profound for EN-B 0 ensemble, as we can see for example in the budget range between the ensem-ble’s DP 1 and DP 2 (the two red stars of lower cost). In this particular budget range, allocation probability p1 decreases and p2 increases, meaning that images that were previously classified at DP 1, are now classified at DP 2. Content-agnostic strategy randomly decides which images should be assigned to the two DPs, achieving classification error that is approximately equal to p1 ·E1 +p2 ·E2; a linear interpola-tion between E1 and E2. In contrast, content-sensitive strat-egy assigns the easier images to DP 1 (the images that DP 1
+
+is more confident about), and the harder images to the more accurate DP 2 (the images that DP 1 is less confident about). This way, the classification error of DP 1 is lower than E1
+
+on the easier images, while the error of DP 2 remains close to E2, leading to a significant improvement over the random allocation. We note that the decision points of the ensemble are not executed sequentially during the content-agnostic allo-cation. For example, when an image is classified at DP 2,the computational cost is equal to the cost of executing EN-B0-448 (processing tree of Fig. 3 (a)). In contrast, during content-sensitive allocation, when an image is classified at 
+
+DP 2, the computational cost is equal to the cost of execut-ing EN-B 0-224 and EN-B 0-448 , since they are executed in a sequence (processing tree of Fig. 3 (b)). This is why the curve of the ensemble’s content-sensitive allocation extends further along the budget axis, compared to the curve that corresponds to the content-agnostic allocation. TNet fol-lows the processing tree of Figure 2 in both allocation strate-gies, and the cost of its decision points does not change. 
+
+5.2.4. Specialization on Data Modes 
+
+Of particular interest is the behavior of the ensemble in the budget range between DP 2 and DP 3 (the two red stars Figure 6. Classification accuracy of TNet and EN-B 0 ensemble on the test set of fMoW, under different computational budgets. We use both the content-agnostic and the content-sensitive allocation methods. The random allocation strategy leads to accuracy that increases linearly between decision points, while the content-sensitive strategy leads to higher accuracy under most budgets, and in the case of EN-B0 ensemble, it even leads to considerably higher accuracy overall. 
+
+of higher cost). We see that the content-sensitive strategy reaches significantly higher accuracy compared to the ran-dom one, e.g., around budget of 4 GFLOPs, but accuracy gradually drops as the allocation probability of DP 3 be-comes equal to 1. We attribute this behavior to the fact that the sets of images that can be classified correctly by EN-B 0-
+
+448 and EN-B 0-896 overlap only partially. In other words, we hypothesize that DP 2 and DP 3 specialize to different modes of the data distribution. We test this hypothesis by calculating the joint accuracy between DP 2 and DP 3, meaning the accuracy when an im-age is correctly classified at either one of the two DPs. We find joint accuracy to be around 78% (error 22% ), which is considerably higher than the accuracy of either one of the two DPs (see Table 1). This shows that there are images that can be classified correctly by DP 2 and not by DP 3,while the opposite holds true as well. The content-sensitive strategy predicts class probabilities for all images at DP 2,and assigns those with the highest top-1 probability to DP 2
+
+because they are deemed easier, while the rest are assigned to DP 3. It seems that this is an effective way to find im-ages classified correctly by DP 2 and not by DP 3, because when the budget increases and images previously classified at DP 2 are assigned to DP 3, the total accuracy drops. This specialization of members of EN-B 0 ensemble is not entirely surprising, because they are trained on images of different resolution, thus, they have access to different kinds of information. On the other hand, TNet gradually ac-cumulates information by attending to more image regions, meaning that more costly DPs add to the features already extracted by the less costly ones, leading to a gradual im-provement of image understanding. 
+
+# 6. Limitations and Future Work 
+
+We identify a number of limitations in our work, and we consider potential future research directions to address them. First, in Section 4.2 we set Eik = Ek, meaning that we made the simplifying assumption that every image, xi,has the same expected classification error at each DP k. This is a strong assumption, and can lead to suboptimal perfor-mance, e.g., when DPs specialize to different images (see Section 5.2.4). There are a number of ways to address this issue. One way would be to enhance Algorithm 1 with an additional heuristic. In particular, if the classification prob-ability of an image which is assigned to a DP is higher than a threshold, it will never be assigned to another DP, irre-spective of the available budget. An alternative approach would be to train a gating net-work to decide which images should be assigned to each DP. This is similar to how images are assigned to different models in a Mixture of Experts (MoE). The difference in our setting is that the number of images that should be as-signed to each model is determined by solving program 2; MoE usually don’t have any constraint on how many im-ages can be classified by each model. An additional benefit of using a gating network is that members of an ensemble do not have to be executed sequentially, which is another limitation of our current content-sensitive strategy. Finally, using multiple models simultaneously, as in the case of the multi-resolution ensemble, may be prohibitive in some settings due to memory constraints. In such set-tings, natively adjustable models, like TNet, may be more suitable. 
+
+# 7. Conclusion 
+
+We formulated budgeted image classification as a resource allocation integer program, which is NP-Hard. We of-fered two approximate solutions, a content-agnostic, and a content-sensitive one. We tested both strategies on satel-lite images (fMoW), by using a multi-resolution ensemble, and a hard-attention model. We experimentally showed that content-sensitive heuristics can offer significant accu-racy benefits, and we theoretically analyzed conditions that must be satisfied by decision points to be suitable for bud-geted classification. Finally, we identified limitations to our strategies, including their inability to handle decision points that specialize to different modes of the data distribution, and we discussed potential solutions as future research di-rections. 
+
+# References 
+
+[1] Irwan Bello, William Fedus, Xianzhi Du, Ekin D Cubuk, Aravind Srinivas, Tsung-Yi Lin, Jonathon Shlens, and Bar-ret Zoph. Revisiting resnets: Improved training and scaling strategies. arXiv preprint arXiv:2103.07579 , 2021. 1 [2] Tolga Bolukbasi, Joseph Wang, Ofer Dekel, and Venkatesh Saligrama. Adaptive neural networks for efficient inference. In International Conference on Machine Learning , pages 527–536. PMLR, 2017. 2 [3] Tom Brown, Benjamin Mann, Nick Ryder, Melanie Sub-biah, Jared D Kaplan, Prafulla Dhariwal, Arvind Neelakan-tan, Pranav Shyam, Girish Sastry, Amanda Askell, et al. Lan-guage models are few-shot learners. Advances in neural in-formation processing systems , 33:1877–1901, 2020. 1 [4] Gordon Christie, Neil Fendley, James Wilson, and Ryan Mukherjee. Functional map of the world. In CVPR , 2018. 5 [5] Michael Figurnov, Maxwell D Collins, Yukun Zhu, Li Zhang, Jonathan Huang, Dmitry Vetrov, and Ruslan Salakhutdinov. Spatially adaptive computation time for residual networks. In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition , pages 1039– 1048, 2017. 2 [6] Xitong Gao, Yiren Zhao, Łukasz Dudziak, Robert Mullins, and Cheng-zhong Xu. Dynamic channel pruning: Feature boosting and suppression. arXiv preprint arXiv:1810.05331 ,2018. 2 [7] Priya Goyal, Piotr Doll´ ar, Ross Girshick, Pieter Noord-huis, Lukasz Wesolowski, Aapo Kyrola, Andrew Tulloch, Yangqing Jia, and Kaiming He. Accurate, large mini-batch sgd: Training imagenet in 1 hour. arXiv preprint arXiv:1706.02677 , 2017. 1 [8] Alex Graves. Adaptive computation time for recurrent neural networks. arXiv preprint arXiv:1603.08983 , 2016. 2 [9] Andrew Howard, Mark Sandler, Grace Chu, Liang-Chieh Chen, Bo Chen, Mingxing Tan, Weijun Wang, Yukun Zhu, Ruoming Pang, Vijay Vasudevan, et al. Searching for mo-bilenetv3. In Proceedings of the IEEE/CVF International Conference on Computer Vision , pages 1314–1324, 2019. 1 [10] Andrew G Howard, Menglong Zhu, Bo Chen, Dmitry Kalenichenko, Weijun Wang, Tobias Weyand, Marco An-dreetto, and Hartwig Adam. Mobilenets: Efficient convolu-tional neural networks for mobile vision applications. arXiv preprint arXiv:1704.04861 , 2017. 1 [11] Gao Huang, Danlu Chen, Tianhong Li, Felix Wu, Laurens van der Maaten, and Kilian Q Weinberger. Multi-scale dense networks for resource efficient image classification. arXiv preprint arXiv:1703.09844 , 2017. 2 [12] Hao Li, Hong Zhang, Xiaojuan Qi, Ruigang Yang, and Gao Huang. Improved techniques for training adaptive deep net-works. In Proceedings of the IEEE/CVF International Con-ference on Computer Vision , pages 1891–1900, 2019. 2 [13] Zhichao Li, Yi Yang, Xiao Liu, Feng Zhou, Shilei Wen, and Wei Xu. Dynamic computational time for visual attention. In 
+
+Proceedings of the IEEE International Conference on Com-puter Vision Workshops , pages 1199–1209, 2017. 2 [14] Augustus Odena, Dieterich Lawson, and Christopher Olah. Changing model behavior at test-time using reinforcement learning. arXiv preprint arXiv:1702.07780 , 2017. 2 [15] Athanasios Papadopoulos, Pawel Korus, and Nasir Memon. Hard-attention for scalable image classification. Advances in Neural Information Processing Systems , 34:14694–14707, 2021. 2, 3, 5, 7 [16] Adria Ruiz and Jakob Verbeek. Adaptative inference cost with convolutional neural mixture models. In Proceedings of the IEEE/CVF International Conference on Computer Vi-sion , pages 1872–1881, 2019. 2 [17] Noam Shazeer, Azalia Mirhoseini, Krzysztof Maziarz, Andy Davis, Quoc Le, Geoffrey Hinton, and Jeff Dean. Outra-geously large neural networks: The sparsely-gated mixture-of-experts layer. arXiv preprint arXiv:1701.06538 , 2017. 2 [18] Emma Strubell, Ananya Ganesh, and Andrew McCallum. Energy and policy considerations for deep learning in nlp. 
+
+arXiv preprint arXiv:1906.02243 , 2019. 1 [19] Mingxing Tan and Quoc Le. Efficientnet: Rethinking model scaling for convolutional neural networks. In International Conference on Machine Learning , pages 6105–6114. PMLR, 2019. 1, 3 [20] Mingxing Tan and Quoc V Le. Efficientnetv2: Smaller mod-els and faster training. arXiv preprint arXiv:2104.00298 ,2021. 1 [21] Surat Teerapittayanon, Bradley McDanel, and Hsiang-Tsung Kung. Branchynet: Fast inference via early exiting from deep neural networks. In 2016 23rd International Con-ference on Pattern Recognition (ICPR) , pages 2464–2469. IEEE, 2016. 2 [22] Hugo Touvron, Matthieu Cord, Matthijs Douze, Francisco Massa, Alexandre Sablayrolles, and Herv´ e J´ egou. Training data-efficient image transformers & distillation through at-tention. In International Conference on Machine Learning ,pages 10347–10357. PMLR, 2021. 1 [23] Hugo Touvron, Thibaut Lavril, Gautier Izacard, Xavier Martinet, Marie-Anne Lachaux, Timoth´ ee Lacroix, Baptiste Rozi` ere, Naman Goyal, Eric Hambro, Faisal Azhar, et al. Llama: Open and efficient foundation language models. 
+
+arXiv preprint arXiv:2302.13971 , 2023. 1 [24] Andreas Veit and Serge Belongie. Convolutional networks with adaptive inference graphs. In Proceedings of the Euro-pean Conference on Computer Vision (ECCV) , pages 3–18, 2018. 2 [25] Thomas Verelst and Tinne Tuytelaars. Dynamic convolu-tions: Exploiting spatial sparsity for faster inference. In Pro-ceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pages 2320–2329, 2020. 2 [26] Xin Wang, Fisher Yu, Zi-Yi Dou, Trevor Darrell, and Joseph E Gonzalez. Skipnet: Learning dynamic routing in convolutional networks. In Proceedings of the European Conference on Computer Vision (ECCV) , pages 409–424, 2018. 2 [27] Yulin Wang, Kangchen Lv, Rui Huang, Shiji Song, Le Yang, and Gao Huang. Glance and focus: a dynamic approach to reducing spatial redundancy in image classification. arXiv preprint arXiv:2010.05300 , 2020. 2 [28] Yulin Wang, Rui Huang, Shiji Song, Zeyi Huang, and Gao Huang. Not all images are worth 16x16 words: Dynamic vision transformers with adaptive sequence length. arXiv preprint arXiv:2105.15075 , 2021. 2 [29] Le Yang, Yizeng Han, Xi Chen, Shiji Song, Jifeng Dai, and Gao Huang. Resolution adaptive networks for efficient infer-ence. In Proceedings of the IEEE/CVF Conference on Com-puter Vision and Pattern Recognition , pages 2369–2378, 2020. 2 [30] Jiahui Yu, Linjie Yang, Ning Xu, Jianchao Yang, and Thomas Huang. Slimmable neural networks. arXiv preprint arXiv:1812.08928 , 2018. 2
