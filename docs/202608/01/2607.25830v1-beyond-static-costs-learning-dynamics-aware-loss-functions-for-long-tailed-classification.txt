@@ -1,0 +1,586 @@
+Title: Beyond Static Costs: Learning-Dynamics Aware Loss Functions for Long-Tailed Classification
+
+URL Source: https://arxiv.org/pdf/2607.25830v1
+
+Published Time: Wed, 29 Jul 2026 01:08:30 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+> 1
+
+# Beyond Static Costs: Learning-Dynamics Aware Loss Functions for Long-Tailed Classification 
+
+Varad Shinde, Nikhil Kumar Shrey, Magesh Rajasekaran, Md Saiful Islam Sajol, Harshil Bhargava, Subhajit Sidanta, Supratik Mukhopadhyay, and Yimin Zhu 
+
+Abstract — Deep learning models in computer vision face significant challenges when trained on long-tailed datasets, where a few majority classes dominate while many minority classes are severely underrepresented. Such imbalances frequently arise in real-world scenarios such as rare species recognition, manufacturing fault detection, and medical image understanding, leading to biased models that underperform on tail classes. Existing reweighting methods typically rely on static class frequencies to penalize the model, ignoring the dynamic nature of how effectively a network actually learns a class over time. We address this by introducing a novel Learning-Dynamics Aware Loss (LDAL) function that shifts the focus from static sample counts to dynamic learning progress. LDAL framework adjusts class weights continuously by leveraging: (i) the strength of learned feature representations (semantic scale), (ii) the intrinsic learning difficulty of each class, measured via the Shannon entropy of its predictions, and (iii) an inter-epoch regularizer term that tracks prediction shifts between consecutive epochs to stabilize training and avoid local minima. LDAL is purely a objective function which incurs negligible computational overhead while adapting to the feature learning of the model. Experimental results on multiple benchmark datasets demonstrate that our approach significantly surpasses state-of-the-art reweighting loss functions, providing an optimal trade-off between accuracy and generalizability. The source code is available at https://github.com/sdm2026/ldal .
+
+I. I NTRODUCTION .Developing reliable and accurate machine learning models requires the availability of balanced datasets with uniform class representation. However, in many real-world use cases, curating a perfectly balanced dataset that represents diverse deployment scenarios is nearly impossible. As a result, many real-world datasets exhibit varying degrees of imbalance, typically following a long-tailed distribution [ 31 ]. For example, in satellite image recognition in urban environments [ 2], [ 5 ], water-bodies may be underrepresented compared to buildings. Long-tailed learning aims to improve inference accuracy for minority (tail) classes without sacrificing the performance of majority (head) classes, a challenge that has profound implications for practical computer vision applications [ 24 ]. Examples include rare disease identification using medical imaging and rare species recognition in ecological monitoring, where accurate and unbiased predictions across all classes are critical. According to the comprehensive taxonomy established by recent surveys in deep long-tailed learning [ 36 ], existing approaches for handling class imbalance fall primarily into three broad categories: (i) information augmentation (IA) [ 11 ], [21 ], [ 28 ], [ 8 ], [ 39 ], (ii) class re-balancing, which prominently includes class-sensitive learning [ 14 ], [ 6], [ 23 ], [ 3 ], [ 22 ], [12 ], and (iii) module improvement (MI) [ 7], [ 9], [ 16 ], [ 42 ], [20 ], [ 40 ], [ 41 ], [ 29 ], [ 34 ]. IA techniques attempt to balance distributions through data oversampling, undersampling, or feature transfer, but they often introduce new types of biases or substantially increase computational costs. MI approaches, such as decoupled training or ensemble learning, enhance general-ization capability but typically require large-scale computation and complex architectural changes, limiting their practicality for existing pipelines. In contrast, class re-balancing methods specifically class-sensitive learning approaches that reweight or remargin the loss function penalize errors according to the class distribution. However, existing class-sensitive learning solutions typically depend on static weighting schemes derived from fixed dataset label frequencies. Because they rely on static priors, they do not adapt to the dynamic nature of model training. The intrinsic "complexity" of learning a specific class (i.e., its learning difficulty) changes continuously as the network optimizes. Static schemes do not capture these nuances, ultimately affecting the model’s ability to generalize to difficult tail classes without overfitting. We introduce a novel class-sensitive learning method: 
+
+Learning-Dynamics Aware Loss (LDAL) . Instead of relying on static sample counts, the framework dynamically assigns class weights based on the strength of the features learned in each epoch and the relative learning difficulty of each class. Furthermore, LDAL introduces an inter-epoch regularizer term that links consecutive training epochs to prevent the model from prematurely converging to local minima dominated by head classes. Using a deeper understanding of the interplay between class representation strength and prediction uncertainty, LDAL aims to enhance both the robustness and generalization capabilities of models trained on heavily skewed datasets. Recent work [ 18 ] has demonstrated that measuring category information amount and learning difficulty yields superior decision boundaries for long-tailed object detection via loss functions. The evaluation seeks to validate that a similar information-theoretic framework is exceptionally effective and establishes highly competitive baselines within the realm of long-tailed image classification. The contributions of this paper are as follows: 1) Learning-Dynamics Aware Loss (LDAL) : We propose a novel LDAL that dynamically adjusts class weights based on running prediction frequencies and entropy-based class difficulty, moving beyond traditional static weighting schemes. arXiv:2607.25830v1 [cs.CV] 28 Jul 2026 2
+
+2) Inter-Epoch Regularizer Term : We introduce a lightweight penalty term that tracks prediction shifts between consecu-tive training epochs. This enforces stable optimization and prevents the model from settling into head-class-dominated local minima. 3) Plug-and-play integration : The LDAL framework operates purely at the objective level. It can be seamlessly integrated into existing machine learning architectures with negligible computational overhead, while pairing up with any other classification loss function. 4) Extensive evaluation on long-tailed benchmarks : We extensively experimented with benchmark datasets to demonstrate that LDAL significantly outperforms state-of-the-art class-sensitive loss functions. We also report the comparisons of LDAL with advance techniques, which uses heavy architectures for module improvements and data augmentation. The source code and datasets are available at [1]. II. M ETHODOLOGY .Reweighting-based methods are highly convinient because they are easy to implement, require no complex architectural modules, and incur minimal training overhead compared to Information Augmentation (IA) or Module Improvement (MI) techniques. However, existing reweighting methods even those that incorporate label distribution priors directly into the logits, such as Balanced Softmax [ 23 ] rely entirely on static dataset statistics. In reality, deep neural networks learn dynamically; the “complexity” of learning features for a particular class fluctuates significantly across epochs. We propose the Learning-Dynamics Aware Loss (LDAL) framework, which retains the simplicity of reweighting while dynamically adapting class weights based on real-time feature representation strength and intrinsic learning difficulty. 
+
+A. Motivation: Beyond Static Label Frequencies. 
+
+During training, a model encounters more samples from dominant (head) classes, leading to richer and stronger feature representations than those of tail classes. However, penalizing a model strictly based on inverse class frequency overlooks the fact that some classes are inherently Easier-to-Learn (ETL) while others are Difficult-to-Learn (DTL), regardless of their sample size. In the LDAL framework, the difficulty of learning a class is measured by the Shannon entropy of its post-softmax prediction probabilities across training batches. Confident predictions yield lower entropy, indicating an ETL class. Conversely, highly uncertain predictions yield higher entropy, indicating a DTL class. By shifting the penalty from raw sample counts to these dynamic learning metrics, LDAL ensures that the model does not over-penalize a tail class simply because it is rare, provided the network has already learned it effectively. 
+
+B. The LDAL Formulation. 
+
+The LDAL function acts as an auxiliary penalty that can be added to standard classification objectives. In our evaluation, we integrate it alongside the standard cross-entropy loss. For a batch of B samples, the combined loss is: 
+
+L = − 1
+
+B
+
+> B
+
+X
+
+> b=1
+> C
+
+X
+
+> k=1
+
+y(b)true ,k log p(b)
+
+> k
+
++ 1
+
+C
+
+> C
+
+X
+
+> i=1
+
+ γi ˜Ni + ri
+
+21
+
+> BC B
+
+X
+
+> b=1
+> C
+
+X
+
+> k=1
+
+ sg( z(b) 
+
+> k
+
+) − (ei)k
+
+2 + ϵ
+
+(1) where:  
+
+> •
+
+C is the total count of classes and B is the batch size.  
+
+> •
+
+z(b) ∈ RC denotes the model logits (pre-softmax) for sample b, with z(b) 
+
+> k
+
+its k-th coordinate, and p(b) 
+
+> k
+
+=softmax( z(b))k the corresponding predicted probability for class k. 
+
+> •
+
+ei ∈ { 0, 1}C is the one-hot vector for class i, such that 
+
+(ei)k = δk,i . 
+
+> •
+
+˜Ni = CB
+
+PBb=1 p(b) 
+
+> i
+
+is the normalized differentiable soft prediction count for class i in the current batch. The 
+
+C/B factor normalizes for the number of classes, so that E[ ˜Ni] ≈ 1 under a uniform predictive distribution regardless of C. Using a continuous soft-count rather than a discrete argmax count maintains the computational graph, allowing the optimizer to backpropagate through the numerator and actively penalize the over-prediction of head classes during gradient descent.  
+
+> •
+
+γi is the dynamic importance weight for class i. 
+
+> •
+
+ri is the inter-epoch regularizer term for class i. 
+
+> •
+
+ϵ = 1 .0 is a stability constant added to prevent division by zero.  
+
+> •
+
+sg( ·) denotes the stop-gradient operator. 
+
+Denominator Design. The denominator 1
+
+> BC
+
+P
+
+> b,k
+
+(sg( z(b) 
+
+> k
+
+) −
+
+(ei)k)2 computes the mean squared deviation between the batch of model logits and the one-hot encoding of class i,averaged over all B samples and C dimensions. The 1/(BC )
+
+normalization converts the raw sum into a mean, keeping the denominator scale consistent across different batch sizes and class counts. This contributes as a continuous scaling factor that normalizes each class’s penalty contribution based on how closely the model’s current output distribution aligns with that class. The stop-gradient operator sg( ·) ensures this term functions purely as a scalar normalizer: without it, the optimizer could minimize the loss by inflating the denominator i.e., pushing logits away from all class prototypes which would degrade learned representations rather than improve classification. Note that while ˜Ni in the numerator maintains gradient connectivity to enable optimization, the stop-gradient on the denominator creates an intentional asymmetry: the optimizer must resolve the penalty by genuinely adjusting its predicted class distribution, not by manipulating the normalizing factor. 
+
+C. Dynamic Class Importance ( γi). 
+
+Prior work [ 19 ] refers to the strength of feature representa-tions as “semantic values”, which are consistently larger for 3
+
+heavily exposed head classes. We define the semantic scale Si
+
+for class i as the squared mean magnitude of its stored logit vectors: 
+
+Si =
+
+ 1
+
+|Fi|
+
+> |Fi|
+
+X
+
+> l=1
+
+∥fil ∥
+
+
+
+> 2
+
+(2) where Fi is the set of logit vectors accumulated for class i
+
+across training batches within the current epoch. The learning difficulty of class i is quantified by the mean Shannon entropy of its per-sample prediction distributions: 
+
+Hi = 1
+
+|C i|
+
+X
+
+> b∈C i
+
+−
+
+> C
+
+X
+
+> k=1
+
+sg( p(b) 
+
+> k
+
+) log sg( p(b) 
+
+> k
+
+)
+
+!
+
+(3) where Ci = {b : y(b)true = i} is the set of samples with true label i. The stop-gradient on p(b) 
+
+> k
+
+prevents the model from artificially manipulating entropy to reduce the loss. The dynamic importance parameter γi combines both signals: 
+
+γi = min 
+
+ Si
+
+1 + max j (Sj ) · Hi
+
+, τ 
+
+
+
+(4) where τ = 5 .0 is an upper bound that keeps the importance weights within a stable range during training. The intuition is straightforward: if a head class is predicted frequently ( ˜Ni is high) and has strong semantic values with low entropy ( γi is high), the multiplicative penalty γi × ˜Ni
+
+grows large. This forces the model to reduce its over-reliance on the head class, subsequently allowing it to focus on learning tail classes. To prevent catastrophic overfitting to the tail classes as their 
+
+˜Ni naturally rises, the γi variable acts as a scaling factor. As the network successfully learns a tail class, its semantic scale 
+
+Si increases and its entropy Hi drops, naturally raising γi and keeping the penalty term in check. 
+
+D. Inter-Epoch Regularization ( ri). 
+
+Training on highly imbalanced data often leads to abrupt pa-rameter shifts between epochs, risking premature convergence to local minima dominated by head classes. LDAL counters this by introducing an inter-epoch regularizer ri for a designated set of target minority classes U.Let M(t) 
+
+> i
+
+denote the cumulative hard prediction count for class i accumulated across batches processed so far within epoch t, and let M(t−1)  
+
+> i
+
+denote the finalized total count from the previous epoch. Note that M(t) 
+
+> i
+
+is computed via argmax 
+
+and is distinct from the differentiable soft-count ˜Ni used in the loss numerator. The regularizer is defined as: 
+
+ri =
+
+
+
++α if i ∈ U and M(t) 
+
+> i
+
+< M(t−1) 
+
+> i
+
+−α if i ∈ U and M(t) 
+
+> i
+
+> M(t−1) 
+
+> i
+
+0 otherwise (5) where α = 1 .0 in all our experiments (see Section V-C for the sensitivity analysis justifying this choice). If the cumulative prediction count for a target minority class falls below its previous epoch’s total, a positive penalty is applied, reinforcing the model’s attention toward that class. Conversely, if predictions for that class have increased, a negative (reward) term is applied. For non-target classes, ri = 0 .All prediction statistics used in this computation are derived exclusively from training batches; no validation signals are used during the training loop. III. D ESIGN RATIONALE AND TRAINING PROCEDURE .
+
+A. Empirical Motivation. 
+
+Our hypothesis that classes should be penalized based on how well the model learns their features, rather than solely on sample count was motivated by examining the per-class classification report of ResNet-32 trained on CIFAR-10. We observed that classes such as Dog and Cat had noticeably lower accuracy compared to classes like Airplane and Bus ,despite being trained under identical conditions and sometimes even having comparable sample counts. This observation suggested that intrinsic class difficulty plays a key role in how well a class’s representation is learned, and that the loss function should account for this. As demonstrated in our ablation study (Section V), penalizing classes based on their learning characteristics consistently outperforms static reweighting methods. 
+
+B. The Role of Class Complexity. 
+
+The distinction between Easy-to-Learn (ETL) and Difficult-to-Learn (DTL) classes is core point to the design of γi (Eq. 4). An ETL class has a compact feature distribution with low intra-class variance. For example, the Airplane class in CIFAR-10 exhibits limited visual diversity. Most airplanes share a common shape making the class relatively straightforward to learn even with fewer samples. For such classes, the model produces confident predictions, yielding low class entropy Hi
+
+(Eq. 3). In contrast, a DTL class exhibits high intra-class variance. The Dog class in CIFAR-10 encompasses an enormous variety of breeds, body shapes, and textures, making it inherently challenging. For DTL classes, the model’s predictions are more uncertain, yielding high entropy Hi.These observations lead to two important design principles: 1) ETL classes can be learned reliably even when they belong to the tail of the distribution. Therefore they should not receive heavy penalties just for being rare. 2) DTL classes may remain poorly modeled despite having larger sample sizes. They require special monitoring during training. The γi formulation (Eq. 4) tries to capture this: classes with higher entropy receive lower γi, ensuring that when their prediction count ˜Ni enters the loss, the resulting penalty is smaller. This in turn effectively protects difficult classes from excessive penalization. As training progresses and the model masters a class (entropy drops, semantic scale rises), its γi
+
+naturally increases, dynamically shifting the optimizer’s focus to the remaining hard classes. This self-balancing property eliminates the need for manual weight scheduling. 4
+
+Fig. 1: Overview of the LDAL penalty computation. Cn denotes class n, and Fn represents its accumulated feature storage. The feature storage is passed through the Delta operation (Eq. 4), which combines the semantic scale Sn with the class entropy 
+
+Hn to produce the dynamic importance weight γn.
+
+C. Training Algorithm. 
+
+Algorithm 1 Training with LDAL 
+
+Require: Training data D = ( X, Y ), number of classes C,epochs T , target minority classes U, regularization strength 
+
+α
+
+Ensure: Trained model parameters w 
+
+> 1:
+
+Initialize model weights w randomly  
+
+> 2:
+
+M(0)  
+
+> i
+
+← 0 for all i = 1 , . . . , C  
+
+> 3:
+
+for epoch t = 1 to T do  
+
+> 4:
+
+Reset: norm_sum i, norm_count i, ent_sum i, ent_count i,
+
+M(t) 
+
+> i
+
+← 0 ∀i 
+
+> 5:
+
+for each mini-batch (x, y ) of size B from D do  
+
+> 6:
+
+z ← f (x, w ) 
+
+> 7:
+
+p ← softmax( z) 
+
+> 8:
+
+LCE ← − 1
+
+> B
+
+P
+
+> b
+
+P 
+
+> k
+
+y(b) 
+
+> k
+
+log p(b) 
+
+> k
+> 9:
+
+˜Ni ← CB
+
+P 
+
+> b
+
+p(b) 
+
+> i
+
+∀i 
+
+> 10:
+
+Update M(t) 
+
+> i
+
+via argmax counts  
+
+> 11:
+
+Accumulate per-class feature norms and entropy  
+
+> 12:
+
+Si ← (norm_sum i / norm_count i)2 ∀i 
+
+> 13:
+
+Hi ← ent_sum i / ent_count i ∀i 
+
+> 14:
+
+γi ← min  Si / (1 + max j Sj · Hi), τ  ∀i 
+
+> 15:
+
+ri ←
+
+
+
++α if i ∈ U , M(t) 
+
+> i
+
+< M(t−1) 
+
+> i
+
+−α if i ∈ U , M(t) 
+
+> i
+
+> M(t−1) 
+
+> i
+
+0 otherwise  
+
+> 16:
+
+LLDAL ← 1
+
+> C
+
+P     
+
+> i
+> (γi˜Ni+ri)21
+> BC
+> P
+> b,k (sg( z(b)
+> k)−(ei)k)2+ϵ
+> 17:
+
+w ← w − η∇w(LCE + LLDAL ) 
+
+> 18:
+
+end for  
+
+> 19:
+
+end for 
+
+Algorithm 1 summarizes the complete LDAL training procedure. At each epoch boundary, the running statistics (feature norms, entropy accumulators, prediction counts) are reset to avoid OOM errors. Within each mini-batch, the algorithm performs the following steps: 1) Computes the standard cross-entropy loss LCE .2) Computes the differentiable soft prediction counts ˜Ni
+
+via softmax (maintaining the computational graph for backpropagation). 3) Accumulates feature norms and prediction entropy statistics per class using the true labels. 4) Derives the dynamic importance weights γi from the accumulated semantic scales and entropies. 5) Evaluates the inter-epoch regularizer ri for target minority classes U using cumulative hard prediction counts. 6) Computes the LDAL penalty and updates model weights via backpropagation on LCE + LLDAL .All statistics including feature norms, prediction counts, and entropy values are computed exclusively from training batches. No validation data or external signals are used within the training loop. Together, the dynamic γi weights and the inter-epoch regularizer ri promote balanced learning: γi steers the model’s focus based on what has been learned so far, while ri penal-izes stagnation on minority classes across epoch boundaries. Empirically, we observe that this combination yields stable optimization and smooth convergence across all evaluated benchmarks (Section IV). IV. E VALUATION .All experiments were conducted on an Intel Xeon server equipped with a 64-core CPU and a single Tesla V100-SXM2-32GB GPU. The implementation details, including hyperparameter settings for all datasets have been adopted from the most recent work from CSL category, AREA [4]. 
+
+A. Baselines and Taxonomy. 
+
+For evaluation of Learning-Dynamics Aware Loss (LDAL) under fair comparisons, we organize our baselines using the deep long-tailed learning taxonomy established by Zhang et al. [ 36 ]. Under this framework, various previous works are categorized by their core mechanisms: Class-Sensitive Learning (CSL), Decoupled Training (DT), Ensemble Learning, Representation Learning (RL), and Transfer Learning (TL). Since LDAL operates entirely as a standalone objective function requiring no multi-stage training or architectural mod-ifications, it falls strictly within the Class-Sensitive Learning (CSL) category. Accordingly, our primary benchmarks are other pure CSL methods. These include all the proposed methods such as Cross-Entropy Loss (CE) [ 37 ], Focal Loss [ 15 ], Class-Balanced Loss (CB) [ 6], and Influence Balanced Loss (IB) [22 ] many more, as well as recent state-of-the-art objective formulations like LDAM [3] , SoLar [27] and AREA [4]. For a complete perspective of the domain, we also pro-vide separate reference tables detailing advanced, module-heavy architectures. These include decoupled frameworks like MisLAS [ 40 ] (DT), ensemble routing networks like RIDE [30 ] and SADE [ 35 ], prototype memory networks like Focal-SAM [ 13 ] (RL), and modern foundation models like LIFT [25 ] (TL). We introduce this partition to clarify that while these methods achieve state-of-the-art absolute accuracy, direct numerical comparisons between a lightweight loss function 5
+
+and computationally intensive, multi-stage, or multi-expert architectures are fundamentally asymmetric. 
+
+B. Results. 
+
+We evaluate LDAL across multiple scales of imbalance. For CIFAR-10, we experiment with imbalance ratios ( p) of 50 and 100, and p ∈ { 50 , 100 , 200 } for CIFAR-100. To assess scalability, we utilize ImageNet-LT (constructed via Pareto distribution [ 17 ]) and iNaturalist-2018, a real-world dataset exhibiting severe natural long-tailed skew. 
+
+1) CIFAR-10 and CIFAR-100 Evaluation.: Table I reports the top-1 accuracy for pure CSL methods using a ResNet-32 backbone, while Table II provides context against advanced approaches.                                                                                       
+
+> Pure CSL Methods CIFAR-10 CIFAR-100
+> p= 100 p= 50 p= 200 p= 100 p= 50
+> CE (Baseline) 70.40 74.80 34.84 38.32 43.85 CE + CB [6] 74.57 79.27 36.23 39.60 45.32 Focal + CB [6] 74.60 79.30 35.62 39.60 -LDAM-DRW [3] 77.00 80.90 -42.04 -Focal ( γ= 1 ) [15] 70.40 76.70 35.62 38.41 44.32 Focal ( γ= 2 ) [15] 69.59 76.52 34.75 38.39 43.70 Focal ( γ= 0 .5) [15] 70.23 76.72 35.00 38.69 44.12 LDAM [3] 73.40 76.80 -39.60 -Meta-Weight-Net [26] 75.21 80.06 37.91 42.09 46.74 IB [22] 78.26 81.70 37.31 42.14 46.22 LDAM-DRW + SSP 77.83 82.13 -43.43 -AREA [4] 78.88 82.68 43.85 48.83 51.77 SoLar ( ϕ= 0 .3,0.05 ) [27] 76.64 83.80 --46.18
+> LDAL (Ours) 80.19 84.41 45.04 49.79 52.72
+
+TABLE I: Comparison of pure CSL loss functions on CIFAR-10 and CIFAR-100 with various imbalance ratios ( p). All methods operate purely at the objective level. LDAL results report the best top-1 accuracy across all runs. 1                                                
+
+> Methods Category CIFAR-10 CIFAR-100
+> p= 100 p= 50 p= 200 p= 100 p= 50
+> MisLAS [40] DT 82.10 85.70 -47.00 52.30 RIDE (3-experts) [30] Ensemble ---48.60 51.40 SADE [35] Ensemble ---49.80 53.90 Focal-SAM [13] RL 77.20 82.20 -44.00 48.10 Balanced Softmax [23] Sampling+CSL 84.90 -45.50 50.80 -
+> LDAL (Ours) Pure CSL 80.19 84.41 45.04 49.79 52.72
+
+TABLE II: Reference accuracies for advanced, module-heavy methods on CIFAR datasets. Categories denote Decoupled Training (DT), Ensemble Learning, Representation Learning (RL), and Transfer Learning (TL). 1
+
+The results validate that LDAL dynamically rebalances train-ing far more effectively than static priors. By adjusting penalties based on real-time feature strength and prediction entropy (as detailed in Section 3.3), LDAL avoids over-penalizing tail classes that are intrinsically "Easy-to-Learn" while maintaining necessary focus on "Difficult-to-Learn" classes. Compared to the baseline Cross-Entropy loss and its class-balanced variant (CE + CB) [ 6], LDAL yields improvements. Notably, LDAL consistently outperforms the recent state-of-the-art CSL method AREA [ 4 ] across all imbalance ratios on CIFAR-100-LT, establishing a highly competitive new benchmark for pure loss functions. 
+
+2) Large-Scale Evaluation: ImageNet-LT and iNaturalist-2018.: Tables III and IV document our results on the large-scale datasets, again strictly separated by taxonomy. Training utilized a ResNet-50 backbone for 120 epochs on ImageNet-LT and 160 epochs on iNaturalist-2018. 
+
+Pure CSL Methods ImageNet-LT iNaturalist-2018 
+
+CE (Baseline) 38.88 57.30 Class-Balanced-Loss [6] 40.85 61.12 Focal loss [15] 30.50 58.03 LDAM [3] 41.86 64.58 CE-DRW [3] - 63.73 CE-DRS [3] - 63.56 IB [22] - 65.39 FSR [38] - 65.52 LDAM-DRW [3] 45.74 68.00 
+
+AREA [4] 49.53 -
+
+LDAL (Ours) 50.10 67.10 
+
+TABLE III: Comparison of pure CSL functions on large-scale datasets using ResNet-50. LDAL results report the best top-1 accuracy. 1                              
+
+> Methods Category ImageNet-LT iNaturalist-2018
+> OLTR [17] RL 40.36 -Balanced Softmax [23] Sampling+CSL 41.80 -NCM [10] DT 44.30 63.10 Decoupling [10] DT 47.30 67.60 MisLAS [40] DT 52.70 70.70 RIDE (3-experts) [30] Ensemble 54.40 71.80 SADE [35] Ensemble 58.80 72.90 LIFT [25] Fine Tuning (CLIP) 77.00 79.20
+> LDAL (Ours) Pure CSL 50.10 67.10
+
+TABLE IV: Reference accuracies for advanced, module-heavy methods on large-scale datasets. Categories denote Represen-tation Learning (RL), Decoupled Training (DT), Ensemble Learning, and Transfer Learning (TL). 1
+
+On ImageNet-LT, LDAL achieves a significant +11.22% absolute accuracy improvement over the baseline Cross-Entropy loss. Crucially, it formally surpasses AREA (49.53%), demon-strating that LDAL’s dynamic, entropy-aware weighting scales effectively to large, structurally complex datasets without requiring hyperparameter retuning. Similarly, on iNaturalist-2018, LDAL reaches 67.10%, im-proving upon the CE baseline by +9.8%. While LDAM-DRW [3 ] reports a marginally higher 68.00%, it uses Deferred Reweighting (DRW) a specialized learning rate schedule deployed in the final epochs rather than standard SGD. When controlling for strictly default training conditions, LDAL re-mains highly competitive. While advanced architectures (Table IV) unsurprisingly post higher numbers through ensemble routing or representation decoupling, LDAL achieves robust 
+
+> 1
+
+A dash ( −) indicates that the referenced paper did not report the results in these settings. 6               
+
+> Dataset Mean Acc.(%) Std. Deviation(±) 95% Confidence
+> CIFAR-10-LT 79.77 0.73 [79.13, 80.41] CIFAR-100-LT 48.88 0.86 [48.12, 49.63] ImageNet-LT 49.67 0.66 [49.09, 50.24] iNaturalist-2018 66.53 0.83 [65.80, 67.25]
+
+TABLE V: Mean accuracy, standard deviation, and 95% confidence interval of LDAL across five independent runs with different random seeds. CIFAR-10 and CIFAR-100 are at imbalance factor 100. performance purely at the loss level, eliminting the need for multi-stage pipelines or complex architectural overhead. Finally, to verify the stability of LDAL, particularly the stabilizing effect of the inter-epoch regularizer ( ri) discussed in Section 3.4 we conducted five independent test runs for each dataset. Table V details the mean accuracy, standard deviation and 95% confidence intervals. The low variance confirms that preventing abrupt parameter shifts between epochs leads to smooth, reliable convergence across diverse data distributions. V. A BLATION STUDY .Hypothesis of proposed Learning-Dynamics Aware Loss (LDAL), is tested with a series of ablation studies that provide insights into the contribution of each of its core components. All experiments in this section were performed by training ResNet-32 on CIFAR-10 and CIFAR-100 with an imbalance ratio of 100, utilizing Stochastic Gradient Descent (SGD) with a momentum of 0.9. Using standard long-tailed learning protocols, the initial learning rate was assigned 0.1 and decayed by a factor of 0.01 at epochs 160 and 180. 
+
+A. Gradient Flow Verification. 
+
+A critical requirement for end-to-end training is for the LDAL auxiliary term to produce non-zero gradients that flow to the backbone parameters. Because LDAL operates on soft predictions sums of softmax probabilities rather than hard argmax counts. The computational graph remains connected. We empirically verify this by isolating the LDAL and CE gradient contributions on the output logits at four checkpoints during training. Table VI reports the gradient norms, the ratio 
+
+∥∇ LDAL ∥/∥∇ CE ∥, and the percentage of non-zero elements in the LDAL Jacobian. We have two important observations. First, the LDAL term maintains near-complete gradient coverage (> 88% non-zero) throughhout training for both CIFAR-10 and CIFAR-100, which confirms that the differentiable soft-count formulation preserves the gradient flow. Second, the LDAL-to-CE gradient ratio generally increases from ∼0.10 to 
+
+∼0.25 over 200 epochs. So as the model’s cross-entropy loss decreases which can be visualized as the basic features being learned. Meanwhile the relative influence of LDAL naturally grows, providing a stronger class-rebalancing signal especially in later epochs when model focuses on fine grained features.                                                
+
+> Grad Norm Epoch ∥∇ LDAL ∥∥∇ CE ∥Ratio NZ% Val Acc
+> CIFAR-10-LT ( ρ=100 ,C=10 )
+> 10.0121 0.1009 0.120 100.0 18.60 25 0.0150 0.0889 0.169 98.8 33.52 100 0.0078 0.0628 0.125 99.1 56.65 200 0.0105 0.0446 0.235 98.9 80.19
+> CIFAR-100-LT ( ρ=100 ,C=100 )
+> 10.0000 0.1215 0.000 95.4 3.57 25 0.0112 0.1057 0.106 97.9 21.64 100 0.0082 0.0696 0.118 89.2 35.88 200 0.0113 0.0445 0.254 88.3 49.79
+
+TABLE VI: Gradient flow analysis. Gradient norms of the LDAL and CE components measured on the output logits during training of ResNet-32. The LDAL term maintains non-zero gradients throughout and its relative contribution grows as training matures. 
+
+B. Component Ablation. 
+
+To quantify the contribution of each LDAL component, we train four ablated variants alongside the full model: (i) CE-only baseline, (ii) LDAL without entropy in γi, (iii) LDAL without the inter-epoch regularizer ( ri=0 ), and (iv) LDAL without semantic scale in γi.            
+
+> Configuration CIFAR-10 CIFAR-100
+> CE only (baseline) 71.32 40.36 LDAL w/o entropy 76.15 44.84 LDAL w/o semantic scale 76.27 44.55 LDAL w/o regularizer ( ri)78.73 45.80
+> LDAL (full) 80.19 49.79
+
+TABLE VII: Component ablation on CIFAR-10-LT and CIFAR-100-LT ( ρ=100 ). Each row removes one component from the full LDAL. The variant with all components of LDAL outperforms every ablated variant on both datasets, confirming that all three components contribute meaningfully. Removing entropy or semantic scale causes comparable drops ( ∼4% on CIFAR-10, 
+
+∼5% on CIFAR-100), indicating that both signals are equally important in computing effective class weights. Remooving the regularizer ( ri) yields a smaller but consistent drop ( 1.5–
+
+4% ) showing that ri primarily benefits late-stage convergence. Even the weakest LDAL variant surpasses the CE baseline by 
+
++4 .2% on CIFAR-100, demonstrating that our method provides substantial gains. 
+
+C. Effectiveness and Sensitivity of Inter-Epoch Regularization (ri). 
+
+To evaluate the inter-epoch regularization term ( ri), we conduct two complementary experiments: (i) a direct com-parison of training with the regularizer active ( α = 1.0)versus disabled ( α = 0 ), and (ii) a sensitivity sweep over 
+
+α ∈ { 0.5, 1.0, 2.0, 5.0, 10 .0, 20 .0}.7
+
+1) Validation Curve Analysis.: Figure 2 overlays the epoch-wise validation accuracy for LDAL with and without the regularizer on both CIFAR-10-LT and CIFAR-100-LT. 
+
+(a) CIFAR-10-LT ( ρ=100 ) (b) CIFAR-100-LT ( ρ=100 )
+
+Fig. 2: Validation accuracy curves comparing LDAL with 
+
+α = 1 .0 (solid blue) against α = 0 (dashed orange, no inter-epoch regularizer). During epochs 1–160, both configurations follow similar trajectories, indicating that γi and cross-entropy dominate early optimization. The critical divergence appears after the learning rate decay at epoch 160: the regularized model ( α=1 .0)converges to a higher accuracy plateau on both CIFAR-10-LT (∼80% vs. ∼77% ) and CIFAR-100-LT ( ∼49% vs. ∼46% ). Without the regularizer, the model settles into a lower local minimum dominated by head classes, confirming that ri has role in the late-stage convergence. 
+
+Sensitivity to α. To further characterize the regularizer, we sweep α ∈ { 0.5, 1.0, 2.0, 5.0, 10 .0, 20 .0} on both datasets. 
+
+α CIFAR-10 CIFAR-100 
+
+0.5 79.24 45.80 
+
+1.0 80.19 49.79 
+
+2.0 78.50 46.48 5.0 74.94 47.59 10.0 53.17 44.63 20.0 33.17 42.67 
+
+TABLE VIII: Sensitivity of LDAL to the reg strength α.As shown in Table VIII, α=1 .0 yields the best accuracy on both datasets, confirming that the optimal regularization strength transfers across scales without dataset-specific tuning. For moderate values ( α ∈ [0 .5, 2.0] ), CIFAR-10-LT accuracy stays within 1.69% , while beyond α=5 .0 performance degrades sharply as regularization terms overwhelm the cross-entropy signal. Notably, CIFAR-100-LT is far more robust ( ∆=7 .12% 
+
+vs. ∆=47 .02% on CIFAR-10-LT), since the 1/C normalization naturally considers each class’s contribution when C=100 .Though we believe stronger analysis for optimum value of α
+
+is dependent on the datasets because of role of C in the loss function. 
+
+D. Representing Class Difficulty with Entropy. 
+
+To validate that Shannon entropy is a meaningful measure of intrinsic class difficulty, we compute the Spearman rank correlation between per-class entropy Hi recorded during training and the final per-class test accuracy on CIFAR-10-LT (ρ=50 ). Figure 3 shows a strong negative correlation (Spearman 
+
+ρ = −0.94 , p < 10 −4): classes with higher prediction entropy during training consistently achieve lower final accuracy. Notably, visually simple classes such as Airplane and Car 
+
+exhibit low entropy and high accuracy, while semantically complex classes like Dog and Horse exhibit high entropy and low accuracy—independent of their position in the long-tailed distribution. This confirms that entropy captures intrinsic learning difficulty rather than merely reflecting sample count, justifying its use in the γi formulation (Eq. 4). 
+
+Fig. 3: Per-class entropy Hi at epoch 75 vs. final test accuracy on CIFAR-10-LT ( ρ=50 ). Each point represents one class. Spearman ρ = −0.94 , p < 0.001 .VI. C ONCLUSIONS AND FUTURE WORK .This work introduces Learning-Dynamics Aware Loss (LDAL), a dynamic loss function that overcomes the limi-tations of static reweighting by utilizing semantic scale and prediction entropy to measure intrinsic class difficulty. The mechanism for shifting penalization away from raw sample counts and toward learning progress helps the framework to adapt intelligently. Using these components, LDAL achieves highly competitive top-1 accuracies without requiring complex multi-stage pipelines or architectural overhead. In future, we aim to extend the dynamic weighting mechanism to object detection and integrate transformer mechanisms instead of convolution backbones. The ultimate goal will be to develop adaptable and reliable real world services [ 33 ], [ 32 ] that do not suffer from bias due to imbalance in the training data. REFERENCES [1] Ldal github repository. https://github.com/sdm2026/ldal. [2] Saikat Basu, Sangram Ganguly, Supratik Mukhopadhyay, Robert DiB-iano, Manohar Karki, and Ramakrishna Nemani. Deepsat: a learning framework for satellite imagery. In Proceedings of the 23rd SIGSPATIAL international conference on advances in geographic information systems ,pages 1–10, 2015. [3] Kaidi Cao, Colin Wei, Adrien Gaidon, Nikos Arechiga, and Tengyu Ma. Learning imbalanced datasets with label-distribution-aware margin loss, 2019. [4] Xiaohua Chen, Yucan Zhou, Dayan Wu, Chule Yang, Bo Li, Qinghua Hu, and Weiping Wang. Area: Adaptive reweighting via effective area for long-tailed classification. In 2023 IEEE/CVF International Conference on Computer Vision (ICCV) , pages 19220–19230, 2023. 8
+
+[5] Edward Collier, Kate Duffy, Sangram Ganguly, Geri Madanguit, Subodh Kalia, Gayaka Shreekant, Ramakrishna Nemani, Andrew Michaelis, Shaung Li, Auroop Ganguly, et al. Progressively growing generative adversarial networks for high resolution semantic segmentation of satellite images. In 2018 IEEE International Conference on Data Mining Workshops (ICDMW) , pages 763–769. IEEE, 2018. [6] Yin Cui, Menglin Jia, Tsung-Yi Lin, Yang Song, and Serge Belongie. Class-balanced loss based on effective number of samples, 2019. [7] Qi Dong, Shaogang Gong, and Xiatian Zhu. Class rectification hard mining for imbalanced deep learning. In Proceedings of the IEEE international conference on computer vision , pages 1851–1860, 2017. [8] Hui Han, Wen-Yuan Wang, and Bing-Huan Mao. Borderline-smote: a new over-sampling method in imbalanced data sets learning. In International conference on intelligent computing , pages 878–887. Springer, 2005. [9] Chen Huang, Yining Li, Chen Change Loy, and Xiaoou Tang. Learning deep representation for imbalanced classification. In Proceedings of the IEEE conference on computer vision and pattern recognition , pages 5375–5384, 2016. [10] Bingyi Kang, Saining Xie, Marcus Rohrbach, Zhicheng Yan, Albert Gordo, Jiashi Feng, and Yannis Kalantidis. Decoupling representation and classifier for long-tailed recognition, 2020. [11] Jaehyung Kim, Jongheon Jeong, and Jinwoo Shin. M2m: Imbalanced classification via major-to-minor translation. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , pages 13896–13905, 2020. [12] Gwen Legate, Lucas Caccia, and Eugene Belilovsky. Re-weighted softmax cross-entropy to control forgetting in federated learning, 2023. [13] Sicong Li, Qianqian Xu, Zhiyong Yang, Zitai Wang, Linchao Zhang, Xiaochun Cao, and Qingming Huang. Focal-sam: Focal sharpness-aware minimization for long-tailed classification, 2025. [14] Tsung-Yi Lin, Priya Goyal, Ross Girshick, Kaiming He, and Piotr Dollár. Focal loss for dense object detection. In Proceedings of the IEEE international conference on computer vision , pages 2980–2988, 2017. [15] Tsung-Yi Lin, Priya Goyal, Ross Girshick, Kaiming He, and Piotr Dollár. Focal loss for dense object detection, 2018. [16] Ziwei Liu, Zhongqi Miao, Xiaohang Zhan, Jiayun Wang, Boqing Gong, and Stella X Yu. Large-scale long-tailed recognition in an open world. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , pages 2537–2546, 2019. [17] Ziwei Liu, Zhongqi Miao, Xiaohang Zhan, Jiayun Wang, Boqing Gong, and Stella X. Yu. Large-scale long-tailed recognition in an open world, 2019. [18] Yanbiao Ma, Wei Dai, and Jiayi Chen. Pursuing better decision boundaries for long-tailed object detection via category information amount, 2025. [19] Yanbiao Ma, Licheng Jiao, Fang Liu, Yuxin Li, Shuyuan Yang, and Xu Liu. Delving into semantic scale imbalance, 2023. [20] Wanli Ouyang, Xiaogang Wang, Cong Zhang, and Xiaokang Yang. Factors in finetuning deep model for object detection with long-tail distribution. In Proceedings of the IEEE conference on computer vision and pattern recognition , pages 864–873, 2016. [21] Seulki Park, Youngkyu Hong, Byeongho Heo, Sangdoo Yun, and Jin Young Choi. The majority can help the minority: Context-rich minority oversampling for long-tailed classification. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition ,pages 6887–6896, 2022. [22] Seulki Park, Jongin Lim, Younghan Jeon, and Jin Young Choi. Influence-balanced loss for imbalanced visual classification, 2021. [23] Jiawei Ren, Cunjun Yu, Shunan Sheng, Xiao Ma, Haiyu Zhao, Shuai Yi, and Hongsheng Li. Balanced meta-softmax for long-tailed visual recognition, 2020. [24] Drew Roselli, Jeanna Matthews, and Nisha Talagala. Managing bias in ai. In Companion proceedings of the 2019 world wide web conference ,pages 539–544, 2019. [25] Jiang-Xin Shi, Tong Wei, and Yu-Feng Li. Lift+: Lightweight fine-tuning for long-tail learning, 2025. [26] Jun Shu, Qi Xie, Lixuan Yi, Qian Zhao, Sanping Zhou, Zongben Xu, and Deyu Meng. Meta-weight-net: Learning an explicit mapping for sample weighting. In H. Wallach, H. Larochelle, A. Beygelzimer, F. d'Alché-Buc, E. Fox, and R. Garnett, editors, Advances in Neural Information Processing Systems , volume 32. Curran Associates, Inc., 2019. [27] Haobo Wang, Mingxuan Xia, Yixuan Li, Yuren Mao, Lei Feng, Gang Chen, and Junbo Zhao. Solar: Sinkhorn label refinery for imbalanced partial-label learning, 2022. [28] Jianfeng Wang, Thomas Lukasiewicz, Xiaolin Hu, Jianfei Cai, and Zhenghua Xu. Rsg: A simple but effective module for learning imbalanced datasets, 2021. [29] Xudong Wang, Long Lian, Zhongqi Miao, Ziwei Liu, and Stella X Yu. Long-tailed recognition by routing diverse distribution-aware experts. 
+
+arXiv preprint arXiv:2010.01809 , 2020. [30] Xudong Wang, Long Lian, Zhongqi Miao, Ziwei Liu, and Stella X. Yu. Long-tailed recognition by routing diverse distribution-aware experts. 
+
+CoRR , abs/2010.01809, 2020. [31] Lu Yang, He Jiang, Qing Song, and Jun Guo. A survey on long-tailed visual recognition. International Journal of Computer Vision ,130(7):1837–1872, 2022. [32] Stephen S Yau, Hasan Davulcu, Supratik Mukhopadhyay, Dazhi Huang, Haishan Gong, Prabhdeep Singh, and Fatih Gelgi. Automated situation-aware service composition in service-oriented computing. International Journal of Web Services Research (IJWSR) , 4(4):59–82, 2007. [33] Stephen S Yau, Hasan Davulcu, Supratik Mukhopadhyay, Dazhi Huang, and Yisheng Yao. Adaptable situation-aware secure service-based (as/sup 3/) systems. In Eighth IEEE International Symposium on Object-Oriented Real-Time Distributed Computing (ISORC’05) , pages 308–315. IEEE, 2005. [34] Yifan Zhang, Bryan Hooi, Lanqing Hong, and Jiashi Feng. Self-supervised aggregation of diverse experts for test-agnostic long-tailed recognition. Advances in Neural Information Processing Systems ,35:34077–34090, 2022. [35] Yifan Zhang, Bryan Hooi, Lanqing Hong, and Jiashi Feng. Self-supervised aggregation of diverse experts for test-agnostic long-tailed recognition, 2022. [36] Yifan Zhang, Bingyi Kang, Bryan Hooi, Shuicheng Yan, and Jiashi Feng. Deep long-tailed learning: A survey, 2023. [37] Zhilu Zhang and Mert R. Sabuncu. Generalized cross entropy loss for training deep neural networks with noisy labels, 2018. [38] Zizhao Zhang and Tomas Pfister. Learning fast sample re-weighting without reward data, 2021. [39] Zhisheng Zhong, Jiequan Cui, Shu Liu, and Jiaya Jia. Improving calibration for long-tailed recognition. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , pages 16489– 16498, 2021. [40] Zhisheng Zhong, Jiequan Cui, Shu Liu, and Jiaya Jia. Improving calibration for long-tailed recognition, 2021. [41] Boyan Zhou, Quan Cui, Xiu-Shen Wei, and Zhao-Min Chen. Bbn: Bilateral-branch network with cumulative learning for long-tailed visual recognition. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , pages 9719–9728, 2020. [42] Linchao Zhu and Yi Yang. Inflated episodic memory with region self-attention for long-tailed visual recognition. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , pages 4344–4353, 2020.

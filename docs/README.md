@@ -6,71 +6,77 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-30
-- 运行时间：2026-07-30 21:54:48 UTC
+- 最新运行日期：2026-08-01
+- 运行时间：2026-08-01 20:33:47 UTC
 - 运行状态：成功
-- 本次总论文数：17
-- 精读区：5
+- 本次总论文数：19
+- 精读区：7
 - 速读区：12
 
 ### 今日简报（AI）
-今日共收录17篇论文，精读5篇，重点聚焦图像编码评估与生成式视频压缩领域。最值得关注的是《JPEG AIC2026》大尺度精细评估数据集（9.0分）和《Generative Video Compression》自适应分数蒸馏方法（8.0分）。建议优先精读这两篇，掌握图像质量评估与视频压缩的前沿思路。
-- 详情：[/202607/30/README](/202607/30/README)
+今日精读与速读共19篇论文，重点聚焦生成式视频压缩与图像编码评估数据集。最值得关注的是《Generative Video Compression with Adaptive Score Distillation》（8.0）提出的自适应分数蒸馏方法，以及《JPEG AIC2026》（8.0）构建的大规模细粒度图像编码评估基准。建议普通读者优先了解这两个方向，后续可关注长尾分类的损失函数设计与视觉生成的矩匹配进展。
+- 详情：[/202608/01/README](/202608/01/README)
 
 ### 精读区论文标签
-1. [JPEG AIC2026: A large-scale dataset for fine-grained assessment of image coding](/202607/30/2607.22783v1-jpeg-aic2026-a-large-scale-dataset-for-fine-grained-assessment-of-image-coding)  
-   标签：评分：9.0/10、query:compress
-   evidence：大规模精细图像编码评估数据集，覆盖传统和学习型编码器
-2. [Generative Video Compression with Adaptive Score Distillation](/202607/30/2607.22772v1-generative-video-compression-with-adaptive-score-distillation)  
+1. [Generative Video Compression with Adaptive Score Distillation](/202608/01/2607.22772v1-generative-video-compression-with-adaptive-score-distillation)  
    标签：评分：8.0/10、query:compress
-   evidence：首个面向压缩的视频扩散模型，用于超低码率生成式压缩
-3. [OrchNAS: Orchestrated Neural Architecture Search Service for Personalised Federated Edge Intelligence](/202607/30/2607.22805v1-orchnas-orchestrated-neural-architecture-search-service-for-personalised-federated-edge-intelligence)  
+   evidence：面向压缩的视频扩散模型与自适应分数蒸馏，实现超低码率压缩
+2. [JPEG AIC2026: A large-scale dataset for fine-grained assessment of image coding](/202608/01/2607.22783v1-jpeg-aic2026-a-large-scale-dataset-for-fine-grained-assessment-of-image-coding)  
+   标签：评分：8.0/10、query:compress
+   evidence：面向图像编码细粒度评估的大规模数据集，覆盖传统和学习型编解码器，是图像压缩研究的核心资源
+3. [AdaKAN: A dual-branch adaptive Kolmogorov-Arnold network for medical image segmentation](/202608/01/2607.22891v1-adakan-a-dual-branch-adaptive-kolmogorov-arnold-network-for-medical-image-segmentation)  
    标签：评分：8.0/10、query:neural-arch
-   evidence：用于设计高效视觉架构的NAS框架
-4. [AdaKAN: A dual-branch adaptive Kolmogorov-Arnold network for medical image segmentation](/202607/30/2607.22891v1-adakan-a-dual-branch-adaptive-kolmogorov-arnold-network-for-medical-image-segmentation)  
+   evidence：提出AdaKAN，一种用于医学图像分割的双分支自适应Kolmogorov-Arnold网络，结合高效注意力
+4. [Structured Redundancy Modeling for Efficient Visual Token Pruning in High-Resolution MLLMs](/202608/01/2607.23046v1-structured-redundancy-modeling-for-efficient-visual-token-pruning-in-high-resolution-mllms)  
    标签：评分：8.0/10、query:neural-arch
-   evidence：针对医学图像分割的新型自适应双分支KAN网络
-5. [Trainable Nonexpansive Denoisers for Contractive Image Reconstruction](/202607/30/2607.23347v1-trainable-nonexpansive-denoisers-for-contractive-image-reconstruction)  
+   evidence：单前向视觉token剪枝，提升高分辨率MLLM视觉架构效率
+5. [A Motion-Aware Vector Quantization Framework with Centroid Reuse for Efficient VLA Inference](/202608/01/2607.24148v1-a-motion-aware-vector-quantization-framework-with-centroid-reuse-for-efficient-vla-inference)  
    标签：评分：8.0/10、query:neural-arch
-   evidence：利用排列操作实现全局非扩张去噪器，提供Lipschitz保证
+   evidence：提出运动感知向量量化与质心复用，通过减少内存访问加速视觉-语言-动作模型推理
+6. [WHTMix: Efficient Stereo Depth Estimation via Walsh-Hadamard Token Mixing](/202608/01/2607.25234v2-whtmix-efficient-stereo-depth-estimation-via-walsh-hadamard-token-mixing)  
+   标签：评分：8.0/10、query:neural-arch
+   evidence：面向立体视觉Transformer的高效Walsh-Hadamard令牌混合
+7. [SepPrune:A Separator-based Pruning Framework for Efficient Multimodal Large Language Models](/202608/01/2607.25818v1-sepprunea-separator-based-pruning-framework-for-efficient-multimodal-large-language-models)  
+   标签：评分：8.0/10、query:neural-arch
+   evidence：提出SepPrune，一种基于分隔符的免训练视觉令牌剪枝方法，降低多模态大语言模型计算开销
 
 ### 速读区论文标签
-1. [Geometry Meets Semantics: Fractional Gradient Stabilization for Semantic-Driven Bounding Box Optimization in Visual Detection Tasks](/202607/30/2607.23530v1-geometry-meets-semantics-fractional-gradient-stabilization-for-semantic-driven-bounding-box-optimization-in-visual-detection-tasks)  
+1. [Beyond Static Costs: Learning-Dynamics Aware Loss Functions for Long-Tailed Classification](/202608/01/2607.25830v1-beyond-static-costs-learning-dynamics-aware-loss-functions-for-long-tailed-classification)  
+   标签：评分：8.0/10、query:neural-arch
+   evidence：利用学习动态调整长尾分类损失，属于视觉模型训练性能优化。
+2. [Amortized Moment Matching for Visual Generation](/202608/01/2607.26860v1-amortized-moment-matching-for-visual-generation)  
+   标签：评分：8.0/10、query:neural-arch
+   evidence：提出摊销矩匹配与AMFD损失作为训练目标，提升视觉生成质量
+3. [Towards joint scaling laws with optimal batch size schedules](/202608/01/2607.27731v1-towards-joint-scaling-laws-with-optimal-batch-size-schedules)  
+   标签：评分：8.0/10、query:neural-arch
+   evidence：提出深度学习训练中的联合缩放定律与批量大小最优调度，直接对应模型优化策略
+4. [Simplifying Neural Networks During Training](/202608/01/2607.27854v1-simplifying-neural-networks-during-training)  
+   标签：评分：8.0/10、query:neural-arch
+   evidence：借助神经坍缩简化训练过程，属于深度网络模型优化策略。
+5. [Twins: Learn to Predict Unified Representations with Focal Loss](/202608/01/2607.22531v1-twins-learn-to-predict-unified-representations-with-focal-loss)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：分数语义IoU损失用于边界框优化中的梯度稳定
-2. [Exploring Budgeted Image Classification with Content-Sensitive Resource Allocation](/202607/30/2607.23997v1-exploring-budgeted-image-classification-with-content-sensitive-resource-allocation)  
+   evidence：级联ViT与VAE特征并用焦点损失稳定多模态训练，属于视觉架构优化技术。
+6. [Low-light Image Enhancement via Multi-scale Attention combined with Fourier Transform](/202608/01/2607.24002v1-low-light-image-enhancement-via-multi-scale-attention-combined-with-fourier-transform)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：面向预算图像分类的内容敏感资源分配
-3. [Sol-Attn: Accelerating Video Generation Inference via On-the-Fly Attention Sparsification](/202607/30/2607.24027v1-sol-attn-accelerating-video-generation-inference-via-on-the-fly-attention-sparsification)  
+   evidence：多尺度注意力与傅里叶融合的U型低光增强网络，是视觉架构改进
+7. [MXAttention: Data-Free Optimal Scaling and Pre-Normalization Quantization for MXFP4 Attention](/202608/01/2607.24377v1-mxattention-data-free-optimal-scaling-and-pre-normalization-quantization-for-mxfp4-attention)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：在线注意力稀疏化加速视频生成推理
-4. [UniGen-AR: Unifying Visual Generation with Auto-Regressive Modeling](/202607/30/2607.24157v1-unigen-ar-unifying-visual-generation-with-auto-regressive-modeling)  
+   evidence：针对注意力机制的数据无关后训练量化框架，属于模型推理效率优化策略。
+8. [OrthKD: Extracting Generalized Clinical Knowledge from Heterogeneous Teachers for Lightweight Deployment](/202608/01/2607.25545v1-orthkd-extracting-generalized-clinical-knowledge-from-heterogeneous-teachers-for-lightweight-deployment)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：使用自回归建模的统一视觉生成架构
-5. [Stable FP4 Training via Transposition-Invariant Block Quantization](/202607/30/2607.24953v1-stable-fp4-training-via-transposition-invariant-block-quantization)  
-   标签：评分：7.0/10、query:neural-arch
-   evidence：转置不变的2D块FP4量化实现稳定低精度训练
-6. [Enabling Fully Integer-Only Inference for Lightweight Detection Transformers](/202607/30/2607.24981v1-enabling-fully-integer-only-inference-for-lightweight-detection-transformers)  
-   标签：评分：7.0/10、query:compress
-   evidence：面向Transformer推理的全整数量化
-7. [A Unified Variational Framework for Deep Weakly Supervised Image Segmentation](/202607/30/2607.19669v1-a-unified-variational-framework-for-deep-weakly-supervised-image-segmentation)  
+   evidence：多教师知识蒸馏，属于深度学习模型优化策略
+9. [The Entropic Bound for Transformers: Why Static Rank Fails and Attention-Native Rank Recovers](/202608/01/2607.23050v1-the-entropic-bound-for-transformers-why-static-rank-fails-and-attention-native-rank-recovers)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：统一的变分框架作为弱监督分割训练损失
-8. [Spectral-Spatial Synergistic Guided Network for Hyperspectral Salient Object Detection](/202607/30/2607.21032v1-spectral-spatial-synergistic-guided-network-for-hyperspectral-salient-object-detection)  
+   evidence：用熵界与内在秩分析指导Transformer容量设计，是架构设计实践
+10. [Exploring Budgeted Image Classification with Content-Sensitive Resource Allocation](/202608/01/2607.23997v1-exploring-budgeted-image-classification-with-content-sensitive-resource-allocation)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：轻量级光谱-空间引导网络用于高光谱显著目标检测
-9. [Structured Redundancy Modeling for Efficient Visual Token Pruning in High-Resolution MLLMs](/202607/30/2607.23046v1-structured-redundancy-modeling-for-efficient-visual-token-pruning-in-high-resolution-mllms)  
+   evidence：基于内容敏感资源分配的自适应图像分类优化
+11. [GenSplatCodec: Feed-Forward Gaussian Splatting Compression via One-Step Diffusion](/202608/01/2607.24403v1-gensplatcodec-feed-forward-gaussian-splatting-compression-via-one-step-diffusion)  
    标签：评分：6.0/10、query:compress
-   evidence：面向高分辨率多模态大模型的高效视觉令牌剪枝，直接关联图像压缩中的令牌压缩
-10. [The Entropic Bound for Transformers: Why Static Rank Fails and Attention-Native Rank Recovers](/202607/30/2607.23050v1-the-entropic-bound-for-transformers-why-static-rank-fails-and-attention-native-rank-recovers)  
+   evidence：面向低码率压缩的前馈高斯编解码器，利用单步扩散生成
+12. [MedARC: Training-Free Adaptive Redundancy Compression of Visual Tokens for 3D Medical Vision-Language Models](/202608/01/2607.26554v1-medarc-training-free-adaptive-redundancy-compression-of-visual-tokens-for-3d-medical-vision-language-models)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：通过熵界对Transformer容量的理论分析
-11. [OmniCache: Multidimensional Hierarchical Feature Caching For Diffusion Models](/202607/30/2607.23844v1-omnicache-multidimensional-hierarchical-feature-caching-for-diffusion-models)  
-   标签：评分：6.0/10、query:neural-arch
-   evidence：层次化特征缓存加速扩散模型推理
-12. [Multimodal Semantic-Probabilistic Objectness for Open World Object Detection](/202607/30/2607.23981v1-multimodal-semantic-probabilistic-objectness-for-open-world-object-detection)  
-   标签：评分：6.0/10、query:neural-arch
-   evidence：面向开放世界目标检测的多模态语义校准
+   evidence：面向视觉-语言模型的免训练标记压缩方法，与神经网络性能提升技术相关
 
 
 <div class="dpr-home-promo-card">
