@@ -6,77 +6,78 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-08-01
-- 运行时间：2026-08-01 20:33:47 UTC
+- 最新运行日期：2026-08-02
+- 运行时间：2026-08-02 21:08:53 UTC
 - 运行状态：成功
-- 本次总论文数：19
-- 精读区：7
+- 本次总论文数：18
+- 精读区：6
 - 速读区：12
 
 ### 今日简报（AI）
-今日精读与速读共19篇论文，重点聚焦生成式视频压缩与图像编码评估数据集。最值得关注的是《Generative Video Compression with Adaptive Score Distillation》（8.0）提出的自适应分数蒸馏方法，以及《JPEG AIC2026》（8.0）构建的大规模细粒度图像编码评估基准。建议普通读者优先了解这两个方向，后续可关注长尾分类的损失函数设计与视觉生成的矩匹配进展。
-- 详情：[/202608/01/README](/202608/01/README)
+今日精读6篇、速读12篇，重点覆盖视觉扩散模型与自适应优化算法两大方向。
+
+最值得关注《Chimera》提出的混合视觉扩散Transformer及Chinchilla扩展策略（9.0分），以及《Learning from the Descent Direction》在非光滑条件下的自适应梯度下降新分析（8.0分）。
+
+建议普通读者优先浏览Chimera的架构设计思路，并关注速读中的视觉语言导航与高分辨率Token选择方法即可。
+- 详情：[/202608/02/README](/202608/02/README)
 
 ### 精读区论文标签
-1. [Generative Video Compression with Adaptive Score Distillation](/202608/01/2607.22772v1-generative-video-compression-with-adaptive-score-distillation)  
+1. [Chimera: Designing and Chinchilla-Scaling Hybrid Visual Diffusion Transformers](/202608/02/2607.28611v1-chimera-designing-and-chinchilla-scaling-hybrid-visual-diffusion-transformers)  
+   标签：评分：9.0/10、query:neural-arch
+   evidence：提出混合视觉扩散Transformer架构与Chinchilla式扩展配方，面向高效视觉生成
+2. [Learning from the Descent Direction: Adaptive Gradient Descent under One-Sided Hölder Regularity](/202608/02/2607.22906v1-learning-from-the-descent-direction-adaptive-gradient-descent-under-one-sided-hlder-regularity)  
+   标签：评分：8.0/10、query:neural-arch
+   evidence：面向模型优化的自适应梯度下降算法
+3. [Parameter-Efficient Adaptation of SAM3 for Prompt-Driven Surgical Concept Segmentation](/202608/02/2607.23694v1-parameter-efficient-adaptation-of-sam3-for-prompt-driven-surgical-concept-segmentation)  
+   标签：评分：8.0/10、query:neural-arch
+   evidence：面向视觉任务的参数高效低秩适配
+4. [Optimization under Persistent State-Dependent Bias: Gradient-based Method and Complexity Analysis](/202608/02/2607.26032v1-optimization-under-persistent-state-dependent-bias-gradient-based-method-and-complexity-analysis)  
+   标签：评分：8.0/10、query:neural-arch
+   evidence：针对SGD更新中的持久状态相关偏差，提出残差学习梯度算法恢复无偏优化
+5. [Compact Representation of Mipmapped SVBRDFs via Shared Gaussians](/202608/02/2607.27943v1-compact-representation-of-mipmapped-svbrdfs-via-shared-gaussians)  
    标签：评分：8.0/10、query:compress
-   evidence：面向压缩的视频扩散模型与自适应分数蒸馏，实现超低码率压缩
-2. [JPEG AIC2026: A large-scale dataset for fine-grained assessment of image coding](/202608/01/2607.22783v1-jpeg-aic2026-a-large-scale-dataset-for-fine-grained-assessment-of-image-coding)  
-   标签：评分：8.0/10、query:compress
-   evidence：面向图像编码细粒度评估的大规模数据集，覆盖传统和学习型编解码器，是图像压缩研究的核心资源
-3. [AdaKAN: A dual-branch adaptive Kolmogorov-Arnold network for medical image segmentation](/202608/01/2607.22891v1-adakan-a-dual-branch-adaptive-kolmogorov-arnold-network-for-medical-image-segmentation)  
+   evidence：基于共享高斯的紧凑纹理压缩，讨论率失真权衡
+6. [WIDE: Boosting Adaptive LLM Inference via Token-level Dynamic Width Pruning](/202608/02/2607.28418v1-wide-boosting-adaptive-llm-inference-via-token-level-dynamic-width-pruning)  
    标签：评分：8.0/10、query:neural-arch
-   evidence：提出AdaKAN，一种用于医学图像分割的双分支自适应Kolmogorov-Arnold网络，结合高效注意力
-4. [Structured Redundancy Modeling for Efficient Visual Token Pruning in High-Resolution MLLMs](/202608/01/2607.23046v1-structured-redundancy-modeling-for-efficient-visual-token-pruning-in-high-resolution-mllms)  
-   标签：评分：8.0/10、query:neural-arch
-   evidence：单前向视觉token剪枝，提升高分辨率MLLM视觉架构效率
-5. [A Motion-Aware Vector Quantization Framework with Centroid Reuse for Efficient VLA Inference](/202608/01/2607.24148v1-a-motion-aware-vector-quantization-framework-with-centroid-reuse-for-efficient-vla-inference)  
-   标签：评分：8.0/10、query:neural-arch
-   evidence：提出运动感知向量量化与质心复用，通过减少内存访问加速视觉-语言-动作模型推理
-6. [WHTMix: Efficient Stereo Depth Estimation via Walsh-Hadamard Token Mixing](/202608/01/2607.25234v2-whtmix-efficient-stereo-depth-estimation-via-walsh-hadamard-token-mixing)  
-   标签：评分：8.0/10、query:neural-arch
-   evidence：面向立体视觉Transformer的高效Walsh-Hadamard令牌混合
-7. [SepPrune:A Separator-based Pruning Framework for Efficient Multimodal Large Language Models](/202608/01/2607.25818v1-sepprunea-separator-based-pruning-framework-for-efficient-multimodal-large-language-models)  
-   标签：评分：8.0/10、query:neural-arch
-   evidence：提出SepPrune，一种基于分隔符的免训练视觉令牌剪枝方法，降低多模态大语言模型计算开销
+   evidence：用于大模型高效推理的令牌级动态宽度剪枝框架
 
 ### 速读区论文标签
-1. [Beyond Static Costs: Learning-Dynamics Aware Loss Functions for Long-Tailed Classification](/202608/01/2607.25830v1-beyond-static-costs-learning-dynamics-aware-loss-functions-for-long-tailed-classification)  
-   标签：评分：8.0/10、query:neural-arch
-   evidence：利用学习动态调整长尾分类损失，属于视觉模型训练性能优化。
-2. [Amortized Moment Matching for Visual Generation](/202608/01/2607.26860v1-amortized-moment-matching-for-visual-generation)  
-   标签：评分：8.0/10、query:neural-arch
-   evidence：提出摊销矩匹配与AMFD损失作为训练目标，提升视觉生成质量
-3. [Towards joint scaling laws with optimal batch size schedules](/202608/01/2607.27731v1-towards-joint-scaling-laws-with-optimal-batch-size-schedules)  
-   标签：评分：8.0/10、query:neural-arch
-   evidence：提出深度学习训练中的联合缩放定律与批量大小最优调度，直接对应模型优化策略
-4. [Simplifying Neural Networks During Training](/202608/01/2607.27854v1-simplifying-neural-networks-during-training)  
-   标签：评分：8.0/10、query:neural-arch
-   evidence：借助神经坍缩简化训练过程，属于深度网络模型优化策略。
-5. [Twins: Learn to Predict Unified Representations with Focal Loss](/202608/01/2607.22531v1-twins-learn-to-predict-unified-representations-with-focal-loss)  
+1. [Towards Dual-Brain Minimal Sufficient Representation for Vision-Language Navigation](/202608/02/2607.23181v1-towards-dual-brain-minimal-sufficient-representation-for-vision-language-navigation)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：级联ViT与VAE特征并用焦点损失稳定多模态训练，属于视觉架构优化技术。
-6. [Low-light Image Enhancement via Multi-scale Attention combined with Fourier Transform](/202608/01/2607.24002v1-low-light-image-enhancement-via-multi-scale-attention-combined-with-fourier-transform)  
+   evidence：面向视觉任务的紧凑高效架构与最小充分表示
+2. [Multi-Modal Object Re-Identification with Prompt-S6 and Semantic-Aware Knowledge Guidance](/202608/02/2607.23451v1-multi-modal-object-re-identification-with-prompt-s6-and-semantic-aware-knowledge-guidance)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：多尺度注意力与傅里叶融合的U型低光增强网络，是视觉架构改进
-7. [MXAttention: Data-Free Optimal Scaling and Pre-Normalization Quantization for MXFP4 Attention](/202608/01/2607.24377v1-mxattention-data-free-optimal-scaling-and-pre-normalization-quantization-for-mxfp4-attention)  
+   evidence：提出PRISM多模态重识别框架，使用Prompt-S6与语义感知知识引导，属于视觉任务架构改进
+3. [GOTS: Greedy Orthogonal Token Selection for High-Resolution Vision-Language Models](/202608/02/2607.23913v1-gots-greedy-orthogonal-token-selection-for-high-resolution-vision-language-models)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：针对注意力机制的数据无关后训练量化框架，属于模型推理效率优化策略。
-8. [OrthKD: Extracting Generalized Clinical Knowledge from Heterogeneous Teachers for Lightweight Deployment](/202608/01/2607.25545v1-orthkd-extracting-generalized-clinical-knowledge-from-heterogeneous-teachers-for-lightweight-deployment)  
+   evidence：贪心正交令牌选择提升视觉语言模型推理效率，属性能改进技术
+4. [Mage-VL: An Efficient Codec-Native Streaming Multimodal Foundation Model](/202608/02/2607.24904v1-mage-vl-an-efficient-codec-native-streaming-multimodal-foundation-model)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：多教师知识蒸馏，属于深度学习模型优化策略
-9. [The Entropic Bound for Transformers: Why Static Rank Fails and Attention-Native Rank Recovers](/202608/01/2607.23050v1-the-entropic-bound-for-transformers-why-static-rank-fails-and-attention-native-rank-recovers)  
-   标签：评分：6.0/10、query:neural-arch
-   evidence：用熵界与内在秩分析指导Transformer容量设计，是架构设计实践
-10. [Exploring Budgeted Image Classification with Content-Sensitive Resource Allocation](/202608/01/2607.23997v1-exploring-budgeted-image-classification-with-content-sensitive-resource-allocation)  
-   标签：评分：6.0/10、query:neural-arch
-   evidence：基于内容敏感资源分配的自适应图像分类优化
-11. [GenSplatCodec: Feed-Forward Gaussian Splatting Compression via One-Step Diffusion](/202608/01/2607.24403v1-gensplatcodec-feed-forward-gaussian-splatting-compression-via-one-step-diffusion)  
+   evidence：面向流式视觉任务的编解码器原生高效分词器
+5. [Argus-Unified: Towards A Compact and Economical Unified Model for Image Understanding and Generation](/202608/02/2607.25527v1-argus-unified-towards-a-compact-and-economical-unified-model-for-image-understanding-and-generation)  
+   标签：评分：7.0/10、query:neural-arch
+   evidence：紧凑统一的多模态模型，利用混合视觉令牌设计高效视觉架构
+6. [Parallel Decoding Distillation for Fast Image and Video Generation](/202608/02/2607.26004v1-parallel-decoding-distillation-for-fast-image-and-video-generation)  
+   标签：评分：7.0/10、query:neural-arch
+   evidence：基于轨迹的蒸馏方法，加速扩散/流模型的推理
+7. [3D Gaussian Splatting for Scientific Particle Data Compression and Rendering](/202608/02/2607.22956v1-3d-gaussian-splatting-for-scientific-particle-data-compression-and-rendering)  
    标签：评分：6.0/10、query:compress
-   evidence：面向低码率压缩的前馈高斯编解码器，利用单步扩散生成
-12. [MedARC: Training-Free Adaptive Redundancy Compression of Visual Tokens for 3D Medical Vision-Language Models](/202608/01/2607.26554v1-medarc-training-free-adaptive-redundancy-compression-of-visual-tokens-for-3d-medical-vision-language-models)  
+   evidence：基于3D高斯溅射的学习式压缩表示，直接面向渲染图像质量优化
+8. [Similarity Is Not Logic: Factored Inference for Dual-Encoder Vision-Language Models](/202608/02/2607.23052v1-similarity-is-not-logic-factored-inference-for-dual-encoder-vision-language-models)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：面向视觉-语言模型的免训练标记压缩方法，与神经网络性能提升技术相关
+   evidence：提出分解推理方法，改善双编码器视觉语言模型的组合推理性能
+9. [The Gate Always Closes: On Injecting Auxiliary Signals into Frozen Vision-Language Models](/202608/02/2607.23335v1-the-gate-always-closes-on-injecting-auxiliary-signals-into-frozen-vision-language-models)  
+   标签：评分：6.0/10、query:neural-arch
+   evidence：研究冻结视觉语言模型中辅助信号门控，并利用抑制现象改进LoRA微调优化
+10. [A Coulomb Particle Model for Learning Kernel Attention in Transformers](/202608/02/2607.23869v1-a-coulomb-particle-model-for-learning-kernel-attention-in-transformers)  
+   标签：评分：6.0/10、query:neural-arch
+   evidence：提出基于粒子方法学习Transformer的核注意力随机特征，贡献于注意力架构设计。
+11. [Test-Time Adaptation via Dual Distillation for Videos Under Severe Distribution Shifts](/202608/02/2607.24611v1-test-time-adaptation-via-dual-distillation-for-videos-under-severe-distribution-shifts)  
+   标签：评分：6.0/10、query:neural-arch
+   evidence：通过双重蒸馏的测试时自适应提升视频模型在严重分布漂移下的鲁棒性
+12. [Semantic Space Search Trajectory Networks](/202608/02/2607.25122v1-semantic-space-search-trajectory-networks)  
+   标签：评分：6.0/10、query:neural-arch
+   evidence：在语义空间构建搜索轨迹网络，用于分析和比较优化算法
 
 
 <div class="dpr-home-promo-card">

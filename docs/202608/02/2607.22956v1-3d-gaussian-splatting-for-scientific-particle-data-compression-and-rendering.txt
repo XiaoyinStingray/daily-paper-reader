@@ -1,0 +1,449 @@
+Title: 3D Gaussian Splatting for Scientific Particle Data Compression and Rendering
+
+URL Source: https://arxiv.org/pdf/2607.22956v1
+
+Published Time: Tue, 28 Jul 2026 00:19:30 GMT
+
+Number of Pages: 13
+
+Markdown Content:
+# 3D Gaussian Splatting for Scientific Particle Data Compression and Rendering 
+
+Bo Jiang ∗, Youyuan Liu ∗, Taolue Yang ∗, Sheng Di †, Sian Jin ∗∗Temple University, Philadelphia, PA, USA 
+
+{bo.jiang, youyuan.liu, taolue.yang, sian.jin }@temple.edu 
+
+†Argonne National Laboratory, Lemont, IL, USA sdi1@anl.gov 
+
+Abstract —Large-scale particle simulations produce hundreds of millions of particles, straining storage, transfer, and interactive visualization. Existing lossy compressors such as SZ3 operate in data space and provide no guarantees on downstream visu-alization fidelity. We propose ParticleGS , a visualization-aware framework based on 3D Gaussian Splatting (3DGS) that learns a compact representation directly optimized for rendered image quality, combining (1) a multi-stage, multi-orbit training pipeline, (2) VizMapper, a lightweight network that adapts a single trained model to user-specified visualization parameters at inference time, and (3) spatial block training with KD-tree decomposi-tion and global fine-tuning. On a 281-million-particle HACC cosmological simulation, our 8-block model reaches 30.03 dB PSNR at 65 × compression, outperforming SZ3 by 5–8 dB at comparable ratios, and generalizes without tuning to additional HACC regions and a dark-matter-only FIRE-2 simulation. It renders at 662 FPS on a single GPU, over 2,300 × faster than ParaView on the full particle data. 
+
+Index Terms —3D Gaussian splatting, scientific visualization, data compression, particle rendering, lossy compression 
+
+I. I NTRODUCTION 
+
+Particle-based simulations are a workhorse of modern computational science. Cosmological N-body codes such as HACC [1] track the gravitational evolution of dark matter through billions of tracer particles; galaxy-formation projects such as FIRE-2 [2], [3] release hydrodynamic zoom-in runs alongside dark-matter-only cosmological volumes with hun-dreds of millions of particles; and molecular dynamics codes such as LAMMPS [4] routinely generate trajectories with comparable particle counts. At the largest scales, individual HACC simulations track trillions of particles and produce snapshots in the tens to hundreds of terabytes each, with multi-snapshot campaigns reaching the petabyte range. Storing, transferring, and interactively exploring datasets at these scales remains a bottleneck in scientific workflows. Interactive visualization of such particle datasets is already challenging even without compression. Software such as Par-aView [5] renders point clouds by converting each particle into a screen-space Gaussian splat, a process that scales linearly with particle count. For a 281-million-particle dataset, ParaView achieves only 0.28 FPS (3.6 s per frame) when generating our evaluation dataset at 1920 ×1080 resolution (Table VII), far below the interactive threshold. Moreover, 
+
+Corresponding author: Sian Jin (sian.jin@temple.edu). 
+
+Fig. 1: Close-up rendering of 281M HACC particles. SZ3 at 
+
+63 × compression introduces axis-aligned streaking artifacts from independent per-axis coordinate quantization, destroying the filamentary structure visible in the ground truth. scientific analysis requires exploring visualization parameters: users adjust particle radius and opacity to reveal structures at different scales, from the cosmic web at large radii to individual filaments at small radii. Each parameter change triggers a full pipeline re-execution over the entire particle dataset, making interactive exploration impractical at scale. Lossy compression is the standard remedy for reducing data volume, but existing scientific compressors operate entirely in 
+
+data space : they minimize reconstruction error of individual coordinate values with little awareness of how the data will ultimately be visualized . General-purpose compressors such as SZ [6], [7], ZFP [8], and MGARD [9] achieve high compres-sion ratios by exploiting numerical regularity in floating-point arrays and provide configurable point-wise error bounds, yet these bounds control data-space distortion, not visual fidelity. Moreover, these compressors were originally designed for structured floating-point arrays from grid-based simulations, not for unstructured particle clouds, and their rate-distortion on particle data is correspondingly poor. This disconnect creates two problems in practice. First, data-space error metrics do not predict visualization quality. A compressor may report low root-mean-square error while producing rendered images with clearly visible artifacts, be-cause small coordinate perturbations can shift particles across density boundaries or break the local spatial coherence that the renderer relies on. In our evaluation (Section IV-F), SZ3 compressed to ∼50 MB ( 65 × ratio) achieves only ∼24 .7 dB PSNR; at ∼11 MB ( 290 ×) it drops to ∼21 .2 dB: poor visual fidelity despite the data-space error bound being satisfied. Second, axis-independent compression introduces directional 
+
+SC26, November 15-20, 2026, Chicago, Illinois, USA 979-8-3195-4789-7/26/$31.00 ©2026 IEEE arXiv:2607.22956v1 [cs.GR] 24 Jul 2026 artifacts : SZ and ZFP compress each coordinate axis ( x, y,
+
+z) as a separate one-dimensional array, so quantization errors along different axes are uncorrelated. When the compressed particles are rendered, this manifests as directional streaking aligned with the coordinate axes (Fig. 1), an artifact class that is absent from the original data and that tightening the error bound reduces only indirectly, at the cost of much lower compression ratios. Particle-specific compressors such as LCP [10] mitigate axis-independence by reordering parti-cles to exploit spatial locality, achieving higher compression ratios at the same error bound (e.g., 45 × vs. SZ3’s 15 × at 
+
+ε=0 .08 ). However, because lossy quantization is then applied within the reordered stream, its errors become spatially co-herent and introduce structured redistribution artifacts: at 65 ×
+
+compression, LCP reaches only ∼20 .3 dB, worse than SZ3’s 
+
+∼24 .7 dB at the same size (Table VI). Neural implicit representations have been explored for scientific data compression, but they target structured grid data and cannot handle unstructured particles with adjustable visualization parameters. Coordinate-based networks such as NeurComp [11] and CoordNet [12] compress volumetric fields, and NeRF-based methods [13] have been adapted for volume rendering of scientific data [14], [15], yet all assume fixed rendering parameters on structured grids [16]. 3D Gaussian Splatting (3DGS) [17] offers a compelling alternative that directly optimizes for rendered image quality. By representing a scene as a set of anisotropic 3D Gaussians optimized end-to-end via differentiable rasterization, 3DGS achieves real-time rendering with high visual fidelity. The representation is inherently compact: a few hundred thousand Gaussians can encode the visual appearance of hundreds of millions of particles, making it naturally aligned with the goal of preserving visualization fidelity over data-space accuracy. In this work, we ask: can 3DGS serve as a visualization-aware compressed representation for large-scale scientific particle data? Adapting 3DGS to this domain, however, intro-duces challenges not present in natural-scene reconstruction:  
+
+> •
+
+Adjustable visualization parameters. Scientific users routinely change particle radius and opacity to reveal different structural features. Standard 3DGS assumes a fixed scene appearance; a na¨ ıve approach would require retraining for every parameter setting.  
+
+> •
+
+Multi-scale viewing. Analysts explore data from far-away overview perspectives to close-up internal views. Training at a single distance leaves the model unable to resolve features at other scales.  
+
+> •
+
+Scale of data. With hundreds of millions of particles, a single model lacks the capacity to capture fine-grained spatial structures throughout the entire volume. We address these challenges with ParticleGS , avisualization-aware 3DGS pipeline for scientific particle data, contributing: 1) A multi-stage/resolution/orbit training pipeline de-signed for scientific particle rendering. We train across multiple camera distances (far, mid, near orbits) and progressively increase resolution, enabling the model to learn both global structure and local detail (Sec-tion III-C). 2) VizMapper , a lightweight neural network ( ∼4,600 pa-rameters) that takes per-Gaussian attributes and global visualization parameters as input and produces multi-plicative corrections to Gaussian. This allows a single trained model to adapt to different visualization settings at inference time without retraining (Section III-B). 3) Spatial block training with global fine-tuning. We partition the particle volume via KD-tree decomposition, train independent per-block models in parallel, merge them, and apply a global fine-tuning stage. This ap-proach increases model capacity where it is most needed and improves quality by up to 1.28 dB over the single-block baseline (Section III-D). We emphasize that ParticleGS is deliberately a
+
+visualization-oriented compressed representation: it optimizes the fidelity of rendered images under interactive visualization parameters and camera motion, rather than the faithful reconstruction of individual particle positions, attributes, or identifiers that a general-purpose data compressor targets. We make this scope explicit because it determines which downstream analyses the representation supports (Section IV-H). Our pipeline achieves high visual fidelity at large compres-sion ratios and generalizes across datasets without hyperpa-rameter tuning. On a 281-million-particle HACC cosmological dataset (3.4 GB), our single-block model achieves 28.80 dB PSNR at 290 × compression, while our 8-block model reaches 30.03 dB at 65 × compression, outperforming SZ3 by 5–8 dB at matched ratios. Tested on additional HACC regions and a 268M-particle dark-matter-only FIRE-2 cosmological box (3.2 GB), the pipeline achieves consistent quality (27–29 dB at 264 –577 ×). The 3DGS representation renders at 662 FPS including VizMapper overhead, over 2,300 × faster than Par-aView on the full 281M-particle dataset (0.28 FPS), with a 
+
+65 × smaller footprint. As a byproduct, the learned Gaussian mixture supports approximate particle recovery via GMM sampling, preserving large-scale density statistics (correlation 
+
+> 0.92 ) but not individual particle positions. II. B ACKGROUND 
+
+A. Particle Scientific Data 
+
+Particle-based simulations model physical systems as col-lections of discrete tracer elements, each carrying a three-dimensional spatial coordinate and, optionally, physical at-tributes such as velocity or mass. Cosmological N-body codes such as HACC [1] and Gadget-4 [18] evolve dark-matter particles under gravitational interactions, hydrodynamic galaxy-formation simulations like FIRE-2 [2] evolve gas and star particles alongside dark matter, and molecular dynamics simulations such as LAMMPS [4] track atomic trajectories, all at scales ranging from millions to billions of particles per snapshot. Unlike grid-based simulation outputs, where field values reside on a regular lattice, particle positions form an un-structured point cloud in R3. This distinction is consequential: compression and rendering techniques designed for structured grids (including most neural implicit representations) do not directly apply to particle data. Visualization tools such as ParaView [5] render particle datasets by drawing each particle as a screen-space Gaussian splat, a semi-transparent sprite with Gaussian falloff parame-terized by a user-specified radius r and opacity α. Adjusting these reveals structures at different scales: large radii with low opacity expose large-scale filamentary networks, while small radii with higher opacity resolve individual density features. This parameter sensitivity makes interactive control essential, so any compressed representation must accommodate varying visualization settings rather than a fixed appearance. 
+
+B. Lossy Compression for Particle Data 
+
+Lossy scientific compressors reduce floating-point data vol-umes by tolerating bounded reconstruction error, enabling storage and transfer of datasets that would otherwise be prohibitively large. SZ [6] and its successor SZ3 [7] predict each value from its neighbors and quantize the prediction residual; a user-specified absolute error bound ε guarantees that no reconstructed value deviates from the original by more than ε. ZFP [8] partitions data into small blocks, applies a near-orthogonal transform, and encodes the coefficients at a configurable bit rate. MGARD [9] provides rigorous 
+
+L∞ error guarantees through multiresolution decomposition. TTHRESH [19] decomposes data tensors via higher-order SVD with optimal quantization. More recently, HPEZ [20] combines multi-component interpolation with auto-tuning to achieve state-of-the-art rate-distortion among prediction-based compressors. GPU-accelerated variants such as cuSZ [21] and cuSZ-i [22] bring error-bounded compression to massively parallel hardware, achieving throughputs of tens of GB/s on modern GPUs. Tao et al. [23] systematically evaluated these compressors on N-body simulation data, showing that the low spatial coherence inherent in particle coordinates limits the compression ratios achievable with prediction-based methods. These compressors were designed for structured grid fields; when applied to particle coordinates, they treat each axis ( x,
+
+y, z) as a separate one-dimensional array and compress the three arrays independently. As a result, quantization errors along different axes are uncorrelated, and the error bounds control data-space distortion of individual values rather than the fidelity of downstream visualizations, a disconnect whose consequences we quantify in Section IV-F. Recent work has begun to address this disconnect. Liu et al. [24] allow users to specify target quality metrics (PSNR, SSIM) rather than pointwise error bounds, auto-tuning com-pression parameters to meet the target. Jiao et al. [25] develop theory and algorithms for preserving downstream quantities of interest (spectra, histograms) during error-bounded compres-sion. On the learning side, AE-SZ [26] combines autoencoders with SZ-style error bounding, achieving significantly higher compression ratios at the cost of throughput. However, all these methods still operate in data space and do not directly optimize for rendered image quality. Z-checker [27] provides a standard framework for assessing lossy compression quality, but its metrics remain data-centric. Particle-specific compressors mitigate per-axis artifacts but do not close the gap between data-space error and visualization quality. LCP [10] reorders particles along a space-filling curve before applying SZ-style prediction and quantization, grouping spatially nearby particles to exploit local coordinate similarity and achieve higher compression at the same error bound. Reordering itself is render-invariant (particle order does not affect the rendered density field), but the subsequent lossy quantization is applied within the reordered stream, so its reconstruction errors become spatially coherent along the space-filling curve, displacing particles into structured artifacts rather than incoherent per-point noise. 
+
+C. 3D Gaussian Splatting 
+
+Neural Radiance Fields (NeRF) [13] sparked rapid progress in neural scene representations; subsequent hash-based en-codings [28] greatly accelerated both training and rendering. 3D Gaussian Splatting (3DGS) [17] represents a scene as a set of anisotropic 3D Gaussians, each characterized by a center position, a covariance matrix (stored compactly as a scale vector and rotation quaternion), an opacity value, and spherical-harmonic color coefficients for view-dependent ap-pearance. To render an image, each Gaussian is projected onto the image plane as a 2D ellipse, and overlapping contributions are composited front-to-back via alpha blending, analogous to the splatting operation used in scientific visualization tools but with learned rather than prescribed parameters. A tile-based CUDA rasterizer sorts Gaussians per screen tile and performs this compositing in parallel, enabling real-time rendering at hundreds of frames per second. The rasterizer is fully differ-entiable, so an image-space loss backpropagates gradients to every Gaussian parameter, allowing the entire representation to be optimized end-to-end from multi-view images without explicit 3D supervision. An adaptive density control scheme periodically splits Gaussians in under-reconstructed regions and prunes those with negligible opacity, automatically adjust-ing model capacity to match scene complexity. Compared to NeRF, 3DGS offers several advantages: the explicit Gaussian representation avoids costly per-ray sampling, achieving 100 –
+
+300 × faster rendering; training converges in minutes rather than hours; and the model can be stored and streamed as a compact set of per-Gaussian parameters. Existing 3DGS methods, however, all target natural-scene reconstruction from photographs, where scene appearance is fixed at capture time. Subsequent work has improved alias-free rendering via prefiltering [29], reduced storage through pruning and quantization [30], [31], extended the framework to dynamic scenes [32], and scaled to large environments through spatial partitioning [33]; none of these address scientific visu-alization. Scientific particle visualization differs in two key respects: users routinely change visualization parameters ( r,
+
+α) to reveal different structural features, and the input is an unstructured point cloud rather than a set of calibrated photographs. A standard 3DGS model trained under one pa-rameter setting cannot generalize to others without retraining, motivating the extensions described in Section III. III. M ETHODOLOGY 
+
+Our goal is to learn a compact 3DGS representation that faithfully reproduces ParaView renderings of a large particle dataset across diverse viewpoints and visualization parame-ters, at high compression and real-time rendering (Fig. 2). We formulate the task as optimizing 3D Gaussians whose rasterized images match ParaView renderings (Section III-A). VizMapper, a lightweight MLP, modulates Gaussian scale and opacity to adapt to user-specified visualization parameters at inference time (Section III-B). A multi-orbit, multi-resolution schedule with content-masked L1 loss trains the model end-to-end (Section III-C). For large datasets, we partition the volume via KD-tree, train per-block models in parallel, merge them, and globally fine-tune to repair seams (Section III-D). As a byproduct, the learned Gaussian mixture serves as a density model from which particle positions can be recovered via GMM sampling (Section III-E). 
+
+A. Problem Formulation 
+
+Let P = {pi}Ni=1 denote N particle positions pi ∈ R3.ParaView renders P into an image I = R(P; r, α, c) via its Point Gaussian representation, where r, α, and c are the particle radius, opacity, and camera pose. Our goal is to learn a 3DGS representation G = {(μj , Σj , o j , fj )}Mj=1 with M ≪ N
+
+Gaussians, such that ˆI = R3DGS (G; r, α, c) approximates I
+
+across viewpoints and visualization parameters. Here μj is the Gaussian center, Σj the covariance (parameterized via scaling 
+
+sj and rotation qj ), oj the opacity, and fj the color features. 
+
+B. VizMapper: Visualization Parameter Adaptation 
+
+We introduce VizMapper, a lightweight MLP that modu-lates each Gaussian’s scale and opacity conditioned on user-specified visualization parameters, enabling one model to generalize across rendering settings without retraining. Na¨ ıve approaches to handling varying visualization param-eters are either too expensive or sacrifice rendering quality; VizMapper addresses both limitations. In scientific visualiza-tion, users frequently adjust the particle radius r and opacity 
+
+α to reveal different structural features. One na¨ ıve approach is to train a separate model for each parameter combination, which is prohibitively expensive and cannot generalize to un-seen settings. Another is to train on randomized visualization parameters without adaptation, which forces the Gaussians to represent an average over all settings, resulting in blurry renderings. VizMapper solves this by learning a lightweight per-Gaussian correction that adapts scale and opacity to the current visualization setting (Fig. 3). VizMapper is a 3-layer MLP ϕθ (4 → 64 → 64 → 2, 4,610 parameters) with SiLU activations. It modulates only scale and opacity (not position or color) because changing r and 
+
+α affects only particle size and transparency. During training, each image is rendered with a randomly sampled radius r and opacity α (Section III-C). Each dataset has default values r0
+
+and α0; we express the current settings as ratios fr = r/r 0
+
+and fα = α/α 0, so that f = 1 means “use the default” and, e.g., fr = 1 .5 means “50% larger than the default radius.” VizMapper takes as input the relative change from the default (f − 1, which is zero when no adaptation is needed) together with two per-Gaussian attributes, the mean log-scale ¯sj and the opacity logit logit( oj ), that let the network produce different corrections for different Gaussians: 
+
+xj =
+
+
+
+fr − 1, fα − 1, ¯sj − μs
+
+∆s
+
+, logit( oj ) − μo
+
+∆o
+
+
+
+. (1) The per-Gaussian log-scale and opacity logit (the same quan-tities stored internally by 3DGS) are affine-normalized by constants (μs, ∆s) and (μo, ∆o) so that all four inputs span approximately [−1, 1] . These constants are estimated once from a pilot run on a reference dataset and fixed for all subsequent experiments (Section IV). Including per-Gaussian attributes is essential: each Gaussian represents a different local particle structure, and the correction depends on its own scale and opacity. The network outputs two tanh -bounded residual correc-tions: 
+
+(δs, δ o) = ϕθ (xj ), δs ∈ [−δmax  
+
+> s
+
+, δ max  
+
+> s
+
+], δo ∈ [−δmax  
+
+> o
+
+, δ max  
+
+> o
+
+].
+
+(2) Both the adapted scale and opacity follow the same three-factor structure: base value × uniform factor × per-Gaussian correction. For scale, this is a direct product of the Gaussian’s intrinsic scale sj , the global rescaling fr , and the learned residual (1 + δs):
+
+s′ 
+
+> j
+
+= sj · fr · (1 + δs). (3) Opacity has the same multiplicative decomposition (base oj ,uniform factor fα, residual (1 + δo)), but since 3DGS already stores opacity as a logit and applies σ during rendering, we inject the correction directly into the logit before the existing sigmoid: 
+
+o′ 
+
+> j
+
+= σ logit( oj ) + log max( fα(1+ δo), ϵ ), (4) where σ is the sigmoid function and ϵ is a lower bound on the multiplicative opacity factor (preventing the network from driving opacities arbitrarily close to zero). VizMapper is trained jointly with all 3DGS parameters end-to-end. The output layer is zero-initialized so that δs = δo = 0 
+
+at the start of training, ensuring the network begins as the identity mapping and does not interfere with early geometric optimization. The network is kept small (4,610 parameters) since it runs once per Gaussian per frame. For initial training we use δmax  
+
+> s
+
+= 0 .1, δmax  
+
+> o
+
+= 0 .3, and ϵ = 0 .4; these ranges widen during fine-tuning (Section III-D). 
+
+C. Training Pipeline 
+
+Our training pipeline normalizes particle coordinates, sam-ples visualization parameters from Beta distributions, and fol-lows a two-stage, multi-resolution schedule that progressively increases image resolution across three camera orbits. Traditional: Compress → Decompress → Render 
+
+# Ours:  Train Once → Render in Real-Time 
+
+Raw Data 
+
+> 3.4GB
+
+Compress 
+
+> SZ3/LCP
+
+Train 3DGS 
+
++ VizMapper 
+
+> multi-view, orbit, param
+> one-time, 67 min
+
+Decompress  ParaView 
+
+> render
+> ∼3 s/Frame
+
+Compact 
+
+Model 
+
+> 11 MB
+> 50-500 MB
+> online
+
+Real-Time 
+
+Rendering    
+
+> VizMapper + rasterizer
+> 665 FPS change view, r, α? instant
+> change view, r, α? wait for 3s for one frame
+> KD-tree
+> split
+> Block
+> Train Merge Fine-
+> tune
+> For Large Data
+> GMM
+> Sampling
+> Recovered
+> Particles
+> For postprocessing
+
+Raw Data 
+
+> 3.4GB
+
+Fig. 2: Comparison of the traditional compress–decompress–render pipeline (top) and our ParticleGS pipeline (bottom). The traditional workflow requires lossy compression, full decompression, and slow ParaView rendering ( ∼3.6 s/frame) for every view change. Our approach trains a compact 3DGS model with VizMapper once (67 min offline), then delivers real-time interactive rendering at 662 FPS with on-the-fly parameter control. For large datasets, spatial block training partitions the volume via KD-tree (Section III-D); as a byproduct, the learned Gaussians enable particle recovery via GMM sampling (Section III-E). fr −1           
+
+> fα−1
+> ¯sj(norm)
+> logit( oj)(norm)
+> per-frame global
+> per-Gaussian invariant
+> FC 64
+> SiLU
+> FC 64
+> SiLU
+> FC 2
+> tanh
+> δsscale
+> δoopacity
+> 4 610 params |zero-init ⇒identity |tanh -bounded
+
+Fig. 3: VizMapper architecture. A lightweight MLP maps per-Gaussian attributes and global visualization parameters to scale and opacity corrections. We first normalize particle coordinates and construct an initial point cloud. Scientific particle coordinates span large ranges (e.g., [0 , 256] 3 for HACC). We center and scale the bounding box to fit within [−1, 1] 3, recording the transform in a shared normalization.json . From the normalized volume we subsample ∼200 ,000 particles as a colored point cloud (PLY format) to initialize the 3DGS optimization. This subsample seeds optimization only : the ground-truth images that supervise training are rendered from the full set of all 281M particles, and adaptive densification subsequently expands the model to 171k (single-block) or 769k (8-block) Gaussians. The model is never trained to reproduce the visu-alization from the ∼200 ,000 -particle subset alone. We pre-sample visualization parameters per training image so that the model learns to handle a range of rendering settings. Specifically, the particle radius r and opacity α are indepen-dently drawn from Beta distributions centered on their defaults (r0 = 0 .01 , α0 = 0 .05 ): r ∼ rmin + ( rmax − rmin ) Beta (β, β ),with concentration β = 3.0, r ∈ [0 .0025 , 0.0175] , and 
+
+α ∈ [0 .0125 , 0.0875] . The Beta shape concentrates samples near the defaults while still covering extreme settings, so the [−1, 1] 3
+
+r=4 (far) 
+
+0.7r (mid) 
+
+0.5r (near) box = 1 
+
+Fig. 4: Multi-distance camera orbits. Three families of orbital camera trajectories at far ( 1.0×), mid ( 0.7×), and near ( 0.5×)base radius surround the normalized particle volume [−1, 1] 3,providing both distant overviews and close-up views. model devotes most capacity to the most commonly used parameter combinations. VizMapper (Section III-B) receives the corresponding factors fr and fα each iteration. We use multi-distance camera orbits and a two-stage pro-gressive resolution schedule. Scientific exploration requires both distant overviews and close-up views, so we generate three families of orbital camera trajectories at far ( 1.0×), mid (0.7×), and near ( 0.5×) base radius from the scene center (Fig. 4), each with uniform azimuth and elevation angles. Training proceeds in two resolution stages that share the multi-orbit camera distribution. Stage 1 trains at 1920 ×1080 
+
+for 12,000 iterations with adaptive densification, establishing the coarse Gaussian distribution at low computational cost. Stage 2 continues at full 5760 ×3240 resolution for 27,000 iterations, refining high-frequency structure with gradually tapering densification. The first 15,000 iterations of stage 2 use the same external orbits as stage 1; the remaining 12,000 iter-B1  
+
+> B2
+> B3
+> B4
+> KD-tree partition
+> B1
+> B2
+> B3
+> B4
+> parallel
+> per-block 3DGS
+> Merge
+> coord. transform local →global
+> Fine-tune
+> seam repair VizMapper recalib.
+> Final
+
+Fig. 5: Spatial block training pipeline. A KD-tree partitions the particle volume into K blocks, each trained independently in parallel. Block Gaussians are merged into a single model via coordinate transform (local → global), then globally fine-tuned to repair boundary seams and recalibrate VizMapper. ations additionally mix in a small fraction (20%) of cameras placed inside the particle volume, which improves robustness for close-up internal views without materially affecting the rendered metric on external orbits. Total training: 39,000 iterations ( ∼67 minutes on a single GPU). We use a pure L1 loss between predicted and ground-truth images, restricted to a content mask M that excludes the black background: 
+
+L = 1
+
+|M| 
+
+X
+
+> (u,v )∈M
+
+ˆI(u, v ) − I(u, v ) . (5) Adding DSSIM, standard in natural-scene 3DGS, inflates model size by 68% without improving masked PSNR (Sec-tion IV-B), since the SSIM signal is dominated by background. SH degree 0 throughout saves another 59% versus degree 2, since particle rendering is view-independent. 
+
+D. Spatial Block Training with Global Fine-Tuning 
+
+For datasets that exceed a single model’s capacity, we partition the volume into blocks via KD-tree, train each block independently, merge them into a unified representation, and fine-tune globally to repair boundary seams. We partition the volume into balanced blocks so that each can be trained independently. A single 3DGS model has limited capacity to represent fine-grained structure across a large particle volume, and training cost grows with scene complexity. We therefore partition the volume into K blocks using a KD-tree that recursively bisects along the axis of greatest extent (Fig. 5), producing spatially compact blocks with roughly equal particle counts so that per-block training cost is balanced. Each block is trained independently using the pipeline of Section III-C, with camera orbits centered on each block’s local bounding box via per-block normalization. Blocks can be trained in parallel across multiple GPUs. After per-block training, we transform each block’s Gaussians from their local coordinate frame back to the global frame. Positions are mapped via pglobal = plocal ·
+
+(sglobal /s block ) + ( cblock − cglobal ) · sglobal , where s denotes the normalization scale factor and c the coordinate-frame center; log-scale parameters are shifted by log( sglobal /s block ).All block Gaussians are merged into one PLY. The merged model is then fine-tuned end-to-end on the original multi-orbit training data at 1920 ×1080 . Fine-tuning at reduced resolution suffices because the goal is to repair block-boundary seams and recalibrate VizMapper for the combined Gaussian population, not to recover additional high-frequency detail. Because each block’s VizMapper was trained on only that block’s Gaussian distribution, the merged population is more heterogeneous; we therefore widen the correction ranges (δmax  
+
+> o
+
+= 0 .8, δmax  
+
+> s
+
+= 0 .3, ϵ = 0 .1) to give the network enough room to adapt. Fine-tuning runs for 60,000 iterations with mild densification enabled during the first 30,000 iterations. 
+
+E. Particle Recovery via GMM Sampling 
+
+As a byproduct, we reinterpret the optimized Gaussians as a Gaussian Mixture Model and sample from it to recover particle positions that preserve large-scale density statistics. Beyond visualization, the trained 3DGS model can serve as a density model of particle positions. We reinterpret the optimized Gaussians G = {(μj , Σj , o j )}Mj=1 as a Gaussian Mixture Model (GMM), where each component’s mixing weight is proportional to its opacity: 
+
+wj = oj
+
+PMk=1 ok
+
+. (6) To recover N particle positions, we first draw compo-nent indices {zi}Ni=1 from the categorical distribution zi ∼
+
+Cat (w1, . . . , w M ), then sample particles from the Gaussian: 
+
+ˆpi = μzi + Rzi diag (σzi ) ϵ, ϵ ∼ N (0, I), (7) where Rj and σj parameterize Σj . Sampled positions are then mapped from the normalized [−1, 1] 3 frame back to the original coordinates. Recovering 281M particles takes ∼74 .5 s on one GPU with no additional training. Because the Gaussians are optimized for rendering fidelity, recovered particles serve as a statisti-cal proxy, preserving large-scale statistics (power spectrum, density PDF) but not local structure (Section IV-H). IV. E XPERIMENTS 
+
+We evaluate on large-scale particle datasets from multiple simulation codes. Ablation studies (Section IV-B) isolate each design choice; block training analysis (Section IV-C) and generalization (Section IV-D) validate scalability. We compare against SZ3 and LCP in rate-distortion (Section IV-F), profile rendering and pipeline performance (Section IV-G), and assess whether the learned representation preserves spatial statistics of the original distribution (Section IV-H). 
+
+A. Dataset and Setup 
+
+We evaluate on snapshots from two cosmological simulation codes. Our primary dataset is a 281M-particle HACC N-body snapshot [1] over a [0 , 256] 3 domain, stored as three float32 arrays ( xx , yy , zz ), totaling 3.4 GB. For generalization (Section IV-D), we also use (i) four ∼268 M-particle HACC snapshots from disjoint spatial regions of a separate HACC dataset, and (ii) the 268M-particle dark-matter-only cosmolog-ical box from the FIRE-2 public data release [3] ( [0 ,116 ,960] 3,3.2 GB). Ground-truth images are rendered with ParaView 6.0.1’s Point Gaussian representation at 1920 ×1080 (the same version is used for all timing comparisons in Section IV-G). We evaluate at three orbital camera distances (far: 1.0×, mid: 
+
+0.7×, near: 0.5× base radius), 80 frames each (240 total). Per-frame radius and opacity are sampled from Beta (3 .0, 3.0) 
+
+over r ∈ [0 .0025 , 0.0175] and α ∈ [0 .0125 , 0.0875] (defaults 
+
+r0 = 0 .01 , α0 = 0 .05 ), matching real scientific exploration. We report PSNR and model size as primary metrics. We additionally report SSIM [34] and masked PSNR , i.e., PSNR computed only over foreground pixels (where either ground truth or rendering is non-black), excluding the uniform background; tables report full-image PSNR unless explicitly labeled masked. We compare against two lossy compressors: 
+
+SZ3 [7], a general-purpose lossy compressor for scientific data (ABS mode, per-axis compression); and LCP [10], a particle-specific compressor that exploits spatial locality through par-ticle reordering and joint three-axis compression. Both base-lines produce decompressed coordinates rendered through the identical ParaView pipeline for fair comparison; we sweep error-bound values to trace full rate-distortion curves. All experiments run on two NVIDIA RTX PRO 6000 GPUs. 
+
+B. Ablation Studies 
+
+Unless noted otherwise, the ablations, block-training anal-ysis, and rate-distortion comparisons (Sections IV-B, IV-C and IV-F) all use the primary 281M-particle HACC snapshot of Section IV-A. We ablate two design axes: core training com-ponents and fine-tune loss. VizMapper is the most impactful single factor ( −5.51 dB without it), followed by progressive multi-resolution training ( −2.39 dB) and multi-orbit cameras (−0.77 dB). All three variants in Table I share the full E25 schedule (39,000 iterations, pure L1 + content-mask loss, antialiasing, SH degree 0, the same densification configuration, and identical Beta-sampled radius/opacity training images); each row modifies only the named component. Disabling VizMapper ( static_viz =true; cameras, sched-ule, and densification unchanged) drops PSNR by -5.51 dB (Table I). The static model must approximate all radius/opacity combinations with one fixed set of Gaussian opacities and scales; densification compensates by inflating the model to 30% more Gaussians (223k vs. 171k), yet still scores -5.51 dB lower: extra capacity cannot substitute for per-parameter adap-tation. Removing progressive resolution collapses the three stages into a single 39,000-iteration stage at 1920 ×1080 (cam-eras and densification unchanged), costing −2.39 dB; coarse-to-fine refinement is worth more than equal iterations at the lowest resolution alone. Restricting all stages to the far 1.0×
+
+orbit (resolution schedule and VizMapper unchanged) costs 
+
+−0.77 dB, since the model never sees mid- or near-distance training views. Pure L1 with densification is the best fine-tune recipe (Table II). Pure DSSIM loss degrades by −3.43 dB with 6×
+
+model bloat (298.2 MB vs. 49.8 MB), because DSSIM’s patch-based gradients encourage many small Gaussians to cover each patch boundary. Even a 10% DSSIM blend costs −1.77 dB. TABLE I: Core training method ablation. Each row disables one component from the default pipeline (28.80 dB); remov-ing any single component degrades quality, with progressive resolution contributing the largest share.                     
+
+> Ablated Component PSNR ∆Size Gaussians
+> Full pipeline (default) 28.80 dB —11.1 MB 171k w/o VizMapper 23.30 dB −5.51 14.4 MB 223k w/o progressive res. 26.42 dB −2.39 11.0 MB 169k w/o multi-orbit 28.04 dB −0.77 12.4 MB 191k
+
+TABLE II: Fine-tune recipe ablation on the 8-block model. Production config (pure L1, AA, densification) is the baseline.                
+
+> Config PSNR ∆Size
+> Production recipe 30.03 dB —49.8 MB w/o densification 28.61 dB −1.42 57.9 MB pure DSSIM 26.60 dB −3.43 298.2 MB L1 + 0.1 DSSIM 28.26 dB −1.77 54.2 MB
+
+TABLE III: Block training sweep. “Merged” is measured immediately after coordinate-transform concatenation; “Fine-tuned” applies 60,000 iterations of F16 global fine-tuning. ∆
+
+is relative to the single-block baseline (28.80 dB).                                     
+
+> Blocks Merged Fine-tuned ∆SSIM Gaussians Size
+> 1—28.80 —0.7723 171k 11.1 MB 228.99 29.72 +0.92 0.8076 543k 35.2 MB 428.85 29.94 +1.14 0.8195 601k 39.0 MB 828.32 30.03 +1.23 0.8241 769k 49.8 MB 16 26.80 30.08 +1.28 0.8271 1,037k 67.2 MB
+
+Disabling densification costs −1.42 dB, as the merged model needs new Gaussians to fill gaps between block boundaries. 
+
+C. Block Training Analysis 
+
+Spatial block decomposition improves quality by up to 
+
++1 .28 dB over the single-block baseline, with diminishing returns beyond 8 blocks (Table III). The largest gain comes from 1 →2 blocks (++0.92 dB after fine-tuning), as even a coarse partition lets each sub-model specialize in a smaller spatial region. Fine-tuning is essential: merged quality degrades as the number of blocks grows beyond two (28.99 dB for 2 blocks down to 26.80 dB for 16 blocks), but fine-tuning fully recovers and surpasses single-block quality in all cases, confirming that global optimization after merging is necessary. Rendering quality saturates beyond 4 blocks: doubling from 4 to 8 blocks adds only +0.09 dB (29.94 → 30.03 dB) while increasing model size by 28%. However, more blocks enable training-time parallelism for larger datasets and improve the fidelity of recovered particle data (Table IX). Block training primarily benefits mid and near views (Fig. 6). For the 8-block model, near-view quality improves by +1.49 dB over the single-block baseline (27.54 vs. 26.05 dB masked PSNR), while far-view quality improves by +1.04 dB (27.35 vs. 26.32 dB), consistent with block training providing additional capacity for spatially localized internal structure. Fig. 6: Fine-tuned masked PSNR by viewing distance for dif-ferent block counts. More blocks consistently improve quality across all distances, with the largest gain from 1 to 2 blocks. 
+
+Fig. 7: Per-block model size vs. particles per block. The dashed line shows perfect linear scaling (anchored at the single-block model). Actual model sizes grow sub-linearly: each block retains a base capacity regardless of particle count, so arbitrarily fine partitioning yields diminishing returns in total model size. 
+
+D. Generalization 
+
+A practical compression pipeline must generalize across data scales, spatial regions, and simulation types without per-dataset tuning. All experiments in this section use the identical default pipeline and hyperparameters unless stated otherwise. Block training (Section IV-C) implicitly demonstrates scale generalization: each block is trained independently, with per-block particle counts spanning ∼17 .6M (16 blocks) to 281M (single block), a 16 × range. Fig. 7 shows per-block Gaussian counts scale sub-linearly with particles, from 94k (17.6M) to 171k (281M), so the pipeline automatically adapts capacity to data size. To verify that the method is not overfit to a particular spatial region, we evaluate on four spatially disjoint HACC snapshots drawn from a separate HACC dataset, each containing ∼268 Mparticles, comparable in size to our primary 281M-particle dataset. Table IV (top) shows remarkably consistent results: mean PSNR is 27.36 dB with a standard deviation of only 0.04 dB, and all blocks achieve similar compression ratios (264 –286 ×) and model sizes ( 10 .8–11 .7 MB). We further evaluate on the dark-matter-only cosmological TABLE IV: Generalization across spatial regions and simula-tion codes. Top: four spatially disjoint HACC snapshots from a separate HACC dataset. Bottom: dark-matter-only FIRE-2 cosmological box (268M particles, different simulation code).                                  
+
+> Dataset / Block PSNR Size Gaussians CR
+> HACC Block 0 27.33 dB 11.7 MB 180k 264 ×
+> HACC Block 1 27.37 dB 11.4 MB 175k 270 ×
+> HACC Block 2 27.33 dB 10.8 MB 166k 286 ×
+> HACC Block 3 27.42 dB 11.3 MB 174k 272 ×
+> HACC Mean ±std 27 .36 ±0.04 dB 11.3 MB 174k 273 ×
+> FIRE-2 29.27 dB 5.3 MB 82k 577 ×
+
+box from the FIRE-2 public data release [3], which contains 268M particles in a 116 ,960 3 domain and is produced by a different simulation code than HACC, with a different domain size and clustering morphology. The only adaptation is scaling ParaView’s particle radius and its sampling range proportionally to the domain size. As shown in Table IV (bottom), the pipeline achieves 29.27 dB PSNR with a compact 5.3 MB model ( 577 ×), using fewer Gaussians (82k vs. ∼174k for HACC), consistent with the more concentrated matter distribution. 
+
+E. Generalization to Unseen Views and Parameters 
+
+The results above generalize across datasets ; we further test generalization across views and parameters held out from training. We use the single-block model (171,346 Gaussians), whose 28.82 dB mean full-image PSNR over the trained orbits reproduces the single-block operating point. Table V reports masked PSNR at orbit radii never seen during training, both interpolated between the 1.0/0.7/0.5training orbits and extrap-olated beyond them, with per-frame (r, α ) held in the trained range. Unseen orbits show no generalization gap: masked PSNR stays within 0.2 dB of the trained orbits, and each in-terpolated value falls between those of its neighboring trained orbits. The one exception is aggressive near-extrapolation: at 
+
+0.35 ×, closer than any training orbit, masked PSNR drops by 1.3 dB. SSIM varies with orbit distance itself, because the foreground fraction grows as the camera approaches, but shows the same pattern. We then fix the orbit and push the radius and opacity fac-tors outside their trained range [0 .25 , 1.75] . Quality degrades smoothly, with no discontinuity at the range boundary: masked PSNR is 21.85 dB at radius factor 2.0× and 20.67 dB at 2.5×,and 22.30 dB and 21.33 dB at opacity factors 2.0× and 2.4×,continuing the in-range trend. VizMapper extrapolates rather than collapses outside its training envelope. 
+
+F. Rate-Distortion: 3DGS vs. Baselines 
+
+Our 3DGS models outperform both baselines by 5–8 dB across the full compression range (Fig. 8 and Table VI). Our single-block model ( ∼171k Gaussians) achieves 28.80 dB PSNR at a compression ratio of 290 × (3.4 GB → 11.1 MB). At a comparable compression ratio, SZ3 achieves only ∼21 .2 dB, a gap of +7 .6 dB. Our 8-block model reaches 30.03 dB at TABLE V: Generalization to unseen camera orbits (single-block model, masked PSNR and SSIM, (r, α ) in trained range). Interpolated (int ) and far-extrapolated (ext ) or-bits match the trained orbits (tr ); only aggressive near-extrapolation costs 1.3 dB.                            
+
+> Orbit 1.3×1.0×0.85 ×0.7×0.6×0.5×0.35 ×
+> ext tr int tr int tr ext
+> Masked PSNR 26.20 26.32 26.33 26.43 26.37 26.07 25.10 SSIM 0.915 0.863 0.823 0.769 0.727 0.685 0.588
+
+Fig. 8: Rate-distortion comparison between our 3DGS models, SZ3, and LCP. Our models consistently outperform both baselines across the full compression range, achieving +5 .4 dB over SZ3 at the 8-block operating point ( 65 × CR) and +7 .6 dB at the single-block point ( 290 × CR). TABLE VI: Rate-distortion comparison. Compression ratio (CR) is computed against raw position data (3.4 GB). PSNR is averaged over far/mid/near evaluation orbits. Both 3DGS variants outperform SZ3 and LCP by 5–8 dB at matched ratios.                        
+
+> Method CR Size PSNR
+> SZ3 (matched to single) ∼290 ×∼11 MB ∼21.2 dB SZ3 (matched to 8-blk) ∼65 ×∼50 MB ∼24.7 dB LCP (matched to single) ∼290 ×∼11 MB ∼17.9 dB LCP (matched to 8-blk) ∼65 ×∼50 MB ∼20.3 dB 3DGS single (ours) 290 ×11.1 MB 28.80 dB 3DGS 8-blk + FT (ours) 65 ×49.8 MB 30.03 dB
+
+65 × compression (49.8 MB), outperforming SZ3 by +5 .4 dB at matched compression ratios. LCP, a particle-specific com-pressor, reaches 20.3 dB at 65 × and 17.9 dB at 290 ×: gaps of 
+
++9 .7 dB and +10 .9 dB against our method. Visual quality differences are most apparent at close range (Fig. 9). At ∼65 × compression, our 3DGS model preserves the large-scale cosmic web and local density variations, while SZ3 exhibits visible artifacts at close range where per-coordinate quantization errors become apparent. 
+
+G. Performance 
+
+Our pipeline renders 2,386 × faster than ParaView at 1080p (662 FPS vs. 0.28 FPS) with 462.2 MB GPU memory, and TABLE VII: Performance summary (RTX PRO 6000 Black-well). ParaView renders 281M particles; 3DGS uses 769k Gaussians (8-block model). Viz-adaptation cost: ParaView = combined − camera-only (same session); 3DGS = per-component timing with CUDA synchronization. 3DGS compo-nents and combined are measured in independent benchmark passes, so VM + camera need not exactly equal combined. VizMapper replaces ParaView’s full pipeline rebuild on each parameter change, accounting for the bulk of the 2,386 × end-to-end speedup.                               
+
+> ParaView 3DGS (Ours) Speedup
+> Per-frame latency (1080p)
+> Viz-param adapt. 3,474 ms 1.21 ms 2,871 ×
+> Camera render 129 ms 0.38 ms 339 ×
+> Combined 3,603 ms 1.51 ms 2,386 ×
+> Per-frame latency (4K)
+> Viz-param adapt. 3,518 ms 1.20 ms 2,932 ×
+> Camera render 129 ms 0.77 ms 168 ×
+> Combined 3,648 ms 1.93 ms 1,890 ×
+> GPU memory
+> Inference (peak) 462.2 MB Training (peak, 6K) 8.5 GB
+> Pipeline cost
+> Data loading 39.4 s 41 ms 968 ×
+> Data prep (one-time, raw →VTP) 6.85 min Training (single-block, incl. GT gen) 67 min Merge (8 blocks) 0.11 s Finetune (60,000 iter) 15 min
+
+trains end-to-end in 67 minutes on a single GPU (Table VII). Both ParaView and our 3DGS pipeline perform two operations per frame: adapting to visualization parameter changes (par-ticle radius, opacity) and rendering from the current camera. Table VII decomposes per-frame cost into these two stages, measured as pure rendering throughput (no disk I/O). In ParaView, changing visualization parameters via the standard Python API triggers a full pipeline rebuild over 281 million particles (3,474 ms), which dominates frame time; camera-only rendering costs 129 ms and is resolution-independent, as vertex processing for 281M particles far exceeds the fragment workload at either resolution. In our pipeline, the VizMapper MLP replaces this rebuild with a 1.21 ms forward pass over 769k Gaussians, while the CUDA rasterizer renders in 0.38 ms at 1080p (0.77 ms at 4K). The overall 2,386 × speedup at 1080p enables interactive exploration at 662 FPS (518 FPS at 4K), with the 8-block model using only 462.2 MB of GPU memory at inference. A single-block model trains in 67 minutes; the 8-block variant adds a 0.11 s merge and a 15-min finetune over eight parallel runs. The per-block trainings are fully independent, so wall-clock stays roughly constant given one GPU per block, while aggregate GPU-hours grow linearly with block count (our two-GPU workstation ran them in four batches, a hardware rather than method limit). Data loading drops ∼1000 × (39.4 s ParaView VTP → 41 ms 3DGS PLY). We account for this training cost transparently: the 67 min 
+
+already includes ParaView ground-truth image generation for all stages, and the only additional offline step is a one-time 
+
+6.85 min raw →VTP conversion that is shared across every Fig. 9: Visual comparison at far (top, orbit 1.0×) and near (bottom, orbit 0.5×) viewing distances, both at ∼65 × compression. Left: ParaView ground truth. Center: our 8-block 3DGS model (30.03 dB). Right: SZ3 at matched ratio (24.73 dB), exhibiting axis-aligned streaking artifacts visible in the inset. These streaks arise from SZ3’s per-axis 1D compression: x, y, z arrays are stored separately with different spatial continuity, so the predictor produces independent quantization errors along each axis that align as stripes. Images show the center 30% crop for detail. camera configuration and every baseline. This is a larger one-time cost than a single pass of a data-space compressor (SZ3 compresses the 281M-particle positions in 11.7 s with a 7.6 s decompress, and LCP in 22.3 s with 4.0 s, at ε=0 .08 ), but ParticleGS amortizes it over unlimited interactive exploration: each subsequent camera or (r, α ) change costs a 1.21 ms VizMapper pass plus rasterization, whereas every such change in the data-space pipeline re-executes ParaView’s 3,474 ms rebuild over all 281M particles. 
+
+H. Approximate Particle Recovery via GMM Sampling 
+
+The learned Gaussians can be interpreted as a Gaussian Mixture Model (GMM) from which particle positions can be sampled. Large-scale spatial statistics are well preserved (density correlation >0.92 , P (k) and ξ(r) within ±10% ), but individual particle positions are not faithfully encoded (NN distance at best 44% of GT). This analysis tests whether the 3DGS representation preserves spatial statistics of the orig-inal particle distribution, a stronger requirement than visual fidelity. Table VIII compares four sampling strategies on 281M recovered particles from the 8-block model. Opacity-weighted sampling (V0) achieves the highest density correlation (0.928), while volume-only weighting (V1, 0.437) and density-field guided sampling (V6, 0.003) fail to recover meaningful struc-ture: opacity learned for rendering also encodes local particle density. The recovered particles are appropriate for density-domain 
+
+analysis: density-field visualization and slicing (Fig. 10), the matter power spectrum P (k) (within ±10% up to 
+
+k=2 .63 h/Mpc), the two-point correlation ξ(r) at large scales (within ±10% for r> 10 Mpc/h), and identification of large-TABLE VIII: Recovery algorithm comparison (281M parti-cles, 8-block model). ξ Dev: mean |ξrec /ξ GT − 1| over bins where ξGT > 0.                     
+
+> Method Dens. Corr. Dens. MAE NN Mean ξDev
+> Baseline 0.928 0.718 0.250 8.6% Volume-weighted 0.437 1.172 1.216 4.0 %Uniform ellipsoid 0.917 0.701 0.281 8.9% Density field 0.003 1.924 0.061 154.1%
+
+TABLE IX: Particle recovery vs. block count (281M particles, V0 method). GT nearest-neighbor mean distance is 0.665.                          
+
+> Blocks Dens. Corr. MAE NN Mean ξDev
+> 10.897 0.906 0.161 15.3% 20.916 0.815 0.186 9.3% 40.923 0.760 0.218 8.3% 80.928 0.718 0.250 8.6% 16 0.928 0.681 0.292 7.8 %
+
+scale structure (filaments, nodes, voids). They are not appro-priate for analyses that depend on individual particles: nearest-neighbor and small-scale clustering statistics (NN distance at best 44% of GT, and ξ overestimated at small r), per-particle tracking or identifiers, velocities and other attributes, and small-scale halo finding. This delineation follows directly from the representation being optimized for visual rather than data-space fidelity, and we present recovery as an approximate byproduct rather than a general-purpose decompression. Large-scale density structure is well reproduced (Fig. 10). We deposit both ground-truth and recovered particles onto a 
+
+256 3 grid to compute the density contrast field δ = ρ/ ¯ρ − 1;Fig. 10: Density field central slice ( log 10 ρ/ ¯ρ) from the learned 8-block Gaussian mixture. Left: ground truth (281M particles). Right: recovered (281M particles). Large-scale structure (fila-ments, nodes, and voids) is clearly reproduced. 
+
+Fig. 11: Cosmological spatial statistics [35] of recovered particles (8-block model, 281M particles). (a) P (k) remains within ±10% up to k = 2 .63 h/Mpc. (b) ξ(r) agrees within 
+
+±10% for r > 10 Mpc/h; overestimates at small r. Panels show ratios with ±5% and ±10% bands. 
+
+Fig. 12: Three-way comparison: 3DGS rendering vs. recovered-particle rendering (ParaView), both evaluated against ground truth (masked PSNR). 3DGS rendering con-sistently outperforms recovered-particle rendering by ∼11 dB, confirming that the learned Gaussian representation captures visual structure beyond what the recovered particles preserve. large-scale structure (filaments, nodes, and voids) is clearly reproduced. The density PDF tracks the ground truth at overdensities ( δ > 0) but diverges in voids ( δ < −1), where the Gaussian mixture under-samples sparse regions. The power spectrum P (k), the primary summary statistic in cosmological clustering analyses, remains within ±10% of the ground truth up to k = 2 .63 for the 8-block model (Fig. 11a). The two-point correlation function ξ(r), the real-space counterpart of P (k),agrees within ±10% at separations r > 10 (Fig. 11b), but overestimates correlations at small r (up to +18% at r ≈ 5), consistent with clustering around Gaussian centers. Increasing the block count improves recovery quality (Ta-ble IX): density correlation rises from 0.897 (1 block) to 0.928 (8 blocks), as more Gaussians provide finer spatial resolution for the mixture. However, the nearest-neighbor (NN) mean distance remains well below the ground truth (best: 0.292 vs. GT 0.665 for 16 blocks), indicating that recovered particles cluster near Gaussian centers rather than reproducing true inter-particle spacing. Increasing the sampling spread ( 1–3×
+
+scale factor) improves NN distance toward the GT value without substantially affecting density correlation ( ∆ < 0.01 ). Rendering recovered particles through ParaView produces far worse images than direct 3DGS rendering (Fig. 12): 3DGS (27.56 dB) outperforms recovered-particle renderings (16.95 dB) by over 11 dB, confirming that the learned repre-sentation is optimized for appearance, not particle positions. V. C ONCLUSION 
+
+We have presented ParticleGS, a visualization-aware 3D Gaussian Splatting framework for compressing and render-ing large-scale scientific particle data. Our approach learns a compact scene representation directly optimized for ren-dered image quality, rather than point-wise data accuracy. The VizMapper network enables a single model to adapt to different visualization parameters without retraining, and spatial block training scales model capacity to large datasets. The complete pipeline trains in 67 minutes on one GPU. ParticleGS has limitations at two levels. At the implemen-tation level, approximating ParaView’s point-sprite rendering with Gaussian alpha compositing imposes a quality ceiling, and VizMapper inference is the per-frame throughput bot-tleneck. Three deeper limitations bound the method’s scope. First, fidelity is highest within the trained viewing envelope: the camera orbits and radius/opacity ranges seen during train-ing are reproduced faithfully, while quality degrades smoothly but measurably outside this envelope (Section IV-E), so ar-bitrary interior fly-throughs are not fully covered. Second, block training with global fine-tuning provides a scaling path: blocks train in parallel at constant per-block capacity, and the fine-tuning stage corrects inter-block boundaries. We have demonstrated this path up to 281M particles, but not yet at the trillion-particle, multi-terabyte snapshots of the largest cam-paigns. Third, particle recovery is approximate and density-domain only (Section IV-H): it supports large-scale structural and statistical analysis, not per-particle positions, attributes, or identifiers. These limitations also delineate where the representation is trustworthy. It is reliable for qualitative exploration: inspecting large-scale morphology, locating filaments, nodes, and voids, comparing density fields across regions, and navigating camera and radius/opacity within the trained ranges. In these tasks the quantity of interest is the visual density field that training directly optimizes. It can be misleading for quantities the rendered images do not constrain: per-particle positions or identifiers, fine-scale clustering and nearest-neighbor statistics, sharp features near block boundaries, and extrapolation far outside the trained envelope, where the rendered loss provides no quality guarantee. Users should treat ParticleGS as an interactive visual surrogate, not a source of ground-truth measurements. We benchmark against ParaView as the representative general-purpose visualization system, but the data-to-render bottleneck is not specific to ParaView. Parallel and in-situ particle renderers such as vl3 and Galaxy, the VTK-m/Ascent stack, and level-of-detail point-cloud renderers in the style of Potree all pay the same per-view pipeline cost over hundreds of millions of particles, and would be informative additional points of comparison. Future work will extend the framework to time-varying simulations, rendering modes beyond point-Gaussian density rendering, and additional scientific domains. The complete pipeline, experiment configurations, and the artifact reproducing every reported number are available at https://github.com/BoJiang03/ParticleGS. ACKNOWLEDGMENT 
+
+This material was supported by the U.S. Department of Energy, Office of Science, Advanced Scientific Computing Research (ASCR), under contract DE-AC02-06CH11357, and by the National Science Foundation under Grants OAC-2311875, OAC-2514036, and OAC-2513768. This research used resources of the Argonne Leadership Computing Facility, a U.S. Department of Energy Office of Science user facility, and the Bebop cluster operated by the Laboratory Computing Resource Center at Argonne National Laboratory. The authors used Claude (Anthropic) to assist with manuscript editing and artifact-script development; all technical content, experiments, and conclusions are the authors’ own. REFERENCES [1] S. Habib, A. Pope, H. Finkel, N. Frontiere, K. Heitmann, D. Daniel, P. Fasel, V. Morozov, G. Zagaris, T. Peterka et al. , “HACC: Simulating sky surveys on state-of-the-art supercomputing architectures,” New Astronomy , vol. 42, pp. 49–65, 2016. [Online]. Available: https: //doi.org/10.1016/j.newast.2015.06.003 [2] P. F. Hopkins, A. Wetzel, D. Kereˇ s, C.-A. Faucher-Gigu` ere, E. Quataert, M. Boylan-Kolchin, N. Murray, C. C. Hayward, S. Garrison-Kimmel, C. Hummels et al. , “FIRE-2 simulations: physics versus numerics in galaxy formation,” Monthly Notices of the Royal Astronomical Society , vol. 480, no. 1, pp. 800–863, 2018. [Online]. Available: https://doi.org/10.1093/mnras/sty1690 [3] A. Wetzel, C. C. Hayward, R. E. Sanderson, X. Ma, D. Angl´ es-Alc´ azar, R. Feldmann, T. Chan, K. El-Badry, C. Wheeler, S. Garrison-Kimmel et al. , “Public data release of the FIRE-2 cosmological zoom-in simulations of galaxy formation,” The Astrophysical Journal Supplement Series , vol. 265, no. 2, p. 44, 2023. [4] A. P. Thompson, H. M. Aktulga, R. Berger, D. S. Bolintineanu, W. M. Brown, P. S. Crozier, P. J. In’t Veld, A. Kohlmeyer, S. G. Moore, T. D. Nguyen et al. , “LAMMPS—a flexible simulation tool for particle-based materials modeling at the atomic, meso, and continuum scales,” Computer physics communications , vol. 271, p. 108171, 2022. [Online]. Available: https://doi.org/10.1016/j.cpc.2021.108171 [5] J. Ahrens, B. Geveci, and C. Law, “Paraview: An end-user tool for large data visualization,” The visualization handbook , vol. 717, no. 8, 2005. [Online]. Available: https://doi.org/10.1016/B978-012387582-2% 2F50038-1 [6] S. Di and F. Cappello, “Fast error-bounded lossy hpc data compression with sz,” in 2016 ieee international parallel and distributed processing symposium (ipdps) . IEEE, 2016, pp. 730–739. [Online]. Available: https://doi.org/10.1109/IPDPS.2016.11 [7] X. Liang, K. Zhao, S. Di, S. Li, R. Underwood, A. M. Gok, J. Tian, J. Deng, J. C. Calhoun, D. Tao et al. , “SZ3: A modular framework for composing prediction-based error-bounded lossy compressors,” IEEE Transactions on Big Data , vol. 9, no. 2, pp. 485–498, 2022. [Online]. Available: https://doi.org/10.1109/TBDATA.2022.3201176 [8] P. Lindstrom, “Fixed-rate compressed floating-point arrays,” IEEE transactions on visualization and computer graphics , vol. 20, no. 12, pp. 2674–2683, 2014. [Online]. Available: https://doi.org/10.1109/ TVCG.2014.2346458 [9] Q. Gong, J. Chen, B. Whitney, X. Liang, V. Reshniak, T. Banerjee, J. Lee, A. Rangarajan, L. Wan, N. Vidal et al. , “MGARD: A multigrid framework for high-performance, error-controlled data compression and refactoring,” SoftwareX , vol. 24, p. 101590, 2023. [Online]. Available: https://doi.org/10.1016/j.softx.2023.101590 [10] L. Zhang, R. Li, C. Ren, S. Di, J. Liu, J. Huang, R. Underwood, P. Grosset, D. Tao, X. Liang et al. , “Lcp: Enhancing scientific data management with lossy compression for particles,” Proceedings of the ACM on Management of Data , vol. 3, no. 1, pp. 1–27, 2025. [Online]. Available: https://doi.org/10.1145/3709700 [11] Y. Lu, K. Jiang, J. A. Levine, and M. Berger, “Compressive neural representations of volumetric scalar fields,” in Computer graphics forum , vol. 40, no. 3. Wiley Online Library, 2021, pp. 135–146. [Online]. Available: https://doi.org/10.1111/cgf.14295 [12] J. Han and C. Wang, “CoordNet: Data generation and visualization generation for time-varying volumes via a coordinate-based neural network,” IEEE Transactions on Visualization and Computer Graphics ,vol. 29, no. 12, pp. 4951–4963, 2022. [Online]. Available: https: //doi.org/10.1109/TVCG.2022.3197203 [13] B. Mildenhall, P. P. Srinivasan, M. Tancik, J. T. Barron, R. Ramamoorthi, and R. Ng, “NeRF: Representing scenes as neural radiance fields for view synthesis,” Communications of the ACM , vol. 65, no. 1, pp. 99–106, 2021. [Online]. Available: https://doi.org/10.1145/3503250 [14] S. Weiss, P. Herm¨ uller, and R. Westermann, “Fast neural representations for direct volume rendering,” in Computer Graphics Forum , vol. 41, no. 6. Wiley Online Library, 2022, pp. 196–211. [Online]. Available: https://doi.org/10.1111/cgf.14578 [15] S. Yao, Y. Lu, and C. Wang, “ViSNeRF: Efficient multidimensional neural radiance field representation for visualization synthesis of dynamic volumetric scenes,” in 2025 IEEE 18th Pacific Visualization Conference (PacificVis) . IEEE, 2025, pp. 235–245. [Online]. Available: https://doi.org/10.1109/PacificVis64226.2025.00029 [16] G. Kindlmann and C. Scheidegger, “An algebraic process for visualization design,” IEEE transactions on visualization and computer graphics , vol. 20, no. 12, pp. 2181–2190, 2014. [Online]. Available: https://doi.org/10.1109/TVCG.2014.2346325 [17] B. Kerbl, G. Kopanas, T. Leimk¨ uhler, and G. Drettakis, “3D Gaussian Splatting for real-time radiance field rendering,” ACM Transactions on Graphics , vol. 42, no. 4, July 2023. [Online]. Available: https://doi.org/10.1145/3592433 [18] V. Springel, R. Pakmor, O. Zier, and M. Reinecke, “Simulating cosmic structure formation with the Gadget-4 code,” Monthly Notices of the Royal Astronomical Society , vol. 506, no. 2, pp. 2871–2949, 2021. [Online]. Available: https://doi.org/10.1093/mnras/stab1855 [19] R. Ballester-Ripoll, P. Lindstrom, and R. Pajarola, “TTHRESH: Tensor compression for multidimensional visual data,” IEEE transactions on visualization and computer graphics , vol. 26, no. 9, pp. 2891–2903, 2019. [Online]. Available: https://doi.org/10.1109/TVCG.2019.2904063 [20] J. Liu, S. Di, K. Zhao, X. Liang, S. Jin, Z. Jian, J. Huang, S. Wu, Z. Chen, and F. Cappello, “High-performance effective scientific error-bounded lossy compression with auto-tuned multi-component interpolation,” Proceedings of the ACM on Management of Data , vol. 2, no. 1, pp. 1–27, 2024. [Online]. Available: https://doi.org/10.1145/3639259 [21] J. Tian, S. Di, K. Zhao, C. Rivera, M. H. Fulp, R. Underwood, S. Jin, X. Liang, J. Calhoun, D. Tao et al. , “cuSZ: An efficient gpu-based error-bounded lossy compression framework for scientific data,” in Proceedings of the ACM International Conference on Parallel Architectures and Compilation Techniques , 2020, pp. 3–15. [Online]. Available: https://doi.org/10.1145/3410463.3414624 [22] J. Liu, J. Tian, S. Wu, S. Di, B. Zhang, R. Underwood, Y. Huang, J. Huang, K. Zhao, G. Li et al. , “CUSZ-i: High-ratio scientific lossy compression on gpus with optimized multi-level interpolation,” in SC24: International Conference for High Performance Computing, Networking, Storage and Analysis . IEEE, 2024, pp. 1–15. [Online]. Available: https://doi.org/10.1109/SC41406.2024.00019 [23] D. Tao, S. Di, Z. Chen, and F. Cappello, “In-depth exploration of single-snapshot lossy compression techniques for n-body simulations,” in 2017 IEEE International Conference on Big Data (Big Data) .IEEE, 2017, pp. 486–493. [Online]. Available: https://doi.org/10.1109/ BigData.2017.8257962 [24] J. Liu, S. Di, K. Zhao, X. Liang, Z. Chen, and F. Cappello, “Dynamic quality metric oriented error bounded lossy compression for scientific datasets,” in SC22: International Conference for High Performance Computing, Networking, Storage and Analysis . IEEE, 2022, pp. 1–15. [Online]. Available: https://doi.org/10.1109/SC41404.2022.00067 [25] P. Jiao, S. Di, H. Guo, K. Zhao, J. Tian, D. Tao, X. Liang, and F. Cappello, “Toward quantity-of-interest preserving lossy compression for scientific data,” Argonne National Laboratory (ANL), Tech. Rep., 2022. [Online]. Available: https://doi.org/10.14778/3574245.3574255 [26] J. Liu, S. Di, K. Zhao, S. Jin, D. Tao, X. Liang, Z. Chen, and F. Cappello, “Exploring autoencoder-based error-bounded compression for scientific data,” in 2021 IEEE International Conference on Cluster Computing (CLUSTER) . IEEE, 2021, pp. 294–306. [Online]. Available: https://doi.org/10.1109/Cluster48925.2021.00034 [27] D. Tao, S. Di, H. Guo, Z. Chen, and F. Cappello, “Z-checker: A framework for assessing lossy compression of scientific data,” The International Journal of High Performance Computing Applications ,vol. 33, no. 2, pp. 285–303, 2019. [Online]. Available: https: //doi.org/10.1177/1094342017737147 [28] T. M¨ uller, A. Evans, C. Schied, and A. Keller, “Instant neural graphics primitives with a multiresolution hash encoding,” ACM transactions on graphics (TOG) , vol. 41, no. 4, pp. 1–15, 2022. [Online]. Available: https://doi.org/10.1145/3528223.3530127 [29] Z. Yu, A. Chen, B. Huang, T. Sattler, and A. Geiger, “Mip-splatting: Alias-free 3D Gaussian splatting,” in Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , 2024, pp. 19 447–19 456. [Online]. Available: https://doi.org/10.48550/arXiv.2311. 16493 [30] J. C. Lee, D. Rho, X. Sun, J. H. Ko, and E. Park, “Compact 3D Gaussian representation for radiance field,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 2024, pp. 21 719–21 728. [Online]. Available: https: //doi.org/10.48550/arXiv.2311.13681 [31] G. Fang and B. Wang, “Mini-splatting: Representing scenes with a constrained number of Gaussians,” in European conference on computer vision . Springer, 2024, pp. 165–181. [Online]. Available: https://doi.org/10.48550/arXiv.2403.14166 [32] G. Wu, T. Yi, J. Fang, L. Xie, X. Zhang, W. Wei, W. Liu, Q. Tian, and X. Wang, “4D Gaussian splatting for real-time dynamic scene rendering,” in Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , 2024, pp. 20 310–20 320. [Online]. Available: https://doi.org/10.48550/arXiv.2310.08528 [33] J. Lin, Z. Li, X. Tang, J. Liu, S. Liu, J. Liu, Y. Lu, X. Wu, S. Xu, Y. Yan et al. , “VastGaussian: Vast 3D gaussians for large scene reconstruction,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 2024, pp. 5166–5175. [Online]. Available: https://doi.org/10.48550/arXiv.2402.17427 [34] Z. Wang, A. C. Bovik, H. R. Sheikh, and E. P. Simoncelli, “Image quality assessment: from error visibility to structural similarity,” IEEE transactions on image processing , vol. 13, no. 4, pp. 600–612, 2004. [Online]. Available: https://doi.org/10.1109/TIP.2003.819861 [35] P. J. E. Peebles, The large-scale structure of the universe . Princeton University Press, 2020. [Online]. Available: https://doi.org/10.23943/ princeton/9780691209838.001.0001
