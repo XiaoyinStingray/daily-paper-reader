@@ -6,59 +6,81 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-08-03
-- 运行时间：2026-08-03 22:00:43 UTC
+- 最新运行日期：2026-08-05
+- 运行时间：2026-08-05 21:35:48 UTC
 - 运行状态：成功
-- 本次总论文数：13
-- 精读区：1
+- 本次总论文数：19
+- 精读区：7
 - 速读区：12
 
 ### 今日简报（AI）
-今日共推荐13篇论文，其中1篇精读、3篇速读；精读聚焦超高清水下/图像恢复新架构CoDe-SSM，评分8.0。值得关注UHD图像恢复的效率与质量平衡，以及噪声调制神经网络、表示轨迹等三篇速读方向。建议普通读者优先浏览精读论文的图文对比，再按兴趣查阅速读摘要。
-- 详情：[/202608/03/README](/202608/03/README)
+今日精读聚焦图像编码与全高清视频识别，速读覆盖扩散变换器、低功耗视觉Transformer加速及多模态跟踪压缩。
+
+最值得关注：Hadamard域量化提升学习图像编码效率，HiResNets用中央凹残差流实现原生全高清视频识别。
+
+下一步可优先尝试多模态跟踪的蒸馏与剪枝协同方案，兼顾模型紧凑性与精度。
+- 详情：[/202608/05/README](/202608/05/README)
 
 ### 精读区论文标签
-1. [CoDe-SSM: Context-Detail Decoupled State Space Model for Efficient UHD Image Restoration](/202608/03/2607.29595v1-code-ssm-context-detail-decoupled-state-space-model-for-efficient-uhd-image-restoration)  
+1. [Hadamard-Domain Model Quantization for Learned Image Coding](/202608/05/2608.01653v1-hadamard-domain-model-quantization-for-learned-image-coding)  
+   标签：评分：9.0/10、query:compress
+   evidence：针对学习型图像编码中的模型量化问题，用哈达玛重参数化提升率失真性能。
+2. [HiResNets: Native Full-HD Video Recognition with Foveal Residual Streams](/202608/05/2608.02140v2-hiresnets-native-full-hd-video-recognition-with-foveal-residual-streams)  
+   标签：评分：9.0/10、query:neural-arch
+   evidence：提出具有对数平方增长的残差网络，用于高效高分辨率视频识别
+3. [GVCCTurbo: Rate-Compute Quality Scheduling for Codebook Driven Generative Compression](/202608/05/2608.03517v1-gvccturbo-rate-compute-quality-scheduling-for-codebook-driven-generative-compression)  
+   标签：评分：9.0/10、query:compress
+   evidence：直接面向图像压缩，为码本驱动的生成式压缩提供率-计算质量调度
+4. [Interpretability-Guided Soft Pruning of Attention Heads in Vision Transformers](/202608/05/2608.00264v1-interpretability-guided-soft-pruning-of-attention-heads-in-vision-transformers)  
    标签：评分：8.0/10、query:neural-arch
-   evidence：面向超高清图像复原的高效状态空间模型架构
+   evidence：可解释性引导的视觉Transformer注意力头软剪枝
+5. [Channel-Agnostic Semantic Compression for Bandwidth-Limited Visual Communication](/202608/05/2608.00394v1-channel-agnostic-semantic-compression-for-bandwidth-limited-visual-communication)  
+   标签：评分：8.0/10、query:compress
+   evidence：提出残差量化实现可扩展离散语义表示，并细粒度控制率失真折中
+6. [Streamable Neural Video Compression: A Mixed Precision Approach for Cross-Platform Deployment](/202608/05/2608.00483v1-streamable-neural-video-compression-a-mixed-precision-approach-for-cross-platform-deployment)  
+   标签：评分：8.0/10、query:compress
+   evidence：利用混合精度量化解决神经编解码器跨平台部署问题，与压缩流程中的量化策略高度相关。
+7. [Test-Time Curriculum for Open-Set AIGC Detection](/202608/05/2608.00559v1-test-time-curriculum-for-open-set-aigc-detection)  
+   标签：评分：8.0/10、query:neural-arch
+   evidence：测试时课程自训练作为一种性能提升技术
 
 ### 速读区论文标签
-1. [Reconstructing Backpropagation from Forward Fluctuations in Noise-modulated Neural Networks](/202608/03/2607.26483v1-reconstructing-backpropagation-from-forward-fluctuations-in-noise-modulated-neural-networks)  
+1. [UDT: Reconciling U-Nets and Diffusion Transformers with Data-Adaptive Token Reduction](/202608/05/2608.01298v1-udt-reconciling-u-nets-and-diffusion-transformers-with-data-adaptive-token-reduction)  
+   标签：评分：8.0/10、query:neural-arch
+   evidence：面向扩散Transformer的数据自适应令牌缩减，提升视觉生成中的表示质量与效率
+2. [DeVIT: Low-Power Vision Transformer Acceleration Using Delta Computation](/202608/05/2608.01343v1-devit-low-power-vision-transformer-acceleration-using-delta-computation)  
+   标签：评分：8.0/10、query:neural-arch
+   evidence：基于增量计算的低功耗视觉Transformer加速
+3. [Towards Compact Unified Multimodal Tracking: Synergizing Knowledge Distillation with Structural Pruning](/202608/05/2608.01488v1-towards-compact-unified-multimodal-tracking-synergizing-knowledge-distillation-with-structural-pruning)  
+   标签：评分：8.0/10、query:neural-arch
+   evidence：结合知识蒸馏与结构剪枝，压缩多模态跟踪模型
+4. [GraphIR: Architecture-Level Search States for LLM-Guided Neural Architecture Evolution](/202608/05/2608.01633v1-graphir-architecture-level-search-states-for-llm-guided-neural-architecture-evolution)  
+   标签：评分：8.0/10、query:neural-arch
+   evidence：提出架构感知中间表示支持LLM引导的神经架构搜索，直接服务于高效架构设计。
+5. [ENCORE: Event-Assisted Complementary Motion Refinement for Learned Video Compression](/202608/05/2607.28020v1-encore-event-assisted-complementary-motion-refinement-for-learned-video-compression)  
+   标签：评分：7.0/10、query:compress
+   evidence：学习式视频压缩中的运动精化与率失真优化
+6. [ReToken: One Token to Improve Vision-Language Models for Visual Retrieval](/202608/05/2607.28627v1-retoken-one-token-to-improve-vision-language-models-for-visual-retrieval)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：从前向统计重构反向传播，是一种模型优化策略
-2. [Representation Trajectories Matters: Complementary Evidence for OOD Detection and Image Classification](/202608/03/2607.26565v1-representation-trajectories-matters-complementary-evidence-for-ood-detection-and-image-classification)  
+   evidence：一个可学习的检索目标令牌从KV缓存中选择相关视觉令牌，提升VLM准确率与效率
+7. [Domain-Adaptive Deep Joint Source-Channel Coding for Image Classification](/202608/05/2607.28907v1-domain-adaptive-deep-joint-source-channel-coding-for-image-classification)  
+   标签：评分：7.0/10、query:compress
+   evidence：端到端学习信源信道编码与学习式图像压缩及率失真优化在概念上一致
+8. [RayViT: Ray-Conditioned Visual Representations for Viewpoint-Robust Imitation Learning](/202608/05/2607.29622v1-rayvit-ray-conditioned-visual-representations-for-viewpoint-robust-imitation-learning)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：表征轨迹提升OOD检测与图像分类性能
-3. [Decoupled Visual Processing: Efficient Multimodal Adaptation via Modality-Specific Transformer Substitution](/202608/03/2607.26596v1-decoupled-visual-processing-efficient-multimodal-adaptation-via-modality-specific-transformer-substitution)  
-   标签：评分：7.0/10、query:neural-arch
-   evidence：通过模态特定Transformer替换实现高效模型适配，属于训练优化策略
-4. [Understanding Is Done Early: A Depth Division of Labor in Large Language Models and Its Use for Unbounded-Context Memory](/202608/03/2607.28263v1-understanding-is-done-early-a-depth-division-of-labor-in-large-language-models-and-its-use-for-unbounded-context-memory)  
-   标签：评分：7.0/10、query:neural-arch
-   evidence：利用LLM深度分工做记忆优化，降低长上下文推理计算与内存
-5. [What to Remove, What to Preserve: Dual-Ambiguity Rectification for All-in-One Image Restoration](/202608/03/2607.28526v1-what-to-remove-what-to-preserve-dual-ambiguity-rectification-for-all-in-one-image-restoration)  
-   标签：评分：7.0/10、query:neural-arch
-   evidence：面向图像恢复的视觉架构改进，用于区分退化与内容
-6. [MixFrag: Fragility-Guided Mixed-Precision Post-Training Quantization for Vision Transformers](/202608/03/2607.28589v1-mixfrag-fragility-guided-mixed-precision-post-training-quantization-for-vision-transformers)  
-   标签：评分：7.0/10、query:neural-arch
-   evidence：针对视觉Transformer的混合精度训练后量化直接属于深度学习模型优化策略
-7. [A Multi-stage Constrained Optimization Framework for Data-driven Problems](/202608/03/2607.23480v1-a-multi-stage-constrained-optimization-framework-for-data-driven-problems)  
+   evidence：向ViT注入几何信息的视觉架构改进
+9. [Noise-Free One-Step LoRA for Task-Driven Image Restoration with Diffusion Priors](/202608/05/2607.25390v1-noise-free-one-step-lora-for-task-driven-image-restoration-with-diffusion-priors)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：基于VAE的熵约束优化框架，可迁移至学习型压缩优化
-8. [ConFusion: Continuous Fusion Space Learning for Fine-Grained Controllable Infrared and Visible Image Fusion](/202608/03/2607.23600v1-confusion-continuous-fusion-space-learning-for-fine-grained-controllable-infrared-and-visible-image-fusion)  
+   evidence：LoRA适配参数优化策略用于图像恢复
+10. [Beyond Token-Level Cross-Entropy: Fréchet Distributional Post-Training for Autoregressive Image Generation](/202608/05/2608.00562v1-beyond-token-level-cross-entropy-frchet-distributional-post-training-for-autoregressive-image-generation)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：面向可控图像融合的新颖网络架构，属于计算机视觉架构改进技术
-9. [Towards Ultrafast Depth Sensing Via Active Event-based Stereo Vision](/202608/03/2607.23684v1-towards-ultrafast-depth-sensing-via-active-event-based-stereo-vision)  
-   标签：评分：6.0/10、query:neural-arch
-   evidence：为事件立体视觉设计轻量级网络ActiveEventNet+，属于高效视觉架构设计
-10. [MSVS-VAE: Multi-Scale Anchored VecSet for High-Fidelity 3D Reconstruction](/202608/03/2607.24436v1-msvs-vae-multi-scale-anchored-vecset-for-high-fidelity-3d-reconstruction)  
+   evidence：为自回归图像生成器提出分布级后训练目标，属于性能提升技术。
+11. [Proteus: A Truncation-Robust Entropy Model for Progressive LiDAR Compression](/202608/05/2608.00687v1-proteus-a-truncation-robust-entropy-model-for-progressive-lidar-compression)  
    标签：评分：6.0/10、query:compress
-   evidence：通过层次化多尺度锚定VecSet潜在表示提升VAE重建质量，可迁移到自编码器图像压缩。
-11. [JEPADepth: Masked Predictive Representation Learning for Self-Supervised Monocular Depth Estimation](/202608/03/2607.26600v1-jepadepth-masked-predictive-representation-learning-for-self-supervised-monocular-depth-estimation)  
+   evidence：面向LiDAR压缩的学习熵模型，与率失真相关，可迁移到图像压缩
+12. [Coverage-Driven Adaptive Keyframe Selection for Video Understanding](/202608/05/2608.00714v1-coverage-driven-adaptive-keyframe-selection-for-video-understanding)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：增加I-JEPA式掩码预测损失，提升自监督深度估计性能
-12. [A Low-Power Sparse Convolution Accelerator with Idle-First-Task-Assignment for Edge Vision](/202608/03/2607.26835v1-a-low-power-sparse-convolution-accelerator-with-idle-first-task-assignment-for-edge-vision)  
-   标签：评分：6.0/10、query:neural-arch
-   evidence：面向边缘视觉的稀疏卷积加速器，属于高效视觉架构与模型优化设计
+   evidence：自适应关键帧选择降低推理开销
 
 
 <div class="dpr-home-promo-card">

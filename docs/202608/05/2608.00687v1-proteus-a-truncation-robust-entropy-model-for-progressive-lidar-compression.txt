@@ -1,0 +1,453 @@
+Title: Proteus: A Truncation-Robust Entropy Model for Progressive LiDAR Compression
+
+URL Source: https://arxiv.org/pdf/2608.00687v1
+
+Published Time: Tue, 04 Aug 2026 00:43:02 GMT
+
+Number of Pages: 21
+
+Markdown Content:
+# PROTEUS : A T RUNCATION -R OBUST ENTROPY MODEL FOR PROGRESSIVE LIDAR C OMPRESSION 
+
+Yihan Qiu 1,2, Xiaodong Lin 2, Baoquan Zhao 2, Hailong Jiao 1, Ge Li 1∗
+
+> 1
+
+Peking University 2Sun Yat-sen University 
+
+qiuyh33@gmail.com {jiaohailong, geli }@pku.edu.cn 
+
+{linxd58@mail2, zhaobaoquan@mail }.sysu.edu.cn 
+
+# ABSTRACT 
+
+LiDAR point clouds provide explicit, deterministic physical boundaries critical for collaborative safety-critical perception. However, wireless channels inherently impair and corrupt transmitted signals. Existing robust frameworks (such as deep JSCC or MDC) attempt to counter these channel impairments through statistical or parametric estimation, turning exact physical measurements into unverified al-gorithmic estimates. To address this, we propose Proteus, a learned LiDAR codec operating on 2D range images. By decoupling the frame representation into in-dependent coders for the sig nificant range bit-planes (SIG) and the ins ignificant range bit-planes and attributes (INS), Proteus achieves overall stream-level trunca-tion robustness. The non-truncatable SIG block encodes the most significant range bit-planes to establish a necessary, self-contained perceptual lower bound, below which the reconstructed point cloud is severely degraded. Meanwhile, INS em-ploys bit-plane slicing representation and coding, ensuring that range truncation mathematically maps to a deterministic spatial precision degradation. Subordinate attributes are reconstructed via a hybrid lossless-predictive method, leveraging the decoded geometry as a strong structural prior for fine-grained approximation. Furthermore, strategic ordering within INS prioritizes geometry over attributes under bandwidth drops. Experimental results on the Waymo Open Dataset and SemanticKITTI demonstrate that Proteus tolerates up to approximately 70% bit-stream truncation, while outperforming established standards (G-PCC, Draco, and JPEG XL) and the representative learned compressor Unicorn under ideal channel conditions. 
+
+# 1 INTRODUCTION 
+
+LiDAR point clouds are a key data structure for scene understanding in autonomous driving, robotics, and remote sensing, providing rich geometric, shape, and scale information (Guo et al., 2021). Beyond geometry, modern LiDARs also record per-point attributes such as reflectance in-tensity that carry complementary cues for downstream perception (Zhu et al., 2025). Crucially, ac-tive LiDAR sensors directly measure explicit, deterministic physical boundaries (Royo & Ballesta-Garcia, 2019). In safety-critical tasks such as collision detection, freespace boundary delineation, and emergency hazard avoidance, these precise physical measurements serve as an indispensable and mathematically verifiable safety net (Royo & Ballesta-Garcia, 2019; Mao et al., 2023). While single-agent perception is inherently limited by physical line-of-sight constraints and severe oc-clusions (Wang et al., 2020), collaborative applications resolve these bottlenecks by continuously sharing these deterministic physical boundaries. Yet, in collaborative applications such as vehicle-to-everything (V2X) communications or UAV swarms, transmitting these dense, high-volume point clouds (Gao et al., 2025) over shared and highly dynamic wireless channels (Hu et al., 2022) places both high-efficiency compression and channel-robust transmission on the same critical path. Specifically, under modern communication protocol stacks (3GPP, 2024), the wireless channel be-tween agents is primarily subject to bandwidth fluctuation (Hu et al., 2022) and transient link outages (Li et al., 2023; Ren et al., 2024). Bandwidth fluctuation causes in-transit stream truncation (Jeon 
+
+> ∗
+
+Corresponding author. 
+
+1arXiv:2608.00687v1 [cs.CV] 1 Aug 2026 et al., 2023). However, conventional codecs collapse under such truncation, requiring latency-heavy feedback loops to renegotiate the bitrate and stalling the real-time pipeline (Li et al., 2024). This demands a prefix-decodable bitstream that yields a valid reconstruction without prior coordination. Meanwhile, transient link outages cause complete, frame-level loss, requiring each frame to be self-contained, as inter-frame prediction breaks down when reference frames are lost in transit (Wiegand et al., 2003; Zhou et al., 2022). Most existing LiDAR codecs, primarily designed for ideal channels, provide neither property (Gao et al., 2025; Wang et al., 2025b; You et al., 2025). To mitigate these transmission bottlenecks, recent learned robust communication frameworks, such as deep joint source-channel coding (Deep JSCC) (Bourtsoulatze et al., 2019; Zhang et al., 2025) or multiple description coding (MDC) (Gamal & Cover, 1982; Chen et al., 2024), have success-fully achieved continuous quality degradation under channel impairments, maintaining competitive PSNR or downstream mAP. However, because these approaches primarily rely on statistical or para-metric estimation to reconstruct the missing or corrupted geometric regions, the decoded coordinates inevitably become an algorithmic estimate rather than an exact, faithful measurement (Zhang et al., 2025; Cheng et al., 2024; Hung et al., 2022). For safety-critical decisions, preserving the exact, physically bounded nature of the sensor’s measurement, even at a coarser resolution, remains the in-dispensable bedrock of trustworthy collaborative intelligence. This prompts the question: how can a learned codec achieve robust progressive compression while strictly preserving mathematically bounded physical boundaries? 
+
+To address these challenges, we propose Proteus, a learned LiDAR codec operating on 2D range im-ages. By restricting coding dependencies strictly intra-frame, Proteus achieves frame-level packet-loss resistance. To resolve truncation vulnerability, we decouple the single-frame representation into two independent coders: a self-contained bits-back coder for the sig nificant range bit-planes (SIG), and a FIFO range coder for the ins ignificant range bit-planes and attributes (INS). The non-truncatable SIG block secures the fundamental geometric structure, without which the reconstructed point cloud loses its perceptual utility, while utilizing an Autoregressive Initial Bits (ArIB) mech-anism (Ryder et al., 2022; Zhang et al., 2024) to eliminate the initial state bits overhead inher-ent in single-frame bits-back decoding. Meanwhile, INS employs bit-plane slicing representation and coding, ensuring that range truncation mathematically maps to a deterministic spatial preci-sion degradation of physical distances, rather than relying on unconstrained statistical estimation. Furthermore, strategic stream serialization within INS prioritizes geometric structures over subor-dinate attributes under bandwidth dips; when attributes are truncated, they are reconstructed via a hybrid lossless-predictive approach using the decoded geometry as a prior to mitigate quality loss. Since SIG accounts for roughly 30% of the bitstream, Proteus remains decodable under up to 70% truncation. Our contributions are as follows. • (i) We address the fundamental incompatibility between truncation robustness and high-efficiency bits-back coding equipped with the Autoregressive Initial Bits (ArIB) mechanism to eliminate single-frame overhead. This enables progressive, graceful degradation under truncation with only a minor penalty in lossless compression efficiency. • (ii) We design a joint geometry-attribute coding framework that strategically orders sub-ordinate attribute data after geometry in the truncatable stream. This allows the system to naturally sacrifice attribute precision first during bandwidth dips, maintaining respectable downstream perception performance even when up to 70% of the overall bitstream is trun-cated. • (iii) Our proposed framework achieves competitive compression efficiency compared to established standards and industrial codecs (such as G-PCC, Draco, and JPEG XL) and the representative learned baseline Unicorn, achieving superior compression efficiency while offering remarkable robustness under channel degradation. 22 RELATED WORK 
+
+2.1 POINT CLOUD COMPRESSION 
+
+A point cloud consists of point positions and per-point attributes such as reflectance (Gao et al., 2025; Fang et al., 2022; Zhu et al., 2025), and most compression pipelines encode these two streams in separate stages. Geometry coders organize the unordered point set into a structured representa-tion amenable to entropy coding (Liu et al., 2026). Octree-based methods represent geometry as occupancy trees, where G-PCC (Graziosi et al., 2020) employs hand-designed contexts and learned variants (Huang et al., 2020; Fu et al., 2022; Song et al., 2023) train neural networks to predict node occupancy distributions. Voxel approaches discretize 3D space into a regular grid and predict per-cell occupancy with 3D convolutions (He et al., 2022; Que et al., 2021). Sparse tensor methods (Wang et al., 2023; 2025b; You et al., 2025) apply sparse convolutions only at occupied voxels, which lowers the cost of voxel-based processing for sparse LiDAR scans. Alternatively, range im-ages offer a memory-efficient data structure to organize and represent point clouds (Meyer et al., 2019; Wang et al., 2022; Liu et al., 2023). To exploit temporal redundancy, several coders condition each frame on previously decoded frames, for example through K-nearest-neighbor lookup in the previous scan (Biswas et al., 2020; Wang et al., 2025b; Zhou et al., 2022), range-view optical flow (Song et al., 2026), or explicit key-frame / predicted-frame structures with motion compensation (Feng et al., 2020; Fan et al., 2022). These inter-frame methods improve rate-distortion under an ideal channel but rely on reference-frame availability: a lost reference propagates errors to subsequent frames, and the first frame of a se-quence lacks a reference (Wiegand et al., 2003; Zhou et al., 2022). For attribute coding, the G-PCC standard (Graziosi et al., 2020) is built on fixed transforms, notably RAHT and the predicting transform, while recent learned coders replace them with neural transforms and context models (Wang et al., 2025a; Fang et al., 2022; Zhu et al., 2025). However, the common practice of running separate networks for geometry and attributes (Wang et al., 2025a;b) increases end-to-end latency (Song et al., 2026). 2.2 ROBUST COMPRESSION AND TRANSMISSION 
+
+Robust transmission under bandwidth fluctuation or packet loss has received less attention than rate-distortion optimization, particularly for point clouds (Gao et al., 2025; Zhang et al., 2025; Chen et al., 2024). We group existing approaches by their robustness mechanism into three families. The first family abandons source-channel separation, directly mapping the signal to channel symbols via a learned encoder-decoder. Without explicit source coding, the decoder reconstructs the source directly from noisy channel outputs, allowing quality to degrade continuously without the cliff effect. The idea originates in pseudo-analog video (Jakubczak & Katabi, 2010), is revived by deep JSCC for images (Bourtsoulatze et al., 2019), with recent variants adopting explicit generative models to trade pixel fidelity for perceptual quality (Erdemir et al., 2023), and is extended to point clouds (Zhang et al., 2025). The second family retains conventional digital source coding and addresses packet loss (Hung et al., 2022). Partitioning approaches split the bitstream into independently decodable parts, grounded in the information-theoretic multiple-description framework (Gamal & Cover, 1982) and instantiated in industrial video error-resilience tools (Wiegand et al., 2003) and point-cloud multiple description coding (Chen et al., 2024). Alternatively, learning-based methods train the codec under random masking, enabling recovery from partial bitstreams without explicit partitioning or post-hoc con-cealment (Cheng et al., 2024). In both branches, regions whose packets are lost are reconstructed by the codec rather than preserved from the source, so the decoded signal there is an algorithmic estimate (Cheng et al., 2024; Hung et al., 2022). The third family encodes the bitstream so that any prefix decodes to a valid lower-quality reconstruc-tion (Liu et al., 2026; Jeon et al., 2023). The embedded-bitstream principle, pioneered by zerotree wavelets (Shapiro, 1993) and JPEG 2000 (Skodras et al., 2001), requires no negotiation or learned decoders. It ensures deterministic degradation, where any truncated reconstruction is a mathemati-cally bounded, non-parametric projection of the source. Conversely, neural latent-variable schemes like PLONQ (Lu et al., 2021) and DPICT (Lee et al., 2022) rely on parametric synthesis, using 3learned statistical estimation to reconstruct truncated codes rather than deterministic degradation. Integrating the principle of deterministic progressive degradation with neural latent-variable frame-works remains an open challenge. 
+
+# 3 PRELIMINARIES 
+
+3.1 RANGE IMAGE REPRESENTATION 
+
+A LiDAR sensor scans the scene by emitting H × W laser shots along H elevation angles θ =
+
+{θ1, . . . , θ H } and W azimuth angles ϕ = {ϕ1, . . . , ϕ W }. Each shot returns a scalar range value ri,j 
+
+(Royo & Ballesta-Garcia, 2019) that measures the radial distance to the first reflective surface along beam (i, j ). The H ×W grid of range values, optionally accompanied by per-pixel attributes such as reflectance intensity, is the range image, a 2D intermediate representation aligned with the LiDAR scanning pattern (Milioto et al., 2019). The Cartesian coordinates of the corresponding point are recovered losslessly from the range value via 
+
+x = ri,j cos θi cos ϕj ,y = ri,j cos θi sin ϕj ,z = ri,j sin θi,
+
+(1) where the emission angles θ and ϕ are fixed by the predefined sensor scanning pattern and known a priori at the receiver (Sun et al., 2020; Zhou et al., 2022). The point cloud is therefore a derived representation: transmitting the scalar range value r suffices to reconstruct the 3D position, which is more efficient than transmitting the three Cartesian coordinates directly. We adopt the range image as the working representation throughout this paper. 3.2 BITS -BACK CODING 
+
+Consider a latent-variable model pθ (x, z) = pθ (x|z)p(z) with variational posterior qϕ(z|x). Bits-back coding (Townsend et al., 2019) encodes x in three steps: 1. Decode z with qϕ(z|x) from initial bits. 2. Encode x with pθ (x|z).3. Encode z with p(z).Decoding reverses the order: z is decoded under p(z), x under pθ (x|z), and the initial bits are released by encoding z under qϕ(z|x). Asymmetric Numeral Systems (Duda, 2013) provides an entropy coder whose encoding and decoding orders are reversed, which is required by this encode-then-decode structure. The average code length over a sequence of N images is 
+
+¯C = 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+h
+
+− log pθ (x(i) | z(i)) − log p(z(i))+ log qϕ(z(i) | x(i))
+
+i
+
+− 1
+
+N log qϕ(z(1) | x(1) ),
+
+(2) where the first term is the negative ELBO and the second term is the initial-bits overhead amortized over the sequence. For a single image the overhead − log qϕ(z|x) is not amortized, which limits bits-back coding to dataset compression unless the overhead is supplied by another mechanism. 3.3 ARIB AND ARIB-BPS Autoregressive initial bits (ArIB), introduced by SHVC (Ryder et al., 2022), partitions the data sequence into two subsets x1: s and xs+1: n, where n is the total number of subimages and s is the split index. Latent variables are used exclusively for x1: s, and the bits used to encode xs+1: n
+
+serve as the initial bits for bits-back coding on x1: s. When xs+1: n supplies enough bits, the single-image overhead of Section 3.2 is eliminated. SHVC realizes ArIB by splitting the image along 4SIG Bit -Plane Slicing             
+
+> Latent
+> Encoder
+> ANS
+> Decoder
+> Latent
+> Decoder
+> ANS
+> Encoder
+> Bit -planes
+> Autoregression
+> ANS
+> Encoder
+> Bit -planes
+> Autoregression
+> 𝑝 𝑧
+> 𝑝 𝑥 !"#:%|𝑥 #:!,𝑝 𝐚 |𝑥
+> Initial bits
+> 𝑅
+> 𝑥 &:(𝑥 ()&:*𝑥 *)&:++𝐚
+> 𝑞 z|𝑥 &:(
+> 𝐹 ,
+> ˆ𝑍
+> INS
+> 𝑝 𝑥 &:(|𝑧
+> ANS
+> Encoder Range
+> Encoder
+> Bit -planes
+> Autoregression
+
+(a) Decoupled SIG (bits-back) and INS (range coding) pipelines range high 
+
+> range low
+> attribute
+
+significant insignificant (b) Truncatable bitstream 
+
+Figure 1: Overview of the Proteus framework designed for truncation-robust LiDAR compression. the space dimension into n spatial subimages: pixels sharing the same coordinate end up adjacent in the original image, so every subimage carries comparable importance for the latent. Excluding the latent from some subimages then underuses it, and the strong autoregressive prior accumulated towards the end of the subimage sequence drives the posterior towards the prior, a failure mode known as posterior collapse. ArIB-BPS (Zhang et al., 2024) realizes ArIB by splitting along the bit-plane dimension instead, taking n = d where d is the bit depth. For a d-bit image, plane l is 
+
+xl = ⌊x/2d−l⌋ mod 2 , (3) and the planes are ordered from the most significant plane (MSP, l = 1 ) to the least significant plane (LSP, l = d). The volume of global data modality decreases from MSP to LSP; since latent variables capture this global modality, their importance is hypothesized to decrease along the same order. ArIB-BPS names x1: s the significant planes and xs+1: d the insignificant planes; the insignificant planes are conditionally independent of the latent and available as initial bits, while the posterior-collapse risk is shifted onto the planes that least need the latent. The resulting rate decomposes as 
+
+Rx = − log p(x1: s|z) − log p(xs+1: d|x1: s). (4) 
+
+# 4 METHOD 
+
+4.1 OVERVIEW 
+
+We build on ArIB-BPS (Section 3.3) and redesign its bitstream for truncation robustness. In ArIB-BPS the insignificant planes and the bits-back coding of the significant planes share a single coupled bitstream, and truncating its tail leaves the significant planes undecodable (Zhang et al., 2024). Our redesign decouples them into two independent coders: SIG, a self-contained bits-back coder for the significant planes, and INS, a range coder for the insignificant planes whose first-in-first-out order tolerates truncation. The redesign is grounded in three properties of LiDAR range images that distinguish them from generic RGB images: • A1 (bit-plane physical meaning). The range value is a quantized physical distance. Trun-cating the N least significant bits of every range sample halves the precision N times, so bit-plane truncation is a deterministic precision degradation rather than an arbitrary distor-tion. • A2 (attributes subordinate to range). Attribute channels are less important than geometry in downstream perception. Industrial pipelines accordingly represent them at lower bit depth than the range channel, and we order attributes after the range in the INS bitstream. 5(a) SemanticKITTI BPD savings (b) WOD BPD savings (c) Downstream s-sweep 
+
+Figure 2: Parameter selection analysis for head depth h and split index s. (a, b) BPD savings achieved using latent variables used to determine h on SemanticKITTI and WOD. (c) Downstream 3D object detection performance under different s selections, where the dashed line represents the untruncated baseline. • A3 (range as skeleton prior). The high bit planes of the range predict both the low bit planes of the range and the attribute channels (Zhang et al., 2024; Zhu et al., 2025). Ahyperprior derived from the significant planes guides INS’s encoding. Figure 1 illustrates the resulting codec. Let R = ( x, a) denote the range image, where x is the range channel of bit depth d and a denotes the per-pixel attribute channels (e.g., reflectance intensity). The range channel is sliced into d bit planes x1: d (Zhang et al., 2024), partitioned into three contiguous parts: the head sub-block x1: h, the mid sub-block xh+1: s, and the tail planes xs+1: d. The significant planes ( x1: s, comprising the head and mid) form SIG to perform self-contained bits-back coding, generating initial bits internally to eliminate the single-frame overhead of Section 3.2. The tail planes 
+
+xs+1: d and attributes a form INS, encoded via a FIFO range coder to allow progressive decoding. Parameter configurations of h, s, d, and attribute depths are detailed in Section 5.1. 4.2 SIG C ODING 
+
+The SIG coder encodes the significant planes x1: s with a bits-back coding closed entirely inside SIG. SIG is split into a head sub-block x1: h and a mid sub-block xh+1: s, where h is the head depth. Encoding proceeds in three stages (Townsend et al., 2019; Ryder et al., 2022). (i) The mid sub-block 
+
+xh+1: s is encoded under p(xh+1: s) without latent conditioning, and the resulting bitstream provides the initial bits. (ii) The latent z is decoded from these bits under the posterior q(z|x1: h). (iii) The head sub-block x1: h is encoded under p(x1: h|z), and z is encoded under p(z). Decoding reverses this order. The net rate of SIG is 
+
+RSIG = − log p(xh+1: s) − log p(x1: h | z)
+
+− log p(z) + log q(z | x1: h), (5) where the first term is the rate of the mid sub-block and the remaining three terms are the bits-back rate of the head sub-block, equal to −ELBO( x1: h). The mid sub-block supplies the initial bits internally, so SIG requires no padding and does not depend on INS. The compression overhead of this decoupling design is evaluated in Section 5.3. 4.3 INS C ODING AND TRUNCATION PROPERTIES 
+
+The INS coder encodes the tail planes of the range (the low d − s bit planes) and the da-bit attribute channels a. Following A2 , we serialize INS as a sequence of bit-planes, ordering the range tail planes xs+1: d before the attribute planes a1: da .Let kr ∈ [s, d ] and ka ∈ [0 , d a] denote the retained bit depths after truncation. A range coder provides the first-in-first-out (FIFO) encoding-decoding order that allows progressive decoding from any stream prefix, subject to the constraint that ka > 0 only if kr = d. To leverage the high range planes as a skeleton prior A3 , the tail planes and attribute channels are sequentially conditioned on the reconstructed geometry. At any valid truncation point (kr , k a), the actual rate of the INS stream is: 6Figure 3: Performance degradation under progressive bitstream truncation. Left: Downstream 3D object detection AP. Right: Geometry and attribute reconstruction quality. 
+
+RINS (kr , k a) = − log p(xs+1: kr | x1: s) − log p(a1: ka | x). (6) Because SIG and INS are written into independent bitstreams, truncating the INS stream leaves the base geometry intact. The decoding and reconstruction of the remaining INS components proceed as follows. 
+
+Range Reconstruction (Precision Degradation). Truncating the N = d − kr least significant planes is equivalent to zero-padding, yielding the reconstructed range image ˆx = x1: kr · 2N . The truncation length maps directly to geometry precision through A1 . Let ∆0 be the range precision of the full d-bit representation. Truncating N planes halves the precision N times: 
+
+∆N = 2 N · ∆0. (7) For KITTI range images, ∆0 ≈ 1mm under the 16-bit quantization convention (You et al., 2025), so truncating N = 1 , 2, 3 planes yields approximately 2mm, 4mm, 8mm precision. 
+
+Attribute Reconstruction (Hybrid Lossless-Predictive). Unlike geometry, attributes lack a strict physical-to-scale mapping and can tolerate predictive approximation. For any truncated attribute depth ka < d a, we reconstruct the remaining bits within the active quantization cell using the lossless prefix a1: ka and the range prior ˆx:
+
+ˆa = a1: ka + δka · σ hθ (ˆ x, a1: ka , k a), (8) where δka = 2 −ka is the cell width, and σ(·) = 0 .5 + 0 .5 tanh( ·) scales the prediction network 
+
+hθ ’s output to [0 , 1] . The reconstruction overhead and the design choices of hθ are evaluated in Section 5.3. Four properties follow. (i) No prior negotiation : the sender and receiver need not agree on a trun-cation point; any INS suffix can be dropped in transit. (ii) No geometric hallucination : truncated range planes are not predicted, ensuring the range is reconstructed exactly at the precision the bit-stream carries. (iii) Deterministic degradation : the geometry precision is ∆N = 2 N ·∆0 regardless of the range content. (iv) Progressive decoding : INS’s FIFO order allows decoding to halt at the truncation point and still recover every plane preceding it. 4.4 TRAINING OBJECTIVE 
+
+The training proceeds in two stages: 
+
+Stage 1: Compression Network Training. We optimize the entropy model parameters using the joint rate-distortion loss under maximum capacity ( kr = d, k a = da): 
+
+Lcompress = − log p(xh+1: s) − ELBO( x1: h) − RINS (d, d a), (9) 7Figure 4: Visualization of reconstructed LiDAR point clouds under progressive bitstream truncation. where 
+
+ELBO( x1: h) = Ez∼q(z|x1: h)
+
+ log p(x1: h | z)+ log p(z) − log q(z | x1: h).
+
+Stage 2: Prediction Head Training. With the compression network frozen, we train the prediction head hθ . For each training instance, we sample ka ∼ Uniform {0, . . . , d a} to represent the progres-sive truncation states. The network is optimized via a cell-normalized masked Mean Squared Error (MSE) over valid range pixels ( x > 0): 
+
+Lrec = 1
+
+Nvalid 
+
+X
+
+> valid
+
+ ˆa − a
+
+δka
+
+2
+
+, (10) where δka = 2 −ka . Normalizing the residual by the quantization cell width δka scales the errors at different truncation levels to the same relative magnitude, balancing the gradient contributions across all progressive bit-planes. 
+
+# 5 EXPERIMENTS 
+
+5.1 EXPERIMENTAL SETUP 
+
+DATASETS .We conduct evaluations on the Waymo Open Dataset (WOD) (Sun et al., 2020) and the Se-manticKITTI dataset (Behley et al., 2019). WOD provides raw range images alongside the accurate emission angles of LiDAR beams (Zhou et al., 2022). This high-fidelity angular information ensures a mathematically lossless transformation between the 2D range image grid and the 3D Cartesian point cloud coordinates. Unlike WOD, SemanticKITTI only provides raw 3D point cloud coordi-nates and does not release predefined beam emission angles or raw range images (Zhou et al., 2022). Following the established evaluation protocols in prior works (Zhou et al., 2022), our experiments on SemanticKITTI are conducted on pseudo range images projected from the 3D point clouds using estimated LiDAR beam emission angles. 8Table 1: BD-Rate gains to G-PCC (%) and runtimes (in seconds). The best results are marked in bold. (a) KITTI                                        
+
+> Geometry Intensity Method BD-Rate Enc. Dec. BD-Rate Enc. Dec. G-PCC 0.00 1.53 0.88 0.00 0.65 0.56 Draco +20 .64 0.02 0.01 +100 .05 0.01 0.01
+> JPEG XL −11 .81 0.10 0.01 +136 .28 0.08 0.01 Unicorn −24 .41 6.65 6.01 −5.82 3.14 1.99
+> Proteus −35 .41 0.16 0.14 −15 .59 0.05 0.05
+> (b) WOD
+> Geometry Intensity Method BD-Rate Enc. Dec. BD-Rate Enc. Dec. G-PCC 0.00 0.49 0.33 0.00 0.17 0.15 Draco +35 .02 0.03 0.01 −13 .41 0.02 0.01
+> JPEG XL +2 .83 0.11 0.01 −2.72 0.08 0.01 Unicorn —
+> Proteus −42 .72 0.21 0.20 −80 .47 0.07 0.08
+
+BASELINES .Since no existing learned point cloud compression (PCC) frameworks support self-contained, prefix-decodable progressive coding under truncation, directly comparable baselines in this regime are un-available. Moreover, although 2D progressive image codecs (e.g., JPEG XL (Sneyers et al., 2025) or JPEG 2000 (Skodras et al., 2001)) natively support truncation, their frequency- or wavelet-domain algorithms do not translate to deterministic, bit-plane-aligned 3D coordinate degradation. We there-fore select G-PCC v23 (MPEG, 2023), Google Draco (Google, 2023), JPEG XL (Sneyers et al., 2025), and Unicorn (Wang et al., 2025a;b) to evaluate and verify our compression performance under ideal channel conditions (0% truncation). IMPLEMENTATION DETAILS .We train separate models for WOD and SemanticKITTI. All experiments are conducted on a single NVIDIA GeForce RTX 3090 GPU using the Adam optimizer (Kingma & Ba, 2015) with an initial learning rate of 1 × 10 −4 and a step decay schedule. For our model configuration, we set the head depth h to 7 (with mid = 3 ) for SemanticKITTI and 6 (with mid = 4 ) for WOD based on the inflection points of bits per dimension (BPD) savings achieved using latent variables in Figure 2(a,b). To provide a necessary self-contained perceptual lower bound under progressive truncation, the split index s is consistently set to 10 for both datasets based on the PointPillars evaluation (Lang et al., 2019) in Figure 2(c). 5.2 PERFORMANCE EVALUATION 
+
+TRUNCATION ROBUSTNESS UNDER DYNAMIC CHANNELS .We evaluate the progressive degradation behavior of our codec under dynamic channel conditions by sweeping the truncation ratio of the INS stream from 0% to 100%. Because the SIG block utilizes the ArIB bits-back mechanism, it is non-truncatable. However, since SIG only accounts for approximately 30% of the overall bitstream, Proteus natively supports a truncation ratio of up to approximately 70%. Under truncation, our framework sacrifices attribute precision first to prioritize geometric preservation, as reflected by the geometry and intensity PSNR trends in Figure 3 (right), while downstream 3D object detection AP degrades progressively down to the self-contained lower bound (Figure 3, left). Specifically, the geometric error remains mathematically bounded by Equation 7, and Figure 4 presents the visual results of the reconstructed point clouds under varying truncation levels. RATE -D ISTORTION PERFORMANCE UNDER IDEAL CHANNELS .We evaluate the rate-distortion (R-D) performance of Proteus under ideal channel conditions (0% truncation) using BD-Rate (Barman et al., 2024); geometry quality follows the point-to-point metric (Tian et al., 2017). 
+
+Geometry Compression. Proteus outperforms other baselines, achieving BD-rates of −35 .41% 
+
+on SemanticKITTI and −42 .72% on WOD compared to G-PCC. This demonstrates the efficiency of our entropy coding framework. Additionally, to achieve a coordinate precision of n bits, 3D 9(a) WOD 
+
+> (b) SemanticKITTI
+
+Figure 5: Rate-distortion performance on WOD (top) and SemanticKITTI (bottom). voxel- or octree-based methods must subdivide the 3D space, scaling their spatial cell representation exponentially as O(kn) (where k is the spatial dimension factor). This is highly efficient at low precision where sparse, empty space is skipped, but the symbol overhead scales rapidly at higher precision levels. In contrast, range-image-based methods operate on a fixed 2D grid, requiring only additional bit planes that scale the complexity linearly as O(n). Consequently, while 3D methods excel at coarse reconstructions at low bitrates, range-image approaches scale more favorably and outperform them in high-precision regimes. 
+
+Attribute Compression. For intensity compression, Proteus outperforms other baselines, achieving BD-rates of −15 .59% on SemanticKITTI and −80 .47% on WOD compared to G-PCC. The perfor-mance difference between the two datasets is primarily driven by variations in dataset distribution, as detailed in Appendix C. 5.3 ABLATION STUDIES 
+
+To verify the necessity of the bits-back mechanism, the ArIB scheme, and to quantify the overhead of achieving truncation robustness, we conduct an ablation study on SemanticKITTI. As shown in Table 2(a), removing the bits-back mechanism (w/o bits-back) increases the average rate by +20.19%. Further removing the ArIB scheme (w/o ArIB) leads to a +31.17% rate increase. Theoret-ically, w/o bits-back and w/o ArIB perform identically for single-frame encoding due to unamortized dummy bits. In practice, however, w/o ArIB requires larger protective padding to prevent ANS de-coding segmentation faults, increasing the bitstream length. Finally, compared to the coupled ArIB scheme, our decoupled framework pays only a minor 6.56% efficiency tax to enable progressive degradation, whereas ArIB entirely lacks truncation robustness. Beyond the entropy coding framework, we also evaluate the design choices of our hybrid attribute reconstruction module. To verify the necessity of the lookup table (LUT), the CNN reconstruction head (Head), and to evaluate their complexity overhead, we conduct an ablation study on attribute prediction. As shown in Table 2(b), removing both components (w/o LUT and Head) increases the BD-rate by +67.8%. Removing the CNN head (w/o Head) leads to a +19.4% BD-rate penalty, while removing only the LUT (w/o LUT) still incurs a +1.2% rate increase. Overall, the proposed joint LUT and Head design is computationally lightweight and economical, requiring only 1.3 MB of extra storage and introducing a minor decoding overhead of 5.2 ms. 10 Table 2: Ablation studies on (a) entropy coding variants and (b) hybrid attribute reconstruction components.                       
+
+> (a) Entropy coding
+> Variant Relative Difference Robustness w/o bits-back +20.19% No w/o ArIB +31.17% No ArIB (coupled) −6.56% No
+> Proposed Ref. (0.00%) Yes (b) Attribute reconstruction
+> Variant BD-Rate Attr. Dec. Overhead Extra Storage w/o LUT and Head +67.8% +0 ms 0w/o Head +19.4% +0.6 ms 9 KB w/o LUT +1.2% +4.6 ms 1.3 MB
+> Proposed Ref. (0.00%) +5.2 ms 1.3 MB
+
+# 6 CONCLUSION 
+
+This paper presents Proteus, a learned LiDAR point cloud compression framework. By decoupling the representation into independent SIG and INS coders, Proteus achieves overall stream-level trun-cation robustness. Under ideal channel conditions, Proteus outperforms traditional standards and the representative learned compressor Unicorn, while natively supporting up to approximately 70% truncation with progressive degradation. 11 REFERENCES 
+
+3GPP. 3GPP TS 23.287 Version 18.4.0 Release 18: Architecture Enhancements for 5G System (5GS) to Support Vehicle-to-Everything (V2X) Services, 2024. URL https://www.etsi.o rg/deliver/etsi_ts/123200_123299/123287/18.04.00_60/ts_123287v18 0400p.pdf .Nabajeet Barman, Maria G. Martini, and Yuriy Reznik. Bjøntegaard Delta (BD): A Tuto-rial Overview of the Metric, Evolution, Challenges, and Recommendations. arXiv preprint (arXiv:2401.04039), 2024. Jens Behley, Martin Garbade, Andres Milioto, Jan Quenzel, Sven Behnke, Cyrill Stachniss, and Juer-gen Gall. SemanticKITTI: A Dataset for Semantic Scene Understanding of LiDAR Sequences. In 
+
+Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV) , pp. 9297– 9307, 2019. Sourav Biswas, Jerry Liu, Kelvin Wong, Shenlong Wang, and Raquel Urtasun. MuSCLE: Multi Sweep Compression of LiDAR using Deep Entropy Models. In Advances in Neural Information Processing Systems , volume 33, pp. 22170–22181, 2020. Eirina Bourtsoulatze, David Burth Kurka, and Deniz G¨ und¨ uz. Deep Joint Source-Channel Coding for Wireless Image Transmission. IEEE Transactions on Cognitive Communications and Net-working , 5(3):567–579, 2019. Anthony Chen, Shiwen Mao, Zhu Li, Minrui Xu, Hongliang Zhang, Dusit Niyato, and Zhu Han. Multiple Description Coding for Point Cloud. In IEEE International Conference on Communica-tions (ICC) , pp. 3408–3413, 2024. Yihua Cheng, Ziyi Zhang, Hanchen Li, Anton Arapin, Yue Zhang, Qizheng Zhang, Yuhan Liu, Kuntai Du, Xu Zhang, Francis Y. Yan, Amrita Mazumdar, Nick Feamster, and Junchen Jiang. GRACE: Loss-Resilient Real-Time Video through Neural Codecs. In 21st USENIX Symposium on Networked Systems Design and Implementation (NSDI 24) , pp. 509–531. USENIX Association, 2024. Jarek Duda. Asymmetric numeral systems: entropy coding combining speed of Huffman coding with compression rate of arithmetic coding. arXiv preprint (arXiv:1311.2540), 2013. Ecenaz Erdemir, Tze-Yang Tung, Pier Luigi Dragotti, and Deniz G¨ und¨ uz. Generative Joint Source-Channel Coding for Semantic Image Transmission. IEEE Journal on Selected Areas in Commu-nications , 41(8):2645–2657, 2023. Tingyu Fan, Linyao Gao, Yiling Xu, Zhu Li, and Dong Wang. D-DPCC: Deep Dynamic Point Cloud Compression via 3D Motion Prediction. In Proceedings of the Thirty-First International Joint Conference on Artificial Intelligence , pp. 898–904, 2022. Guangchi Fang, Qingyong Hu, Hanyun Wang, Yiling Xu, and Yulan Guo. 3DAC: Learning Attribute Compression for Point Clouds. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , pp. 14819–14828, 2022. Yu Feng, Shaoshan Liu, and Yuhao Zhu. Real-Time Spatio-Temporal LiDAR Point Cloud Com-pression. In 2020 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) ,pp. 10766–10773, 2020. Chunyang Fu, Ge Li, Rui Song, Wei Gao, and Shan Liu. OctAttention: Octree-Based Large-Scale Contexts Model for Point Cloud Compression. Proceedings of the AAAI Conference on Artificial Intelligence , 36(1):625–633, 2022. Abbas A. El Gamal and Thomas M. Cover. Achievable rates for multiple descriptions. IEEE Trans-actions on Information Theory , 28(6):851–857, 1982. Wei Gao, Liang Xie, Songlin Fan, Ge Li, Shan Liu, and Wen Gao. Deep Learning-Based Point Cloud Compression: An In-Depth Survey and Benchmark. IEEE Transactions on Pattern Analysis and Machine Intelligence , 47(11):10731–10752, 2025. 12 Google. Draco 1.5.6. Official software release, 2023. URL https://github.com/google/ draco/releases/tag/1.5.6 .D. Graziosi, O. Nakagami, S. Kuma, A. Zaghetto, T. Suzuki, and A. Tabatabai. An overview of ongoing point cloud compression standardization activities: video-based (V-PCC) and geometry-based (G-PCC). APSIPA Transactions on Signal and Information Processing , 9(1):e13, 2020. Yulan Guo, Hanyun Wang, Qingyong Hu, Hao Liu, Li Liu, and Mohammed Bennamoun. Deep Learning for 3D Point Clouds: A Survey. IEEE Transactions on Pattern Analysis and Machine Intelligence , 43(12):4338–4364, 2021. Yun He, Xinlin Ren, Danhang Tang, Yinda Zhang, Xiangyang Xue, and Yanwei Fu. Density-Preserving Deep Point Cloud Compression. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pp. 2333–2342, 2022. Yue Hu, Shaoheng Fang, Zixing Lei, Yiqi Zhong, and Siheng Chen. Where2comm: Communication-Efficient Collaborative Perception via Spatial Confidence Maps. In Advances in Neural Information Processing Systems , volume 35, pp. 4874–4886, 2022. Lila Huang, Shenlong Wang, Kelvin Wong, Jerry Liu, and Raquel Urtasun. OctSqueeze: Octree-Structured Entropy Model for LiDAR Compression. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , pp. 1313–1323, 2020. Tzu-Kuan Hung, I-Chun Huang, Samuel Rhys Cox, Wei Tsang Ooi, and Cheng-Hsin Hsu. Error Concealment of Dynamic 3D Point Cloud Streaming. In Proceedings of the 30th ACM Interna-tional Conference on Multimedia (MM ’22) , pp. 3134–3142, 2022. Szymon Jakubczak and Dina Katabi. SoftCast: One-Size-Fits-All Wireless Video. In Proceedings of the ACM SIGCOMM 2010 Conference , pp. 449–450, 2010. Seungmin Jeon, Kwang Pyo Choi, Youngo Park, and Chang-Su Kim. Context-Based Trit-Plane Coding for Progressive Image Compression. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , pp. 14348–14357, 2023. Diederik P. Kingma and Jimmy Ba. Adam: A Method for Stochastic Optimization. In ICLR 2015 ,2015. Alex H. Lang, Sourabh Vora, Holger Caesar, Lubing Zhou, Jiong Yang, and Oscar Beijbom. Point-Pillars: Fast Encoders for Object Detection from Point Clouds. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , pp. 12697–12705, 2019. Jae-Han Lee, Seungmin Jeon, Kwang Pyo Choi, Youngo Park, and Chang-Su Kim. DPICT: Deep Progressive Image Compression Using Trit-Planes. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , pp. 16113–16122, 2022. Jinlong Li, Runsheng Xu, Xinyu Liu, Jin Ma, Zicheng Chi, Jiaqi Ma, and Hongkai Yu. Learning for Vehicle-to-Vehicle Cooperative Perception under Lossy Communication. IEEE Transactions on Intelligent Vehicles , 8(4):2650–2660, 2023. Yueheng Li, Hao Chen, Bowei Xu, Zicheng Zhang, and Zhan Ma. Improving Adaptive Real-Time Video Communication via Cross-Layer Optimization. IEEE Transactions on Multimedia , 26: 5369–5382, 2024. Bojun Liu, Yangzhi Ma, Li Li, Dong Liu, Zhu Li, and Houqiang Li. Next Bit Prediction: A Uni-fied Lossless and Lossy Point Cloud Geometry Compression Framework. IEEE Transactions on Pattern Analysis and Machine Intelligence , 48(5):5371–5387, 2026. Chia-Sheng Liu, Jia-Fong Yeh, Hao Hsu, Hung-Ting Su, Ming-Sui Lee, and Winston H. Hsu. BIRD-PCC: Bi-Directional Range Image-Based Deep Lidar Point Cloud Compression. In 2023 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP) , pp. 1–5, 2023. Yadong Lu, Yinhao Zhu, Yang Yang, Amir Said, and Taco S. Cohen. Progressive Neural Image Compression with Nested Quantization and Latent Ordering. In 2021 IEEE International Con-ference on Image Processing (ICIP) , pp. 539–543, 2021. 13 Jiageng Mao, Shaoshuai Shi, Xiaogang Wang, and Hongsheng Li. 3D Object Detection for Au-tonomous Driving: A Comprehensive Survey. International Journal of Computer Vision , 131(8): 1909–1963, 2023. Gregory P. Meyer, Ankit Laddha, Eric Kee, Carlos Vallespi-Gonzalez, and Carl K. Wellington. LaserNet: An Efficient Probabilistic 3D Object Detector for Autonomous Driving. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , pp. 12677– 12686, 2019. Andres Milioto, Ignacio Vizzo, Jens Behley, and Cyrill Stachniss. RangeNet++: Fast and Accu-rate LiDAR Semantic Segmentation. In 2019 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , pp. 4213–4220, 2019. MPEG. G-PCC TMC13 v23.0-rc2. Official G-PCC reference software tag, 2023. URL https: //github.com/MPEGGroup/mpeg-pcc-tmc13/releases/tag/release-v23.0 -rc2 .Zizheng Que, Guo Lu, and Dong Xu. VoxelContext-Net: An Octree based Framework for Point Cloud Compression. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pat-tern Recognition (CVPR) , pp. 6042–6051, 2021. Shunli Ren, Zixing Lei, Zi Wang, Mehrdad Dianati, Yafei Wang, Siheng Chen, and Wenjun Zhang. Interruption-Aware Cooperative Perception for V2X Communication-Aided Autonomous Driv-ing. IEEE Transactions on Intelligent Vehicles , 9(4):4698–4714, 2024. Santiago Royo and Maria Ballesta-Garcia. An Overview of Lidar Imaging Systems for Autonomous Vehicles. Applied Sciences , 9(19):4093, 2019. Tom Ryder, Chen Zhang, Ning Kang, and Shifeng Zhang. Split Hierarchical Variational Compres-sion. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , pp. 386–395, 2022. Jerome M. Shapiro. Embedded Image Coding Using Zerotrees of Wavelet Coefficients. IEEE Transactions on Signal Processing , 41(12):3445–3462, 1993. Athanassios Skodras, Charilaos Christopoulos, and Touradj Ebrahimi. The JPEG 2000 Still Image Compression Standard. IEEE Signal Processing Magazine , 18(5):36–58, 2001. Jon Sneyers, Jyrki Alakuijala, Luca Versari, Zolt´ an Szabadka, Sami Boukortt, Amnon Cohen-Tidhar, Moritz Firsching, Evgenii Kliuchnikov, Tal Lev-Ami, Eric Portis, Thomas Richter, and Osamu Watanabe. The JPEG XL Image Coding System: History, Features, Coding Tools, Design Rationale, and Future. arXiv preprint (arXiv:2506.05987), 2025. Rui Song, Chunyang Fu, Shan Liu, and Ge Li. Efficient Hierarchical Entropy Model for Learned Point Cloud Compression. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , pp. 14368–14377, 2023. Rui Song, Yan Wang, Tongda Xu, Zhening Liu, Zehong Lin, and Jun Zhang. Low-Latency Neural LiDAR Compression with 2D Context Models. In International Conference on Learning Repre-sentations (ICLR) , 2026. URL https://openreview.net/forum?id=y1REtB4olw .Pei Sun, Henrik Kretzschmar, Xerxes Dotiwalla, Aurelien Chouard, Vijaysai Patnaik, Paul Tsui, James Guo, Yin Zhou, Yuning Chai, Benjamin Caine, Vijay Vasudevan, Wei Han, Jiquan Ngiam, Hang Zhao, Aleksei Timofeev, Scott Ettinger, Maxim Krivokon, Amy Gao, Aditya Joshi, Yu Zhang, Jonathon Shlens, Zhifeng Chen, and Dragomir Anguelov. Scalability in Perception for Autonomous Driving: Waymo Open Dataset. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , pp. 2446–2454, 2020. Dong Tian, Hideaki Ochimizu, Chen Feng, Robert A. Cohen, and Anthony Vetro. Geometric Dis-tortion Metrics for Point Cloud Compression. In 2017 IEEE International Conference on Image Processing (ICIP) , pp. 3460–3464, 2017. 14 James Townsend, Thomas Bird, and David Barber. Practical Lossless Compression with Latent Variables using Bits Back Coding. In International Conference on Learning Representations (ICLR) , 2019. Jianqiang Wang, Dandan Ding, Zhu Li, Xiaoxing Feng, Chuntong Cao, and Zhan Ma. Sparse Tensor-based Multiscale Representation for Point Cloud Geometry Compression. IEEE Transac-tions on Pattern Analysis and Machine Intelligence , 45(7):9055–9071, 2023. Jianqiang Wang, Ruixiang Xue, Jiaxin Li, Dandan Ding, Yi Lin, and Zhan Ma. A Versatile Point Cloud Compressor Using Universal Multiscale Conditional Coding – Part II: Attribute. IEEE Transactions on Pattern Analysis and Machine Intelligence , 47(1):252–268, 2025a. Jianqiang Wang, Ruixiang Xue, Jiaxin Li, Dandan Ding, Yi Lin, and Zhan Ma. A Versatile Point Cloud Compressor Using Universal Multiscale Conditional Coding – Part I: Geometry. IEEE Transactions on Pattern Analysis and Machine Intelligence , 47(1):269–287, 2025b. Sukai Wang, Jianhao Jiao, Peide Cai, and Lujia Wang. R-PCC: A Baseline for Range Image-based Point Cloud Compression. In 2022 International Conference on Robotics and Automation (ICRA) ,pp. 10055–10061, 2022. Tsun-Hsuan Wang, Sivabalan Manivasagam, Ming Liang, Bin Yang, Wenyuan Zeng, and Raquel Urtasun. V2VNet: Vehicle-to-Vehicle Communication for Joint Perception and Prediction. In 
+
+Computer Vision – ECCV 2020 , volume 12347, pp. 605–621. Springer, 2020. Thomas Wiegand, Gary J. Sullivan, Gisle Bjøntegaard, and Ajay Luthra. Overview of the H.264/AVC Video Coding Standard. IEEE Transactions on Circuits and Systems for Video Tech-nology , 13(7):560–576, 2003. Kang You, Tong Chen, Dandan Ding, M. Salman Asif, and Zhan Ma. RENO: Real-Time Neural Compression for 3D LiDAR Point Clouds. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , pp. 22172–22181, 2025. Cixiao Zhang, Mufan Liu, Wenjie Huang, Yin Xu, Yiling Xu, and Dazhi He. Deep Joint Source-Channel Coding for Wireless Point Cloud Transmission. In 2025 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP) , pp. 1–5, 2025. Zhe Zhang, Huairui Wang, Zhenzhong Chen, and Shan Liu. Learned Lossless Image Compression based on Bit Plane Slicing. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , pp. 27579–27588, 2024. Xuanyu Zhou, Charles R. Qi, Yin Zhou, and Dragomir Anguelov. RIDDLE: Lidar Data Compres-sion With Range Image Deep Delta Encoding. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , pp. 17212–17221, 2022. Jiahao Zhu, Kang You, Dandan Ding, and Zhan Ma. Efficient LiDAR Reflectance Compression via Scanning Serialization. In Proceedings of the 42nd International Conference on Machine Learning , volume 267, pp. 80330–80346. PMLR, 2025. 15 Appendix 
+
+# A EVALUATION METRICS 
+
+To evaluate the reconstruction quality of the LiDAR point cloud geometry and attributes, we define the mathematical formulations of the metrics below. Let P denote the original point cloud and ˆP
+
+represent the reconstructed point cloud. A.1 GEOMETRIC PEAK VALUE 
+
+To establish a normalized peak signal-to-noise ratio, the peak value r is defined as the maximum nearest-neighbor distance across the entire evaluation dataset D (Tian et al., 2017): 
+
+r = max  
+
+> P∈D
+
+
+
+max  
+
+> pi∈P
+
+min    
+
+> pj∈P,j ̸=i
+
+∥pi − pj ∥2
+
+
+
+. (11) Based on the dataset conventions, we set r = 59 .70 for SemanticKITTI and r = 57 .41 for the Waymo Open Dataset (WOD). A.2 POINT -TO -P OINT (D1) M ETRIC 
+
+The symmetric Point-to-Point Mean Squared Error (MSE D1 ) measures the Euclidean distance be-tween a point and its nearest neighbor in the corresponding point cloud (Tian et al., 2017): MSE D1 (P, ˆP ) = max 
+
+ 1
+
+|P |
+
+X
+
+> p∈P
+
+d2(p, ˆP ), 1
+
+| ˆP |
+
+X 
+
+> ˆp∈ˆP
+
+d2(ˆ p, P )
+
+ , (12) where d(p, ˆP ) = min ˆp∈ ˆP ∥p − ˆp∥2. The geometry D1 PSNR is then calculated as: PSNR D1 = 10 log 10 
+
+3r2
+
+MSE D1 (P, ˆP )
+
+!
+
+. (13) A.3 POINT -TO -P LANE (D2) M ETRIC 
+
+The symmetric Point-to-Plane Mean Squared Error (MSE D2 ) projects the nearest-neighbor displace-ment vector along the surface normal vector of the reference point (Tian et al., 2017): MSE D2 (P, ˆP ) = max 
+
+ 1
+
+|P |
+
+X
+
+> p∈P
+
+(( p − ˆpp) · np)2 , 1
+
+| ˆP |
+
+X 
+
+> ˆp∈ˆP
+
+((ˆ p − pˆp) · nˆp)2
+
+ , (14) where ˆpp represents the nearest neighbor of p in ˆP , and np denotes the surface normal vector at point p. The geometry D2 PSNR is formulated as: PSNR D2 = 10 log 10 
+
+3r2
+
+MSE D2 (P, ˆP )
+
+!
+
+. (15) A.4 REFLECTANCE ATTRIBUTE METRIC 
+
+The attribute reconstruction accuracy is measured via the reflectance PSNR over all valid points 
+
+Nvalid :16 MSE ref = 1
+
+Nvalid 
+
+> Nvalid
+
+X
+
+> i=1
+
+(ai − ˆai)2, (16) PSNR ref = 10 log 10 
+
+ V 2max 
+
+MSE ref 
+
+
+
+, (17) where ai and ˆai are the normalized reference and decoded reflectance values, respectively, and the peak intensity value is set to Vmax = 1 .0.
+
+# B PROTEUS ARCHITECTURE AND LADDER VAE2 S TATE MACHINE 
+
+Proteus implements a 2-layer hierarchical Variational Autoencoder (LadderVAE2) to execute the Decoupled Bits-back coding framework. While Proteus retains the structural layers of RangeCM’s feature extraction blocks ( ga, h a, h s, g s) to maintain architectural compatibility (Song et al., 2026), their functional roles are repurposed. Instead of projecting continuous values directly, these blocks parameterize the location parameters of discrete hierarchical distributions over binary bit-planes. B.1 PARAMETER PREDICTION NETWORKS (P ARAM NETS )To map the continuous feature representations to the discrete probability spaces of our bit-planes, we introduce three lightweight parameter prediction networks (heads) built with 2D convolutional layers: 1. q head z: A posterior parameter network that maps the hyper-latent feature space zfeatures 
+
+to the top-level location parameter μqz :
+
+μqz = q head z (zfeatures ) ∈ RB×zchannels ×H/ 8×W/ 128 . (18) 2. q head y: A joint posterior parameter network that concatenates the bottom-up feature extraction yfeatures and the top-down reconstructed feature space hsout to generate the bottom-level location parameter μqy :
+
+μqy = q head y  [hsout , y features ] ∈ RB×ydim ×H/ 4×W/ 64 . (19) 3. p head y: A prior parameter network that maps the top-down features hsout alone to the prior location parameter μpy for bottom-level decoding: 
+
+μpy = p head y (hsout ) ∈ RB×ydim ×H/ 4×W/ 64 . (20) B.2 HIERARCHICAL DISTRIBUTION PARAMETERIZATION 
+
+The hierarchical model comprises a top-level hyper-latent z and a bottom-level main latent y. Both latents are modeled using Logistic distributions with a unit scale parameter. LAYER z (T OP LEVEL )• Posterior q(z|x): where μqz is predicted using q head z, and zfeatures = ha(ga(x)) .
+
+q(z|x) = Logistic (μqz , 1) . (21) • Prior p(z): where the location parameter is a static zero tensor ( μpz = 0). This design forces the prior to follow a standard standard Logistic distribution, eliminating the need for hyper-prior projection layers. 
+
+p(z) = Logistic (0 , 1) . (22) 17 LAYER y (B OTTOM LEVEL )• Posterior q(y|x, z ): where μqy is generated using q head y with the concatenated features, and hsout = hs(z).
+
+q(y|x, z ) = Logistic (μqy , 1) . (23) • Prior p(y|z): where μpy is computed from the top-down propagation using p head y. 
+
+p(y|z) = Logistic (μpy , 1) . (24) B.3 BITS -B ACK STATE MACHINE FLOW 
+
+Due to the Last-In-First-Out (LIFO) stack property of Asymmetric Numerical Systems (ANS), the compression and decompression routines must execute “decode” and “encode” operations in strictly reversed order (Duda, 2013; Townsend et al., 2019). Proteus utilizes the Insignificant Planes (INS) stream as the initial ANS stack state to resolve the single-frame overhead of conventional bits-back coding. 
+
+INS Stream 
+
+Encoder (Compression) 
+
+(Decode z via q) (Decode y via q) SIG Encoded 
+
+(Recycle y via p)(Recycle z via p)Final Stream 
+
+Final Stream 
+
+Decoder (Decompression) 
+
+(Decode z via p) (Decode y via p) SIG Decoded 
+
+(Restore y via q)(Restore z via q)INS Stream 
+
+COMPRESSION PIPELINE 
+
+The encoding sequence is mathematically defined as follows: 1. INS Initialization: Encode the range tail planes xs+1: d and attribute planes a1: da using a range coder. The generated bitstream initializes the ANS coder (MixEncoder). 2. Bottom-Up Feature Extraction: Extract yfeatures = ga(x) and zfeatures = ha(yfeatures ).3. Decapsulate z (Bits-Back Decode): Predict posterior parameter μqz = q head z (zfeatures ).
+
+Decode zids from the active ANS stack using the CDF of q(z|x). Reconstruct the latent representation as z = μpz + δz , where δz is mapped from zids and μpz = 0.
+
+zids ∼ q(z|x). (25) 4. Top-Down Determinstic Step: Generate top-down spatial features hsout = hs(z).5. Decapsulate y (Bits-Back Decode): Predict μqy = q head y ([ hsout , y features ]) and μpy =
+
+p head y (hsout ). Decode yids from the ANS stack using the CDF of q(y|x, z ). Reconstruct the latent representation as y = μpy + δy , where δy is mapped from yids .
+
+yids ∼ q(y|x, z ). (26) 6. SIG Synthesis: Formulate ˆy = y + hsout and generate the SIG probability distribution parameters via gs(ˆ y). Encode the significant planes x1: s using the synthesized parameters. 7. Recycle Latents (Prior Encode): To satisfy LIFO, encode the latent variables back into the ANS stack in reverse order ( y → z) using their respective priors: • First, encode the main latent yids using the prior p(y|z), which mathematically reduces to encoding the residual y − μpy under Logistic (0 , 1) .• Second, encode the hyper-latent zids using the prior p(z), which reduces to encoding 
+
+z under Logistic (0 , 1) .18 Figure C.1: Reflectance intensity range images under linear (top) and logarithmic (bottom) scales. Left: SemanticKITTI. Right: WOD. DECOMPRESSION PIPELINE 
+
+At the receiver, decoding proceeds in the exact opposite direction: 1. Latent Decompress ( decompress pz): Since z was encoded last, it sits at the top of the ANS stack. • Decode zids using the prior p(z) ∼ Logistic (0 , 1) . Reconstruct z = 0 + δz .• Propagate z deterministically to obtain hsout = hs(z) and calculate the main prior parameter μpy = p head y (hsout ).• Decode yids using the prior p(y|z) (reconstructed from the residual under Logistic (0 , 1) offset by μpy ). Reconstruct y = μpy + δy .• Formulate ˆy = y + hsout and generate the conditional SIG parameters via gs(ˆ y).2. Decode SIG: Decode the significant planes x1: s using the generated parameters. 3. Restore Stack State ( compress qz): Before decoding the INS stream, the latent variables must be written back into the ANS stack to restore its state at the beginning of Step 1. LIFO demands the encoding order y → z:• Extract yfeatures and zfeatures by passing the decoded SIG planes through ga and ha.• Compute the posterior parameter μqy . Encode yids using the posterior CDF of 
+
+q(y|x, z ).• Compute the posterior parameter μqz . Encode zids using the posterior CDF of q(z|x).4. Decode INS: The ANS stack has now been returned to its initial state. Decode the insignif-icant range planes xs+1: d and attribute planes a1: da .
+
+# C ANALYSIS OF DATASET INTENSITY DISTRIBUTION AND BIT -P LANE 
+
+# SLICING EFFICIENCY 
+
+The rate-distortion (R-D) efficiency of bit-plane slicing is determined by the probability density function (PDF) of the raw reflectance intensity S ∈ [0 , 255] . We formalize this relationship using information-theoretic principles to demonstrate why bit-plane representation is highly suitable for WOD but less optimal for SemanticKITTI. 19 Figure C.2: Reflectance intensity and bit-plane statistics on SemanticKITTI and WOD. Top: Inten-sity histograms on linear (left) and logarithmic (right) scales. Bottom: Bit-plane fill rates (left) and zero-order entropy (right) from MSB-0 to MSB-7. C.1 MATHEMATICAL FORMULATION OF THE BIT -P LANE REPRESENTATION 
+
+Let f (S) denote the continuous probability density function of the intensity. Bit-plane slicing de-composes the scalar value S into a sequence of binary values xk ∈ { 0, 1} for k ∈ [1 , d ], where 
+
+d = 8 . The binarization mapping for the k-th bit plane is defined as: 
+
+xk =
+
+ S
+
+2d−k
+
+
+
+(mod 2) . (27) For the most significant bit-plane (MSB-0, where k = 1 ), this mapping simplifies to an indicator function: 
+
+x1 = I(S ≥ 128) = 
+
+1 if S ∈ [128 , 255] ,
+
+0 if S ∈ [0 , 127] . (28) The fill rate pk of the k-th bit-plane is the probability P(xk = 1) . For k = 1 , the fill rate is determined by the cumulative density over the upper half of the intensity range: 
+
+p1 =
+
+Z 255 128 
+
+f (S) dS. (29) The zero-order marginal entropy of this bit-plane is: 
+
+H(pk) = −pk log 2 pk − (1 − pk) log 2(1 − pk). (30) 20 C.2 DISTORTION AND SPARSITY PROPERTIES IN WOD As illustrated in the intensity maps and histograms (Figures C.1 and C.2), WOD’s intensity distri-bution is highly skewed and sparse, featuring a sharp peak at zero and a heavy, power-law tail. The PDF can be approximated as a mixture model: 
+
+fWOD (S) = (1 − ϵ)δ(S) + ϵg (S), (31) where δ(S) is the Dirac delta function representing low-intensity background surfaces, ϵ ≈ 0.02 
+
+represents the ratio of retroreflective objects, and g(S) is a high-magnitude probability distribution spanning up to S = 255 .On WOD, evaluating the integral yields a very low fill rate for MSB-0 ( p1 ≈ 0.63% ). According to the entropy formulation, the marginal coding cost is: 
+
+HWOD (p1) ≈ 0.055 bits/pixel . (32) However, this plane dictates the presence of the sparse, high-magnitude spikes that dominate the overall Mean Squared Error (MSE). Under an additive distortion model, the expected distortion D
+
+is dominated by these uncompressed outliers if MSB-0 is truncated: 
+
+D = E[( S − ˆS)2] = 
+
+Z 255 0
+
+(S − ˆS)2f (S) dS. (33) Because S2 
+
+> i
+
+is large for retroreflective pixels, omitting x1 forces ˆS ≤ 127 , causing the squared residual (S − ˆS)2 to be exceptionally large. By coding MSB-0, these high-magnitude outliers are localized to their correct coarse cell ( S ≥ 128 ), reducing the expected distortion D drastically. Consequently, on WOD, transmitting MSB-0 yields an extremely high R-D efficiency (approxi-mately 90 dB/bpp) because the information-theoretic cost H(p1) is near zero. C.3 CONTINUOUS DENSITY PROPERTIES IN SEMANTIC KITTI In contrast, SemanticKITTI features a dense, continuous, mid-range distribution (Figures C.1 and C.2). Its PDF fKITTI (S) is characterized by a broad gaussian-like hump centered near S ≈ 85 .Evaluating the integral yields p1 ≈ 6.0% , which results in a significantly higher marginal entropy: 
+
+HKITTI (p1) ≈ 0.34 bits/pixel . (34) For the second bit-plane (MSB-1), the fill rate on SemanticKITTI approaches p2 ≈ 50% , which maximizes the entropy H(p2) ≈ 1.0 bit/pixel. Because the intensity field is spatially continuous and lacks extreme isolated spikes, the marginal distortion reduction of coding these high-significance planes is relatively small ( 1.0 dB for 0.24 bpp on the first plane). These mathematical properties explain the attribute compression behaviors observed in our experi-ments: 1. WOD natively benefits from bit-plane slicing, as the sparse, high-magnitude intensity spikes are encoded at a negligible bitrate cost. 2. SemanticKITTI ’s continuous distribution is less suited for direct bit-plane coding, and its compression efficiency relies on the decoder-side conditional-mean reconstruction to model spatial correlations. 21
