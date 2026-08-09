@@ -1,0 +1,501 @@
+Title: AOS: Adaptive Optimizer Switching via Training-State Signals for Faster Convergence and Better Generalization
+
+URL Source: https://arxiv.org/pdf/2608.01997v1
+
+Published Time: Tue, 04 Aug 2026 02:10:55 GMT
+
+Number of Pages: 6
+
+Markdown Content:
+# AOS: Adaptive Optimizer Switching via Training-State Signals for Faster Convergence and Better Generalization 
+
+Alok Kumar Pandey 
+
+Compute AI SW Qualcomm India Private Ltd 
+
+Hyderabad, India alopand@qti.qualcomm.com 
+
+Umang Chaturvedi 
+
+Compute AI SW Qualcomm India Private Ltd 
+
+Hyderabad, India uchaturv@qti.qualcomm.com 
+
+Aatish Rana 
+
+Compute AI SW Qualcomm India Private Ltd 
+
+Hyderabad, India aatirana@qti.qualcomm.com 
+
+Gopi Krishna Nedanuri 
+
+Compute AI SW Qualcomm India Private Ltd 
+
+Hyderabad, India gnedanur@qti.qualcomm.com 
+
+Abstract —Single-optimizer training is a poor fit for the distinct phases of deep network optimization: adaptive methods handle noisy early gradients well but overshoot flat minima, while SGD with momentum generalizes better in the late phase but converges slowly early on. We introduce AOS-R (Adaptive Optimizer Switching, Rule-Based), a lightweight controller that monitors six online gradient-space signals gradient noise scale, Hutchinson curvature trace, loss stagnation, update stability ratio, GSI, and LIR and switches among AdamW, SGD-M, and Lion as the optimization landscape evolves. State-preserving momentum transfer and a 400-step learning-rate bridge prevent accuracy degradation at every transition point. On CIFAR-100/WRN-28-10, AOS-R reaches 78% top-1 in 81 epochs 26% fewer than AdamW (109), 43% fewer than SGD-M (143), and 16% fewer than Lion (96). Across eight model–dataset benchmarks, AOS-R achieves best accuracy on 6 of 8 combinations with a mean +0 .4 pp gain and 0.80 × convergence speedup over AdamW under a single shared hyperparameter configuration. 
+
+Index Terms —optimizer switching, adaptive training, gradient noise scale (GNS), gradient stability index (GSI), loss improvement ratio (LIR), convergence speed 
+
+I. I NTRODUCTION 
+
+Modern deep learning workflows commit to a single optimizer before training starts and keep it fixed for all epochs. This is convenient but wasteful: Adam-family methods [10], [11] handle noisy early gradients well through per-coordinate second-moment normalization, yet their adaptive preconditioning can overshoot the flat regions that matter for generalization in the final phase. SGD with momentum (SGD-M) converges to flatter minima on convolutional networks [9] but is slow and unstable when gradient variance is high. Lion [1] offers a memory-efficient sign-based alternative that sits between the two along the speed–generalization frontier, while second-order methods [3], [13] improve curvature exploitation at the cost of additional memory and compute. The core difficulty is that no single optimizer is best in all three phases of a typical training run. SWATS [9] demonstrated that even one scheduled Adam-to-SGD switch can close much of the generalization gap, but it relies on a single scalar trigger, discards accumulated momentum at the transition, and cannot detect rising curvature or gradient noise independently. What is needed is a lightweight controller that (i) monitors gradient-space signals online as training progresses, (ii) switches among a pool of optimizers when evidence is sufficiently strong, and (iii) transfers momentum state across boundaries so no accumulated gradient information is lost. We present Adaptive Optimizer Switching (AOS) , a signal-driven framework that addresses all three requirements. AOS-R, the rule-based variant, requires no additional model training and uses six interpretable online signals to drive switching decisions; AOS-L replaces the rule set with a small learned MLP controller. We focus on supervised image classification: experiments on CIFAR-10 and CIFAR-100 across eight model–dataset combinations show that AOS-R consistently outperforms each constituent optimizer used alone, while ImageNet and GLUE evaluations are in progress. 
+
+Contributions: 
+
+1) AOS framework : a signal-driven optimizer-switching con-troller that monitors six lightweight online signals gradient noise scale (GNS), Hutchinson curvature trace, loss-descent rate, update stability ratio, gradient stability index (GSI), and loss improvement ratio (LIR) to select among AdamW, SGD-M, and Lion based on the current training state. 2) State-preserving transitions : moment statistics are mapped across optimizers at switch points, preventing the momen-tum collapse that naive resets incur. 3) LR continuity bridge : linearly ramps the incoming opti-mizer’s learning rate over 400 steps when a large LR ratio is detected, preventing loss spikes at transition boundaries. 4) Convergence analysis : under bounded switching frequency, AOS preserves per-optimizer descent properties up to a constant additive overhead from transition periods. 5) Empirical validation : AOS-R attains best accuracy on 6 of 8 model–dataset combinations with a mean +0 .4 pp gain and 0.80 × speedup over AdamW under a single shared hyperparameter configuration. II. R ELATED WORK 
+
+Adaptive gradient methods. Adam [10] introduced per-parameter adaptive learning rates. AdamW [11] decoupled arXiv:2608.01997v1 [cs.LG] 3 Aug 2026 weight decay from the gradient update. Lion [1] uses sign-based updates, halving memory while matching or exceeding AdamW on vision and language benchmarks. Shampoo [3] and SOAP [13] use Kronecker-factored preconditioners for structured curvature adaptation. 
+
+Optimizer switching. SWATS [9] flips Adam to SGD-M once the effective LR stabilizes, improving generalization. AOS extends this with a richer six-signal set, multi-way bidirectional switching, and state transfer that preserves momentum buffers. Lookahead [14] stabilizes any inner optimizer by interpolating toward slow-moving weights; the gradient noise scale [12] has been used to set batch sizes we adapt a related proxy to drive optimizer selection. 
+
+Sharpness and generalization. SAM [2] seeks flat minima by perturbing parameters toward sharp directions. AOS uses a curvature proxy to activate SGD-M’s implicit flat-minima bias without SAM’s two-forward-pass overhead. 
+
+Benchmark architectures. ResNet [5], DenseNet [7], PyramidNet-110 [4], and SE-ResNet [6] cover a range of gradient-flow and curvature profiles used in our evaluation. III. M ETHOD 
+
+A. Optimizer Pool 
+
+AOS maintains a pool O = {O1, . . . , O K }. All CIFAR ex-periments use K=3 : O = {AdamW , SGD-M , Lion }. AdamW handles noisy early gradients via second-moment adaptation; Lion provides memory-efficient sign-based mid-phase mo-mentum; SGD-M drives flat-minima convergence via implicit sharpness regularization in the late phase. 
+
+AdamW [11]: 
+
+mt = β1mt−1 + (1 − β1)gt, vt = β2vt−1 + (1 − β2)g2 
+
+> t
+
+,
+
+θt = θt−1 − η
+
+ ˆmt
+
+√ˆvt + ε + λθt−1
+
+
+
+. (1) 
+
+SGD-M : ut = μut−1 + gt, θt = θt−1 − η ut.
+
+Lion [1]: 
+
+θt = θt−1 − η(sign( βct−1 + (1 − β)gt) + λθt−1) ,
+
+ct = βct−1 + (1 − β)gt. (2) 
+
+B. Online Training-State Signals 
+
+Every Teval =200 steps, AOS computes six signals. 
+
+S1 – Gradient Noise Proxy (GNS). Mini-batch split into micro-batches Ba, Bb:
+
+]GNS t = ∥ga − gb∥2
+
+∥ga∥2 + ∥gb∥2 + ε . (3) High GNS favors adaptive methods (AdamW, Lion). 
+
+S2 – Hutchinson Curvature Proxy. Using m=5 
+
+Rademacher probes vi ∼ {± 1}d [8]: 
+
+btr( Ht) = 1
+
+m
+
+> m
+
+X
+
+> i=1
+
+v⊤ 
+
+> i
+
+∇(∇L · vi). (4) High trace (sharp geometry) favors SGD-M’s implicit regular-ization. 
+
+S3 – Loss Stagnation Detector. 
+
+∆Lk = Lt−k − L t, k = Teval . (5) Triggers SGD-M when ∆Lk < δ stag .
+
+S4 – Update Stability Ratio. 
+
+ρt = ∥∆θt∥∥∇L t∥ + ε . (6) Large ρt indicates instability; SGD-M preferred. 
+
+S5 – Gradient Stability Index (GSI). 
+
+GSI t = ¯μ2
+
+> t
+
+¯vt
+
+∈ (0 , 1] , (7) where ¯μt, ¯vt are EMAs of ∥∇L t∥ and ∥∇L t∥2. GSI t →
+
+1 when gradient norms are perfectly consistent. Threshold 
+
+τgsi =0 .65 gates Lion and late-phase SGD-M. 
+
+S6 – Loss Improvement Ratio (LIR). 
+
+LIR t = ∆Lk
+
+∆L(0)  
+
+> k
+
++ ε , (8) where ∆L(0)  
+
+> k
+
+is the reference descent at step Teval . When 
+
+LIR t<0.05 and t/T ≥0.60 , AOS triggers an early transition to SGD-M. Because LIR decays monotonically (from 1.0 at epoch 1 to ≈0.03 by epoch 130 in the CIFAR-100 run), it crosses 0.05 roughly 2–3 epochs before the hard stagnation condition ( ∆Lk < δ stag ) fires sized to match the 400-step LR bridge, so the incoming SGD-M reaches its target learning rate just as the plateau fully develops. 
+
+C. Switching Policy (AOS-R) 
+
+Thresholds τgns , τtr , τρ, δstag determine the active optimizer (Algorithm 1). Two mechanisms prevent thrashing: (i) hystere-sis : a signal must exceed its threshold for H=3 consecutive evaluations before triggering a switch; and (ii) minimum dwell 
+
+Dmin steps between consecutive switches. Four anti-thrash extensions stabilize AOS-R further: (N1) Adaptive dwell : Deff = Dmin ×max(0 .4, 1.5−0.5·GSI t −0.5·
+
+LIR t), which shortens dwell when gradients are stable and still improving and lengthens it when they are noisy or stagnating, with a 0.4 floor preventing collapse to zero. (N2) Anti-thrash backoff : excess switches within 12,000 steps multiply dwell by 
+
+3nexcess . (N3) GNS trend : early exit from the AdamW phase when GNS is consistently falling (new-half mean ≤ 0.8× old-half mean), signaling the noise-dominated phase has ended. (N4) SGD-M grace period : direct SGD-M triggers are suppressed until t/T ≥ 0.52 , since activating SGD-M before curvature has risen causes premature momentum collapse and accuracy regression. 
+
+D. State-Preserving Transitions 
+
+Optimizer state is transferred rather than discarded at switch points, consistent with Proposition 1. 
+
+AdamW → SGD-M. SGD-M’s velocity buffer initialized from AdamW’s bias-corrected first moment, scaled by the LR ratio: 
+
+unew = ηSGD 
+
+ηAdam 
+
+ˆmt. (9) Algorithm 1 AOS-R: Rule-Based Adaptive Optimizer Switch-ing 
+
+Require: Model fθ , pool O, thresholds, dwell Dmin , hystere-sis H, eval interval Teval  
+
+> 1:
+
+Init Oact ← AdamW, tlast ← 0, signal counters, private step counters  
+
+> 2:
+
+for t = 1 , 2, . . . , T do  
+
+> 3:
+
+Sample mini-batch; compute loss Lt 
+
+> 4:
+
+Update with Oact ; increment private counter  
+
+> 5:
+
+if t mod Teval = 0 then  
+
+> 6:
+
+Compute S1–S6; update hysteresis counters  
+
+> 7:
+
+if t − tlast ≥ Deff then  
+
+> 8:
+
+if high GNS or t/T < 0.15 then  
+
+> 9:
+
+Onext ← AdamW  
+
+> 10:
+
+else if high curvature or stagnation or ρt > τ ρ or 
+
+t/T ≥ 0.65 or early LIR trigger then  
+
+> 11:
+
+Onext ← SGD-M  
+
+> 12:
+
+else  
+
+> 13:
+
+Onext ← Lion  
+
+> 14:
+
+end if  
+
+> 15:
+
+if Onext ̸ = Oact then  
+
+> 16:
+
+Check LR ratio; install bridge if r > R bridge  
+
+> 17:
+
+Transfer state; set Oact ← Onext  
+
+> 18:
+
+end if  
+
+> 19:
+
+end if  
+
+> 20:
+
+end if  
+
+> 21:
+
+end for AdamW ↔ Lion. Lion’s momentum buffer c seeded with 
+
+ˆmt (AdamW →Lion); reverse transfer seeds m0 ← ct.
+
+SGD-M → Lion. If bidirectional switching returns to Lion after an SGD-M phase (e.g., GNS rises again), cold-starting Lion’s empty buffer c would discard the curvature information accumulated during SGD-M. Instead, c is seeded from SGD-M’s velocity buffer ut, scaled by the LR ratio: 
+
+cnew = ηSGD 
+
+ηLion 
+
+ut. (10) 
+
+E. Learning-Rate Continuity Bridge 
+
+When the LR ratio r = η∗ 
+
+> j
+
+/η i satisfies r > R bridge or r < 
+
+1/R bridge (Rbridge =8 ), AOS installs a linear ramp: 
+
+ηbridge  
+
+> t
+
+= ηbridge + t − tswitch 
+
+Tbridge 
+
+ η∗ 
+
+> j
+
+(t) − ηbridge 
+
+, (11) where Tbridge =400 steps. Each optimizer also maintains a 
+
+private schedule step counter to prevent schedule over-advance and base-LR corruption when idle. 
+
+F. Hyperparameters 
+
+Table I lists the four experimental presets. The full 
+
+configuration uses Dmin =4 ,000 (≈10 epochs at 391 steps/epoch for CIFAR-100, batch 128), preventing the Lion ↔SGD-M thrashing observed with Dmin =1 ,000 . Shared AOS hyperparameters across all presets: Teval =200 , H=3 ,
+
+m=5 , τgns =0 .60 , τtr =2 .0×running median trace, τρ=5 .0,
+
+δstag =10 −4, τgsi =0 .65 , τlir =0 .05 , Rbridge =8 .                      
+
+> TABLE I EXPERIMENT PRESET CONFIGURATIONS
+> Preset Model Epochs Batch Dmin
+> quick ResNet-18 20 128 2,000 medium WRN-16-8 100 128 1,500 full WRN-28-10 200 128 4,000 imagenet ResNet-50 90 256 1,000
+
+IV. T HEORETICAL ANALYSIS 
+
+Assumption 1 (Smoothness) . L is L-smooth: 
+
+∇L (θ) − ∇L (θ′) ≤ L θ − θ′ .
+
+Assumption 2 (Per-optimizer descent) . Each Ok ∈ O,when active for ≥ Dmin steps with step size ηk, satisfies 
+
+E[L(θt+1 )] ≤ E[L(θt)] − ckE[∥∇L (θt)∥2] for some ck > 0.
+
+Assumption 3 (Bounded switching frequency) . Each Ok, when activated, satisfies the per-optimizer descent condition after at most D∗ active steps. AOS-R is configured with Dmin ≥ D∗.
+
+Proposition 1 (Descent after state-preserving switch) . Under the above assumptions, if the state-preserving transfer sets the incoming optimizer’s buffer such that ∥∆θnew ∥ ≤ ηnew /L , then 
+
+E[L(θt+1 )] ≤ L (θt) at the first update after the switch. 
+
+The scaling in (9) satisfies this bound. The LR bridge further ensures the effective step size stays within the stability region during the ramp period. 
+
+Theorem 1 (Convergence of AOS-R) . Under the above assumptions, for any ε0 > 0, AOS-R reaches 
+
+> 1
+> T
+
+PTt=1 E[∥∇L (θt)∥2] ≤ ε0 in at most 
+
+T ≤ 2( L(θ0) − L ∗)
+
+cmin ε0
+
++ S · Dmin (12) 
+
+steps, where cmin = min k ck and S is the total number of switches. 
+
+Remark 1. Empirically S ≤ 4 in all runs regardless of total steps. In the 200-epoch CIFAR-100/WRN-28-10 run, S=2 and 
+
+Dmin =4 ,000 , contributing only 8,000 overhead steps out of 
+
+≈78 ,200 total, so the convergence rate is comparable to single-optimizer bounds up to a small constant additive term. Switches diminish as training stabilizes, so S grows far more slowly than T in practice. 
+
+Remark 2 (Calibrating Dmin ). Dmin must be calibrated to dataset and batch size. We recommend Dmin ≥ 0.025 × T as a task-agnostic lower bound, ensuring each optimizer phase covers at least 2.5% of total training before a switch is permitted:  
+
+> •
+
+CIFAR-100, batch 128 (391 steps/epoch): Dmin =4,000 ≈ 10 epochs  
+
+> •
+
+ImageNet, batch 256 ( ≈1,252 steps/epoch): Dmin =1,000 ≈ 0.8 epochs V. E XPERIMENTS 
+
+A. Setup 
+
+Datasets and models. All experiments use CIFAR-10 and CIFAR-100 (50k/10k, standard RandomCrop + RandomHFlip + AutoAugment augmentation). Four architectures on CIFAR-10: ResNet-32 (0.47M), DenseNet-BC-100 (0.8M), PyramidNet-110 (1.7M), SE-ResNet-32 (0.47M). For CIFAR-100 the ResNet-32 row is replaced by ResNet-50 (25.6M), which provides a higher-capacity reference on the harder 100-class task. All models trained for 200 epochs (batch 128, seed 42) using the full AOS preset (Table I). 
+
+Baselines. SGD-M, AdamW, Lion, and SWATS [9], each using hyperparameters from their respective publications vali-dated by grid search on each task. 
+
+Metrics. (1) Best top-1 validation accuracy. (2) Convergence speed: steps to reach 95% of each method’s own best validation accuracy, relative to AdamW (lower is faster). 
+
+B. Main Results 
+
+Tables II and III report best accuracy and convergence speed across all eight benchmarks. 
+
+TABLE II BEST TOP -1 V ALIDATION ACCURACY (%) A CROSS EIGHT 
+
+MODEL –D ATASET COMBINATIONS (200 E POCHS , S EED 42). BOLD = B EST IN ROW . † AOS-R T RAILS SGD-M ON PYRAMID NET -110.                                                               
+
+> Model Dataset AdamW SGD-M Lion SWATS AOS-R (ours)
+> ResNet-32 CIFAR-10 91.8 93.2 92.5 92.6 94.1
+> DenseNet-BC-100 CIFAR-10 94.8 95.0 94.8 94.8 95.3
+> PyramidNet-110 CIFAR-10 95.4 95.7 95.1 95.2 94.7 †
+> SE-ResNet-32 CIFAR-10 94.1 93.9 94.0 94.0 94.5
+> ResNet-50 CIFAR-100 81.1 81.9 80.7 81.3 82.0
+> DenseNet-BC-100 CIFAR-100 73.5 76.2 75.1 75.3 76.5
+> PyramidNet-110 CIFAR-100 76.6 77.8 77.0 77.1 76.9 †
+> SE-ResNet-32 CIFAR-100 70.8 70.6 70.5 70.7 71.4
+> AOS-R best on 6/8; mean ∆(6 wins) ————+0.4pp
+
+TABLE III CONVERGENCE SPEED : S TEPS TO REACH 95% OF EACH METHOD ’S OWN 
+
+BEST ACCURACY , R ELATIVE TO ADAM W (L OWER IS FASTER ). BOLD =FASTEST .                                                        
+
+> Model Dataset AdamW SGD-M Lion SWATS AOS-R (ours)
+> ResNet-32 CIFAR-10 1.00 ×1.02 ×0.96 ×0.98 ×0.81 ×
+> DenseNet-BC-100 CIFAR-10 1.00 ×1.04 ×0.94 ×0.96 ×0.79 ×
+> PyramidNet-110 CIFAR-10 1.00 ×1.03 ×0.95 ×0.97 ×0.77 ×
+> SE-ResNet-32 CIFAR-10 1.00 ×1.01 ×0.93 ×0.97 ×0.80 ×
+> ResNet-50 CIFAR-100 1.00 ×1.03 ×0.98 ×1.01 ×0.82 ×
+> DenseNet-BC-100 CIFAR-100 1.00 ×1.02 ×0.95 ×0.97 ×0.81 ×
+> PyramidNet-110 CIFAR-100 1.00 ×1.01 ×0.94 ×0.96 ×0.79 ×
+> SE-ResNet-32 CIFAR-100 1.00 ×1.02 ×0.96 ×0.98 ×0.82 ×
+> Mean AOS speed 1.00 ×0.80 ×
+
+Key findings: 
+
+1) AOS-R best on 6 of 8 benchmarks (Table II), mean 
+
++0 .4 pp over the best baseline. Gains range from +0 .1 pp (ResNet-50/CIFAR-100) to +0 .9 pp (SE-ResNet-32/CIFAR-100). 2) PyramidNet-110 exception. SGD-M outperforms AOS-R by 1.0 pp on CIFAR-10 and 0.9 pp on CIFAR-100. PyramidNet-110’s monotonically increasing channel width causes the Hutchinson trace to exceed τtr at epoch 35 (vs. epoch 130 on WRN-28-10), converting AOS-R to an early SGD-M run while carrying a partially altered momentum buffer from the AdamW →Lion warm-up. Recalibrating τtr 
+
+or extending Dmin for monotonically widening architectures is an open problem. 3) Milestone convergence speed (Fig. 1): AOS-R reaches 
+
+78% top-1 in 81 epochs 26% fewer than AdamW (109), 43% fewer than SGD-M (143), 28% fewer than SWATS (113). The gap widens at harder milestones, consistent with signal-driven transitions extracting more benefit as the task nears saturation. 
+
+Fig. 1. Milestone convergence speed, CIFAR-100/WRN-28-10. Epochs required to reach accuracy milestones (70%, 74%, 78%). AOS-R hits 78% in 
+
+81 epochs 26% fewer than AdamW (109), 43% fewer than SGD-M (143), and 28% fewer than SWATS (113). The advantage widens with milestone difficulty. 
+
+4) Early-phase advantage (Fig. 2). AOS-R leads all baselines from epoch 15 ( +3 pp over AdamW, +22 pp over SGD-M by epoch 100), driven by the GNS-triggered AdamW →Lion switch at epoch 30 and the LIR-triggered Lion →SGD-M switch at epoch 130. 
+
+Fig. 2. Early-phase accuracy, epochs 1–100, CIFAR-100/WRN-28-10. 
+
+Shaded regions: AdamW phase (blue, epochs 1–30), Lion phase (orange, 31–100 +). AOS-R (red) leads from epoch 15; by epoch 100 it is ≈ 3 pp ahead of AdamW and ≈ 22 pp ahead of SGD-M (teal). The AdamW →Lion handoff at epoch 30 coincides with AOS-R’s steepest relative gain. 5) Model-specific switching patterns. On SE-ResNet-32, GNS stays elevated through epochs 1–45 (vs. 1–30 for ResNet-32), delaying AdamW →Lion due to higher gra-dient noise from SE gating the switch timings adapt per architecture without any configuration change.     
+
+> Fig. 3. Convergence curves, CIFAR-100/WRN-28-10. Validation accuracy vs. epoch for all five methods. AOS-R (red) leads from epoch 15; SGD-M (teal) oscillates for the first 125 epochs. All methods reach ≈79 % by epoch 200.
+
+C. Optimizer Trajectory 
+
+AOS-R executed exactly 2 signal-driven switches on CIFAR-100/WRN-28-10: AdamW →Lion at epoch 30 and Lion →SGD-M at epoch 130. The Dmin =4 ,000 -step dwell ( ≈10 epochs at 391 steps/epoch, per Remark 2) prevented the spurious Lion ↔SGD-M re-switching seen with Dmin =1 ,000 .
+
+Signal trace. GSI ranged 0.69–0.97, confirming gradient-norm stability adequate for Lion from epoch 30. LIR decayed monotonically to ≈ 0.03 by epoch 130, triggering Lion →SGD-M 2–3 epochs before the hard stagnation threshold fires giving the 400-step LR bridge time to complete before the plateau deepens. 
+
+LR bridge activations. AdamW →Lion ramped 9.72 ×
+
+10 −4 → 9.72 × 10 −5 over 400 steps. Lion →SGD-M spanned a ∼16 × LR ratio; omitting the bridge produces a 3.1× larger loss spike. 
+
+D. Discussion 
+
+Phase structure across architectures. The AdamW →Lion →SGD-M trajectory proved consistent across all models: GNS identified the noisy early phase (epochs 1–30–45, varying by architecture), the curvature trace detected sharpening, and LIR anticipated the late plateau. This regularity held even for DenseNet’s heterogeneous skip connections and PyramidNet-110’s non-uniform channel widths, suggesting the phase structure is a property of the optimization landscape rather than the specific architecture. 
+
+State transfer matters. Ablations replacing state-preserving transfer with zero initialization degraded accuracy by 0.5– 1.1 pp and slowed convergence by 12–18% across all eight benchmarks, consistent with Proposition 1. The penalty was largest on DenseNet (1.1 pp), where dense connectivity builds large first-moment buffers that take many steps to reconstruct. 
+
+Hyperparameter portability. All eight runs used the same AOS configuration; only the number of output classes changed per combination. The six online signals drove the switching policy without any architecture-specific adjustment on 6 of 8 benchmarks, PyramidNet-110 being the only exception (Key Findings, item 2). VI. A BLATION STUDY TABLE IV ABLATION STUDY ON CIFAR-100/WRN-28-10 (200 E POCHS , 3 S EEDS ). TOP -1 = B EST ACCURACY (M EAN ± STD ); ×SPEED = S TEPS TO 82% TOP -1, R ELATIVE TO ADAM W.                                                                                                                      
+
+> Configuration Top-1 (%) ×speed AOS-R (full) 82 .2±0.20.78
+> Signal ablations (remove one):
+> w/o GNS 81 .8±0.20.85
+> w/o curvature trace 81 .7±0.30.88
+> w/o descent rate 81 .9±0.20.82
+> w/o stability ratio 82 .0±0.20.80
+> w/o GSI 81 .6±0.30.86
+> w/o LIR 81 .8±0.20.83
+> Switching control:
+> No hysteresis ( H= 0 )81 .4±0.40.91
+> No dwell ( Dmin = 0 )81 .3±0.50.93
+> Dmin = 1 ,000 (under-cal) 81 .2±0.50.94
+> Dmin = 4 ,000 (calibrated) 82 .2±0.20.78
+> State-preserving transitions:
+> Naive reset (zero init) 81 .3±0.30.90
+> Partial (AdamW →SGD only) 81 .9±0.20.81
+> LR bridge:
+> No bridge 81 .5±0.40.87
+> Bridge ( Rbridge = 8 )81 .2±0.20.78
+> Optimizer order:
+> AdamW →SGD-M (no Lion) 81 .7±0.20.84
+> AdamW →Lion →SGD-M 82 .2±0.20.78
+> AdamW →SGD-M →Lion 81 .6±0.30.86
+> Eval frequency Teval :
+> Teval = 50 82 .0±0.30.80
+> Teval = 200 82 .2±0.20.78
+> Teval = 500 81 .9±0.20.81
+> Hutchinson probes m:
+> m= 1 81 .8±0.40.83
+> m= 5 82 .2±0.20.78
+> m= 10 82 .2±0.20.78
+> Learned controller:
+> AOS-L (off-policy MLP) 82 .3±0.20.76
+
+We ablate each AOS-R component on CIFAR-100/WRN-28-10 (200 epochs, 3 seeds). 
+
+Signal ablations. Removing any individual signal degrades performance. Curvature trace contributes most (13% slowdown), followed by GNS (9%). GSI removal costs 0.6 pp and 10% speed; LIR removal costs 0.4 pp and 6% speed, confirming both plateau-detection signals carry independent information. 
+
+Dwell time calibration. Dmin =1 ,000 (under-calibrated) reduces top-1 by 1.0 pp and increases steps by 21% versus the task-calibrated Dmin =4 ,000 ; correct dwell calibration is not optional. LR bridge. Removing the bridge costs 0.7 pp and 11% speed; the loss spike at a naive Lion →SGD-M transition is 
+
+3.1× larger without it. 
+
+State-preserving transitions. Naive zero-initialization de-grades top-1 by 0.9 pp and slows convergence by 15%, consistent with Proposition 1. 
+
+Evaluation frequency and probe count. Teval =200 and 
+
+m=5 are cost-effective; increasing either yields diminishing returns. Full numerical results are summarized in Table IV above. VII. C ONCLUSION 
+
+We presented AOS , a signal-driven framework for switch-ing among complementary optimizers during training. State-preserving transitions, an LR continuity bridge, task-calibrated dwell times, and hysteresis together prevent the instability that naive multi-optimizer schemes suffer. Bounded switching is shown to preserve per-optimizer descent properties with only a small, bounded overhead from transition periods. AOS-R achieves consistent gains on 6 of 8 benchmarks: mean +0 .4 pp and 0.80 × convergence speedup over AdamW across ResNet-32, DenseNet-BC-100, and SE-ResNet-32 on CIFAR-10/100, and ResNet-50 on CIFAR-100. On CIFAR-100/WRN-28-10, AOS-R reaches 78% top-1 in 81 epochs vs. 109 for AdamW and 143 for SGD-M; the AdamW →Lion handoff at epoch 30 opens a sustained 2–3 pp gap that persists to epoch 200. Model-specific switching patterns emerge from signal dynamics without per-architecture configuration, supporting the view that training phase structure is a property of the optimization landscape. 
+
+Limitations. Signal computation adds ≤ 2.5% wall-clock overhead. Threshold miscalibration can cause thrashing; hys-teresis and dwell mitigate but do not eliminate this risk. Current results are single-seed; multi-seed evaluation and ImageNet/GLUE benchmarks are in progress. 
+
+Future work. Extending AOS to distributed training, integrat-ing SAM as an optional pool member, developing theoretical lower bounds on required switches, and automating threshold calibration are natural next directions. ACKNOWLEDGMENT 
+
+This work was carried out voluntarily by the authors as research initiative. We thank our colleagues at Qualcomm for helpful discussions and for providing access to computing resources. REFERENCES [1] X. Chen et al., “Symbolic discovery of optimization algorithms,” NeurIPS ,vol. 36, 2023. [2] P. Foret, A. Kleiner, H. Mobahi, and B. Neyshabur, “Sharpness-aware minimization for efficiently improving generalization,” ICLR , 2021. [3] V. Gupta, T. Koren, and Y. Singer, “A unified approach to adaptive regularization in online and stochastic optimization,” arXiv:1802.09568 ,2018. [4] D. Han, J. Kim, and J. Kim, “Deep pyramidal residual networks,” CVPR ,2017. [5] K. He, X. Zhang, S. Ren, and J. Sun, “Deep residual learning for image recognition,” CVPR , 2016. [6] J. Hu, L. Shen, S. Albanie, G. Sun, and E. Wu, “Squeeze-and-excitation networks,” CVPR , 2018. [7] G. Huang, Z. Liu, L. van der Maaten, and K. Q. Weinberger, “Densely connected convolutional networks,” CVPR , 2017. [8] M. F. Hutchinson, “A stochastic estimator of the trace of the influence matrix for Laplacian smoothing splines,” Commun. Statist. Simul. Comput. , vol. 19, no. 2, pp. 433–450, 1990. [9] N. S. Keskar and R. Socher, “Improving generalization performance by switching from Adam to SGD (SWATS),” arXiv:1712.07628 , 2017. [10] D. P. Kingma and J. Ba, “Adam: A method for stochastic optimization,”

@@ -1,0 +1,1184 @@
+Title: Mask-Based Priors Are More Persistent than Query-Key Initializations
+
+URL Source: https://arxiv.org/pdf/2608.00418v1
+
+Published Time: Tue, 04 Aug 2026 00:24:01 GMT
+
+Number of Pages: 31
+
+Markdown Content:
+# Mask-Based Priors Are More Persistent than Query-Key Initializations 
+
+Mingze Ma 
+
+Australian Institute for Machine Learning Adelaide University 
+
+mingze.ma@adelaide.edu.au 
+
+Hemanth Saratchandran 
+
+Australian Institute for Machine Learning Adelaide University 
+
+Cameron Gordon 
+
+Australian Institute for Machine Learning Adelaide University 
+
+Simon Lucey 
+
+Australian Institute for Machine Learning Adelaide University 
+
+simon.lucey@adelaide.edu.au 
+
+## Abstract 
+
+Transformers do not merely lack data on some Boolean extrapolation tasks; they generalize in a systematically wrong way. Recent work on generalization on the unseen has shown that, despite fitting the observed domain, Transformers often extrapolate according to a simpler minimum-degree interpolator rather than the true target function. These Boolean tasks are not practical applications, but controlled stress tests for understanding Transformer inductive bias. We ask whether this failure mode can be corrected by injecting explicit structural priors into attention. Existing structured-initialization methods alter Transformer inductive bias indi-rectly, by choosing query and key projections whose similarity scores approximate a desired attention pattern. However, we find that when applied to Boolean ex-trapolation, these QK-based priors can be rapidly overwritten during training and fail to change the learned extrapolation rule. We propose a simpler alternative: initialize the additive attention mask directly. Unlike standard hard masks used for causality or locality attention, our mask is a finite, learnable attention-logit bias initialized from task-level interaction structure. This separates the structural prior from content-dependent attention scores, allowing it to persist throughout optimiza-tion. On Boolean reasoning tasks, mask-based initialization achieves near-perfect extrapolation where vanilla and QK-initialized Transformers remain trapped by the default inductive bias. The same mechanism also improves low-data arithmetic performance and remains competitive on vision and language benchmarks. These results show that attention masks can serve not only as architectural constraints, but as a simple substrate for encoding persistent inductive bias in Transformers. 
+
+## 1 Introduction 
+
+Attention provides Transformers [Vaswani et al., 2017] a powerful mechanism for learning long range token interactions directly from data. This flexibility has been central to their success across natural language processing [Vaswani et al., 2017, Radford et al., 2019, Guo et al., 2025] and computer vision [Dosovitskiy et al., 2020, Liu et al., 2021, Peebles and Xie, 2023]. However, this same flexibility can also make their inductive bias difficult to control. Recent work on generalization on the unseen (GOTU) [Abbe et al., 2024] provides a sharp example: Transformers can fit the observed data while extrapolating according to the wrong rule. Boolean tasks make this failure especially clear. A model may match every training example yet prefer a simpler minimum-degree interpolator over the true 
+
+> Preprint. arXiv:2608.00418v1 [cs.AI] 1 Aug 2026
+
+Boolean Extrapolation Failure   
+
+> Desired Pairwise Interaction: 0011
+> Seen Domain:
+> 010010011
+> Model Prediction:
+> 011
+
+Same Prior, two locations 
+
+> 0011
+> QK initializations:
+> Mask initialization:
+
+Q
+
+K
+
+> M
+> QK initialization:
+> Mask initialization:
+
+Effect After Training    
+
+> 0011
+> Unseen Domain:
+> 1101
+> Transformer prefers a Minimum Degree Interpolator
+> M
+> Prior encoded directly as attention bias
+> Prior encoded indirectly
+> 0011
+
+Q
+
+K  
+
+> Extrapolation Failed 1⊕1→1 2Parity: 75% → 75%
+> Extrapolation Changed: 1⊕1→0 2Parity: 75% →100%
+> On Boolean GOTU tasks, the same structural prior is often ineffective when encoded as a learnable additive attention mask.
+> Shared Structural Prior
+> Prior Lost
+> Prior Preserved
+
+Figure 1: Where the prior lives determines whether it changes extrapolation. Boolean GOTU tasks expose a failure mode in which Transformers fit the observed domain but extrapolate according to the wrong rule, often a simpler minimum-degree interpolator. We compare two ways of injecting the same structural prior into attention. QK-based initialization encodes the prior indirectly through content-dependent query-key projections, choosing Q and K so that Softmax( QK ⊤/√d) approxi-mates the desired pattern. Mask-based initialization instead places the prior directly in the attention logits as a finite, learnable additive bias. After training, QK-based priors can be washed out, whereas mask-based priors remain explicit and persistent, leading to substantially improved extrapolation. target function on unseen inputs [Abbe et al., 2024]. This raises a broader question: Can we modify self-attention so that its inductive bias better matches the structure of the target problem? 
+
+A natural approach is to initialize self-attention with a structural prior. Rather than requiring the model to infer the relevant relational pattern entirely from data, structured initialization biases the initial attention mechanism toward interactions believed to be important for the task. Classical initialization methods mainly focus on optimization stability, often by analyzing signal propagation under assumptions on pseudo-inputs such as Gaussian-distributed features [Sitzmann et al., 2020, Lindell et al., 2022, Kumar, 2017, He et al., 2015]. While effective for stabilizing deep networks, these methods are not designed to initialize the correlation structure learned by self-attention, and typically do not encode explicit relational priors. More recent works have begun to study initialization directly for attention, either to improve training stability [Ji et al., 2025] or to modify the model’s inductive bias [Zheng et al., 2025]. These methods usually encode a desired attention pattern through the query and key projections, using either prior knowledge about the dataset [Zheng et al., 2025] or posterior observations from well-trained attention maps [Trockman and Kolter, 2023]. They have demonstrated improvements in settings where vanilla Transformers previously struggled. However, QK-based structural initialization is indirect: the prior must be represented through content-dependent similarity scores. Since the same query and key projections must also learn task-dependent representations during training, the injected structure may be rapidly repurposed or washed out. As a result, it is unclear whether QK initialization genuinely changes the learned extrapolation rule, particularly in settings such as GOTU or arithmetic problems where the failure mode is explicitly about inductive bias [Abbe et al., 2024, Duan et al., 2024]. In this work, we first study Boolean GOTU problems [Abbe et al., 2024], where the extrapolation failure is explicit and the relevant variable interactions are known. This makes them a useful lens for testing whether an intervention genuinely changes the inductive bias of a Transformer, rather than merely improving optimization on the observed domain. We show that these logical structures can 2be naturally encoded as attention-mask patterns, guided by the principle that self-attention should expose the token interactions required by the target rule. Our main finding is that where the prior is placed matters. State-of-the-art QK-based structured initialization methods can produce the desired attention pattern at initialization [Trockman and Kolter, 2023, Zheng et al., 2025], but do not necessarily preserve this information during training and do not reliably alter the extrapolation behavior of the vanilla Transformer. In contrast, injecting the same structural patterns directly as learnable additive attention masks yields near-perfect extrapolation on Boolean GOTU tasks. This intervention does not introduce a new attention operation: it uses the standard additive attention-mask interface already present in Transformers. However, unlike causal or padding masks, which impose hard architectural constraints, our masks are finite, learnable attention-logit biases initialized from task-level interaction structure. Thus, the mask acts as a persistent inductive bias rather than merely a validity constraint. Beyond Boolean reasoning, we evaluate the same strategy on arithmetic, image classification, and small language-modeling benchmarks. Arithmetic tasks provide a natural extension from Boolean logic to compositional algorithmic structure, while vision and language tasks test whether mask-based priors remain compatible with settings where Transformers already perform well. Across these settings, mask-based initialization preserves prior information throughout optimization, improves low-data generalization on structured tasks, and remains competitive on standard vision and language benchmarks. These results suggest that additive attention masks can serve not only as architectural constraints, but also as a simple substrate for persistent inductive bias in Transformer attention. In summary, our main contributions are: • We use Boolean GOTU problems as a sharp test of Transformer extrapolation behavior, and show that appropriately designed attention-mask priors can move Transformers away from minimum-degree solutions. • We show that existing QK-based structured initialization methods may fail to preserve injected priors during training and may not reliably change the extrapolation behavior of vanilla Transformers on logical reasoning tasks. • We propose mask-based structured initialization, which injects a prior directly through a learnable additive attention mask rather than indirectly through query and key matrices. This avoids constructing pseudo-inputs or solving an inverse problem for QK parameters. • We provide a gradient-level explanation for the persistence of mask-based priors. Structure encoded via QK ⊤ is entangled with query and key feature scales, making it susceptible to distortion during training, whereas additive masks decouple structural bias from content-dependent similarity scores. • We validate mask-based initialization across Boolean reasoning, arithmetic, and image classification, showing strong extrapolation gains on logical and combinatorial tasks while remaining competitive on practical vision and language datasets. 
+
+## 2 Related Works 
+
+2.1 Neural Network Initialization and Inductive Biases 
+
+Initialization methods have been widely explored in the deep learning community. Traditionally, they are designed to stabilize the training process, as deep networks often suffer from vanishing or exploding gradients [Glorot and Bengio, 2010, He et al., 2015]. More recent work has shifted focus toward how initialization can influence learning efficiency. For instance, [Xu et al., 2023, Samragh et al., 2024, 2023] proposes using pretrained weights from large models to initialize smaller models. Similarly, [Trockman and Kolter, 2023] suggests transferring structural patterns from well-trained Transformers as initialization, improving performance across a variety of tasks. Inductive bias, which characterizes the generalization behavior of machine learning algorithms, has long been a central topic in the field. The inductive bias of Transformers has been extensively studied, with many approaches seeking to explore the limits of extrapolation, generalization, and encoding priors through training[Abbe et al., 2024, Wang et al., Zhong and Andreas, 2024, Pushkin et al., Davidovich and Ringel, 2026, Teney et al., 2026, Shinnick et al., 2026]. More recently, [Zheng 3et al., 2024, 2025] propose structured initialization to address the lack of inductive bias in standard Transformer initialization, which typically yields unstructured attention maps. Their approach injects CNN-like locality into ViTs by solving for query and key matrices such that Softmax( QK ⊤/√d)
+
+approximates convolutional impulse patterns. This imposes spatial structure at initialization without modifying the architecture, leading to improved performance on small- and medium-scale datasets while maintaining competitive results at scale. However, this induced structure is implicitly encoded through query-key interactions, which may not preserve the desired inductive bias during training. 
+
+2.2 Attention Masks in Transformers 
+
+Masks, as a flexible and easily implemented component, play an important role in Transformer architectures. The causal mask is a feature in the original autoregressive architecture, preventing the model from accessing future tokens and thereby avoiding shortcut solutions that could harm inference performance [Yin et al., 2024, Pei et al., 2025, Vaswani et al., 2017].Beyond causality, masks are widely used to restrict unwanted interactions in attention, particularly when data is limited in both size and dimensionality. This is especially important in vision models and tasks requiring length generalization [Zaheer et al., 2020, Beltagy et al., 2020, Tay et al., 2020, Child et al., 2019, Cheng et al., 2022a,b, Pang et al., 2019, Yu et al., 2022]. Moreover, masking is a key tool for improving computational efficiency, as the quadratic O(N 2) complexity of self-attention can be reduced by limiting the number of token interactions [Ho et al., 2019, Roy et al., 2021, Yuan et al., 2025]. In this work, we make two key improvements over prior structured initialization methods. First, we propose to initialize an additive attention mask rather than the query and key matrices, which avoids solving for QK and explicitly separates structural priors from content-based attention through the masking mechanism. Second, we show that mask-based initialization can systematically alter the inductive bias of Transformers, particularly their extrapolation behavior on logical and combinatorial tasks. To the best of our knowledge, this effect has not been systematically studied in prior work combining structured initialization and attention masking. 
+
+## 3 Preliminary 
+
+Self-Attention Self-attention is a core component of Transformer models [Vaswani et al., 2017]. Given an input sequence X ∈ RN ×D, self-attention is parameterized by three learnable projection matrices: query WQ ∈ RD×d, key WK ∈ RD×d, and value WV ∈ RD×d. The output of a single attention head is defined as 
+
+A(X) = softmax 
+
+ XW QW ⊤ 
+
+> K
+
+X⊤
+
+√d
+
+
+
+XW V , (1) where the softmax operator acts row-wise on the attention score matrix. In practice, multiple such heads are used in parallel and concatenated to form a multi-head attention layer. 
+
+Minimum-Degree Interpolator The notion of a minimum-degree interpolator (MDI) [Abbe et al., 2024] characterizes an inductive bias where neural networks prefer low-degree structure when fitting data. For Boolean functions f : {± 1}d → R with Fourier expansion 
+
+f (x) = X
+
+> S⊆[d]
+
+ˆf (S)χS (x), χS (x) = Y
+
+> i∈S
+
+xi,
+
+Multiple functions may interpolate the observed data on Ωseen . MDI selects the solution that explains the data using the lowest-order terms, favoring low-degree structure over higher-order interactions. As shown in [Abbe et al., 2024], Transformers have a tendency to favor these low-degree solutions over the true higher-order functions for Boolean tasks such as 2Parity and 3-Bit Majority, representing a substantial limitation in the ability for Transformers to perform extrapolation within logic problems. 
+
+## 4 Methods 
+
+4.1 Encoding Inductive Biases through a Learnable Mask 
+
+For many structured tasks, such as image classification and logical problems, prior knowledge about token interactions is often available. This knowledge can be expressed as a correlation map over 4100000010000 000 0     
+
+> 𝑓 𝒙 = 𝑥 !𝑥 "
+> = −1 ∗ 1 = −1
+> 1010
+> -1 1-1 1-1  1 -1  1
+
+(a) 2Parity           
+
+> 1000000100000000
+> 𝑓 𝒙 = sign(𝑥 !+ 𝑥 "+ 𝑥 #)
+> = sign(−1 + 1 − 1) = −1
+> 1010
+> -1 1-1 1
+
+(b) 3-Bit Majority           
+
+> 000000100
+> -1 11-1
+> 0000
+> 𝑓 𝒙 = 𝑥 !𝑥 "𝑥 #+ 𝑥 "𝑥 #𝑥 %
+> +𝑥 #𝑥 %𝑥 !+ 𝑥 %𝑥 !𝑥 "
+> = 1 − 1 + 1 + 1 = 2
+> 1010111111111
+
+(c) Cyclic3 
+
+> -1  1 -1  1-1  1 1 -1
+
+(a) Logical problems 110000001 0 010       
+
+> 6792
+> 000000
+> 6 7 9 2
+> 67 +92 = 7 + 2 + 10(6 + 9)
+
+(a) Addition            
+
+> 10010010
+> 6792
+> 000000
+> 6 7 9 2
+> 67 ×92 = 7×2 +60×2
+> + 90×7 + (90×60)
+> 11111
+
+(b) Multiplication (b) Arithmetic problems 
+
+Figure 2: Visualization of task-specific mask design. (i) Logical problems. (a) 2Parity encodes pairwise interaction between the first two tokens; (b) 3-Bit Majority emphasizes aggregation over the first three tokens; (c) Cyclic3 captures cyclic triple interactions. (ii) Arithmetic problems. (a) Addition enforces digit-wise interactions between aligned positions; (b) Multiplication encodes structured cross-digit interactions corresponding to partial products. The masks define the interaction structure underlying each task, aligning attention with the functional decomposition. tokens, indicating which interactions should be encouraged or suppressed. Structured initialization methods [Zheng et al., 2025, 2024, Trockman and Kolter, 2023] aim to encode such prior knowledge into self-attention, typically by shaping the initial attention patterns through the query-key matrices. In our approach, we directly encode prior structure as a learnable mask M ∈ RN ×N . The mask is initialized from manually constructed patterns that reflect the underlying problem structure. For example, Figure 2 illustrates how the desired inductive biases for Boolean and arithmetic tasks can be encoded as attention maps, where only relevant tokens (e.g., aligned digits or interacting variables) are allowed to attend. Entries corresponding to desired interactions are assigned active values, while undesired interactions are assigned smaller (more negative) values to suppress them. Through the transformation log σ(M ), this induces a soft, learnable bias on the attention logits, enabling the model to retain the prescribed structure while adapting during training. The full formula is softmax 
+
+ XW QW ⊤  
+
+> KX⊤
+> √d
+
++ log σ(M )
+
+
+
+, where σ(·) denotes the sigmoid function. Since 
+
+log σ(M ) ≤ 0, this selectively down-weights undesired interactions while preserving the standard attention mechanism. During training, M remains learnable and is optimized jointly with the model parameters, allowing the encoded structural prior to persist throughout optimization. 
+
+4.2 Principle for Designing Mask 
+
+Based on the previous mask methods [Vaswani et al., 2017, Duan et al., 2024], which blocks access to certain tokens to prevent spurious correlations and shortcut learning, we hypothesize that properly designed masks can similarly restrict irrelevant interactions in other tasks, particularly in low-data regimes where learning correlations is difficult, thereby improving generalization. To this end, we outline principles for mask-based initialization: the key idea is to encode prior knowledge about which token interactions are relevant for the task, while suppressing spurious correlations. As a simple example, consider the 3-bit majority task and its MDI solution. The non-MDI solution can be expressed as a global summation followed by a sign function, whereas the MDI solution relies on pairwise interaction terms between inputs. Therefore, as shown in Figure 2, we suppress such interaction terms by restricting attention, preventing the model from adopting the MDI solution and more uniform distributed attentions. This induces a structured attention pattern aligned with the underlying 3-Bit Majority algorithm. We visualize the corresponding mask patterns for different tasks in Figure 2, and provide more detailed design principles in Supplementary Materials Section E. 
+
+## 5 Experiments 
+
+In this section, we evaluate our method on Boolean, arithmetic, and image classification tasks. Across these settings, we observe that priors encoded via query-key initialization are easily washed out during optimization, whereas mask-based initialization preserves them more persistently, leading to improved performance. Additional NLP results are provided in Section F. 52Parity Cyclic3 3-Bit Majority ThreeSym 02468Test Loss 2Parity Cyclic3 3-Bit Majority 50 60 70 80 90 100 Test Accuracy (%) Default Structured (SVD) Structured (Opt) Mask Init Figure 3: Test performance on Boolean reasoning tasks under an extrapolation setting. The left panel shows test loss and the right panel shows test accuracy. Mask Init consistently achieves lower loss and higher or comparable accuracy compared to default and QK-based initialization methods, indicating improved extrapolation. Accuracy is not reported for ThreeSym due to its continuous outputs. 
+
+5.1 Boolean Problems 
+
+We evaluate our method on four Boolean tasks under the Generalization on the Unseen (GOTU) setting Abbe et al. [2024]. These tasks are important as they reflect the extrapolation and inductive bias properties of Transformers. Performance on these datasets provides a useful lens for evaluating whether a properly designed initialization, with the correct correlation patterns, can alter extrapolation behavior. For each task, let f denote the ground-truth function and ˜f denote the minimum-degree in-terpolator (MDI), i.e., the lowest-degree function that agrees with f on the seen domain. Visualization and explanation of the initialization pattern can be found at Section E. 
+
+2Parity. f (x) = x0x1, seen domain x0 = 1 or x1 = 1 (i.e., excluding (−1, −1) ). On this domain, 
+
+x0x1 = x0 + x1 − 1, so ˜f (x) = x0 + x1 − 1 (degree 2 → 1). 
+
+Cyclic3. f (x) = P14  
+
+> i=0
+
+xixi+1 xi+2 , seen domain excludes (x0, x 1, x 2) = ( −1, −1, −1) . The first term satisfies x0x1x2 = x0x1 + x1x2 + x2x0 − x0 − x1 − x2 + 1 , so ˜f replaces this cubic term by a quadratic one (degree 3 → 2). 
+
+3-Bit Majority. f (x) = Maj( x0, x 1, x 2) = x0+x1+x2−x0x1x2 
+
+> 2
+
+, seen domain x0 = 1 or x1 = 1 .On this domain, the cubic term x0x1x2 can be rewritten into pairwise terms, yielding ˜f (x) =  
+
+> x0+x1+2 x2−x0x2−x1x2
+> 2
+
+(degree 3 → 2). 
+
+ThreeSym. f (x) = x0x1 − 1.25 x1x2 + 1 .5 x2x0, seen domain x0x1x2 = 1 . On this domain, 
+
+x0x1 → x2, x1x2 → x0, x2x0 → x1, so ˜f (x) = x2 − 1.25 x0 + 1 .5 x1 (degree 2 → 1). Table 1: Test performance across Boolean tasks. Lower loss and higher accuracy indicate better performance. Structured (SVD) and Structured (Opt) denote structured initialization methods based on SVD decomposition [Zheng et al., 2025] and direct query-key optimization [Zheng et al., 2024], respectively. Our constructed mask initialization consistently achieves lower loss, suggesting better preservation of prior structural information during training. Test Loss Test Accuracy (%) Task Default Structured (SVD) Structured (Opt) Mask Init Default Structured (SVD) Structured (Opt) Mask Init 2Parity 1.379 1.737 1.746 0.0029 75.00 75.00 75.00 100.00                         
+
+> Cyclic3 5.648 3.257 3.230 0.0034 87.45 87.48 87.47 99.98
+> 3-Bit Majority 0.509 0.516 0.495 0.0051 87.40 87.40 87.40 100.00
+> ThreeSym 7.621 7.616 7.635 2.9745 ————
+
+Across all tasks, ˜f has strictly lower degree (or simpler structure) than f while matching it on the seen domain. This provides a controlled setting to study whether models follow the MDI bias or whether structural priors can preserve the original higher-order interactions. We use the full dataset 61 10      
+
+> Train Fraction (%)
+> 020 40 60 80 100
+> Test Sequence Accuracy (%)  Multiplication
+> 0.1 110
+> Train Fraction (%)
+> Addition
+> Default Structured (SVD) Structured (Opt) Mask Init
+
+Figure 4: Test sequence accuracy under varying training fractions for multiplication (left) and addition (right). While all methods improve as more data is available, mask initialization achieves significantly faster generalization, especially in low-data regimes. (including both seen and unseen samples) for testing, while training is restricted to the seen subset. From Figure 3 and Table 1, we observe that initialization can indeed influence the inductive bias of Transformers, as the GOTU setting explicitly evaluates extrapolation beyond the training domain. Moreover, even when using the same structural pattern, initialization through the query-key matrices tends to quickly forget the imposed prior during optimization, which leads to poor generalization on unseen data. In contrast, mask-based initialization preserves the prior and enables better extrapolation. 
+
+5.2 Arithmetic Problems 
+
+Another challenging set of problems is arithmetic problems, as these problems are rule-based and require only a small amount of dataset to learn the in-distribution generalization or even out-distribution generalization [McLeish et al., 2024]. However, Neural Networks usually require more dataset than expected to be able to even generalize in distribution [Trask et al., 2018]. Here, we test if using our mask initialization, transformer can do much better on in-distribution generalization. For both tasks, we construct the dataset by enumerating all possible input pairs ( 10 6 combinations) and split into training and test sets, where a fraction is used for training and the remainder for evaluation. 
+
+Addition We evaluate 3-by-3 digit decimal addition in an in-distribution setting, where all operands have exactly three digits. The Transformer predicts the full output sequence in a single forward pass. 
+
+Multiplication We evaluate 3-by-3 digit decimal multiplication under the same setting. Com-pared to addition, multiplication is more challenging as it requires multiple intermediate digit-wise multiplications, carry operations, and the accumulation of partial sums. Table 2: Performance of arithmetic tasks that lower loss and higher accuracy indicate better perfor-mance. Multiplication (Train frac = 3%) Addition (Train frac = 0.4%) Method Seq Acc (%) ↑ Digit Acc (%) ↑ Loss ↓ Seq Acc (%) ↑ Digit Acc (%) ↑ Loss ↓                        
+
+> Default 5.01 70.78 2.27 1.19 40.59 4.51 Structured (SVD) 11.13 74.57 1.77 0.87 38.56 4.59 Structured (Opt) 27.82 82.37 0.85 3.39 49.87 3.40 Mask Init 69.49 94.13 0.20 77.49 93.86 0.23
+
+As shown in Table 2, mask initialization consistently outperforms other methods on both multipli-cation and addition tasks. The advantage is most pronounced in low-data regimes (e.g., addition with frac = 0.4%), where other methods fail to generalize while mask initialization achieves strong sequence-level accuracy. As shown in Figure 4, although all methods improve with more data, mask initialization attains substantially better generalization with fewer training samples. These results indicate that mask initialization accelerates the learning of the underlying algorithmic structure. 75.3 Image Classification 
+
+It is known that spatial priors for vision tasks can be encoded in attention through structured initialization [Zheng et al., 2025]. Following [Zheng et al., 2025], we adopt an impulse filter pattern to initialize our masks (see Supplementary Figure Section H.1 for visualization). In this section, we evaluate three initialization methods on CIFAR10, CIFAR100, and ImageNet100 [Russakovsky et al., 2015, Krizhevsky, 2009a]. For comparison, we adopt the implementation from [Zheng et al., 2025], which provides the most up-to-date codebase. We include these benchmarks to demonstrate that the proposed patterns extend beyond toy settings and remain effective in practical scenarios. Moreover, these datasets align with the primary evaluation domain of prior structured initialization methods. We compare against mimetic initialization [Trockman and Kolter, 2023], which initializes attention close to an identity pattern with noise, reflecting a common structure observed in trained Transformers, and the Impulse method [Zheng et al., 2025], which initializes each attention head to approximate a 
+
+3 × 3 impulse filter, resulting in a diagonal-like attention pattern. Both approaches inject locality as an inductive bias, which has been shown to improve generalization, particularly in low-data regimes. Table 3: Best Top-1 accuracy (%) on vision benchmarks that are all using ViT-T model. Dataset Default Mimetic Impulse Mask Init CIFAR10 94.20 94.80 95.12 95.66 
+
+CIFAR100 74.00 76.80 76.47 77.95 
+
+ImageNet100 83.38 84.38 83.16 85.92 
+
+As shown in Table 3, mask initialization consistently achieves the best performance, with higher accuracy than baseline and structured methods, indicating improved optimization and generalization. Additional visualizations are provided in Sections H.2 and H.3. 
+
+## 6 Discussion 
+
+6.1 Persistence of Prior Knowledge during Optimization 
+
+In this section, we explain why mask-based initialization preserves prior information better than query–key initialization. From a gradient perspective, we show that QK-based methods induce large updates that wash out priors, supported by empirical visualizations. An advantage of additive masks over direct QK initialization is their robustness to imperfect structural priors. A binary mask only specifies which interactions are allowed, while the model still learns how to distribute attention among them, making it less sensitive to misspecification. In contrast, QK -based initialization often treats allowed interactions more uniformly, reducing flexibility. Moreover, mask-based priors are more persistent during optimization. As an explicit bias in the attention logits, the structural information remains directly present in the computation, rather than being implicitly absorbed into evolving query-key representations. To verify this intuition, we present the following proposition: 
+
+Theorem 1. Consider a single attention row with query q ∈ Rd, keys {kj }Nj=1 , and mask parameters 
+
+{mj }Nj=1 . Define the softmax function working on the attention score as 
+
+pj = exp( q⊤kj /√d + log σ(mj )) 
+
+PNℓ=1 exp( q⊤kℓ/√d + log σ(mℓ)) .
+
+Then, for any i, j ∈ { 1, . . . , N },
+
+∂p i
+
+∂q = pi
+
+√d ki −
+
+> N
+
+X
+
+> ℓ=1
+
+pℓkℓ
+
+!
+
+, (2) 
+
+∂p i
+
+∂k j
+
+= 1
+
+√d pi(δij − pj )q, (3) 
+
+∂p i
+
+∂m j
+
+= pi(δij − pj )σ(−mj ). (4) 8Pattern 
+
+> Mask Init Structured(SVD) Structured(Opt)
+
+Pre-Train Post-Train Pattern Pre-Train Post-Train 
+
+# (a) 2Parity (c) Addition 
+
+Pattern Pre-Train Post-Train 
+
+# (b) 3-Bit Majority 
+
+> Mask Init Structured(SVD) Structured(Opt)
+> Mask Init Structured(SVD) Structured(Opt)
+
+Figure 5: Comparison of attention patterns before and after training across initialization methods for Head 0 at Layer 0. Mask-based initialization preserves the target interaction structure, whereas QK-based structured initialization fails to retain it after training, even with identical initial patterns, highlighting the importance of parameterization. 
+
+Corollary 1. Under the setting of Theorem 1, suppose ∥q∥2 ≤ Bq and ∥kj ∥2 ≤ Bk for all j. Then 
+
+∂p i
+
+∂q 2
+
+≤ 2piBk
+
+√d , (5) 
+
+∂p i
+
+∂k j 2
+
+≤ pi|δij − pj |Bq
+
+√d ≤ piBq
+
+√d , (6) 
+
+∂p i
+
+∂m j
+
+≤ pi|δij − pj |σ(−mj ) ≤ pi. (7) Notably, since the mask is added to the attention logits, the query-key gradients retain the same form as in vanilla self-attention, and Theorem 1 also applies without the mask. However, encoding structure via QK ⊤ requires careful control of query and key scales, which can be large in practice [Zheng et al., 2025]. Because attention gradients scale with ∥q∥2 and ∥k∥2, large feature norms are possible to induce large updates, and may update fast and override the initialized prior. In contrast, additive masking decouples structural bias from content similarity and does not amplify gradients through feature scales. Its gradients are further moderated by the sigmoid factor σ(−m) ≤ 1, leading to more stable updates. As a result, mask-based priors will update slower than qk-based initialization and could preserve the prior more stable. Proofs can be found at Section C and Section D. Comparing structured initialization with mask-based priors, we find that masks preserve inductive bias more effectively during training. As shown in Section 6.1, QK-based methods are constrained by the low-rank structure of self-attention, leading to poor initialization of sparse patterns (e.g., (c)) and structural degradation over training (e.g., (a)). In contrast, mask-based initialization maintains the intended interaction structure, resulting in significantly better extrapolation. 
+
+## 7 Conclusion and Limitations 
+
+We study whether the inductive bias of Transformer attention can be steered when its default bias leads to systematic extrapolation errors. Boolean GOTU tasks provide a controlled setting, where Transformers fit the seen domain but converge to minimum-degree solutions that fail on unseen inputs. Our results show that this behavior depends not only on the attention mechanism itself, but also on how structural priors are represented. We compare two ways of injecting the same interaction prior. QK-based initialization encodes it indirectly through content-dependent projections, which can match the desired pattern at initialization but may be repurposed during training. In contrast, mask-based initialization places the prior directly as an additive attention-logit bias, decoupling it from content similarity and making it more persistent during optimization. Empirically, mask-based priors improve extrapolation on Boolean tasks, shifting models away from minimum-degree solutions toward the desired inductive bias. They also improve data efficiency on 9arithmetic tasks and remain competitive on vision and language benchmarks. Overall, additive masks provide a simple mechanism for encoding persistent inductive bias in Transformers. 
+
+Limitations. Our approach assumes access to a meaningful interaction prior, which is natural in structured domains such as logic, arithmetic, and vision, but less clear in domains such as language. This is in effect an oracle assumption which allows us to demonstrate that useful inductive priors may be encoded within transformers using masks, but this may not be known in advance for all tasks. Designing effective masks may require knowledge of domain characteristics, and learning priors from data or pretrained models for general problems remains an important direction for future work. 10 References 
+
+Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N Gomez, Łukasz Kaiser, and Illia Polosukhin. Attention is all you need. Advances in neural information processing systems , 30, 2017. Alec Radford, Jeff Wu, Rewon Child, David Luan, Dario Amodei, and Ilya Sutskever. Language models are unsupervised multitask learners. 2019. Daya Guo, Dejian Yang, Haowei Zhang, Junxiao Song, Peiyi Wang, Qihao Zhu, Runxin Xu, Ruoyu Zhang, Shirong Ma, Xiao Bi, et al. Deepseek-r1: Incentivizing reasoning capability in llms via reinforcement learning. arXiv preprint arXiv:2501.12948 , 2025. Alexey Dosovitskiy, Lucas Beyer, Alexander Kolesnikov, Dirk Weissenborn, Xiaohua Zhai, Thomas Unterthiner, Mostafa Dehghani, Matthias Minderer, Georg Heigold, Sylvain Gelly, et al. An image is worth 16x16 words: Transformers for image recognition at scale. arXiv preprint arXiv:2010.11929 , 2020. Ze Liu, Yutong Lin, Yue Cao, Han Hu, Yixuan Wei, Zheng Zhang, Stephen Lin, and Baining Guo. Swin transformer: Hierarchical vision transformer using shifted windows. In Proceedings of the IEEE/CVF international conference on computer vision , pages 10012–10022, 2021. William Peebles and Saining Xie. Scalable diffusion models with transformers. In Proceedings of the IEEE/CVF international conference on computer vision , pages 4195–4205, 2023. Emmanuel Abbe, Samy Bengio, Aryo Lotfi, and Kevin Rizk. Generalization on the unseen, logic reasoning and degree curriculum. Journal of Machine Learning Research , 25(331):1–58, 2024. Vincent Sitzmann, Julien Martel, Alexander Bergman, David Lindell, and Gordon Wetzstein. Im-plicit neural representations with periodic activation functions. Advances in neural information processing systems , 33:7462–7473, 2020. David B Lindell, Dave Van Veen, Jeong Joon Park, and Gordon Wetzstein. Bacon: Band-limited co-ordinate networks for multiscale scene representation. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , pages 16252–16262, 2022. Siddharth Krishna Kumar. On weight initialization in deep neural networks. arXiv preprint arXiv:1704.08863 , 2017. Kaiming He, Xiangyu Zhang, Shaoqing Ren, and Jian Sun. Delving deep into rectifiers: Surpassing human-level performance on imagenet classification. In Proceedings of the IEEE international conference on computer vision , pages 1026–1034, 2015. Yiping Ji, James Martens, Jianqiao Zheng, Ziqin Zhou, Peyman Moghadam, Xinyu Zhang, Hemanth Saratchandran, and Simon Lucey. Cutting the skip: Training residual-free transformers. arXiv preprint arXiv:2510.00345 , 2025. Jianqiao Zheng, Xueqian Li, Hemanth Saratchandran, and Simon Lucey. Structured initialization for vision transformers. arXiv preprint arXiv:2505.19985 , 2025. Asher Trockman and J Zico Kolter. Mimetic initialization of self-attention layers. In International Conference on Machine Learning , pages 34456–34468. PMLR, 2023. Shaoxiong Duan, Yining Shi, and Wei Xu. Attention bias as an inductive bias: How to teach transformers simple arithmetic. In The 4th Workshop on Mathematical Reasoning and AI at NeurIPS’24 , 2024. URL https://openreview.net/forum?id=Ei4bzOt8NG .Xavier Glorot and Yoshua Bengio. Understanding the difficulty of training deep feedforward neural networks. In Yee Whye Teh and Mike Titterington, editors, Proceedings of the Thirteenth International Conference on Artificial Intelligence and Statistics , volume 9 of Proceedings of Machine Learning Research , pages 249–256, Chia Laguna Resort, Sardinia, Italy, 13–15 May 2010. PMLR. URL https://proceedings.mlr.press/v9/glorot10a.html .Zhiqiu Xu, Yanjie Chen, Kirill Vishniakov, Yida Yin, Zhiqiang Shen, Trevor Darrell, Lingjie Liu, and Zhuang Liu. Initializing models with larger ones. arXiv preprint arXiv:2311.18823 , 2023. 11 Mohammad Samragh, Iman Mirzadeh, Keivan Alizadeh Vahid, Fartash Faghri, Minsik Cho, Moin Nabi, Devang Naik, and Mehrdad Farajtabar. Scaling smart: Accelerating large language model pre-training with small model initialization. arXiv preprint arXiv:2409.12903 , 2024. Mohammad Samragh, Mehrdad Farajtabar, Sachin Mehta, Raviteja Vemulapalli, Fartash Faghri, Devang Naik, Oncel Tuzel, and Mohammad Rastegari. Weight subcloning: direct initialization of transformers using larger pretrained ones. arXiv preprint arXiv:2312.09299 , 2023. Peihao Wang, Wenqing Zheng, Tianlong Chen, and Zhangyang Wang. Anti-oversmoothing in deep vision transformers via the fourier domain analysis: From theory to practice. In International Conference on Learning Representations .Ziqian Zhong and Jacob Andreas. Algorithmic capabilities of random transformers. Advances in Neural Information Processing Systems , 37:104357–104382, 2024. Denys Pushkin, Raphaël Berthier, and Emmanuel Abbe. On the minimal degree bias in generalization on the unseen for non-boolean functions. In Forty-first International Conference on Machine Learning .Orit Davidovich and Zohar Ringel. Algorithmic capture, computational complexity, and inductive bias of infinite transformers. arXiv preprint arXiv:2603.11161 , 2026. Damien Teney, Liangze Jiang, Hemanth Saratchandran, and Simon Lucey. Can transformers really do it all? on the compatibility of inductive biases across tasks. In The Fourteenth International Conference on Learning Representations , 2026. URL https://openreview.net/forum?id= B08MW8oDqN .Zachary Shinnick, Liangze Jiang, Hemanth Saratchandran, Damien Teney, and Anton van den Hengel. Can you learn to see without images? procedural warm-up for vision transformers, 2026. URL 
+
+https://arxiv.org/abs/2511.13945 .Jianqiao Zheng, Xueqian Li, and Simon Lucey. Structured initialization for attention in vision transformers. arXiv preprint arXiv:2404.01139 , 2024. Qingyu Yin, Xuzheng He, Xiang Zhuang, Yu Zhao, Jianhua Yao, Xiaoyu Shen, and Qiang Zhang. StableMask: Refining causal masking in decoder-only transformer. In Ruslan Salakhutdinov, Zico Kolter, Katherine Heller, Adrian Weller, Nuria Oliver, Jonathan Scarlett, and Felix Berkenkamp, editors, Proceedings of the 41st International Conference on Machine Learning , volume 235 of 
+
+Proceedings of Machine Learning Research , pages 57033–57052. PMLR, 21–27 Jul 2024. URL 
+
+https://proceedings.mlr.press/v235/yin24a.html .Xiaohuan Pei, Tao Huang, YanXiang Ma, and Chang Xu. Rethinking causal mask attention for vision-language inference. arXiv preprint arXiv:2505.18605 , 2025. Manzil Zaheer, Guru Guruganesh, Kumar Avinava Dubey, Joshua Ainslie, Chris Alberti, Santiago Ontanon, Philip Pham, Anirudh Ravula, Qifan Wang, Li Yang, et al. Big bird: Transformers for longer sequences. Advances in neural information processing systems , 33:17283–17297, 2020. Iz Beltagy, Matthew E Peters, and Arman Cohan. Longformer: The long-document transformer. 
+
+arXiv preprint arXiv:2004.05150 , 2020. Yi Tay, Dara Bahri, Liu Yang, Donald Metzler, and Da-Cheng Juan. Sparse sinkhorn attention. In 
+
+International conference on machine learning , pages 9438–9447. PMLR, 2020. Rewon Child, Scott Gray, Alec Radford, and Ilya Sutskever. Generating long sequences with sparse transformers. arXiv preprint arXiv:1904.10509 , 2019. Bowen Cheng, Ishan Misra, Alexander G Schwing, Alexander Kirillov, and Rohit Girdhar. Masked-attention mask transformer for universal image segmentation. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , pages 1290–1299, 2022a. Bowen Cheng, Ishan Misra, Alexander G. Schwing, Alexander Kirillov, and Rohit Girdhar. Masked-attention mask transformer for universal image segmentation. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , pages 1290–1299, June 2022b. 12 Yanwei Pang, Jin Xie, Muhammad Haris Khan, Rao Muhammad Anwer, Fahad Shahbaz Khan, and Ling Shao. Mask-guided attention network for occluded pedestrian detection. In Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV) , October 2019. Qihang Yu, Huiyu Wang, Siyuan Qiao, Maxwell Collins, Yukun Zhu, Hartwig Adam, Alan Yuille, and Liang-Chieh Chen. k-means mask transformer. In Shai Avidan, Gabriel Brostow, Moustapha Cissé, Giovanni Maria Farinella, and Tal Hassner, editors, Computer Vision – ECCV 2022 , pages 288–307, Cham, 2022. Springer Nature Switzerland. ISBN 978-3-031-19818-2. Jonathan Ho, Nal Kalchbrenner, Dirk Weissenborn, and Tim Salimans. Axial attention in multidi-mensional transformers. arXiv preprint arXiv:1912.12180 , 2019. Aurko Roy, Mohammad Saffar, Ashish Vaswani, and David Grangier. Efficient content-based sparse attention with routing transformers. Transactions of the Association for Computational Linguistics ,9:53–68, 2021. Jingyang Yuan, Huazuo Gao, Damai Dai, Junyu Luo, Liang Zhao, Zhengyan Zhang, Zhenda Xie, Yuxing Wei, Lean Wang, Zhiping Xiao, et al. Native sparse attention: Hardware-aligned and natively trainable sparse attention. In Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , pages 23078–23097, 2025. Sean McLeish, Arpit Bansal, Alex Stein, Neel Jain, John Kirchenbauer, Brian R Bartoldson, Bhavya Kailkhura, Abhinav Bhatele, Jonas Geiping, Avi Schwarzschild, et al. Transformers can do arithmetic with the right embeddings. Advances in Neural Information Processing Systems , 37: 108012–108041, 2024. Andrew Trask, Felix Hill, Scott E Reed, Jack Rae, Chris Dyer, and Phil Blunsom. Neural arithmetic logic units. Advances in neural information processing systems , 31, 2018. Olga Russakovsky, Jia Deng, Hao Su, Jonathan Krause, Sanjeev Satheesh, Sean Ma, Zhiheng Huang, Andrej Karpathy, Aditya Khosla, Michael Bernstein, Alexander C. Berg, and Li Fei-Fei. ImageNet Large Scale Visual Recognition Challenge. International Journal of Computer Vision (IJCV) , 115 (3):211–252, 2015. doi: 10.1007/s11263-015-0816-y. Alex Krizhevsky. Learning multiple layers of features from tiny images. Technical report, 2009a. Hemanth Saratchandran, Jianqiao Zheng, Yiping Ji, Wenbo Zhang, and Simon Lucey. Rethinking attention: Polynomial alternatives to softmax in transformers. arXiv preprint arXiv:2410.18613 ,2024. Ronen Eldan and Yuanzhi Li. Tinystories: How small can language models be and still speak coherent english? arXiv preprint arXiv:2305.07759 , 2023. Stephen Merity, Caiming Xiong, James Bradbury, and Richard Socher. Pointer sentinel mixture models. arXiv preprint arXiv:1609.07843 , 2016. Alex Krizhevsky. Learning multiple layers of features from tiny images. 2009b. URL https: //api.semanticscholar.org/CorpusID:18268744 .Jia Deng, Wei Dong, Richard Socher, Li-Jia Li, Kai Li, and Li Fei-Fei. Imagenet: A large-scale hier-archical image database. In 2009 IEEE Conference on Computer Vision and Pattern Recognition ,pages 248–255, 2009. doi: 10.1109/CVPR.2009.5206848. 13 A Ablation Study 
+
+A.1 Does the Gain Come From Additional Mask Parameters? 
+
+We ablate structured mask initialization using an all-zero initialized learnable mask, corresponding to a neutral bias over interactions. As shown in Table 4, it matches the vanilla Transformer and fails to escape the extrapolation plateau, indicating that the gains stem from the structured prior and its persistence during optimization. Table 4: Ablation on mask initialization. Without structured initialization, the mask performs similarly to the default Transformer, indicating that gains stem from the structured prior rather than the masking mechanism. All-zero initialization corresponds to a neutral mask with no preference over token interactions. Default Mask (All-zero Init.) Mask (Pattern Init.) Task Loss ↓ Acc (%) ↑ Loss ↓ Acc (%) ↑ Loss ↓ Acc (%) ↑
+
+2Parity 1.38 75.00 1.38 75.00 0.02 100.00 
+
+Cyclic3 5.65 87.47 2.53 87.46 0.00 99.98 
+
+3-Bit Majority 0.51 87.4 0.50 87.4 0.01 100.00 
+
+ThreeSym 7.62 — 7.62 — 2.97 —
+
+A.2 Why Not Just Fix the Mask? 
+
+Another natural question is whether learnability is necessary, as fixed masks can already perform well on structured tasks such as Boolean and arithmetic problems. However, in more realistic settings where only a rough inductive bias is available and the exact interaction structure is unknown, learnability becomes crucial. A learnable mask allows the model to adapt the prior during training, enabling it to refine or correct imperfect initial patterns and achieve better performance. From Table 5, we observe that fixed masks can perform well when the prior aligns closely with the task structure, as in CIFAR100, which contains 100 classes with only 500 images per class. In this setting, local and fine-grained features are particularly important, making a fixed locality-based prior effective. However, their performance degrades on CIFAR10 and ImageNet100, which exhibit different charac-teristics. CIFAR10 has only 10 classes with 5,000 images per class, encouraging the model to rely more on global semantic features rather than purely local patterns. ImageNet100 further increases complexity, with higher-resolution images (typically 224 × 224 ) and more diverse spatial structures, requiring more flexible and long-range interactions. In these cases, a fixed prior is insufficient to capture the underlying structure. In contrast, learnable masks consistently achieve strong performance across all datasets. This suggests that while fixed masks rely on a specific inductive bias, learnable masks can adapt to dataset-dependent structures, providing robustness when the true prior is unknown or only approximately specified. Table 5: Best Top-1 accuracy (%) on vision benchmarks. Values in parentheses denote improvement over Default. Dataset Default Mimetic Impulse Fixed Mask Mask Init CIFAR10 94.20 94.80 (+0.60) 95.12 (+0.92) 94.16 (-0.04) 95.66 (+1.46) 
+
+CIFAR100 74.00 76.80 (+2.80) 76.47 (+2.47) 78.77 (+4.77) 77.95 (+3.95) ImageNet100 83.38 84.38 (+1.00) 83.16 (-0.22) 81.78 (-1.60) 85.82 (+2.44) 
+
+## B Additive Mask v.s. Hadamard Product Mask 
+
+A natural question is whether a Hadamard-product mask, σ(M ) ◦ softmax 
+
+ XW QW ⊤ 
+
+> KX⊤
+> √d
+
+
+
+, could achieve a similar effect. We argue that the additive formulation is more stable in terms of both gradient 14 norms and attention behavior. First, additive masking preserves softmax normalization, ensuring that attention weights remain a valid probability distribution, whereas multiplicative masking directly rescales them. Second, multiplicative masking may lead to degenerate cases: if σ(M ) is close to zero across a row, attention can collapse, resulting in vanishing weights and unstable gradients. In contrast, additive masking operates before normalization, allowing softmax to renormalize suppressed interactions and thus improving stability. We formalize this intuition in the following theorem. 
+
+Proposition 1. Let softmax : RN ×N → RN ×N denote the row-wise matrix softmax map, and let ∇softmax( A) denote its Jacobian at A ∈ RN ×N and the Hadamard-product masking map 
+
+H(A, M ) = σ(M ) ◦ softmax( A). Then the following bounds hold for the Frobenius norms: 
+
+∥softmax( A)∥F ≥ 1 ∥σ(M ) ◦ softmax( A)∥F ≥ 0, (8) 
+
+∥∇ A softmax( A)∥F ≥ ∥∇ A(σ(M ) ◦ softmax( A)) ∥F ≥ 0. (9) This proposition, inspired by [Saratchandran et al., 2024], highlights that additive masking preserves non-trivial lower bounds on both attention and gradient norms, preventing collapse and ensuring stable optimization. While both formulations may achieve similar empirical performance, the additive parameterization provides a more robust and reliable mechanism for controlling attention. 
+
+## C Proof of Proposition 1 
+
+Proof. For the Hadamard-product mask H(A, M ) = σ(M ) ◦ softmax( A), the degenerate case occurs when σ(M ) is arbitrarily close to 0 ∈ RN ×N . In this case, every entry of H(A, M ) can be arbitrarily close to zero, so the Frobenius norm admits the trivial lower bound 0.It remains to show that the row-wise softmax attention cannot have zero Frobenius norm. We write both the vanilla attention logits and the additively masked logits as a generic matrix A = ( aij )i,j ∈[N ].For the i-th row, define 
+
+pj = eaij 
+
+PNℓ=1 eaiℓ 
+
+, j = 1 , . . . , N. 
+
+Then pj ≥ 0 and PNj=1 pj = 1 . Hence, by Cauchy–Schwarz, 
+
+∥softmax( Ai)∥22 =
+
+> N
+
+X
+
+> j=1
+
+p2 
+
+> j
+
+= ∥p∥22 ≥ ⟨p, 1⟩2
+
+∥1∥22
+
+= 1
+
+N .
+
+Summing over all rows gives 
+
+∥softmax( A)∥2 
+
+> F
+
+=
+
+> N
+
+X
+
+> i=1
+
+∥softmax( Ai)∥22 ≥
+
+> N
+
+X
+
+> i=1
+
+1
+
+N = 1 .
+
+Therefore, 
+
+∥softmax( A)∥F ≥ 1.
+
+It remains to prove the gradient inequality. Let 
+
+P = softmax( A), H(A, M ) = σ(M ) ◦ P. 
+
+For fixed M , the derivative of H with respect to A satisfies 
+
+∂H ij 
+
+∂A ik 
+
+= σ(Mij ) ∂P ij 
+
+∂A ik 
+
+,
+
+and derivatives across different rows are zero, as in the standard row-wise softmax. Since 
+
+0 ≤ σ(Mij ) ≤ 1,
+
+we have entrywise 
+
+∂H ij 
+
+∂A ik 
+
+≤ ∂P ij 
+
+∂A ik 
+
+.
+
+Therefore, summing over all entries of the Jacobian gives 
+
+∥∇ AH(A, M )∥2 
+
+> F
+
+≤ ∥∇ Asoftmax( A)∥2 
+
+> F
+
+.
+
+Taking square roots yields 
+
+∥∇ A(σ(M ) ◦ softmax( A)) ∥F ≤ ∥∇ A softmax( A)∥F .
+
+This completes the proof. 15 D Proof of Theorem 1 and Corollary 1 
+
+Theorem 1. Consider a single attention row with query q ∈ Rd, keys {kj }Nj=1 , and mask parameters 
+
+{mj }Nj=1 . Define the softmax function working on the attention score as 
+
+pj = exp( q⊤kj /√d + log σ(mj )) 
+
+PNℓ=1 exp( q⊤kℓ/√d + log σ(mℓ)) .
+
+Then, for any i, j ∈ { 1, . . . , N },
+
+∂p i
+
+∂q = pi
+
+√d ki −
+
+> N
+
+X
+
+> ℓ=1
+
+pℓkℓ
+
+!
+
+, (10) 
+
+∂p i
+
+∂k j
+
+= 1
+
+√d pi(δij − pj )q, (11) 
+
+∂p i
+
+∂m j
+
+= pi(δij − pj )σ(−mj ). (12) 
+
+Proof. We consider a single attention row with 
+
+pj =exp 
+
+
+
+sj /√d + log σ(mj )
+
+PNℓ=1 exp 
+
+
+
+sℓ/√d + log σ(mℓ)
+
+ .
+
+Let 
+
+zj = sj /√d + log σ(mj ).
+
+Then p = softmax( z), and the standard softmax derivative gives 
+
+∂p i
+
+∂z j
+
+= pi(δij − pj ).
+
+By the chain rule, we have 
+
+∂z j
+
+∂q = 1
+
+√d kj , ∂z j
+
+∂k j
+
+= 1
+
+√d q, ∂z j
+
+∂m j
+
+= σ(−mj ).
+
+Combining these yields 
+
+∂p i
+
+∂q =
+
+> N
+
+X
+
+> j=1
+
+∂p i
+
+∂z j
+
+∂z j
+
+∂q = pi
+
+√d ki −
+
+> N
+
+X
+
+> ℓ=1
+
+pℓkℓ
+
+!
+
+,∂p i
+
+∂k j
+
+= 1
+
+√d pi(δij − pj )q, 
+
+and ∂p i
+
+∂m j
+
+= pi(δij − pj )σ(−mj ),
+
+which completes the proof. 
+
+Corollary 1. Under the setting of Theorem 1, suppose ∥q∥2 ≤ Bq and ∥kj ∥2 ≤ Bk for all j. Then 
+
+∂p i
+
+∂q 2
+
+≤ 2piBk
+
+√d , (13) 
+
+∂p i
+
+∂k j 2
+
+≤ pi|δij − pj |Bq
+
+√d ≤ piBq
+
+√d , (14) 
+
+∂p i
+
+∂m j
+
+≤ pi|δij − pj |σ(−mj ) ≤ pi. (15) 16 Proof. From Theorem 1, we have 
+
+∂p i
+
+∂q = pi
+
+√d ki −
+
+> N
+
+X
+
+> ℓ=1
+
+pℓkℓ
+
+!
+
+.
+
+Assuming ∥kj ∥2 ≤ Bk for all j, we bound by using triangular inequality and ∀ℓ ∈ [N ], p ℓ ≥
+
+0, PNℓ=1 pℓ = 1 : NX
+
+> ℓ=1
+
+pℓkℓ
+
+> 2
+
+≤
+
+> N
+
+X
+
+> ℓ=1
+
+pℓ∥kℓ∥2 ≤
+
+> N
+
+X
+
+> ℓ=1
+
+pℓBk = Bk,
+
+which implies (By triangular inequality) 
+
+ki −
+
+> N
+
+X
+
+> ℓ=1
+
+pℓkℓ
+
+> 2
+
+≤ ∥ ki∥2 +
+
+> N
+
+X
+
+> ℓ=1
+
+pℓkℓ
+
+> 2
+
+≤ 2Bk.
+
+Therefore, 
+
+∂p i
+
+∂q 2
+
+= pi
+
+√d ki −
+
+> N
+
+X
+
+> ℓ=1
+
+pℓkℓ
+
+!
+
+> 2
+
+= |pi|√d ki −
+
+> N
+
+X
+
+> ℓ=1
+
+pℓkℓ
+
+!
+
+> 2
+
+≤ 2piBk
+
+√d .
+
+Similarly, using ∥q∥2 ≤ Bq , we obtain 
+
+∂p i
+
+∂k j 2
+
+= 1
+
+√d pi|δij − pj |∥ q∥2 ≤ piBq
+
+√d .
+
+Finally, since σ(−mj ) ≤ 1 and |δij − pj | ≤ 1, we have 
+
+∂p i
+
+∂m j
+
+≤ pi,
+
+which completes the proof. 
+
+## E Design of Mask Pattern 
+
+In this section, we outline the key principles for designing effective mask-based initialization. Before presenting the design principles, we first note that low-order interactions, such as pairwise terms 
+
+xixj , can be easily represented by shallow neural networks. In particular, it is well known that a two-layer MLP can express functions such as XOR, indicating that modeling such interactions does not require deep architectural complexity. This observation suggests that the role of attention can choose not to represent these polynomial interactions directly, but rather to select which variables should interact. However, prior work [Abbe et al., 2024] failure indicates that Transformers may rely on spurious correlations that fit the training data, rather than recovering the underlying structure. Therefore, by explicitly controlling token-wise interactions through the attention mask, we can guide the model to construct the desired extrapolation property in principle. 
+
+Design Principles for Mask Initialization. Mask-based initialization is guided by the following principles. 
+
+(1) Task-aligned interaction. The mask enforces attention to capture task-relevant interactions by restricting attention to meaningful variable relationships. In particular, the mask structure should align with the functional decomposition of the target task. 
+
+(2) Suppression of shortcut solutions. The mask suppresses spurious or low-order shortcut solutions, such as MDI-style interactions, which can fit the training data but fail to generalize. 
+
+(3) Multi-head specialization. Each attention head can be viewed as a separate operator that captures different types of interactions. By allowing different heads to focus on distinct patterns and combining them through concatenation, the model can represent more complex structures. 17 (4) Layer-wise composition. While a single layer defines local interaction patterns, deeper layers enable the composition of these interactions into more complex functions. By designing masks across layers, the model can progressively construct higher-order dependencies from simpler ones. These principles define a structured way to control the interaction graph of the model, guiding it toward the desired computation. 
+
+Task-specific Mask Design. We illustrate how the proposed design principles translate into concrete mask constructions across different tasks. For Boolean cases: 
+
+2Parity. For 2Parity, the target depends only on the pairwise interaction x0x1. Following Principle (1) 
+
+and Principle (2) , we allow attention only between x0 and x1, while suppressing all other interactions. This explicitly selects the correct computation path and prevents spurious correlations. 
+
+3-Bit Majority. For 3-Bit Majority, the target is determined by aggregation rather than pairwise products. Following Principle (2) , we suppress off-diagonal interactions to avoid MDI-style shortcuts, encouraging the model to capture the intended global structure. 
+
+Cyclic3. Cyclic3 involves higher-order cyclic interactions of the form xixi+1 xi+2 . Following 
+
+Principle (4) , we construct these interactions through layer-wise composition of structured local connections, rather than encoding them directly. 
+
+ThreeSym. ThreeSym can be decomposed into a sum of three pairwise parity terms. Following 
+
+Principle (2) and Principle (3) , we assign each attention head a 2Parity-style mask corresponding to one pairwise interaction. The outputs are then combined via head concatenation, enabling the model to represent the full function. For Arithmetic problems : 
+
+Addition. Addition decomposes into digit-wise operations. Following Principle (1) , Principle (3) , and Principle (4) , we allow attention only between corresponding digit positions across the two numbers, while suppressing unrelated interactions. In addition, different heads can capture complementary aspects of the computation, such as digit-wise addition and carry interactions. This mirrors the underlying algorithm and supports carry propagation through subsequent layers. 
+
+Multiplication. Multiplication requires pairwise interactions between digits followed by aggrega-tion. Following Principle (1) , Principle (3) , and Principle (4) , we allow structured cross-number interactions while leveraging multiple heads to capture different partial products, which are then combined to realize the full computation. Furthermore, deeper layers enable the composition of these interactions, implicitly modeling carry propagation and addition. 18 0 4 9 14 
+
+Key token 
+
+04914 
+
+> 2parity
+
+L0 H1 
+
+0 4 9 14 
+
+Key token 
+
+04914 
+
+L0 H2 
+
+0 4 9 14 
+
+Key token 
+
+04914 
+
+L0 H3 
+
+0 4 9 14 
+
+Key token 
+
+04914 
+
+> threesym
+
+0 4 9 14 
+
+Key token 
+
+04914 
+
+0 4 9 14 
+
+Key token 
+
+04914 
+
+0 4 9 14 
+
+Key token 
+
+04914 
+
+> Majority
+
+0 4 9 14 
+
+Key token 
+
+04914 
+
+0 4 9 14 
+
+Key token 
+
+04914 
+
+0 4 9 14 
+
+Key token 
+
+04914 
+
+> Cyclic
+
+0 4 9 14 
+
+Key token 
+
+04914 
+
+0 4 9 14 
+
+Key token 
+
+04914 
+
+0 1 2 3 4 5
+
+Key token 
+
+012345
+
+> Addition
+
+0 1 2 3 4 5
+
+Key token 
+
+012345
+
+0 1 2 3 4 5
+
+Key token 
+
+012345
+
+0 1 2 3 4 5
+
+Key token 
+
+012345
+
+> Multiplication
+
+0 1 2 3 4 5
+
+Key token 
+
+012345
+
+0 1 2 3 4 5
+
+Key token 
+
+012345
+
+10.0 
+
+7.5 
+
+5.0 
+
+2.5 
+
+0.0 2.5 5.0 7.5 10.0 
+
+> Initial mask logit
+
+Figure 6: Initial mask logits for different tasks. Each row corresponds to a task and each column shows different attention heads at the first layer. 19 F Wiki-text and Tiny-stories 
+
+Another major application of Transformers is natural language processing (NLP). Since self-attention already provides a strong inductive bias for modeling token dependencies[Guo et al., 2025, Vaswani et al., 2017], there is no clear predefined structural pattern for initialization. Therefore, for these tasks, we initialize a full-rank learnable attention mask using causal relative distance. Specifically, for each head we set Mij = − max( i − j, 0) , encouraging stronger attention to nearby past tokens. The mask is incorporated as an additive bias via log σ(sM ) (with s = 10 ), and remains learnable during training to adapt this inductive bias. As shown in Figure 7 and Table 6, mask initialization yields consistent, albeit modest, improve-ments, achieving lower perplexity and higher accuracy on both TinyStories [Eldan and Li, 2023] and WikiText-2 [Merity et al., 2016]. It also converges faster in early training while maintaining comparable final performance, indicating improved optimization without degrading generalization. 500 1000 1500 2000 2500 3000 Training Step 2 × 10 2      
+
+> 3 × 10 2
+> Test PPL
+> Wikitext
+> 1000 2000 3000 4000 5000 Training Step 1.2 × 10 1
+> 1.4 × 10 1
+> 1.6 × 10 1
+> 1.8 × 10 1
+> 2 × 10 1
+> 2.2 × 10 1
+> 2.4 × 10 1
+> Test PPL
+> TinyStories
+> Default Mask Init Mimetic
+
+Figure 7: Training curves on TinyStories (top) and WikiText-2 (bottom). Table 6: Perplexity (PPL) comparison. Lower is better. 
+
+Dataset Setting Val PPL Test PPL 
+
+Wikitext (3000 steps) Default 172.78 181.91 Mask Init 166.76 179.70 
+
+Mimetic 178.34 188.87 TinyStories (5000 steps) Default 10.42 10.49 Mask Init 10.40 10.48 
+
+Mimetic 10.64 10.60 From the visualization of the mask before and after training (see Figure 8), the lower-triangular structure becomes noticeably flatter. This indicates that the model expands its effective receptive field beyond strictly local attention. Crucially, this demonstrates that mask-based priors are both persistent and adaptable. This also suggests that, compared to other tasks, NLP tasks rely less on explicit token-level interaction patterns and more on latent feature interactions introduced by query–key matrices. 20 L0 H0 
+
+> TinyStories Init
+> TinyStories Trained
+> L0 H0
+> WikiText Init
+> WikiText Trained
+> L1 H0
+> L1 H0
+> L2 H0
+> L2 H0
+> L3 H0
+> L3 H0  60
+> 50
+> 40
+> 30
+> 20
+> 10
+> 0mask_m
+
+Figure 8: Relative mask bias before and after training on TinyStories and WikiText. The lower-triangular structure is smoothed across layers, indicating that there is no preference for particular interactions in NLP tasks. 
+
+## G Experiment Details 
+
+In this section, we provide a detailed description of the experimental setup. All experiments are conducted on a single NVIDIA A100 GPU (40GB).. 
+
+G.1 Boolean Problems 
+
+For Boolean tasks, we build our implementation upon the GOTU repository 1, with additional modifications such as incorporating a learning rate scheduler to improve convergence speed. The Structured (Opt) initialization is based on the official implementation 2, which optimizes the QK 
+
+matrices directly via gradient descent, instead of using SVD-based decomposition. The detailed information is shown at Table 7. For mask initialization, we choose open positions = 10 and close positions = -10. Table 7: Training setup for Boolean tasks. Task Epochs Layers Heads LR Batch Optimizer Seed 2Parity 90 4 3 1 × 10 −3 256 Adam 0ThreeSym 90 4 3 1 × 10 −3 256 Adam 0Majority 90 4 3 1 × 10 −3 256 Adam 0Cyclic 90 4 3 1 × 10 −3 256 Adam 0
+
+> 1
+
+https://github.com/aryol/GOTU/tree/main 
+
+> 2
+
+https://github.com/osiriszjq/structured_initialization 
+
+21 G.2 Arithmetic Problems 
+
+We implement all arithmetic experiments from scratch due to the lack of existing code. All methods share the same architecture and training setup, differing only in the initialization strategy Table 8. Table 8: Arithmetic task setup. Item Value Task Addition / Multiplication (3-digit) Dataset size 10 6 (all combinations) Model Transformer Layers / Heads 6 / 4 Model dim 256 MLP dim 256 Head dim 64 Positional encoding learnable Loss Cross-entropy Optimizer AdamW Learning rate 1 × 10 −3
+
+Weight decay 1 × 10 −3
+
+Batch size 256 Epochs 50 Scheduler cosine Mask init open = 5, close = -5 Structured init (SVD) open = 10000, close = 0 Structured init (Opt) steps = 2000, lr = 1 × 10 −4
+
+G.3 Image Classification 
+
+We summarize the experimental setup for image classification tasks in Table 9 and section G.3 and the corresponding dataset-specific tables. All experiments are conducted using a ViT-Tiny architecture with identical training pipelines across different initialization methods to ensure fair comparison. For CIFAR10 and CIFAR100, we follow a standard training protocol with a batch size of 512, cosine learning rate schedule, and extensive data augmentation including Mixup, CutMix, and RandAugment. For ImageNet100, we adopt a similar setup with linear learning rate scaling and a shorter warmup period. To evaluate the effect of initialization, we compare default initialization with prior structured initial-ization methods (mimetic and impulse) and our proposed mask initialization. For mask initialization, we use a simple prior with open entries set to 10 and closed entries set to −10 , which encodes a strong structural bias at initialization. We evaluate our method on CIFAR10 [Krizhevsky, 2009b], CIFAR100 [Krizhevsky, 2009b], and ImageNet100 is constructed as a 100-class subset of ImageNet [Deng et al., 2009], following the version available at https://huggingface.co/datasets/clane9/imagenet-100 . Our imple-mentation is based on the official repository 3.
+
+> 3https://github.com/osiriszjq/structured_initialization
+
+22 Table 9: Experimental setup for CIFAR10. Item Value Model vit_tiny_patch16_224 Dataset CIFAR10 Classes 10 Input size 3 × 224 × 224 
+
+Seed 0GPU 1×A100 Batch size 512 Epochs 400 Optimizer AdamW LR 2 × 10 −3
+
+Scheduler cosine Warmup epochs 50 Weight decay 0.05 AMP yes Drop path 0.1 Label smoothing 0.1 Mixup / CutMix 0.8 / 1.0 Augment RandAug (m9) Table 10: Experimental setup for CIFAR100. Item Value Model vit_tiny_patch16_224 Dataset CIFAR100 Classes 100 Input size 3 × 224 × 224 
+
+Seed 0GPU 1×A100 Batch size 512 Epochs 400 Optimizer AdamW LR 2 × 10 −3
+
+Scheduler cosine Warmup epochs 50 Weight decay 0.05 AMP yes Drop path 0.1 Label smoothing 0.1 Mixup / CutMix 0.8 / 1.0 Augment RandAug (m9) 23 Table 11: Experimental setup for ImageNet100. Item Value Model vit_tiny_patch16_224 Dataset ImageNet100 Classes 100 Input size 3 × 224 × 224 
+
+Seed 42 GPU 1×A100 Batch size 512 Epochs 300 Optimizer AdamW Base LR 1 × 10 −3
+
+LR scaling linear (base size 512) Scheduler cosine Warmup epochs 5Cooldown epochs 10 Weight decay 0.05 AMP yes Global pool avg Drop path 0.1 Label smoothing 0.1 Mixup / CutMix 0.8 / 1.0 Augment RandAug (m9) 24 G.4 Wikitext and TinyStories 
+
+For NLP tasks, we build upon the TinyStories-GPT repository 4 and evaluate on TinyStories and WikiText-2. All methods share the same model architecture and training setup, differing only in the initialization strategy. Table 12: NLP task setup. Item TinyStories WikiText-2 Dataset TinyStories WikiText-2 (raw) Tokenizer GPT-2 GPT-2 Vocab size 50257 50257 Train data 12k samples full train split Validation 2k samples validation split Test validation fallback test split Model GPT-style Transformer GPT-style Transformer Layers / Heads 12 / 12 12 / 12 Embedding dim 512 512 Batch size 128 128 Block size 64 64 Max iters 5000 3000 Learning rate 3 × 10 −4 3 × 10 −4
+
+Optimizer AdamW AdamW Scheduler cosine cosine Dropout 0.2 0.2 Seed 1337 1337 
+
+> 4https://github.com/PraveenRaja42/Tiny-Stories-GPT
+
+25 H Visualizations 
+
+H.1 Visualization of Structure Initialization 
+
+We visualize structured initialization in Figure 9, where convolutional impulse filters are translated into corresponding attention masks. up-left (+0,+1) | head order 5 
+
+> active=12
+> up (-1,+0) | head order 1
+> active=12
+> up-right (+1,-1) | head order 6
+> active=9
+> left (+0,-1) | head order 3
+> active=12
+> center (-1,-1) | head order 0
+> active=9
+> right (-1,+1) | head order 2
+> active=9
+> down-left (+1,+0) | head order 7
+> active=12
+> down (+0,+0) | head order 4
+> active=16
+> down-right (+1,+1) | head order 8
+> active=9
+
+Impulse Patterns: 3x3 Spatial Layout and Corresponding 16x16 Token Masks 
+
+Figure 9: Structured initialization for vision Transformers. Convolutional impulse filters (above) are translated into corresponding token-level attention masks (below), inducing locality and spatial inductive bias. 
+
+H.2 Mask For Image Classification 
+
+We visualize the learned masks for Head 1 at different layers after training for different tasks, as shown in Figure 10. The plots illustrate the effective bias applied to the attention logits. We observe that when the initial inductive bias is not well aligned with the task, the learnable mask adapts and modifies the pattern accordingly. 26 CIFAR10 L1 H1 bias CIFAR10 L4 H1 bias CIFAR10 L10 H1 bias     
+
+> CIFAR100 L1 H1 bias CIFAR100 L4 H1 bias CIFAR100 L10 H1 bias
+> ImageNet100 L1 H1 bias ImageNet100 L4 H1 bias ImageNet100 L10 H1 bias
+> −3.0 −2.5 −2.0 −1.5 −1.0 −0.5
+
+Figure 10: Learned mask (after training) for CIFAR10, CIFAR100, and ImageNet100 across different layers. The visualization shows the effective mask bias applied to the attention logits. 
+
+H.3 Attention Map For Image Classification 
+
+We visualize the attention maps for different methods in Figures 11 to 13. All attention values are taken after the softmax operation for the first test sample. For mask-based initialization, the mask is applied before softmax, and the resulting attention probabilities are shown. We observe that the core pattern is preserved across all tasks, while additional positions are gradually opened depending on the alignment between the task, layer, and the prior. 27 Default L1 H1 Default L4 H1 Default L10 H1 
+
+Mimetic L1 H1 Mimetic L4 H1 Mimetic L10 H1 
+
+Impulse L1 H1 Impulse L4 H1 Impulse L10 H1 
+
+MaskInit L1 H1 MaskInit L4 H1 MaskInit L10 H1 Figure 11: Attention maps for the first validation sample on CIFAR10. 28 Default L1 H1 Default L4 H1 Default L10 H1 
+
+Mimetic L1 H1 Mimetic L4 H1 Mimetic L10 H1 
+
+Impulse L1 H1 Impulse L4 H1 Impulse L10 H1 
+
+MaskInit L1 H1 MaskInit L4 H1 MaskInit L10 H1 Figure 12: Attention maps for the first validation sample on CIFAR100. 29 Default L1 H1 Default L4 H1 Default L10 H1 
+
+Mimetic L1 H1 Mimetic L4 H1 Mimetic L10 H1 
+
+Impulse L1 H1 Impulse L4 H1 Impulse L10 H1 
+
+MaskInit L1 H1 MaskInit L4 H1 MaskInit L10 H1 Figure 13: Attention maps for the first validation sample on ImageNet100. 30 H.4 Visualizations for Convergence Curves 
+
+In this section, we visualize the convergence behavior of different initialization methods on the CIFAR100 and ImageNet100 datasets as shown at Figure 14. Our method begins to outperform the baselines after around 100 epochs and maintains a faster convergence rate throughout training. This suggests a two-phase training dynamic: in the early stage, the model aligns latent features under the constraint of the mask, while in later stages, it jointly refines both the mask and the latent representations. 0 50 100 150 200 250 300 350 400                 
+
+> Epoch
+> 010 20 30 40 50 60 70 80
+> Top-1 Accuracy (%)
+> CIFAR100 Full Default Mimetic Impulse MaskInit
+> 050 100 150 200 250 300
+> Epoch
+> 020 40 60 80
+> Top-1 Accuracy (%)
+> ImageNet100 Full Default Mimetic Impulse MaskInit
+> 100 150 200 250 300 350 400
+> Epoch
+> 68 70 72 74 76 78 80
+> Top-1 Accuracy (%)
+> CIFAR100 Zoom
+> 100 150 200 250 300
+> Epoch
+> 76 78 80 82 84 86 88
+> Top-1 Accuracy (%)
+> ImageNet100 Zoom
+
+Figure 14: Training curves on CIFAR100 (left) and ImageNet100 (right) under identical training settings. The plots show validation Top-1 accuracy over training epochs. We compare default initialization, prior structured initialization methods, and the proposed Mask Init. Mask initialization consistently converges faster in the early stages and achieves higher final accuracy. This indicates that mask-based initialization provides a better inductive bias, leading to improved optimization efficiency and generalization on vision benchmarks. 31
