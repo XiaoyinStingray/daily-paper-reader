@@ -6,79 +6,74 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-08-09
-- 运行时间：2026-08-09 20:35:20 UTC
+- 最新运行日期：2026-08-10
+- 运行时间：2026-08-10 21:22:08 UTC
 - 运行状态：成功
-- 本次总论文数：19
-- 精读区：7
+- 本次总论文数：18
+- 精读区：6
 - 速读区：12
 
 ### 今日简报（AI）
-今日精读与速读共19篇论文，覆盖优化器、超分、深度估计、MoE训练与目标检测等方向。  
-最值得关注的是《AOS》提出的基于训练状态信号的优化器自适应切换，以及《PixelSR》针对屏幕内容的高效超分方案，二者分别提升收敛效率与图像质量。  
-建议优先精读AOS与PixelSR，速读可关注YOLOv14跨域检测和XiDepth轻量深度估计，后续可跟踪这些方法在实际任务中的落地效果。
-- 详情：[/202608/09/README](/202608/09/README)
+今日完成18篇论文筛选，精读6篇、速读12篇，重点关注高效边缘动作识别与神经网络量化方向。最值得研读的是满分的CoDAT双注意力Transformer低耗时时序建模方案，以及8分的低维子空间优化量化训练方法。建议优先复现CoDAT的边缘动作识别架构，同时可跟进视觉语言模型测试时适应与零样本特征上采样等速读佳作。
+- 详情：[/202608/10/README](/202608/10/README)
 
 ### 精读区论文标签
-1. [AOS: Adaptive Optimizer Switching via Training-State Signals for Faster Convergence and Better Generalization](/202608/09/2608.01997v1-aos-adaptive-optimizer-switching-via-training-state-signals-for-faster-convergence-and-better-generalization)  
+1. [CoDAT: Collaborative Dual-Attention Transformer with Low-Cost Temporal Modeling for Efficient Edge Action Recognition](/202608/10/2608.06691v1-codat-collaborative-dual-attention-transformer-with-low-cost-temporal-modeling-for-efficient-edge-action-recognition)  
    标签：评分：9.0/10、query:neural-arch
-   evidence：基于训练状态信号的自适应优化器切换，加速收敛并提升泛化，属于模型优化策略。
-2. [PixelSR: Efficient Screen Content Super-Resolution via Pixel Classification](/202608/09/2608.00646v1-pixelsr-efficient-screen-content-super-resolution-via-pixel-classification)  
+   evidence：面向边缘动作识别的高效双注意力Transformer展示了视觉任务轻量化架构设计方法。
+2. [Low-Dimensional High-Leverage Subspace Optimization: Beyond Full-Parameter Coupled Training for Neural Network Quantization](/202608/10/2608.03919v1-low-dimensional-high-leverage-subspace-optimization-beyond-full-parameter-coupled-training-for-neural-network-quantization)  
    标签：评分：8.0/10、query:neural-arch
-   evidence：通过像素分类和内容注意力实现高效屏幕内容超分辨率，符合高效神经网络架构设计需求
-3. [Role-Decoupled Attention Residuals: Separating Matching and Content Retrieval Across Depth](/202608/09/2608.01075v1-role-decoupled-attention-residuals-separating-matching-and-content-retrieval-across-depth)  
+   evidence：提出面向神经网络量化的低维高杠杆子空间优化，属于模型优化策略
+3. [Robustness Emerges Early in Training Dynamics, but Is Not Preserved](/202608/10/2608.04442v1-robustness-emerges-early-in-training-dynamics-but-is-not-preserved)  
    标签：评分：8.0/10、query:neural-arch
-   evidence：Transformer残差架构改进
-4. [Linear Multi-Timescale Retention as a Memory-Efficient Vision-Language Bridge](/202608/09/2608.01614v1-linear-multi-timescale-retention-as-a-memory-efficient-vision-language-bridge)  
+   evidence：提出早期阶段稳定与非对称权重回退，保留浅层鲁棒表示
+4. [Training Crossroads for Recurrent Vision Transformers: Recurrence, Neural ODEs, and Deep Supervision](/202608/10/2608.04879v1-training-crossroads-for-recurrent-vision-transformers-recurrence-neural-odes-and-deep-supervision)  
    标签：评分：8.0/10、query:neural-arch
-   evidence：面向视觉-语言模型的内存高效线性注意力模块，属于神经网络架构性能提升技术。
-5. [Token Radius Attention for Efficient Video Generation](/202608/09/2608.02504v1-token-radius-attention-for-efficient-video-generation)  
+   evidence：对循环视觉Transformer的训练与推断进行受控实证研究，为架构设计与训练实践提供指导。
+5. [Flow-Map Distillation on Relation Manifolds for Image Restoration](/202608/10/2608.05769v1-flow-map-distillation-on-relation-manifolds-for-image-restoration)  
    标签：评分：8.0/10、query:neural-arch
-   evidence：无需训练的令牌半径注意力降低视频扩散Transformer注意力开销
-6. [GVCCTurbo: Rate-Compute Quality Scheduling for Codebook Driven Generative Compression](/202608/09/2608.03517v1-gvccturbo-rate-compute-quality-scheduling-for-codebook-driven-generative-compression)  
-   标签：评分：8.0/10、query:compress
-   evidence：基于BPP驱动的率-计算调度，实现码本驱动生成压缩的率失真优化。
-7. [SlimVLM: Sensitivity-aware Dynamic Structured Pruning with Adaptive Visual Token Selection for Efficient Vision-Language Models](/202608/09/2608.03580v1-slimvlm-sensitivity-aware-dynamic-structured-pruning-with-adaptive-visual-token-selection-for-efficient-vision-language-models)  
+   evidence：将知识蒸馏重构为关系流形上的流映射，属于模型优化策略
+6. [Suppress and Diversify: Refining Robust Pathways for Corruption Robustness](/202608/10/2608.06712v1-suppress-and-diversify-refining-robust-pathways-for-corruption-robustness)  
    标签：评分：8.0/10、query:neural-arch
-   evidence：面向视觉语言模型的结构化剪枝与视觉令牌选择，提升模型效率
+   evidence：一种与架构无关的精炼方法，提升视觉模型对图像污染的鲁棒性
 
 ### 速读区论文标签
-1. [XiDepth: a Lightweight and Efficient Network for Self-supervised Monocular Depth Estimation](/202608/09/2608.03666v1-xidepth-a-lightweight-and-efficient-network-for-self-supervised-monocular-depth-estimation)  
-   标签：评分：8.0/10、query:neural-arch
-   evidence：XiDepth面向自监督单目深度估计设计轻量高效网络，关注资源高效的架构设计。
-2. [MESH: Memory-Efficient Sinkhorn Optimization for Mixture-of-Experts Training](/202608/09/2608.04407v1-mesh-memory-efficient-sinkhorn-optimization-for-mixture-of-experts-training)  
-   标签：评分：8.0/10、query:neural-arch
-   evidence：面向MoE训练的内存高效Sinkhorn优化器，属于模型优化策略
-3. [YOLOv14:Unified Cross-Domain Real-Time Object Detectionwith Adaptive Multi-View Representation](/202608/09/2608.04720v1-yolov14unified-cross-domain-real-time-object-detectionwith-adaptive-multi-view-representation)  
-   标签：评分：8.0/10、query:neural-arch
-   evidence：YOLOv14提出可变形区域注意力、游戏到真实域适配和多视图条件设定，提升跨域目标检测鲁棒性。
-4. [StaticSegFormer: An Efficient High-Performance Semantic Segmentation Based on Static Structured Pruning](/202608/09/2608.04811v1-staticsegformer-an-efficient-high-performance-semantic-segmentation-based-on-static-structured-pruning)  
-   标签：评分：8.0/10、query:neural-arch
-   evidence：结构化剪枝以提升神经网络效率
-5. [Mask-Based Priors Are More Persistent than Query-Key Initializations](/202608/09/2608.00418v1-mask-based-priors-are-more-persistent-than-query-key-initializations)  
+1. [Local Margin Restoration for Test-Time Adaptation of Vision-Language Models](/202608/10/2608.02216v1-local-margin-restoration-for-test-time-adaptation-of-vision-language-models)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：向Transformer注意力注入显式结构先验以修正归纳偏置
-6. [Beyond Symmetric Fusion: Exploiting Task-Dependent Modality Strengths for RGB-Event Small Object Detection](/202608/09/2608.01302v1-beyond-symmetric-fusion-exploiting-task-dependent-modality-strengths-for-rgb-event-small-object-detection)  
+   evidence：通过局部边界恢复增强视觉-语言模型在分布偏移下的测试时自适应
+2. [PixelUp: Zero-Shot Semantic Feature Upsampling for Fine-Grained Vision Tasks](/202608/10/2608.02792v1-pixelup-zero-shot-semantic-feature-upsampling-for-fine-grained-vision-tasks)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：针对小目标检测的RGB与事件模态任务相关非对称融合
-7. [SMM Transformer: Leveraging Spiking Neural Networks for Multimodal Tasks](/202608/09/2608.01622v1-smm-transformer-leveraging-spiking-neural-networks-for-multimodal-tasks)  
+   evidence：面向细粒度视觉任务的零样本语义特征上采样模块，计算机视觉架构改进
+3. [Maglev: Sliding Recurrent Memory](/202608/10/2608.02870v2-maglev-sliding-recurrent-memory)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：提出SNN多模态Transformer，设计新型神经元和注意力替代模块。
-8. [Estimating SSIM from MSE for DCT-Based Compressed Images](/202608/09/2608.02549v1-estimating-ssim-from-mse-for-dct-based-compressed-images)  
-   标签：评分：7.0/10、query:compress
-   evidence：面向DCT压缩图像的SSIM估计
-9. [Hybrid-Domain Posterior Sampling for Inverse Problems via Latent Flow Matching](/202608/09/2608.00537v1-hybrid-domain-posterior-sampling-for-inverse-problems-via-latent-flow-matching)  
+   evidence：带固定大小记忆的循环Transformer架构
+4. [iFAN: Inference-Aware Learning for Plain Mask Transformers](/202608/10/2608.03216v1-ifan-inference-aware-learning-for-plain-mask-transformers)  
+   标签：评分：7.0/10、query:neural-arch
+   evidence：面向推理的感知学习框架，含排序调整和跨层蒸馏，属于性能提升技术
+5. [Lightweight 3D Object Detection via Mamba-Based Knowledge Distillation](/202608/10/2608.03490v1-lightweight-3d-object-detection-via-mamba-based-knowledge-distillation)  
+   标签：评分：7.0/10、query:neural-arch
+   evidence：基于Mamba的知识蒸馏将体素表示迁移至轻量3D检测器，属模型优化策略。
+6. [MuRA: Multi-Rank Adaptation for Efficient and Effective Test-Time Vision-Language Generalization](/202608/10/2608.03885v1-mura-multi-rank-adaptation-for-efficient-and-effective-test-time-vision-language-generalization)  
+   标签：评分：7.0/10、query:neural-arch
+   evidence：面向测试时视觉-语言泛化的多秩自适应
+7. [Think in Sets for Streaming Video Token Compression](/202608/10/2608.01169v1-think-in-sets-for-streaming-video-token-compression)  
+   标签：评分：6.0/10、query:neural-arch
+   evidence：利用集合选择对流式视频视觉令牌进行高效压缩
+8. [SPARE: Structural Parameter-Free Affinity Regularization for Flow Matching](/202608/10/2608.01990v1-spare-structural-parameter-free-affinity-regularization-for-flow-matching)  
+   标签：评分：6.0/10、query:neural-arch
+   evidence：无参数结构亲和力正则化加速扩散Transformer训练
+9. [SpikeRestormer: Towards Energy-Efficient All-in-One Image Restoration via Unified Event Reasoning](/202608/10/2608.02290v1-spikerestormer-towards-energy-efficient-all-in-one-image-restoration-via-unified-event-reasoning)  
+   标签：评分：6.0/10、query:neural-arch
+   evidence：面向视觉（图像复原）的节能神经网络架构设计
+10. [Attention-Only White-Box Transformer via LeJEPA-Based Self-Supervised Pretraining](/202608/10/2608.04213v1-attention-only-white-box-transformer-via-lejepa-based-self-supervised-pretraining)  
+   标签：评分：6.0/10、query:neural-arch
+   evidence：联合自监督预训练用于白盒Transformer架构设计
+11. [GVC-RT: Towards Real-Time Generative Video Compression at Ultra-Low Bitrates](/202608/10/2608.04891v1-gvc-rt-towards-real-time-generative-video-compression-at-ultra-low-bitrates)  
    标签：评分：6.0/10、query:compress
-   evidence：探讨自编码器瓶颈和压缩潜空间导致的高频信息丢失，与基于自编码器的图像压缩方法相关
-10. [SparseKAN: Compressing Kolmogorov--Arnold Networks Across Basis Functions, Neurons, and Bits](/202608/09/2608.00859v1-sparsekan-compressing-kolmogorov--arnold-networks-across-basis-functions-neurons-and-bits)  
+   evidence：利用无查找量化（LFQ）和率失真优化的生成式视频压缩，其方法可迁移到学习型图像压缩流程中。
+12. [An active-learning framework for real-time depth perception from monocular vision streams](/202608/10/2608.04917v2-an-active-learning-framework-for-real-time-depth-perception-from-monocular-vision-streams)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：Kolmogorov-Arnold网络的多轴压缩与量化
-11. [Rethinking Video Token Compression with a Global Codebook: Learning Once, Compressing Everywhere](/202608/09/2608.01271v1-rethinking-video-token-compression-with-a-global-codebook-learning-once-compressing-everywhere)  
-   标签：评分：6.0/10、query:neural-arch
-   evidence：利用全局码本将视频令牌压缩离线化以降低推理成本
-12. [Prompt-Driven Simulation with Feature Perturbation for Cross-Domain Few-Shot Object Detection](/202608/09/2608.01348v2-prompt-driven-simulation-with-feature-perturbation-for-cross-domain-few-shot-object-detection)  
-   标签：评分：6.0/10、query:neural-arch
-   evidence：采用提示驱动模拟与特征扰动，提升跨域少样本目标检测性能。
+   evidence：面向动态环境的主动学习模型优化框架
 
 
 <div class="dpr-home-promo-card">
