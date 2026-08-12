@@ -1,0 +1,1099 @@
+Title: A neural operator view on U-Nets for inverse imaging problems
+
+URL Source: https://arxiv.org/pdf/2608.05839v1
+
+Published Time: Fri, 07 Aug 2026 00:48:04 GMT
+
+Number of Pages: 40
+
+Markdown Content:
+# A neural operator view on U-Nets for inverse imaging problems 
+
+Alexander Auras 1, Martin Burger 2,3 , Samira Kabri 2, Michael Moeller 1, and Michael Schopf-Kuester 11Computer Vision Group, University of Siegen, H¨ olderlinstraße 3, 57076 Siegen, Germany, 
+
+{alexander.auras, michael.moeller, michael.schopf }@uni-siegen.de 
+
+> 2
+
+Helmholtz Imaging, Deutsches Elektronen-Synchrotron DESY, Notkestr. 85, Hamburg, 22607, Germany, 
+
+{martin.burger, samira.kabri }@desy.de 
+
+> 3
+
+Fachbereich Mathematik, Universit¨ at Hamburg, Bundesstrasse 55, Hamburg, 20146, Germany 
+
+Deep neural networks have shown great empirical success in the solution of a wide variety of ill-posed inverse problems in imaging. Yet, very few works have studied their behavior in the limit that turns the discretized ill-conditioned problems into truly ill-posed ones, i.e., for an increasing reso-lution of the discretization. In this work, we review common approaches to 
+
+neural operator learning in architectures that resemble a U-Net, one of the most common classical architectures for inverse imaging problems. We dis-cuss advantages and drawbacks of the respective approaches, consider a 1D toy example for improved interpretability, and present extensive numerical experiments on how different types of neural operator U-Nets can improve a first (crude) limited angle CT-reconstruction. In particular, we study how well networks trained for a certain resolution of the discretization generalize to other resolutions. Our finding is that while U-shaped neural operator ar-chitectures are by design resolution-invariant, the classical U-Net architecture seems to be more robust with respect to resolution changes than expected. 
+
+# 1 Introduction 
+
+In this work, we study the solution of ill-posed linear inverse problems in imaging with the help of deep learning. We consider an underlying (infinite-1arXiv:2608.05839v1 [math.NA] 6 Aug 2026 dimensional) inverse problem of recovering u from f given by 
+
+f = A(u) (1) for a compact linear operator A with infinite-dimensional range. Under these conditions, the pseudo-inverse of A becomes discontinuous (cf. [1]), making the problem (1) ill-posed. 
+
+Ill-posed inverse problems and regularization 
+
+In any practical setting, one can only measure finitely many (discrete) data points, commonly interpreted as the integration of the continuous function 
+
+A(u) over areas of individual sensors plus some measurement noise, e.g., ˜f δi =
+
+Z
+
+> Si
+
+A(u)( x) dx + n, (2) for a sensor area Si and measurement noise n, giving rise to discrete mea-surements ˜f δ ∈ RNf for a certain resolution Nf .1 Naturally, one chooses to reconstruct a discretization ˜ u ∈ RNu , where a reasonable choice of Nu
+
+depends on the number of measurements Nf . Model-based reconstructions therefore determine a discrete approximation ˜A ∈ RNf ×Nu of the operator 
+
+A, and solve a regularized version of ˜f δ ≈ ˜A˜u. (3) While (3) is finite dimensional, such that the solution always depends on the data continuously, the ill-posedness of (1) typically makes (3) ill-conditioned, with the operator norm ∥ ˜A∥ increases with increasing Nf , Nu. Thus, model-based approaches have focused on developing suitable regularization strate-gies as well as regularization parameter choice rules for the resulting ap-proaches to be provably convergent, even in the infinite-dimensional case (1). The difficulty of modeling suitable regularizers (or priors) has led to the rise of deep learning approaches for inverse problems. In the simplest case, such approaches use a simple (crude) estimate of ˜ u, e.g. ˜u0 = ˜AT ˜f δ, as an input to a neural network G and learn to reconstruct a better approxi-mation G(˜ u0; θ) from the initial one by training the parameters θ on a large amount of (typically simulated) training examples for which the ground truth is known. Another method is to train a denoiser as a so-called plug-and-play prior, and incorporate it into an iterative reconstruction approach (cf. [2, 3]). Recently, generating samples from the posterior distribution with the help of score-based diffusion (cf. [4–9]) and Bayesian flow matching (cf. [10]) has gained large interest. Many of these approaches rely on U-Nets: Originally     
+
+> 1We remark that in imaging, the measured data often has the interpretation of a two-dimensional matrix RN1×N2, which, however, is isomorphic to RN1N2such that we consider the vectorized version only.
+
+2designed for image segmentation in [11, 12], these U-shaped neural networks appear in end-to-end approaches as proposed in [13], in the DRUNET ar-chitecture [14], a popular choice for plug-and-play priors, and in the NCSN architecture [7] used to approximate the score function in score-based dif-fusion, to name just a few. While such approaches have been extremely successful in various applications (cf. [15]), most practical works consider the discretization Nf and Nu to be fixed, neglecting the ill-posed nature of the underlying continuous formulation. 
+
+Neural Operators 
+
+The field of Neural Operator Learning [16, 17] has focused on the approxi-mation of operators independent of the discretization of the input signal. It primarily deals with the question of a consistent continuum interpretation of linear layers, in particular convolutional layers, to allow for varying discretiza-tions of the input. The original formulation of neural operators proposed in [17] views convolutional layers as approximations of integral operators. Afamous representative of this interpretation is the Fourier neural operator (FNO) proposed in [18]. Here, convolution kernels are parametrized by their Fourier coefficients, allowing for the effortless approximation of a continu-ous convolution using trigonometric interpolation of the kernels. FNOs and FNO-derived architectures have been used successfully, especially in the con-text of partial differential equations (PDEs) (cf. [19, 20, 18, 21–24]). In this chapter, we pay special attention to the U-shaped neural operator (UNO) that is based on the FNO and proposed in [22]. The parametrization by Fourier coefficients makes it more complicated to restrict the spatial support of convolution kernels. A natural approach to combine spatial locality with the approximation of an integral operator is to interpolate local kernels while keeping the size of their support fixed. The work [25] integrates this idea into neural operators and uses the discrete-continuous (DISCO) convolution established in [26] to implement so-called local convolutions. Extending the integral operator view of [17] to differential operators, it was further pointed out in [25] that classical convolutional layers can also be used to approximate spatial derivatives. This seems especially interesting in the context of finite difference approximations of partial differential equations that play an important role in model-based image processing (cf. [27, 28]) and have further already motivated the neural network architectures proposed in [29]. A more restrictive version of neural operators is given by representation equivalent neural operators (ReNOs) described in [30]. In particular, ReNOs are required to respect a function’s band-limit, which is usually not fulfilled with the usual activation functions. Motivated by the concept of represen-tation equivalence, [31] propose the convolutional neural operator (CNO). Based on a classical U-Net architecture, the CNO is made representation 3equivalent by additional upsampling and downsampling operations. In par-ticular, the input resolution of a CNO has to be fixed, requiring a resizing operation for inputs of different resolutions. While neural operators have also been applied in imaging applications, e.g., classification [32, 33], super-resolution [34] and image generation [5], the study of U-shaped neural operators is, to the best of the authors’ knowledge, limited to the approximation of solution operators for partial differential equations. With this chapter, we want to contribute to closing this gap. We focus on architectural design choices and their interpretation in the infinite dimensional setting. Of course, for a full understanding, quantities like the approximation error resulting from the discretization and the generalization error to unseen data have to be considered, as well as how training with data of different resolutions influences the training dynamics. While we do not cover these aspects in detail, we refer to [35, 17] for approximation theory, to [36, 37] for statistical learning theory for neural operators and operator learning in general and to [38, 39] for recent works on training aspects of FNOs. 
+
+Structure of this work 
+
+The remainder of this work is organized as follows: In Section 2 we recall the classical U-Net architecture. In Section 3 we explore ways to transform the classical U-Net into a U-shaped neural operator following the integral opera-tor interpretation. More precisely, in Subsection 3.1 we re-derive the spectral convolution which is at the heart of FNO architectures and propose a simplis-tic U-shaped neural operator architecture. In Subsection 3.2 we investigate how local convolutional layers could make the proposed architecture more efficient. In Section 4 we discuss possibilities to integrate differential layers into neural operators for image processing. In Section 5 we illustrate differ-ent architectures with a 1-D example of sparse signal deblurring and provide large scale numerical experiments for the post-processing of limited angle CT data. We summarize our findings in Section 6. All code for reproducing our results will be made available publicly. 2
+
+# 2 Discrete U-Net 
+
+In this section, we summarize common architectures for classical U-Nets. In most architectures, all linear layers are convolutional layers and the nonlinear activation function is usually the Rectified Linear Unit (ReLU). The “U”-shape that characterizes a classical U-Net is caused by down-sampling in the first half (contracting path) and up-sampling operations in the second half (expanding path) of the architecture. To make up for the information loss, it is common practice to increase the number of channels after down-sampling          
+
+> 2The code to reproduce our results is available at https://github.com/AlexanderAuras/ neural-operator-view-on-unets
+
+4down-/up-sampling conv. block skip connection Figure 1: The general form of a U-Net. and to decrease them after up-sampling. The transmission of high frequency information is ensured by so-called skip-connections, which directly feed the outputs of the contracting path into the corresponding levels of the expanding path. We refer to Figure 1 for a visualization of the general structure. In the following, we give more detailed descriptions of the components mentioned above. We use the notation [n] := 
+
+n
+
+−
+
+j n
+
+2
+
+k
+
+, . . . , 0, . . . , 
+
+l n
+
+2
+
+m
+
+− 1
+
+o
+
+.
+
+for n ∈ N and the corresponding zero-centered indexing, i.e., u ∈ Rn can be written as ( ui)i∈[n].
+
+2.1 Convolutional blocks 
+
+A convolutional block is a stack of convolutional layers and activation func-tions in alternating order. For the sake of simplicity, we describe a convo-lutional block that only consists of one convolutional layer, followed by one application of the activation function. The discrete convolution of an input 
+
+u ∈ Rn×n with a discrete convolution kernel κ ∈ Rm×m, m ≤ n, can be formally defined as (κ ∗ u)i := X
+
+> j∈[m]2
+
+κj ui−j , for all i ∈ [n]2. (4) This notion requires a definition of ui for i / ∈ [n]2. In practice, filling up the values of u for unknown indices is called padding and the so-called padding 5mode determines how the padding is performed. For completeness, we further note that it is also common to compute only ( κ ∗ u)i for i for which there don’t appear any undefined indices in (4). In this work, we are interested in two different padding modes: 1. Zero-padding: Unknown values are set to zero. 2. Circular padding: Unknown values are determined by the periodic ex-tension. While zero-padding is more popular than circular padding (images are usually not assumed to be periodic), circular padding allows for a change of basis to the Fourier domain, which will be useful in Section 3. We further note that there is no need for the dimensions of κ and u to match, as the sum in (4) is only taken over [ m]2, which corresponds to zero-padding of the kernel 
+
+κ. This gives the key-insight how the convolutional layer behaves for inputs of different dimensions, or, from a function space perspective, of different resolution. We illustrate this in the following example. 
+
+Example 1. Consider a function u : R2 → R and its discretizations un ∈
+
+Rn×n, un := ( u(i/n )) i∈[n]2 . To get a well-defined definition of the discrete convolution, we can assume that the support of u lies in [−0.5, 0.5] 2 (zero-padding) or that u is 1-periodic (circular padding). For a fixed kernel κ ∈
+
+Rm×m, we get 
+
+(κ ∗ un)i = X
+
+> j∈[m]2
+
+κj u
+
+ i − jn
+
+
+
+, for all i ∈ [n]2,
+
+meaning that the support of the kernel, or its receptive field, is given by 
+
+[0 , m/n ]2 and therefore shrinks as n grows. In other words, the discrete convolution with a fixed kernel becomes more and more local the higher the resolution of the input is. 
+
+So far, we have omitted the so called channels, i.e., inputs u ∈ Rcin ×n×n,that can be motivated by vector-valued functions. A convolutional layer parametrized by κ ∈ Rcout ×cin ×m×m has cin input channels and cout output channels and is defined by (κ ∗ u)c := X
+
+> d∈[cin ]
+
+κc,d ∗ ud, for all c ∈ [cout ].
+
+Concatenating the convolutional layer with an activation function σ : R × R,we obtain the simple convolutional block Cκ : Rcin ×n×n → Rcout ×n×n,
+
+Cκ(u) := σ(κ ∗ u), (5) where the activation function is applied elementwise. In practice, the above form is often equipped with an additive bias b ∈ Rcout , which is added channel-wise to the output of the convolutional layer, leading to 
+
+Cκ,b (u) := σ(κ ∗ u + b).
+
+6While the latter version is used in the numerical experiments, we use (5) in the majority of our theoretical studies. However, all results can be extended to the biased operator, as b ∈ Rcout can always be interpreted as a vector-valued function that is constant in each component. We further note that in both cases, the only dimensions that are inherent to the parametrization by 
+
+κ and b are cin and cout . In particular, the image size n is not determined by the size m of the kernel. 
+
+2.2 Downsampling, Upsampling and Skip Connections 
+
+Different methods for decreasing the spatial resolution to transfer to a lower level of the U-Net in the encoding path have been proposed: The original paper [11] used max-pooling, i.e., took the largest value in every distinct 2 × 2 patch. Alternatives are average pooling (=taking the mean instead of the maximum), strided convolutions (=learning weights for combining the entries in a patch), or other (non-linear) pooling layers. The reverse process of increasing the resolution in the decoder-path of the U-Net is typically done by direct upsampling (interpolation) or the use of transpose convolution, i.e., the adjoint operator to a convolution with stride. Skip connections in U-Nets are typically concatenating skip-connections, i.e., the operation of appending the channels of the output of a convolutional layer on the encoder side to the respective channels of the same spatial res-olution on the decoder side. Alternatives are additive (residual) connections (for improved efficiency) or more sophisticated processing connections such as attention gates in [40]. Typically, data-driven models based on U-Net architectures are optimized specifically for a single input resolution. The driving question of the remain-ing chapters will thus be “How can we interpret a discrete U-Net architec-ture from the neural operator perspective?”. In detail, we consider infinite dimensional architectures that can be reduced to conventional U-Nets via discretization. The focus will be on the infinite dimensional interpretation of the convolution. As discussed in [25], the discrete convolution (4) can result from the discretization of integral operators, but also differential op-erators. Therefore, there is no unique answer to the posed question and a suitable interpretation depends on the given application and in particular, on the specific “role” a convolutional layer fulfills within the U-Net. Our derivations aim to explain both interpretations of discrete convolutions as integral operators and as differential operators and why they could both be reasonable choices in the context of image processing. 
+
+# 3 U-Nets with integral operators 
+
+In this section, we want to interpret the convolutional layers in a discrete U-Net as discretized integral operators. Based on the spectral convolution 7proposed in [18] we derive a simple neural operator architecture that can be seen as a special case of the UFNO [22], while still being very close to its discrete counter part. For the integral operator perspective, we interpret the discrete convolution (4) to be an approximation of the convolution of two functions κ : Ω → R
+
+and u : Ω → R,(κ ∗ u)( x) = 
+
+Z
+
+> Ω
+
+κ(y) u(x − y) dy, (6) where we choose Ω = ( −0.5, 0.5) 2. Again, one has to provide an extension of u to make ( κ ∗ u) well-defined on the entire domain Ω. Assuming both functions to be smooth enough and n ∈ N large enough, using standard mid-point quadrature (cf. [41, Chapter 9]), we get (κ ∗ u)( xi) ≈ 1
+
+n2 (κn ∗ un)i for all i ∈ [n]2, (7) where we use the notation xi := i/n , κn := ( κ(xi)) i∈[n]2 and un = ( u(xi)) i∈[n]2 .It follows directly from example 1 that the discrete convolution implemented by (4) only allows for the above interpretation if n, i.e., the resolution of the inputs, is fixed. For two different resolutions, the same discrete kernel cor-responds to the approximation of the convolution with two different kernel functions. The seminal work on neural operators [17] proposes various op-tions to parametrize convolutional layers such that they indeed approximate a convolution for varying input resolutions. In this chapter, we concentrate on the parametrization of kernels by their Fourier coefficients, as proposed for Fourier Neural Operators [18]. 
+
+3.1 Spectral architectures based on trigonometric interpolation 
+
+We first briefly recapitulate the basics of discrete Fourier analysis to moti-vate the implementation of the spectral convolution which is at the heart of Fourier neural operators. In a next step, we derive a U-shaped neural opera-tor based on the spectral convolution. To keep the architecture as simple as possible, we omit the so-called linear transform that is typically used in the FNO-layer and only add residual connections. 3 While in [22] it is proposed to contract and expand the function domain to create a U-shape, we propose to first decrease and then increase the number of parameters used. For the sake of simpler notation, the results we provide here correspond to the general case that u ∈ Cn×n. Restricting u to be real-valued requires some careful adaptations for even n. We refer the interested reader to [33]. All results we state in this section are well-known results from Fourier analysis (cf. [42]), but we restate them in our specific setting to improve readability. 
+
+> 3In this context, the linear transform refers to a linear combination of the channels. Substituting it by residual connections is thus equivalent to fixing the linear transform to be the identity.
+
+83.1.1 Basic definitions and results 
+
+We define the discrete Fourier transform of u ∈ Cn×n as (Fu)k := 1
+
+n2
+
+X
+
+> j∈[n]2
+
+uj e−2πi ⟨ jn ,k ⟩ for all k ∈ [n]2, (8) where here and in the following, i denotes the imaginary unit and ⟨· , ·⟩ denotes the canonical inner product. We restrict the support to [ n]2 due to the 1-periodicity of e−2πi x . The inverse discrete Fourier transform for ˆ u ∈ Cn×n is then given by (F−1 ˆu)j = X
+
+> k∈[n]2
+
+ˆuk e2πi ⟨ jn ,k ⟩ for all j ∈ [n]2. (9) Other variants of the discrete Fourier transform mainly differ from (8) by the normalization factor 1 /n 2: Multiplying by 1 /n in both, the “forward” and inverse discrete Fourier transform, yields a unitary operator, while only normalizing the inverse Fourier transform by 1 /n 2 is probably the most com-mon choice. However, the normalization used in (8) simplifies notation in our specific setting, where we are interested in Fourier coefficients of functions that are discretized with a varying number of sampling points. In this sense, the factor 1 /n 2 corresponds to approximating the Fourier coefficients of a periodic function defined on the two-dimensional torus T2 = R2
+
+.
+
+Z2. This interpretation becomes rigorous with the following lemma. 
+
+Lemma 1 (cf. [42, Definition 3.1.4]) . For ˆu ∈ Cm×m consider u : T2 → C,
+
+u(x) = X
+
+> k∈[m]2
+
+ˆuk e2πi ⟨x,k ⟩. (10) 
+
+Then it holds for any n ≥ m that 
+
+(Fun)k =
+
+(
+
+ˆuk if k ∈ [m]2,
+
+0 if k ∈ [n]2 \ [m]2.
+
+where un = ( u(j/n )) j∈[n]2 denotes the discretization of u using n2 equidistant sampling points. Proof. The proof follows from inserting the inverse Fourier transform into (11). Lemma 1 shows that for suitable functions, we can compute all non-trivial Fourier coefficients with the discrete Fourier transform of a discretization with equidistant samples, provided that the number of samples is large 9enough. The functions that fulfill (10) are called trigonometric polynomi-als and can be seen as the periodic version of band-limited functions. In this sense, Lemma 1 is the trigonometric polynomial counterpart of the sam-pling theorem for band-limited functions (cf. [42, Theorem 6.6.9]). The trigonometric interpolation formula that is analogous to sinc-interpolation for band-limited functions would take the form 
+
+u(x) = X
+
+> j∈[n]2
+
+u(j/n ) ψn(x − j/n ), with ψn(x) := 1 /n 2 X
+
+> k∈[n]2
+
+e2πi ⟨x,k ⟩,
+
+which is equivalent to zero-padding the Fourier coefficients, i.e., 
+
+u(x) = X
+
+> k∈[n]2
+
+ˆuk e2πi ⟨x,k ⟩ with ˆ uk = ( Fun)k, k ∈ [n]2. (11) Having established the definition of the discrete Fourier transform, we restate the discrete convolution theorem, which motivates the implementation of the convolution of two functions using their Fourier coefficients. 
+
+Theorem 2 (Discrete Convolution Theorem, cf. [42, Proposition 3.1.2, (9)]) .
+
+Let u, κ ∈ Cn×n. Then it holds for the discrete convolution (4) with circular padding of u that 1
+
+n2 (κ ∗ u) = F−1(Fκ · F u),
+
+where we define the point-wise multiplication operator · for ˆu, ˆκ ∈ Cn×n as 
+
+ˆκ · ˆu := (ˆ κk ˆuk)k∈[n]2 .
+
+Proof. The proof follows from inserting the definitions of the discrete convo-lution (4) and the discrete Fourier transform and its inverse into the claimed formula and reordering the sums. 
+
+3.1.2 Spectral convolutional layers 
+
+Up to a rescaling with the factor 1 /n 2 the convolution theorem allows to parametrize the discrete convolution (4) restricted to inputs u ∈ Cn×n by ˆκ ∈ Cn×n that correspond to Fκ. This derivation however, requires a rule how to perform convolutions of inputs u ∈ Cn×n with “smaller” kernels ˆκ ∈ Cm×m, m ≤ n. We recall that in conventional implementations, this is done as in (4), i.e., by zero-padding of the “spatial” parameters κ. The authors of [18] also propose to handle dimension mismatches by zero-padding, but this time in the domain of Fourier coefficients. This means to define ˆκk = 0 for all k ∈ Z2 \ [m]2
+
+for ˆ κ ∈ Cm×m. The resulting operation is called the spectral convolutional layer. We denote it by ˆ ∗, i.e., for u ∈ Cn×n and ˆ κ ∈ Cm×m we define ˆκ ˆ∗ u := F−1 
+
+(ˆ κk (Fu)k)k∈[n]2
+
+
+
+. (12) 10 We note that the above definition also works for kernels that are larger than the input as the excess entries of ˆ κ will be ignored. A direct advantage of the spectral convolutional layer is that it indeed ap-proximates the continuous convolution (6) for a fixed kernel function, even for varying input resolutions. For trigonometric polynomials, it even fol-lows from Lemma 1 and Theorem 2 that the spectral convolutional layer is equivariant with respect to trigonometric interpolation. 
+
+Corollary 3 (cf. [33, Corollary 1]) . Consider trigonometric polynomials 
+
+κ : T2 → C and u : T2 → C that are determined by (10) with coefficients 
+
+ˆκ, ˆu ∈ Cm×m. Then it holds for any n ≥ m that 
+
+(κ ∗ u)n = F−1 (ˆ κ ˆ∗ un) ,
+
+where (κ∗u)n = (( κ∗u)( j/n )) j∈[n]2 and un = ( u(j/n )) j∈[n]2 are discretizations of the functions κ ∗ u and u using n2 equidistant sample points. 
+
+The generalization to multiple input and output channels is done exactly as for the discrete convolution presented in Section 2.1. For an activation function σ : R → R, the spectral convolutional block parametrized by ˆ κ ∈
+
+Ccout ×cin ×m×m is then defined for u ∈ Cn×n by 
+
+Sˆκ(u) = σ (ˆ κ ˆ∗ u) . (13) At this point we would like to stress that although we can show interpo-lation equivariance for the spectral convolutional layer, this result does in general not transfer to the spectral convolutional block. For example, it is pointed out in [30, 43] that applying the popular ReLU activation function, ReLU( t) = max {0, t }, pointwise in the sense of Nemytskii-operators (cf. [44, Chapter 4.3]) does not keep the band-limit of a function, or, to relate it to our derivations, does not map trigonometric polynomials to trigonometric polynomials. This means that in general, even if we use two fine enough but different discretizations of a trigonometric polynomial, we can not expect the outputs of the spectral convolutional layer to be related by trigonometric interpolation anymore. This issue is addressed by respresentation equivalent neural operators (ReNOs) proposed in [30]. Building on this concept, the work [31] proposes a modified activation function that first upsamples the discrete data to a high resolution before applying the ReLU. 
+
+3.1.3 Derivation of a spectral U-Net architecture 
+
+Using the spectral convolutional layer, we now derive a spectral U-Net ar-chitecture. To do so, we first recall that in a classical U-Net architecture the image that is passed through the U-Net is downsampled in the contraction path and then upsampled in the expansion path. We now want to inspect this behavior from the perspective of spectral convolutional layers. 11 ∗ ∗∗ ∗     
+
+> down-/up-sampling κ∗uconv. block skip connection
+
+Figure 2: A more detailed visualization of the convolution in classical U-Net architec-tures. Typically, the size of the input changes by down- and upsampling, while the size of the convolutional kernels is fixed. 
+
+Corollary 4 (cf. [33, Lemma 3]) . Let m, n ∈ N, m ≤ n be fixed. For any 
+
+κ ∈ Cm×m and u ∈ Cn×n it holds that 
+
+κ ∗ u = n2 (Fκn) ˆ ∗ u, 
+
+with κnj := κj if j ∈ [m]2 and κnj := 0 if j ∈ [n]2 \ [m]2. Vice versa, for any 
+
+ˆκ ∈ Cm×m and u ∈ Cn×n it holds that 
+
+ˆκ ˆ∗ u = 1
+
+n2 (F−1 ˆκn) ∗ u, 
+
+with ˆκnk := ˆ κk if k ∈ [m]2 and ˆκnk := ˆ κk if k ∈ [n]2 \ [m]2.
+
+Up to a scaling, the parameter transform from spatial parameters to spec-tral parameters is performed by first zero-padding the spatial kernel to the size of the input, followed by the application of the discrete Fourier trans-form, which is essentially trigonometric interpolation. The resulting set of spectral parameters has then the same size as the input. In other words: The kernel is resized to match the size of the input by trigonometric interpolation (11). We now motivate our spectral U-Net architecture as follows: 1. We start with a classical U-Net and assume that it is tied to input data of a fixed size. 2. Using Corollary 4, we transform each convolutional block of the U-Net into a spectral convolutional block. Passing through a classical U-Net, the size of the input first shrinks and then grows. This corresponds to a decreasing and then increasing number of spectral parameters. This again means that the convolutional kernels get coarser in the contraction path and then finer in the expansion path (cf. Figure 2). Since the spectral convolution is not tied to a fixed input size, we omit the resizing operation. The resulting architecture does not have a 12 ˆ∗ ˆ∗
+
+ˆ∗ ˆ∗
+
+# ( ) ( )      
+
+> down-/up-sampling (optional) ˆκˆ∗uspectral conv. block skip connection
+
+Figure 3: A more detailed visualization of the spectral convolution in the considered spectral U-Net architecture. While down- and upsampling is optional, the size of the kernels shrinks in the contracting path and grows in the expanding path. The overall structure is analogue to classical U-Net architectures. U-shape in the original sense anymore, but it has a U-shape with respect to the number of its parameters (cf. Figure 3). Since the number of required parameters is significantly larger than usually used in the classical case, we refrain from increasing the number of channels in the contraction path. Adrawback of spectral convolutional layers is that they cannot approximate the identity very well, since for any u ∈ Cn×n it holds that 
+
+u = ((1) k∈[n]2 ˆ∗ u),
+
+which cannot be obtained by zero-padding any fixed set of parameters ˆ κ ∈
+
+Cm×m with m < n . For this reason, we supply our architecture with residual connections in each layer. We summarize our spectral architecture in the following definition. 
+
+Definition 1 (Spectral U-Net) . Given a number of input and output chan-nels cin = cout , a number of hidden channels c and a depth d. Further let 
+
+0 < m 0 ≤ m1 ≤ . . . ≤ md−1 ≤ md ≤ min be the kernel sizes. The blocks 
+
+Bin , B −d, . . . , B 0, . . . , B d, B out of the spectral U-Net consists of the following components: 
+
+• The first block Bin is parametrized by ˆκin ∈ Cc×cin ×min ×min . For an input uin ∈ Ccin ×n×n it is defined by Bin : uin 7 → u−d,
+
+u−d := Sˆκin (uin ).
+
+• Contracting path: The block Bℓ with ℓ = −d, . . . , −1 is parametrized by ˆκℓ ∈ Cc×c×m−ℓ×m−ℓ . For an input uℓ−1 ∈ Cc×n×n it is defined by 
+
+Bℓ : uℓ−1 7 → uℓ,
+
+uℓ := Sˆκℓ (uℓ−1) + uℓ−1.
+
+13 • The central block B0 is parametrized by ˆκ0 ∈ Cc×c×m0×m0 . For an input u−1 ∈ Cc×n×n it is defined by B0 : u−1 7 → u0,
+
+u0 := Sˆκ0 (u−1) + u−1.
+
+• Expanding path: The block Bℓ with ℓ = 1 , . . . , d is parametrized by 
+
+ˆκℓ ∈ Cc×c×mℓ×mℓ . For inputs u−ℓ, u ℓ−1 ∈ Cc×n×n it is defined by Bℓ :(u−ℓ, u ℓ−1) 7 → uℓ,
+
+uℓ := Sˆκℓ (u−ℓ + uℓ−1) + uℓ−1.
+
+• The last block Bout is parametrized by κout ∈ Ccout ×c×1×1. For an input 
+
+ud ∈ Cc×n×n it is defined by Bout : ud 7 → uout ,
+
+uout = κout ∗ ud.
+
+Stacking all components together, the spectral U-Net is given by 
+
+Bout ◦ U + 
+
+> d
+
+◦ Bin ,
+
+where U + 
+
+> d
+
+is defined recursively for u ∈ Cc×n×n by 
+
+U + 
+
+> ℓ
+
+(u) =
+
+(
+
+Bℓ(U − 
+
+> ℓ
+
+(u), U +
+
+> ℓ−1
+
+(u)) if ℓ ∈ { 1, . . . , d, }
+
+U − 
+
+> 0
+
+(u) if ℓ = 0 ,U − 
+
+> ℓ
+
+(u) = (B−ℓ ◦ B−ℓ+1 ◦ . . . ◦ B−d)( u), for ℓ ∈ 0, . . . , d. 
+
+As mentioned, the above architecture does not include resizing operations. Depending on the size of the input, this can cause a high memory demand. In our numerical experiments in Section 5, we therefore also consider a spectral U-Net architecture with resizing operations. More precisely, in the contrac-tion path and the central block, any input is downsampled via trigonometric interpolation to the size of the kernel ˆ κℓ before passing through the block 
+
+Bℓ for ℓ = −d, . . . , 0. Inputs that are already smaller keep their size. In the expanding path we then perform the corresponding upsampling via trigono-metric interpolation. Although it follows from Corollary 3 the resizing does not cause any information loss in the spectral convolutional layers, a differ-ent behavior of both architectures is possible after the first application of the activation function. We note that with or without resizing, the spectral U-Net architecture typically needs much larger kernels in order to catch high frequency details than a classical U-Net with the same depth. In the classical version, each convolutional layer is usually parametrized by kernels of the same height and width, e.g. κℓ ∈ Ccout ,ℓ ×cin ,ℓ ×3×3 for each layer. This additionally means that the size of the kernels first grows with respect to the size of the input and then shrinks again. The kernels parametrized in the spectral convolutional layer 14 however are not restricted to a local field of view. Therefore, although the parametrization used in the spectral convolutional layer is consistent with the integral operator intepretation and comes with the advantage of fast computations due to the fast Fourier transform, it is probably not optimal. Another option we want to explore in the next section, is to use a locally restricted parametrization, but to keep approximating an integral operator by interpolating the kernel to match the size of the input. 
+
+3.2 Interpolating local kernels 
+
+As discussed in Corollary 4, the interpretation of spectral convolutions is to resize the kernel to match the size of the input by trigonometric interpo-lation. Yet, spectral convolutional layers typically need significantly larger parametrizations than usual fixed-size (spatial) kernels to capture some high-frequency information, leading to a significant increase in the number of learnable parameters and memory requirements. As an alternative and mo-tivated by [25] and [45], we study locally restricted kernels modeled as piece-wise bi-linear functions parameterized by ˜km ∈ Rm×m (for choices of m such as m = 3 or m = 5). In other words, we interpret discrete values of a learn-able kernel ˜km as evaluations of an underlying continuous function on a fixed, (resolution-independent) regular grid xl ∈ [0 , 1], l ∈ [m], xl < x l+1 , and ap-proximate the underlying continuous function via bi-linear interpolation, i.e., we set 
+
+k(x, y ) = 
+
+
+
+1 − x − xi
+
+xi+1 − xi
+
+  
+
+1 − y − xj
+
+xj+1 − xj
+
+
+
+˜kmi,j 
+
++
+
+ x − xi
+
+xi+1 − xi
+
+  
+
+1 − y − xj
+
+xj+1 − xj
+
+
+
+˜kmi+1 ,j 
+
++
+
+
+
+1 − x − xi
+
+xi+1 − xi
+
+  y − xj
+
+xj+1 − xj
+
+
+
+˜kmi,j +1 
+
++
+
+ x − xi
+
+xi+1 − xi
+
+  y − xj
+
+xj+1 − xj
+
+
+
+˜kmi+1 ,j +1 (14) for xi ≤ x ≤ xi+1 and xj ≤ y ≤ xj+1 , and set k(x, y ) = 0 if x ≤ x1 or y ≤ x1
+
+or x ≥ xm or y ≥ xm. Consequently, we approximate the continuous convo-lution (6) for a given discretization un ∈ Rn×n via 1 /n 2 times the discrete convolution between un and kn (see (7)), where we use the above bi-linear interpolation to create kn from ˜km. Because the above bilinear interpolation is zero if x ≤ x1, y ≤ x1, x ≥ xm or y ≥ xm, the kernel k(x, y ) has a local support, and most values of kn do not have to be computed for evaluating the discrete convolution. We therefore largely retain the computational ef-ficiency of the usual fixed-size discrete convolution. This approach permits an exact approximation of a certain set of kernels, namely piecewise, bilinear 15 polynomials: 
+
+k(x, y ) = ax + by + cxy + d. (15) Even though different sets might be reasonable from a practical point of view, the most natural choice for a set of functions preserved by bilinear interpolation are (piecewise) bilinear polynomials. That this holds can be seen by plugging in (15) into (14), where it is easily visible that the four parameters are always uniquely determined by the four neighboring vertices of the sampling grid. An important counterexample in the context of this work is the identity function, which we define here for the discretized case as follows: 
+
+kn(x, y ) = 
+
+(
+
+n2 if x = y = 0 ,
+
+0 else. The term n2 is necessary as we intend to approximate (7) as close as possible. By bilinearly interpolating such an identity-kernel of size m to size n > m , we observe two effects: First, the interpolation of a singular Dirac peak of height 
+
+m2 results in a convex combination of the peak value and a neighboring zero value, thus either keeping the value or decreasing it, contrary to the required increase to a value of n2. Furthermore the just described effect also spreads the central, “singular” peak onto multiple neighbors, losing one of the central properties of a Dirac measure. Intuitively speaking, bilinearly interpolating a Dirac measure results in a wider and flatter function. Similarly to Dirac measures, differential operators cannot be preserved very well by interpolation. In the following section, we therefore take a closer look at possibilities to express differential operators by convolutional layers. 
+
+# 4 U-Nets with differential operators 
+
+In contrast to the interpretation as integral operators, we now turn to the interpretation of convolutional layers in discrete U-Nets as discretized dif-ferential operators. Differential operators are a valuable ingredient in image processing for various reasons: On the one hand, a prominent tool from clas-sical feature extraction is edge detection, which can be related to identifying areas with a large image gradient (cf. [46, Chapter 4]). On the other hand, differential operators naturally appear in techniques from PDE-based im-age processing (cf. [27]). In this section, we discuss possibilities to connect discrete U-Net architectures to these two paradigms. As pointed out in [25], the convolution (4) can be generalized to variable input resolutions by interpreting it as the finite differences approximation of a differential operator (cf. [47]) by scaling with the inverse spatial step-size. To motivate this, we restate Proposition 3.1 from [25] for our equispaced grid setting. In general, the proposition states that the scaled convolution con-verges pointwise to a directional derivative. In our specific case, we consider 16 the limit of the scaled convolution with a fixed kernel and discretizations with increasing resolution, i.e., 
+
+ul·n =
+
+
+
+u
+
+ il · n
+
+ 
+
+> i∈[l·n]2
+
+with l, n ∈ N.
+
+Here, n denotes an arbitrary but fixed base resolution and l denotes the refinement. Scaling the convolution with the inverse spatial step-size corre-sponds to a multiplication with l · n. We state the pointwise convergence in points i/n = ( l·i)/(l·n) for any i ∈ [n]2. We further note that throughout this section, we perform the discrete convolution via zero-padding of undefined values of the input u. In the case of continuous functions, this can be inter-preted as zero boundary conditions. To match the zero-centered indexing, we again use the domain Ω = ( −0.5, 0.5) 2.
+
+Lemma 5 ([25, Prop. 3.1]) . Consider u ∈ C10 (Ω , R) and its discretizations 
+
+un = ( u(i/n ))) i∈[n]2 using n2 equidistant sampling points for any n ∈ N.Further let κ ∈ Rm×m, m ∈ N, be a fixed convolution kernel that fulfills 
+
+X
+
+> i∈[m]2
+
+κi = 0 . (16) 
+
+Then it holds for any i ∈ [n]2 that 
+
+lim 
+
+> l→∞
+
+(l · n) ( κ ∗ ul·n)l·i = ⟨b, ∇u⟩(i/n ),
+
+for any i ∈ [n]2 and 
+
+b = − X
+
+> i∈[m]2
+
+i κ i. (17) 
+
+Proof. The proof follows from the first order Taylor expansion of u and can be found in [25, Appendix A.1]. For the derivation of the explicit form of b
+
+we note that the result in [25] is stated for the cross-correlation (denoted by 
+
+⋆) instead of the convolution (denoted by ∗), which causes opposite signs of 
+
+b.A kernel that fulfills (16) is called a differential kernel. In the implemen-tation provided by the authors of [25], it is proposed to transform any kernel 
+
+κ into a differential kernel by subtracting the sum over the entries of κ from the element κ0,0.4 This approach has the additional advantage that it does not alter the vector b, since κ0,0 is always multiplied by (0 , 0) in (17). A consequence of condition (16) one should keep in mind is that convolu-tions with differential kernels cannot approximate the identity anymore. In               
+
+> 4We would like to thank Miguel Liu-Schiaffini for sharing this insight. The code is available at https://github.com/neuraloperator/neuraloperator/blob/main/neuralop/layers/ differential_conv.py
+
+17 the architecture proposed in [25] this issue is resolved by adding residual con-nections. To stay as close to the classical convolutional layer as possible, we instead adapt the definition of our differential convolutional layer: For a ker-nel κ ∈ Rm×m and inputs u ∈ Rn×n we define the differential convolutional layer Diff n as Diff n(κ, u ) := n κ ∗ u + (1 − n) ˜ κ u, with ˜ κ = X
+
+> i∈[m]2
+
+κi.
+
+It follows directly from Lemma 5 that the differential convolutional layer still approximates a directional derivative but is also capable to reproduce the identity. 
+
+Corollary 6. Consider u ∈ C10 (Ω , R) and its discretizations un = ( u(i/n )) i∈[n]2
+
+using n2 equidistant sampling points for any n ∈ N. Further let κ ∈ Rm×m,
+
+m ∈ N, be any fixed convolution kernel. Then it holds that 
+
+lim  
+
+> l→∞
+
+Diff l·n(κ, u l·n)l·i = (˜ κ u + ⟨b, ∇u⟩) ( i/n ),
+
+for any i ∈ [n]2 and b as in (17) .
+
+The following example visualizes how we can use the layer Diff n to ap-proximate any directional derivative and multiple of the identity. 
+
+Example 2. Consider the kernel 
+
+κ =
+
+
+
+0 0 00 κ1 + κ2 + c − κ1
+
+0 −κ2 0
+
+ ,
+
+with κ1, κ 2, c ∈ R. We compute ˜κ = c and thus for any u ∈ C10 (Ω , R), un as above, it follows for any i ∈ [n]2 that 
+
+lim  
+
+> l→∞
+
+Diff l·n(κ, u l·n)l·i = ( c u + κ2 ∂1u + κ1 ∂2u) ( i/n ).
+
+The reason that κ2 controls the horizontal derivative ∂1u and κ1 controls the vertical derivative ∂2u lies in the discretization of u as a matrix, which rotates the coordinate system by −π/ 2. In practice one would rather consider discretizations (u(( i2, −i1)/n )) i∈N which does not cause the described switch of axes. 
+
+In the remainder of this section we want to investigate how the idea of differential convolutions can be incorporated into U-shaped neural network architectures for image processing. Here, we distinguish between the role as a feature extractor on the one hand and its integration into the approximation of a partial differential equation on the other hand. 18 4.1 Feature extraction perspective 
+
+We first want to subsume the discussed differential convolutions in the con-text of feature extraction. This means that we understand the purpose of the differential convolutional layer as returning a directional derivative as a feature that characterizes a given function. It is important to note that in the case of image processing, the assumption of differentiability is typically only fulfilled piecewise. Instead, images are assumed to lie in the space of functions of bounded variation, BV . In particular, the space BV (Ω) consists of all function u ∈ L1(Ω), for which there exists a finite, vector-valued Radon measure Du in Ω such that 
+
+Z
+
+> Ω
+
+u div ϕ dx = −
+
+Z
+
+> Ω
+
+⟨ϕ, dDu ⟩ for any test function ϕ ∈ C10 (Ω , R2).
+
+The measure Du is called the distributional derivative of u. We refer to [48, Chapter 3] for a profound introduction. If a function u is weakly differen-tiable, Du is absolutely continuous with respect to the Lebesgue measure and its density is given by the weak derivative of u. In this case, the applica-tion of a differential convolutional layer should not cause any problems. The more interesting case however, is to consider input images with sharp edges, or, in other words, piecewise differentiable functions that contain jumps. For such inputs, a clarification of the purpose of the feature extraction layer is required. If the aim is to approximate Du in regions where u is differentiable, the differential convolutional layer will return the desired output in these regions. At jumps however, the scaling with the inverse spatial step-size will cause divergence of the outputs as the number of sampling points tends to infinity. This issue could be approached for example by adding a truncation layer that cuts off high gradients. In contrast to this, an important part of classical feature extraction is edge detection (cf. [46, Chapter 4]), which is concerned with the jumps of the input function. Therefore, it could be more suitable to have a layer that extracts the location and the height of jumps, which would then correspond to the classical convolutional layer again. Here, the output would consist of the sparse set of edges, while in differentiable regions it would vanish with an increasing number of sampling points. While the gradient information contained in the differential part might be negligible (for example in the case of piece-wise constant input functions), only extracting the edges of an image might not be sufficient to solve a given problem. In many cases the architecture would still need a mechanism to fill in, or, “color in” the extracted edges, for example by a learned upsampling method. Additionally, the function of deeper layers in the contracting path is not clear from these derivations. We thus leave this direction for future work and summarize our consider-ations in Figure 4 and the following example. 19 Figure 4: Outputs of the differential layer for two different input resolutions. Left: Diff 17 (κ, u 17 ), right: Diff 65 (κ, u 65 ), with u and κ as described in Example 3. The black circle corresponds to the boundary ∂B 1/4(0). The maximum magnitude of the outputs grows with the number of samples. The output in the boundary regions does not contain the full information about the corre-sponding normal vector in ∂B 1/4(0). 
+
+Example 3. On the zero-centered domain Ω = ( −0.5, 0.5) 2, with the cor-responding Borel σ-algebra B, we consider the function u ∈ BV (Ω) , defined for a constant c > 0 as 
+
+u(x) = 
+
+(
+
+c if x ∈ B1/4 (0) ,
+
+0 otherwise. In the interior of B1/4(0) and Ω \ B1/4(0) the function u is differentiable (with ∇u = 0 ) and the jump set is given by ∂B 1/4(0) . It follows from Gauß’s Theorem (see e.g, [49, A8.8]) that the distributional derivative Du can be computed for sets A ∈ B as 
+
+Du (A) = 
+
+Z
+
+> A∩B1/4(0)
+
+∇u dx −c
+
+Z
+
+> A∩∂B 1/4(0)
+
+x/ ∥x∥ dH1(x)= −c
+
+Z
+
+> A∩∂B 1/4(0)
+
+x/ ∥x∥ dH1(x),
+
+where x/ ∥x∥ corresponds to the normal vector at x ∈ ∂B 1/4(0) and H1 de-notes the 1-dimensional Hausdorff measure (cf. [49]). For the sake of sim-plicity, we only consider the first component of the derivative, Du 1. For a differentiable function, we know from Lemma 5 and Example 2 that ∂1u
+
+can be approximated by differential layers Diff l·n(κ, ·), l → ∞ , with kernel 
+
+κ = (0 , 1, −1) T . It directly follows that for any n ∈ N, i ∈ [n]2 that 
+
+lim  
+
+> l→∞
+
+Diff l·n(κ, u l·n)l·i = ∂1u(i/n ),
+
+20 as long as i > 0 or ∥i/n ∦ = 1 /4. However, if i ≤ 0 and ∥i/n ∥ = 4 , the differ-ential layer approximates the jump and the above limit is infinity. Moreover, we can show that 
+
+∥ Diff n(κ, u n)∥∞ −→ ∞ , as n → ∞ ,
+
+since for any n ∈ N there exists i ∈ [n]2 such that ∥i/n ∥ ≥ 1/4, but ∥(i1, i 2 −
+
+1) /n ∥ < 1/4 and thus Diff n(κ, u n)i = n c . The diverging entries could be bounded by applying a thresholding operation, but c, the height of the jump, cannot be recovered with this approach. Next, we consider the behavior of the unscaled, classical convolutional layer. Due to the missing scaling, we get for any n ∈ N, i ∈ [n]2
+
+lim 
+
+> l→∞
+
+(κ ∗ ul·n)l·i = 0 ,
+
+as long as i > 0 or ∥i/n ∦ = 1 /4. Although in our example, this coincides with the actual gradient ∂1(i/n ), the limit would also be zero in the case of a non-trivial gradient, for example for a function that is not constant in 
+
+B1/4 (0) . In contrast at any positive jump, i.e., i ∈ [n]2 such that ∥i/n ∥ ≥ 1/4
+
+and ∥(i1, i 2 − 1) /n ∥ < 1/4, we get (κ ∗ un)i = c, and analogously, we get 
+
+(κ ∗ un)i = −c at negative jumps. This means, that we can approximate the position and the height of jumps. However, the directional information 
+
+x/ ∥x∥ contained in Du is reduced to the elementwise sign sgn( x).
+
+4.2 PDE perspective 
+
+Another way to interpret differential convolutional layers is as a component of finite difference schemes to approximate the solution of a partial differ-ential equation (PDE). The essential ingredient here are residual connec-tions. These have been studied in a range of works [50–53] in the context of finite difference schemes to approximate solutions of ordinary differential equations. Further incorporating spatial derivatives, [29] proposes to design residual convolutional neural networks based on finite difference schemes for partial differential equation. In this section, we want to investigate how this approach transfers to the setting of variable input resolutions. Similar to the approach described in [29], we now consider kernels κ that implement finite differences of order α ∈ N, for example 
+
+κ =
+
+
+
+0 0 00 2 −10 −1 0
+
+ , or, κ =
+
+
+
+0 1 01 −4 10 1 0
+
+ .
+
+which (after appropriate scaling with the pixel size) approximate first derivates or a Laplacian, respectively. We rewrite the convolutional layer with a resid-ual connection in iterative form as 
+
+un(tk+1 ) = un(tk) + ReLU ( κ ∗ un(tk)) . (18) 21 In the following, we want to show that for suitable kernels, this iterative formulation can be seen as a stable finite difference scheme to approximate the solution of a partial differential equation. To do so, we introduce a time discretization determined by the time step-size ∆ t, tk = k∆t for any k ∈ N
+
+and denote the spatial step-size by ∆ x. We recall that for discretizations un
+
+sampled on a regular n×n-grid, it holds that ∆ x = 1 /n . Further introducing a discretization independent constant c ∈ R, we consider the finite difference scheme 
+
+un(tk+1 ) = un(tk) + c ∆t ReLU 
+
+ κ ∗ un(tk)∆xα
+
+
+
+, (19) where α ∈ N determines the order of the derivative. 5 Such finite difference schemes are called conditionally stable if under a suitable relation between ∆t and ∆ x for any T > 0, there exists a constant CT independent of ∆ t, ∆ x
+
+such that 
+
+∥un(tk)∥ ≤ CT ∥un(t0)∥ for any k such that tk ≤ T. 
+
+We refer to [47, Definition 1.5.1] for a more general definition. Comparing (18) to (19), we see that the classical convolution without rescaling of κ
+
+corresponds to 
+
+c∆t/ (∆ x)α = 1 .
+
+Such a choice is reminiscent of the Courant-Friedrichs-Levy (CFL) condition needed for stable explicit discretizations of a partial differential equation (cf. [47, Theorem 1.6.1]). We note that for the above condition to be sufficient to obtain conditional stability, it requires further assumptions on κ that control the scaling and the direction of the finite difference approximation and refer to [47] for further details. On the other hand, the above explicit Euler scheme is not stable if the CFL condition is violated in the sense that ∆ t/ (∆ x)α → ∞ .6 However this divergence of ∆ t/ (∆ x)α does occur if the convolutional layer is substituted by a differential layer that approximates a derivative of order α. More precisely, the iterative scheme 
+
+un(tk+1 ) = un(tk) + ReLU (Diff nα(κ, u n(tk))) ,
+
+with Diff nα(κ, u n(tk)) = κ ∗ un(tk)∆xα ,
+
+corresponds to choosing the constant time step-size ∆ t = 1 /c .                           
+
+> 5We note that to obtain a approximation of a derivative of order α, the kernel κhas to fulfill conditions similar to (16).
+> 6This can be seen as follows: For an arbitrary kernel κchoose a non-zero entry κjand un
+> −j(t0) =
+> κj, zero everywhere else. Then ∥un(t0)∥=κjand ( κ∗un(t0)) 0=κ2
+> j, thus ∥un(t1)∥ ≥ || κj| − |c|∆t/ (∆ x)ακ2
+> j| → ∞ as ∆ t/ (∆ x)α→ ∞ .
+
+22 From the above derivations we conclude that the classical convolutional layer seems more suitable to implement the described PDE-perspective. How-ever, we also see that choosing ∆ t = c ∆xα implicitly means that approx-imating the solution at a fixed time T requires more and more time steps (respectively layers) as the resolution increases. In contrast, the classical U-Net architecture consists of a fixed number of layers. Hence, we expect a decreasing effect on the reconstruction quality of such a network architecture for increasing resolution, which can partly be observed from the computa-tional results below. We leave a more detailed study of this direction for future work. 
+
+# 5 Numerical experiments 
+
+5.1 A toy example 
+
+As a starting point for understanding different ways to handle varying dis-cretizations of the same inverse problem, consider deblurring a signal that is a superposition of finitely many dirac deltas, i.e., consider 
+
+f = Au + n, u(x) = 
+
+> N
+
+X
+
+> j=1
+
+αj δ(x − xj ), Au = k ∗ u (20) for a Gaussian kernel k, and non-negative coefficients αj > 0. For any discretization, i.e., sampling of f at discrete positions i, leading to ˜f =(f (xi)) i=1 ,...,n ∈ Rn, we reconstruct an approximation ˜ u ∈ Rn of u on the same spatial grid. As we expect ˜ u to be non-negative and sparse, we use an ℓ1 regularization as well as a non-negativity constraint along with a quadratic data fidelity term (assuming measurements of ˜f with Gaussian noise) to compute the classical model-based reconstruction ˜u = arg min 
+
+> u≥0
+
+12 ∥ ˜Au − ˜f ∥2 + γ∥u∥1, (21) for ˜Au = ˜k ∗ u being the convolution with a discrete Gaussian kernel. Using a projected gradient descent for the above minimization leads to iterations ˜uk+1 =proj ·≥ 0
+
+
+
+˜uk − τ ˜A∗( ˜A˜uk − ˜f ) − τ γ 
+
+
+
+(22) =ReLU 
+
+ ˜g
+
+|{z} 
+
+> kernel
+
+∗ ˜uk + ( −τ γ )
+
+| {z } 
+
+> bias
+
++ τ ˜u0
+
+|{z} 
+
+> skip con. from input
+
+ (23) =ReLU 
+
+ ˜uk
+
+|{z} 
+
+> skip con.
+
++ ˜h|{z} 
+
+> kernel
+
+∗ ˜uk + ( −τ γ )
+
+| {z } 
+
+> bias
+
++ τ ˜u0
+
+|{z} 
+
+> skip con. from input
+
+ . (24) 23 0 100 200 300 400 500 1.0 
+
+> 0.5
+> 0.0
+
+(a) True Kernel. 0 50 100 150 200 250 300 4 
+
+> 2
+> 0
+
+(b) Small kernel ˜h.0 100 200 300 400 500 1.0 
+
+> 0.5
+> 0.0
+
+(c) Interpolated Kernel ˜h.0 100 200 300 400 500 1.0  
+
+> 0.5
+> 0.0
+
+(d) Interpolated Kernel ˜ g = I − ˜h.0 100 200 300 400 500 1.0 
+
+> 0.5
+> 0.0
+
+(e) Spectral kernel ˜h.0 100 200 300 400 500 1.0  
+
+> 0.5
+> 0.0
+
+(f) Spectral kernel ˜ g = I − ˜h.
+
+Figure 5: The different kernels. Interpolating as well as padding the kernel ˜h in the Fourier space produces a result that is indistinguishable from the true kernel. When interpolating ˜ g = I − ˜h, the skip connection is no longer accurately preserved.The same issue arises when ˜ g is padded in Fourier space, which leads to a sinc-like artifact in the resulting kernel. We have interpreted the (provably convergent) gradient projection iterations as two slightly different but equivalent convolutional neural networks: For an input u0 = ˜A∗f (being an approximate reconstruction obtained from applying the adjoint operator to the measurements), we use skip connections (weighted with τ ) from the input to the output of every convolutional layer. We obtain two different interpretations of the networks by either using a kernel ˜ g := I − τ (˜k ∗ ˜k) that represents ( I − τ ˜A∗ ˜A), 7 or using a kernel ˜h := −τ (k ∗ k) and making the skip connection from the previous layer explicit. While the two formulations, (23) and (24), are of course identical, they start to differ if one considers them to be architectures that ought to handle different resolutions (discretizations) with the same parameters. In this case, we have several options: 
+
+• Use the same kernel (˜ g or ˜h) for different resolutions. In this case the 
+
+> 7
+
+Please note that the convolution with a Gaussian kernel is self-adjoint. 
+
+24 two network architectures remain identical. Yet, they will not generalize across different resolutions at all, since a finer discretization (larger n)requires a wider kernel. 
+
+• Parameterize the kernel with a few parameters (suitable for a small 
+
+n) and use linear interpolation to handle different discretizations. In this case, the two approaches, (23) and (24), start to differ as (23) includes the skip connection into the interpolation while (24) does not, see Fig. 5. Based on how the direct application of the gradient projection algorithm at the correct resolution would look like, we expect (24) to work significantly better. 
+
+• Write the convolutions in (23) and (24) as multiplications in Fourier space. Consider the Fourier coefficients for a certain resolution (small 
+
+n) to be the parameters of an FNO-inspired network and apply the convolutions with zero padding at higher resolution. Note that it is potentially necessary to rescale the kernels after interpolation in order to preserve the integral value (see also chapter 3.1.1 Transforming the Fourier padded kernel back to the spatial domain, Fig. 5 illustrates their shape. As we can see, the interpolated kernel ˜h remains unaffected. However, this is not the case for the kernel ˜ g: adding the skip connection and padding modifies the kernel such that, in the Fourier domain, it behaves like a rectangular window function. Consequently, this results in a sinc-function in the time domain (see Figure 5). To demonstrate the five different choice of handling different resolutions within a CNN motivated by our projected gradient descent algorithm, we simulate the continuous f , u and k using a discretization of n = 64000 points. We then subsample f by a factor of 16 and add noise to obtain ˜f ∈ R4000 . We create Gaussian kernels with σ = 300 at a resolution suitable for reconstructing ( n = 1000) and use the five different approaches described above (use low-resolution kernel, use linear interpolation of ˜ g, use linear interpolation of ˜h, use spectral variant of (23), use spectral variant of (24)) and show the reconstructions in Fig. 6. Interpolating the smaller kernel, defined as ˜h = −τ (k ∗ k), yields results comparable to those obtained with the larger kernel. In this case, the sparsity of the ground truth signal can be effectively reconstructed. In contrast, interpolation using ˜ g fails to recover this sparsity; the output primarily reflects the smooth intensity profile of the Gaussian kernel. Similar results were observed for the spectral variants. These observations suggest that incorporating a skip connection from the input to the corresponding layer, as implemented in Equation 24, is a more effective modeling strategy. Overall, the approach of interpolating kernels appears to be a promising strategy. In the following, we shift our focus to a more practical setting, where we aim to solve limited-angle CT reconstruction problems by learning 
+
+suitable convolution kernels for the reconstruction, rather than deriving them 25 012(a) Ground truth signal 0.000 0.001 0.002 (b) Noisy measurement. 0.00 0.02 0.04 0.06 
+
+(c) Reconstruction with large kernel 0.000 0.001 (d) Reconstruction with small kernel. 0.00 0.02 0.04 0.06 
+
+(e) Reconstruction with interpolation of ˜h.0.000 0.005 0.010 
+
+(f) Reconstruction with interpolation of ˜g.0.00 0.05 0.10 
+
+(g) Reconstruction with spectral interpo-lation of ˜h.0.00 0.01 0.02 
+
+(h) Reconstruction with spectral interpo-lation of ˜ g.
+
+Figure 6: The results with different kernel. The interpolation of ˜h reconstructs the spar-sity of the ground truth signal, while the interpolation of ˜ g leads to a more spread-out signal. 26 analytically through a model-based approach. 
+
+5.2 Limited angle CT post-processing 
+
+Inspired by the results on the one-dimensional toy example we took a closer look into the behavior of different neural network architectures on imaging data based on a common real world application, namely limited angle com-puterized X-ray tomography. This imaging modality is commonly encoun-tered in medical and scientific applications. While for full-angle tomography data, there exists a unique analytical solution (at least in the theoretical case of perfect measurements), limited angle tomography is an underdetermined inverse problem, leading to so-called streaking artifacts in naive reconstruc-tions. To remove these, common approaches use various combinations of variational or data-driven approaches to pre-process, reconstruct and post-process limited angle CT measurements. As we intend to stay close to a real-world application while also staying as simple as possible regarding theoretical analysis and practical implemen-tation we restrict our experiments to post-processing. We therefore consider naive reconstructions generated from measurements of different resolutions as input data and the corresponding artifact free reconstructions as target data. Since data collection for such a task is costly we use simulated data. 
+
+5.2.1 Data generation 
+
+Figure 7 visualizes our data generation process. We generate high-resolution (1024 × 1024 pixels) groundtruth images consisting of ellipses with random sizes, positions, rotations and densities. These high-resolution images were then transformed using the Radon transform with angles in [0 , 34 π], resulting in an incomplete but high-resolution sinogram missing approximately 25% of angles. As a sinogram size (determined by the amount of angles and offsets) with the (vectorized) dimension as the groundtruth proved insufficient for reconstructing images in our framework we empirically determined a suffi-cient size as 2 N angles and 4 N offsets, where N is the width/height of the final image. Finally, we generated each final data sample by constructing the target by bilinear subsampling of the high-resolution groundtruth image while constructing the input by performing a ram-lak filtered backprojection onto the desired input size. As the focus of our work lies on the behavior across different resolutions we chose to not include any noise, resulting in an easier reconstruction problem and thus hopefully easier training of the different models. We generated 3 datasets with different resolutions (64 × 64, 128 × 128 or 256 × 256), each having 10000 samples, split between training-, validation-and test-data (64% /16% /20%). To guarantee fairness we used identical train-ing data across all training runs. 27 Radon Transform Bilinear Subsampling High-Resolution Ellipses Limited Angle Sinogram Low-Resolution Target Low-Resolution Input Filtered Backprojection  
+
+> 1024 64 64 128 256 1024 64 64
+
+Figure 7: An overview over the data generation process to simulate the limited angle CT data used in our experiments, here exemplary for images of size 64 × 64. 
+
+5.2.2 Architectures 
+
+We analyze six different neural network architectures: 
+
+Classical U-Net Visualized in Figure 1 we implemented this popular image-to-image architecture as described in section 2 and [11], with a minor modification: The convolutional layers in the original U-Net do not perform zero-padding, which causes the outputs to be slightly smaller than the in-puts. In our implementation we use zero-padding as this generates outputs that have the same size as the inputs and thus better fits the idea of post-processing. As in the original work, we use a depth of 4, meaning we operate on 5 different resolutions. Every downsampling step doubles the amount of channels while halving the image resolution, which is exactly inverted in the upsampling part. An initial convolution extends the amount of channels to 64, which is inverted at the end by a final convolution. This U-Net structure is used as reference for all other architectures, with the goal of staying as close as possible. 
+
+Differential U-Net The differential U-Net has the same structure as our U-Net implementation, with the only difference being the use of differential convolution filters, as described in section 4. Based on our discussions in Section 4, we do not expect a resolution-invariant behavior for such an ar-chitecture, as we neither include a thresholding layer to cut off exploding 28 gradients, nor adapt the number of layers to the input resolution. 
+
+Spectral U-Net A U-Net inspired by Fourier neural operators, as intro-duced in [18], described in section 3.1.3. Structurally our implementation again follows the U-Net as described above, as we also use a depth of 4 and extend the number of channels to 64 in the first layer. As described in Definition 1, we do not further increase the number of channels in the contracting path and implement the skip connections as additions instead of concatenations. This makes it possible to add residual connections in each layer, as we have argued for in section 3.1.3. We further choose the kernel sizes min = m4 = 256, m3 = 128, m2 = 64, m1 = 32, m0 = 16. 
+
+Spectral resizing U-Net The spectral resizing U-Net is similar to the basic spectral U-Net described above. The main difference is the inclusion of up- and downsampling operations in the form of trigonometric interpolation. 
+
+CNO We use the original CNO implementation 8 as described in [31], with hyperparameters such as depth, amount of initial channels etc. chosen in a way to most closely resemble the classical U-Net. 
+
+U-NO We use the original U-NO implementation 9 as described in [22], with hyperparameters (number of channels, skip connections, kernel sizes) chosen such that it matches the spectral resizing U-Net. 
+
+5.2.3 Results 
+
+Even if a network contains resolution-agnostic building blocks, we can only assess empirically if it is a suitable model to solve our problem. We consider the following questions: (Q1) Performance for fixed input resolution: How well does the network per-form on a single resolution when it was trained on the same resolution? (Q2) Performance for varying input resolutions: How well does the network perform on varying resolutions when it was trained on the same varying resolutions? (Q3) Generalization to unseen input resolutions: How well does the network perform on resolutions that were not seen during training? Does the performance improve if the range of training resolutions increases? (Q4) Performance for resized input resolutions: How well does a network trained on a single resolution perform on images of varying resolutions resized to the resolution the network was trained on? We evaluate each architecture by training 10 instances and reporting the mean performance. The following figures show the performance of each ar-
+
+> 8The code for the CNO architecture is available at
+> https://github.com/camlab-ethz/ConvolutionalNeuralOperator/tree/main/CNO2d_original_ version .
+> 9The code for the U-NO architecture is available at
+> https://github.com/neuraloperator/neuraloperator/blob/main/neuralop/models/uno.py .
+
+29 chitecture in terms of MSE, trained either on 6400 images of 64 ×64, 128 ×128 or 256 × 256 pixels, or an equal mixture of all three resolutions with the same total amount of images. We would like to emphasize that we did not perform an extensive search for the various hyperparameters, which could be a source for further im-provement. Since a careful selection of hyperparameters will most probably lead to a good performance on a fixed input resolution, we do not put much weight to the first question (Q1). Instead, we use the performance obtained on a fixed resolution as a reference value to answer the remaining questions. We further note that since the input resolution of the CNO is tied to the fixed training resolution, we only consider questions (Q1) and (Q4) for this architecture. Our findings are visualized in Figures 8 to 10, where Figure 8 shows the mean performance and Figures 9 and 10 give further insights on the perfor-mance range. While the curves showing the performance for models trained on a fixed input resolution (“64 × 64”, “128 × 128”, “256 × 256”) give an-swers to (Q1), the models trained on mixed input resolutions (“mixed”) are related to (Q2). While for these first two questions, we only consider the performance at the respective training resolutions, the plots further shows the performance on unseen resolutions. Comparing these results for models trained on single fixed resolutions to the ones trained on mixed resolutions gives insights about (Q3). Lastly, (Q4) is taken into account with the dashed curves, which show the performance on inputs that have been resized to the training resolution. In the following we describe our findings for each archi-tecture. 
+
+Classical U-Net The classical U-Net performs quite well, however we see a large deviation between different runs in Figure 9. Training on mixed data slightly worsens the maximum performance but increases the generalization capabilities of the network. While the models perform best on the resolution they were trained on, they also generalize to a broader range of resolutions than expected. Training on mixed resolutions further increases the perfor-mance on unseen low resolutions with a slight performance trade-off on high resolutions. Resizing the input data to the training input size (dashed lines) drastically improves generalization. This indicates that the architecture itself is not resolution-invariant. 
+
+Differential U-Net As clearly depicted in Figure 8, simply substituting classical convolutional layers by differential ones without further adaptations affects the networks’ performance very negatively. We attribute the lower performance on the training resolutions to the scaling introduced in differen-tial layers, that seems to make training less stable. Taking into account this in general worse performance, we observe a similar change in performance as for the classical U-Net when training on mixed resolutions. The general-ization to unseen resolutions is substantially worse than for all other tested architectures. 30 0 100 200 300 400 500 Resolution 10 1
+
+10 2
+
+10 3
+
+> MSE
+> Baseline 64x64 128x128 256x256 Mixed Resized
+
+(a) Classical U-Net 0 100 200 300 400 500 Resolution 10 1
+
+10 2
+
+10 3 
+
+> MSE
+> Baseline 64x64 128x128 256x256 Mixed Resized
+
+(b) Spectral U-Net 0 100 200 300 400 500 Resolution 10 1
+
+10 2
+
+10 3
+
+> MSE
+> Baseline 64x64 128x128 256x256 Mixed Resized
+
+(c) Differential U-Net 0 100 200 300 400 500 Resolution 10 1
+
+10 2
+
+10 3 
+
+> MSE
+> Baseline 64x64 128x128 256x256 Mixed Resized
+
+(d) Spectral resizing U-Net 0 100 200 300 400 500 Resolution 10 1
+
+10 2
+
+10 3
+
+> MSE
+> Baseline 64x64 128x128
+
+(e) CNO 0 100 200 300 400 500 Resolution 10 1
+
+10 2
+
+10 3 
+
+> MSE
+> Baseline 64x64 128x128 256x256 Mixed Resized
+
+(f) U-NO 
+
+Figure 8: Performance comparison for different architectures on different resolutions, with dots marking the resolution of minimal MSE. Dashed lines indicate the performance if the test-inputs are resized to the size of the training samples. “Baseline” indicates the MSE of the initial reconstruction. 31 Resizing the inputs to the respective training resolution yields consistent results across nearly all resolutions. From these observations we conclude that the chosen differential architecture is not resolution-invariant. 
+
+Spectral U-Net The performance obtained with the spectral U-Net is comparable to the best runs of the classical U-Net, while the deviation ob-served between different runs is much lower for the spectral version (Figure 9). All models trained on a single fixed resolution generalize well to data of high resolutions, while performing worse on lower resolutions. Training on mixed data does not seem to improve the results at all, neither on a single resolution nor regarding the generalization capabilities. The same applies to resizing the input data to the network’s training resolution: In nearly all cases, resizing strictly decreases network performance. This indicates the strong resolution independence of spectrally parameterized networks and re-sizing only introduces interpolation errors. 
+
+Spectral resizing U-Net The resizing version of the spectral U-Net be-haves nearly identically to the non-resizing version, except for its negligibly worse performance in general. The advantage of the resizing version is the decrease in memory consumption, see figure 11. 
+
+CNO Due to the high memory requirements of the CNO model (see Figure 11, mostly caused by intermediate values in the computation) and our avail-able hardware, we had to restrict our numerical experiments to resolutions smaller than 512 × 512. A further constraint was given by the architec-ture, which does not allow for training (or testing) with mixed resolutions, we therefore only compare the resizing variants. For the remaining cases the networks performed similar to the spectral U-Net variants, producing slightly better results. 
+
+U-NO As this model also requires high memory (Figure 11), we needed to restrict our tests to resolutions smaller or equal to 256 × 256. Compared to other models, U-NO did not achieve competitive results on any resolution, but we attribute this to our choice of hyperparameters. From Figure 9 we see that the performance is almost identical in all 10 runs. Training on mixed resolutions does not seem to change the models performance. For unseen resolutions, we observe a strong zig-zag pattern between good peformance on even resolutions and bad performance on odd resolutions. The reason for this could lie in the used implementation of the spectral convolution, that in the case of real tensors of even size differs from the spectral convolution we use for the spectral (resizing) U-Net (cf. [33]). Lastly we would like to highlight once again the vast differences in compute requirements of the different models. Table 1 shows the amount of parameters the models in our experiments utilized. These are independent from training and test resolutions and do not change. Not only does the amount of pa-rameters partially explain the difference in performance between the spectral and more classic versions, but also makes a strong case for the use of com-mon, discretized models, which either generalize well enough by themselves 32 0 100 200 300 400 500 Resolution 10 1
+
+10 2
+
+10 3
+
+> MSE
+> Baseline 64x64 128x128 256x256 Mixed
+
+(a) U-Net 0 100 200 300 400 500 Resolution 10 1
+
+10 2
+
+10 3 
+
+> MSE
+> Baseline 64x64 128x128 256x256 Mixed
+
+(b) Spectral U-Net 0 100 200 300 400 500 Resolution 10 1
+
+10 2
+
+10 3
+
+> MSE
+> Baseline 64x64 128x128 256x256 Mixed
+
+(c) Differential U-Net 0 100 200 300 400 500 Resolution 10 1
+
+10 2
+
+10 3 
+
+> MSE
+> Baseline 64x64 128x128 256x256 Mixed
+
+(d) Spectral resizing U-Net 0 100 200 300 400 500 Resolution 10 1
+
+10 2
+
+10 3
+
+> MSE
+> Baseline 64x64 128x128 256x256 Mixed
+
+(e) U-NO 
+
+Figure 9: Ranges in performance of different architectures on different resolutions. “Baseline” indicates the MSE of the initial reconstruction. 33 0 100 200 300 400 500 Resolution 10 1
+
+10 2
+
+10 3
+
+> MSE
+> Baseline 64x64 128x128 256x256 Mixed
+
+(a) U-Net 0 100 200 300 400 500 Resolution 10 1
+
+10 2
+
+10 3 
+
+> MSE
+> Baseline 64x64 128x128 256x256 Mixed
+
+(b) Spectral U-Net 0 100 200 300 400 500 Resolution 10 1
+
+10 2
+
+10 3
+
+> MSE
+> Baseline 64x64 128x128 256x256 Mixed
+
+(c) Differential U-Net 0 100 200 300 400 500 Resolution 10 1
+
+10 2
+
+10 3 
+
+> MSE
+> Baseline 64x64 128x128 256x256 Mixed
+
+(d) Spectral resizing U-Net 0 100 200 300 400 500 Resolution 10 1
+
+10 2
+
+10 3
+
+> MSE
+> Baseline 64x64 128x128
+
+(e) CNO 0 100 200 300 400 500 Resolution 10 1
+
+10 2
+
+10 3 
+
+> MSE
+> Baseline 64x64 128x128 256x256 Mixed
+
+(f) U-NO 
+
+Figure 10: Ranges in performance of different architectures on different resolutions re-sized to their corresponding training resolution. “Baseline” indicates the MSE of the initial reconstruction. 34 0 200 400 600 800 1000 Input Size 0510 15 20 25 30 Memory (GB) 
+
+> Classical U-Net Differential U-Net Spectral U-Net (resizing) Spectral U-Net CNO U-NO
+
+Figure 11: Comparison of the memory requirements for different models on different resolutions. Classical U-Net Differential U-Net Spectral resizing U-Net Spectral U-Net CNO U-NO # Params (Mio.) 31.76 31.76 363.15 363.15 124.23 541.46 Table 1: Comparison of the parameter counts of different models in the configurations used in our experiments. or can be made nearly resolution independent using resized inputs. Figure 11 additionally shows the amount of required memory for a single (gradient-tracking) forward-pass through a certain architecture, making again a strong point for discretized, multiscale architectures. 
+
+# 6 Conclusion and Outlook 
+
+The numerical experiments showed that the spectral U-shaped architectures generalize well to unseen data resolutions. To make them practically compet-itive a more efficient parametrization seems inevitable. Here, we see potential in a more local, spatial parametrization in combination with interpolation. Another interesting direction is the robustness classical U-Nets showed for a certain range of unseen resolutions. It is open if this observation can be linked to the differential character of (unscaled) convolutional layers from the perspective of finite difference schemes. Towards the approximation of differ-ential operators, our results strongly indicate that it is not enough to simply substitute convolutional layers by differential layers to achieve resolution-invariance. The option to integrate differential layers into an architecture for image processing thus requires further investigations. One perspective could be to combine integral layers and differential layers like it was done in [25]. A practical shortcoming of the classical U-Net was the large variability of performance we observed in the different training runs. In this regard, 35 further numerical experiments are necessary to see if this issue can be fixed with an optimized training process. 
+
+# Acknowledgement 
+
+This research was supported in part through the Maxwell computational resources operated at Deutsches Elektronen-Synchrotron DESY, Hamburg, Germany. Additional support was received by the OMNI-Cluster compute resources at the University of Siegen. MB and SK acknowledge support from DESY (Hamburg, Germany), a member of the Helmholtz Association HGF. AA, MB, SK and MM acknowledge support by the German Research Foundation, projects BU 2327/19-1 and MO 2962/7-1. SK would like to thank Tim Roith and Lukas Weigand for the fruitful discussions. 
+
+# References 
+
+[1] H. W. Engl, M. Hanke, and A. Neubauer. Regularization of inverse problems . Vol. 375. Dordrecht: Kluwer, 1996. [2] S. Hurault, A. Leclaire, and N. Papadakis. “Gradient Step Denoiser for convergent Plug-and-Play”. In: International Conference on Learning Representations . 2023. [3] S. V. Venkatakrishnan, C. A. Bouman, and B. Wohlberg. “Plug-and-Play priors for model based reconstruction”. In: 2013 IEEE Global Conference on Signal and Information Processing . 2013, pp. 945–948. 
+
+doi : 10.1109/GlobalSIP.2013.6737048 .[4] B. T. Feng et al. “Score-based diffusion models as principled priors for inverse imaging”. In: Proceedings of the IEEE/CVF International Conference on Computer Vision . 2023, pp. 10520–10531. [5] P. Hagemann et al. “Multilevel Diffusion: Infinite Dimensional Score-Based Diffusion Models for Image Generation”. In: SIAM Journal on Mathematics of Data Science 7.3 (2025), pp. 1337–1366. doi : 10.1137/ 23M1614092 . eprint: https://doi.org/10.1137/23M1614092 .[6] J. H. Lim et al. “Score-Based Diffusion Models in Function Space”. In: 
+
+Journal of Machine Learning Research 26.158 (2025), pp. 1–62. [7] Y. Song and S. Ermon. “Generative modeling by estimating gradients of the data distribution”. In: Advances in neural information processing systems 32 (2019). [8] S. Welker et al. Position-Blind Ptychography: Viability of image recon-struction via data-driven variational inference (in preparation) . 2025. 36 [9] X. Xu and Y. Chi. “Provably Robust Score-Based Diffusion Poste-rior Sampling for Plug-and-Play Image Reconstruction”. In: Advances in Neural Information Processing Systems 38: Annual Conference on Neural Information Processing Systems 2024, NeurIPS 2024, Vancou-ver, BC, Canada, December 10 - 15, 2024 . Ed. by A. Globersons et al. 2024. [10] C. Wald and G. Steidl. “Flow Matching: Markov kernels, stochastic processes and transport plans”. In: Variational and Information Flows in Machine Learning and Optimal Transport, Oberwolfach Seminars. Vol. 56 . Birkh¨ auser, 2025, pp. 185–254. [11] O. Ronneberger, P. Fischer, and T. Brox. “U-Net: Convolutional Net-works for Biomedical Image Segmentation”. In: Medical Image Com-puting and Computer-Assisted Intervention – MICCAI 2015 . Ed. by N. Navab et al. Cham: Springer International Publishing, 2015, pp. 234– 241. [12] E. Shelhamer, J. Long, and T. Darrell. “Fully Convolutional Networks for Semantic Segmentation”. In: IEEE Transactions on Pattern Anal-ysis and Machine Intelligence 39.4 (2017), pp. 640–651. doi : 10.1109/ TPAMI.2016.2572683 .[13] J. Feng et al. “End-to-end Res-Unet based reconstruction algorithm for photoacoustic imaging”. In: Biomed. Opt. Express 11.9 (Sept. 2020), pp. 5321–5340. doi : 10.1364/BOE.396598 .[14] K. Zhang et al. “Plug-and-Play Image Restoration With Deep Denoiser Prior”. In: IEEE Transactions on Pattern Analysis and Machine Intel-ligence 44.10 (Oct. 2022), pp. 6360–6376. doi : 10.1109/tpami.2021. 3088914 .[15] A. Auras et al. “Robustness and exploration of variational and machine learning approaches to inverse problems: An overview”. In: GAMM-Mitteilungen 47.4 (2024), e202470003. doi : https : / / doi . org / 10 . 1002/gamm.202470003 .[16] J. Berner et al. “Principled Approaches for Extending Neural Architec-tures to Function Spaces for Operator Learning”. In: arXiv:2506.10973 
+
+(2025). [17] N. Kovachki et al. “Neural operator: Learning maps between function spaces with applications to pdes”. In: Journal of Machine Learning Research 24.89 (2023), pp. 1–97. [18] Z. Li et al. “Fourier Neural Operator for Parametric Partial Differential Equations”. In: International Conference on Learning Representations .2021. 37 [19] C. Bonneville et al. “Accelerating phase field simulations through a hybrid adaptive Fourier neural operator with U-net backbone”. In: npj Computational Materials 11.1 (Jan. 2025). doi : 10 . 1038 / s41524 -024-01488-z .[20] Z. Li et al. “Fourier neural operator with learned deformations for pdes on general geometries”. In: Journal of Machine Learning Research 
+
+24.388 (2023), pp. 1–26. [21] H. Liu, P. Zhao, and T. Song. “U-shaped factorized Fourier neural operator for solving partial differential equations”. In: Computers & Mathematics with Applications 196 (2025), pp. 233–245. doi : https: //doi.org/10.1016/j.camwa.2025.07.013 .[22] M. A. Rahman, Z. E. Ross, and K. Azizzadenesheli. “U-NO: U-shaped Neural Operators”. In: Transactions on Machine Learning Research 
+
+(2023). [23] A. Tran et al. “Factorized Fourier Neural Operators”. In: The Eleventh International Conference on Learning Representations . 2023. [24] G. Wen et al. “U-FNO—An enhanced Fourier neural operator-based deep-learning model for multiphase flow”. In: Advances in Water Re-sources 163 (2022), p. 104180. [25] M. Liu-Schiaffini et al. “Neural operators with localized integral and differential kernels”. In: Proceedings of the 41st International Con-ference on Machine Learning . ICML’24. Vienna, Austria: JMLR.org, 2024. [26] J. Ocampo, M. A. Price, and J. McEwen. “Scalable and Equivariant Spherical CNNs by Discrete-Continuous (DISCO) Convolutions”. In: 
+
+The Eleventh International Conference on Learning Representations .2023. [27] G. Aubert and P. Kornprobst. Mathematical Problems in Image Pro-cessing: Partial Differential Equations and the Calculus of Variations .Springer New York, 2006. doi : 10.1007/978-0-387-44588-5 .[28] C.-B. Sch¨ onlieb. Partial differential equation methods for image in-painting . Cambridge monographs on applied and computational math-ematics 29. New York, NY: Cambridge University Press, 2015. 254 pp. [29] L. Ruthotto and E. Haber. “Deep neural networks motivated by par-tial differential equations”. In: Journal of Mathematical Imaging and Vision 62.3 (2020), pp. 352–364. [30] F. Bartolucci et al. “Representation equivalent neural operators: a framework for alias-free operator learning”. In: Advances in Neural In-formation Processing Systems 36 (2023), pp. 69661–69672. 38 [31] B. Raoni´ c et al. “Convolutional neural operators for robust and ac-curate learning of PDEs”. In: Proceedings of the 37th International Conference on Neural Information Processing Systems . NIPS ’23. New Orleans, LA, USA: Curran Associates Inc., 2023. [32] W. Johnny et al. “Fourier Neural Operator for Image Classification”. In: 2022 17th Iberian Conference on Information Systems and Tech-nologies (CISTI) . 2022, pp. 1–6. doi : 10.23919/CISTI54924.2022. 9820128 .[33] S. Kabri et al. “Resolution-Invariant Image Classification Based on Fourier Neural Operators”. In: Scale Space and Variational Methods in Computer Vision . Springer International Publishing, 2023, pp. 236– 249. doi : 10.1007/978-3-031-31975-4_18 .[34] M. Wei and X. Zhang. “Super-Resolution Neural Operator”. In: Pro-ceedings of the IEEE/CVF Conference on Computer Vision and Pat-tern Recognition (CVPR) . June 2023, pp. 18247–18256. [35] N. Kovachki, S. Lanthaler, and S. Mishra. “On Universal Approxima-tion and Error Bounds for Fourier Neural Operators”. In: Journal of Machine Learning Research 22.290 (2021), pp. 1–76. [36] M. V. de Hoop et al. “Convergence Rates for Learning Linear Operators from Noisy Data”. In: SIAM/ASA Journal on Uncertainty Quantifica-tion 11.2 (2023), pp. 480–513. doi : 10.1137/21M1442942 .[37] N. Reinhardt, S. Wang, and J. Zech. Statistical Learning Theory for Neural Operators . 2024. [38] T. Koshizuka et al. “Understanding the Expressivity and Trainability of Fourier Neural Operator: A Mean-Field Perspective”. In: Advances in Neural Information Processing Systems . Ed. by A. Globerson et al. Vol. 37. Curran Associates, Inc., 2024, pp. 11021–11060. [39] J. Rowbottom et al. “Multi-level monte carlo training of neural oper-ators”. In: arXiv preprint arXiv:2505.12940 (2025). [40] S. Eri¸ sen. “SERNet-Former: Segmentation by Efficient-ResNet with Attention-Boosting Gates and Attention-Fusion Networks”. In: 2024 IEEE International Conference on Computer Vision and Machine In-telligence (CVMI) . 2024, pp. 1–6. doi : 10 . 1109 / CVMI61877 . 2024 . 10782648 .[41] A. Quarteroni, R. Sacco, and F. Saleri. Numerical Mathematics . Springer New York, 2007. doi : 10.1007/b98885 .[42] L. Grafakos. Classical Fourier Analysis . Springer New York, 2014. doi :
+
+10.1007/978-1-4939-1194-3 .39 [43] V. S. Fanaskov and I. V. Oseledets. “Spectral Neural Operators”. In: 
+
+Doklady Mathematics 108.S2 (Dec. 2023), S226–S232. doi : 10.1134/ s1064562423701107 .[44] F. Tr¨ oltzsch. Optimal Control of Partial Differential Equations . Amer-ican Mathematical Society, Apr. 2010. doi : 10.1090/gsm/112 .[45] S. Wang et al. “Deep Parametric Continuous Convolutional Neural Net-works”. In: Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR) . June 2018. [46] M. S. Nixon and A. S. Aguado. Feature extraction and image processing for computer vision . 4th ed. Includes bibliographical references and index. [Place of publication not identified]: Academic Press, 2020. 1 p. [47] J. C. Strikwerda. Finite Difference Schemes and Partial Differential Equations, Second Edition . Society for Industrial and Applied Mathe-matics, Jan. 2004. doi : 10.1137/1.9780898717938 .[48] L. Ambrosio, N. Fusco, and D. Pallara. Functions of Bounded Variation and Free Discontinuity Problems . Oxford University Press, Mar. 2000. 
+
+doi : 10.1093/oso/9780198502456.001.0001 .[49] H. W. Alt. Linear Functional Analysis . Springer London, 2016. doi :
+
+10.1007/978-1-4471-7280-2 .[50] R. T. Chen et al. “Neural ordinary differential equations”. In: Advances in neural information processing systems 31 (2018). [51] W. E. “A Proposal on Machine Learning via Dynamical Systems”. In: 
+
+Communications in Mathematics and Statistics 5 (2017). [52] E. Haber and L. Ruthotto. “Stable architectures for deep neural net-works”. In: Inverse problems 34.1 (2017), p. 014004. [53] M. Thorpe and Y. van Gennip. “Deep limits of residual neural net-works”. In: Research in the Mathematical Sciences 10.1 (2023), p. 6. 40

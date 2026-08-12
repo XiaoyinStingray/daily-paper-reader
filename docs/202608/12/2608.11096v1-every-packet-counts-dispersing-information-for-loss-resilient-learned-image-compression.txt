@@ -1,0 +1,867 @@
+Title: Every Packet Counts: Dispersing Information for Loss-Resilient Learned Image Compression
+
+URL Source: https://arxiv.org/pdf/2608.11096v1
+
+Published Time: Wed, 12 Aug 2026 01:21:07 GMT
+
+Number of Pages: 16
+
+Markdown Content:
+# Every Packet Counts: Dispersing Information for Loss-Resilient Learned Image Compression 
+
+# Yuhang Wei ∗
+
+1150501302@sjtu.edu.cn Shanghai Jiao Tong University Shanghai, China 
+
+# Chuqin Zhou ∗
+
+zhouchuqin@sjtu.edu.cn Shanghai Jiao Tong University Shanghai, China 
+
+# Yibo Shi 
+
+shiyibo@huawei.com Central Media Technology Institute Huawei Technologies Ltd. Beijing, China 
+
+# Jing Wang 
+
+wangjing215@huawei.com Central Media Technology Institute Huawei Technologies Ltd. Beijing, China 
+
+# Guo Lu †
+
+luguo2014@sjtu.edu.cn Shanghai Jiao Tong University Shanghai, China 
+
+## Abstract 
+
+Learned image compression (LIC) has achieved impressive rate-distortion performance. However, existing methods remain highly vulnerable to packet loss, a common challenge in satellite and emer-gency communications. This vulnerability stems from non-uniform information distribution at the packetization stage and sequential decoding dependencies at the entropy coding stage. We propose an end-to-end loss-resilient image compression scheme that ad-dresses both. Before packetization, we introduce an Inter-Channel Redistribution (ICR) mechanism to redistribute channel energy, preventing critical information concentrating in a small subset of channels. Then, an Interleaved Channel Grouping (ICG) strategy partitions latent channels in a strided manner to disperse informa-tion across packets, with each packet kept within constrained sizes. To limit cascading errors from lost packets, we adopt a two-layer dual-branch autoregressive structure to shorten the dependency chain. Extensive experiments demonstrate that our method con-sistently outperforms existing approaches in both reconstruction quality and stability. At 20% packet loss, it achieves an average PSNR gain of 1.84 dB over LossResilientLIC while reducing PSNR variance by an order of magnitude. Notably, trained under uniform random loss only, our model generalizes to bursty loss modeled by the Gilbert–Elliott channel, outperforming methods explicitly trained for such conditions. 
+
+## CCS Concepts 
+
+• Computing methodologies → Image compression .
+
+## Keywords 
+
+Image Compression; Neural Network; Loss-Resilient 
+
+> ∗Both authors contributed equally to this research.
+> †Corresponding author.
+> This work is licensed under a Creative Commons Attribution 4.0 International License.
+> MM ’26, Rio de Janeiro, Brazil
+> © 2026 Copyright held by the owner/author(s). ACM ISBN 979-8-4007-2213-4/2026/11 https://doi.org/10.1145/3767308.3836205
+
+ACM Reference Format: 
+
+Yuhang Wei, Chuqin Zhou, Yibo Shi, Jing Wang, and Guo Lu. 2026. Every Packet Counts: Dispersing Information for Loss-Resilient Learned Image Compression. In Proceedings of the 34th ACM International Conference on Multimedia (MM ’26), November 10–14, 2026, Rio de Janeiro, Brazil. ACM, New York, NY, USA, 16 pages. https://doi.org/10.1145/3767308.3836205 LossResilientLIC 0.510bpp 22.559dB ResiComp 0.662bpp 24.443dB Ours 0.645bpp 24.458dB Ours 0.390bpp 22.884dB 
+
+Figure 1: PSNR gains over JPEG2000 at medium bitrate under varying packet loss rates. Visual comparisons show that Loss-ResilientLIC produces gray artifacts and ResiComp exhibits corrupted texture, whereas our method achieves higher PSNR at a lower bitrate with visually clean reconstruction. 
+
+## 1 Introduction 
+
+The explosive growth of multimedia data has driven an increas-ing demand for efficient image and video transmission, spurring sustained research on image and video compression. Learned Im-age Compression (LIC) has achieved remarkable success in rate-distortion performance. Recent approaches [12–14, 16, 28, 33, 43, 45, 46] have demonstrated substantial superiority over established arXiv:2608.11096v1 [cs.CV] 11 Aug 2026 MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil Yuhang Wei, Chuqin Zhou, Yibo Shi, Jing Wang, & Guo Lu 
+
+standards such as JPEG [41], BPG [4], and VVC [5]. However, most existing LIC methods are developed and evaluated under the as-sumption of lossless transmission. In real-world deployment, par-ticularly in satellite communications, emergency networks, and long-distance links, packet loss inevitably occurs due to network congestion, signal fluctuation, and timeouts. Under such scenarios, LIC methods suffer dramatic performance degradation, yet this critical challenge remains largely underexplored. Deploying LIC under lossy channels faces challenges at two stages of the compression pipeline. At the packetization stage ,existing methods adopt unequal packetization strategies that con-centrate critical information in a small subset of packets. Loss of particular packets severely degrades reconstruction quality, even if all subsequent packets are received. At the entropy coding stage ,a separate but equally critical issue arises. Entropy coding intro-duces sequential dependencies within each bitstream such that all preceding bits are required for arithmetic decoding, so a single lost segment can render the remainder of that bitstream undecodable. Autoregressive entropy models [20, 21, 25] further amplify this is-sue by introducing latent-wise dependencies. When earlier packets are lost, estimation errors propagate along the autoregressive chain, causing cascading quality degradation that worsens with longer dependency chains. Progressive coding approaches [22, 26] share this vulnerability. Loss of early, high-priority packets disrupts all subsequent decoding. Both factors make reconstruction sensitive not just to how many packets are lost, but to which ones are lost, causing unstable performance across different loss patterns. Recent efforts have emerged to address packet loss within the LIC framework. LossResilientLIC [37] redistributes spatially adjacent latents across packets via spatial-channel rearrangement. However, its tail-drop training strategy concentrates critical information in leading transmitted packets, leaving the packetization-stage prob-lem unresolved. To tackle the entropy-coding-stage dependency, it adopts a non-autoregressive architecture, which sacrifices en-tropy modeling capacity and overall compression performance, as depicted in Figure 1. ResiComp [42], built on masked visual to-ken modeling, predicts lost tokens via a bidirectional transformer and performs well above 0.2 bpp using Intra Slice mode without entropy-coding-stage dependencies. Yet at low bitrates, it falls back to Layered mode with hierarchical autoregressive dependencies, where packet loss at any layer propagates downward and ampli-fies decoding errors. In both cases, fundamental issues persist that packet information remains unevenly distributed, leaving recon-struction vulnerable to the loss of specific packets. To address challenges at both stages, we propose a loss-resilient image compression scheme that disperses information and mini-mizes quality impacts of packet loss. First, we introduce an Inter-Channel Redistribution (ICR) mechanism that leverages channel interaction to disperse channel energy before packetization, pre-venting energy concentration, while the Inverse Inter-Channel Redistribution (Inv-ICR) aggregates channel energy before decod-ing. Second, we design an Interleaved Channel Grouping (ICG) strategy that partitions latent channels in a strided manner so that each packet is of comparable importance, no significant degrada-tion being caused by loss of any specific packet. Third, to limit cascading effects of entropy-coding-stage dependencies, we adopt a two-layer dual-branch autoregressive structure that shortens the dependency chain to two levels; with a training strategy that as-signs low-criticality information to the second layer, this design bounds reconstruction degradation even when preceding packets are lost. Extensive evaluations on Kodak [17] and CLIC [40] datasets demonstrate that our method achieves superior reconstruction qual-ity and stability over both traditional and LIC-based approaches across varying packet loss rates and transmission environments. Our main contributions are summarized as follows: 
+
+• We design an Inter-Channel Redistribution mechanism to re-distribute channel energy and an Interleaved Channel Group-ing strategy to disperse packet information. They render the reconstruction insensitive to the loss of any specific packet. 
+
+• We adopt a two-layer dual-branch autoregressive structure that eliminates first-layer intra-stream dependencies and limits cross-layer cascading effects, enabling robust entropy decoding under packet loss. 
+
+• Experiments demonstrate that our method achieves state-of-the-art loss-resilient performance across multiple packet loss rates. At 20% packet loss, our method achieves an average PSNR gain of 1.84 dB over LossResilientLIC with an order-of-magnitude reduction in variance. 
+
+## 2 Related Works 2.1 Learned Image Compression 
+
+In recent years, Learned Image Compression (LIC) has achieved remarkable progress by leveraging deep neural networks. Theis et al. [39] and Ballé et al. [2] pioneer end-to-end image compression frameworks based on variational autoencoders (VAEs), in which im-ages are transformed into compact latent representations through learned analysis and synthesis transforms. To capture the scale priors of spatially adjacent elements, they [3] further introduce a hierarchical prior model, which has since become a foundational component in the field. To enhance the accuracy of entropy estima-tion, Minnen et al. [31] propose an autoregressive context module that conditions the distribution estimation of each latent element on its already-decoded neighbors, enabling more precise probabilistic modeling. Subsequent research has explored more principled loss functions [1, 27], more sophisticated transform architectures [6– 8, 10, 15, 34, 44] to eliminate redundancy, and more expressive context modules [24, 29, 32] for accurate entropy modeling. In addition, progressive coding approaches based on LIC have been explored to mitigate the long latency associated with high-delay transmission. DPICT [26] proposes a progressive compression algorithm supporting fine granular scalability, ensuring that the ear-lier packet encapsulates the most critical information. ProgDTD [22] introduces a progressive compression strategy that introduces no additional model parameters, employing a double-tail-drop mecha-nism to concentrate important information within leading filters. 
+
+## 2.2 Traditional Loss-Resilient Coding 
+
+During transmission, packet loss frequently occurs due to network congestion and timeout-induced delays. Retransmission, widely adopted in TCP, is a conventional countermeasure. However, it con-siderably increases user latency in long-distance communication due to acknowledgment delays and high round-trip times (RTTs). Every Packet Counts: Dispersing Information for Loss-Resilient Learned Image Compression MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil 
+
+Figure 2: Overview of our proposed method. The Inter-Channel Redistribution (ICR) module shuffles and disperses channel information. Subsequently, the Interleaved Channel Grouping (ICG) module performs hierarchical splitting and packet encapsulation. Random mask simulates packet-level loss on packets during transmission, while Condition Mask generates masks for packets based on the random loss and autoregressive dependency. Before decoding, the Inverse Inter-Channel Redistribution (Inv-ICR) module unshuffles and aggregates channels. 
+
+Forward Error Correction (FEC) [18, 36] is a widely used encoder-side approach to mitigating packet loss by introducing redundancy. Specifically, for 𝑁 source packets, additional 𝑅 redundant packets are generated to enable error verification and recovery at the re-ceiver, accommodating loss rates up to 𝑝 = 𝑅 𝑁 +𝑅 . Nevertheless, FEC entails a fundamental trade-off between bandwidth utilization and loss resilience. Under favorable network conditions, the redundant packets result in bandwidth inefficiency, whereas under adverse conditions where loss rates exceed 𝑝 = 𝑅 𝑁 +𝑅 , decoding may fail. Post-processing Error Concealment (PEC) offers an alternative decoder-side strategy that requires no redundant injection. Tech-niques such as intra-mode macroblock encoding [11] and flexible macroblock ordering [23] enable each transmitted packet to be de-coded independently, ensuring that the loss or corruption of one packet does not affect decoding of others. However, this indepen-dence comes at costs of compression efficiency, as the encoder is precluded from exploiting redundancy across adjacent macroblocks. 
+
+## 2.3 LIC-Based Loss-Resilient Coding 
+
+Recent years have witnessed growing interest in loss-resilient com-pression built upon LIC. GRACE [9] introduces an end-to-end video compression system that disperses information across multiple packets, incorporating optimistic encoding with dynamic state resynchronization for recovery. ProgDTD [22] achieves progres-sive coding via dual-drop training, enabling partial reconstruction under loss, but fails to accommodate loss of early, high-priority packets. LossResilientLIC [37] distributes spatially adjacent latent elements across packets via spatial-channel rearrangement, and restores missing elements through a Mask Conditional Aggregation (MCA) module. However, its training mechanism tends to concen-trate critical information within leading packets of transmission sequences, inducing reconstruction quality highly sensitive to loss of specific packets. ResiComp [42] predicts lost tokens via masked visual token modeling, and systematically investigates loss-resilient performance across various contextual coding configurations. How-ever, Layered mode employed at low bitrates exhibits poor loss re-silience due to its hierarchical autoregressive dependencies, which amplify the impact of packet loss on subsequent decoding steps. 
+
+## 3 Method 3.1 Overview 
+
+Our proposed framework is illustrated in Figure 2. The key design components introduced to mitigate packet loss are described be-low. The Inter-Channel Redistribution(ICR) mechanism leverages channel-based attention and channel rearrangement to effectively redistribute inter-channel energy. To prevent substantial quality fluctuations resulting from loss of any particular packet, we design an Interleaved Channel Grouping (ICG) strategy, dispersing critical information across different packets. Additionally, to shorten the dependency chain, we introduce a two-layer dual-branch autore-gressive model, encapsulating each first-layer group as an indepen-dently decodable packet. It is worth noting that we assume ˆ 𝑧 of the hyperprior branch to be lossless during transmission, as loss of the hyperprior stream would corrupt distribution estimates for MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil Yuhang Wei, Chuqin Zhou, Yibo Shi, Jing Wang, & Guo Lu 0 5 10 15 20 25 
+
+> Image Sequence
+> 10 15 20 25 30
+> PSNR/dB
+> Baseline 15% spatial lost 15% channel lost 179th channel lost 25% packet lost(Ours)
+
+(a) PSNR of reconstructed images with element loss. (1) 15% spatial lost PSNR=23.22dB (2) 15% channel lost PSNR=24.21dB (3) 179th channel lost PSNR=18.22dB (4) 25% packet lost (Ours) PSNR= 24.43dB (b) Visualization of reconstruction under different conditions. Figure 3: Analysis of information loss across spatial and channel dimensions. “Baseline” denotes the case without element loss, while “Spatial” and “Channel” refer to random element loss along the corresponding dimensions. The 179th channel corresponds to the channel with the highest energy. “Ours” represents the proposed model trained for loss resilience. 
+
+decoding ˆ 𝑦 , rendering correct reconstruction infeasible. To adapt the model to packet loss during inference, the training incorpo-rates a structured masking strategy with both random and condi-tional masking. Specifically, when packets in the first-layer are lost, masking is propagated to second-layer packets with autoregressive dependencies on affected packets. The overall model is optimized with respect to a rate-distortion objective, formulated as follows: 
+
+L = R + 𝜆 · D = R ( ˆ𝑦 ) + 𝜆 𝑧 · R ( ˆ𝑧 ) + 𝜆 · D ( 𝑥, ˆ𝑥 ) (1) where R ( ˆ𝑦 ) and R ( ˆ𝑧 ) denote the bitrates consumed by ˆ 𝑦 and ˆ 𝑧 ,respectively, D ( 𝑥, ˆ𝑥 ) measures the distortion between the input image 𝑥 and its reconstruction ˆ 𝑥 , 𝜆 is a hyperparameter governing the rate-distortion trade-off, and 𝜆 𝑧 controls the bitrate allocation between the primary coding branch and the hyperprior branch. 
+
+## 3.2 Analysis of Different Dimensions 
+
+We conduct preliminary experiments to examine impacts of infor-mation loss across different dimensions on reconstruction quality. Specifically, using a non-autoregressive LIC model as the baseline, we simulate packet loss in latent space along either the spatial or channel dimension. Results are presented in Figure 3. Packet loss in the spatial dimension results in masked pixel regions in the recon-struction, with PSNR degradation relatively uniform across images, albeit with a large absolute drop. In contrast, channel-dimension packet loss leads to highly inconsistent PSNR degradation. Some images experience negligible quality loss, while others suffer sig-nificant degradation. This discrepancy stems from the severely imbalanced energy distribution across channels in latent space. Loss of a high-energy channel, such as the 179th channel, causes complete decoding failure. Since packet loss is inherently stochastic, it is desirable to ensure that information carried by each packet is as balanced as possible. While spatial-dimension information is already relatively well-distributed, explicit design is required in the channel dimension to achieve comparable information balance. 
+
+## 3.3 Inter-Channel Redistribution 
+
+Directly mapping channels to packets is impractical, as loss of packets containing critical channels is unrecoverable. To address this challenge, we introduce an Inter-Channel Redistribution(ICR) module and its counterpart, Inverse Inter-Channel Redistribution (Inv-ICR), whose architectures are illustrated in Figure 2. At the encoder, the ICR module combines attention mechanisms, group rearrangement, and adaptive fusion to redistribute channel infor-mation across the latent representation 𝑦 , achieving a more uniform energy distribution. At the decoder, the Inv-ICR module performs inverse operations, restoring original channel arrangement with channel unshuffle and channel-based attention. This implicit inter-channel interaction mechanism disperses packet energy, mitigating the impact of critical packet loss on decoding and enabling stable, high-quality reconstruction under diverse packet loss conditions. 
+
+## 3.4 Interleaved Channel Grouping 
+
+In practical transmission systems, commercial short-burst data pro-tocols typically restrict packet sizes to 900 or 1500 bytes. Simply encapsulating compressed image features is impractical, as the resulting packet size would exceed limit even at low bitrates. To comply with constraints, we propose an Interleaved Channel Group-ing (ICG) method to disperse information across packets. As shown in Figure 2, the latent 𝑦 is partitioned into two slices. For the first slice 𝑠 1, index-based partitioning is applied to derive 𝑦 1, comprising even-indexed channels, and 𝑦 2, comprising odd-indexed ones. Anal-ogously, the second slice 𝑠 2 is partitioned to yield 𝑦 3 and 𝑦 4 in the same manner. For each 𝑦 𝑖 , the number of packets 𝑁 𝑖 is determined based on its bitrate and the packet size constraint. The channel-dimension partition stride is set to 𝑁 𝑖 accordingly, ensuring that 𝑦 𝑖 
+
+is split into 𝑁 𝑖 independent packets in an interleaved manner. With this partitioning strategy, all packets are endowed with comparable importance, consequently ensuring that loss of any specific packet does not lead to substantial degradations in reconstruction quality. Every Packet Counts: Dispersing Information for Loss-Resilient Learned Image Compression MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil 
+
+Table 1: Performance comparison of models under packet loss with a uniform distribution on Kodak dataset.                                                                                                                                                                                                                
+
+> 𝑝 𝑒 Method Low Bitrate Medium Bitrate High Bitrate bpp mean ↑var ↓bpp mean ↑var ↓bpp mean ↑var ↓
+> 5% JPEG2000 0.165 24.116 0.117 0.216 24.556 0.201 0.347 25.278 0.243 ProgDTD 0.133 26.312 0.436 0.221 26.877 0.820 0.359 27.919 0.564 LossResilientLIC 0.131 26.850 0.015 0.210 28.247 0.043 0.338 29.561 0.007 ResiComp 0.169 27.202 0.155 0.216 28.572 0.363 0.370 30.461 0.021 Baseline 0.128 26.934 0.064 0.216 27.013 0.297 0.332 29.194 0.562 Random 0.130 27.251 0.045 0.208 28.497 0.068 0.334 29.704 0.021 Ours 0.125 27.546 0.002 0.217 28.980 0.001 0.346 30.433 0.001
+> 10% JPEG2000 0.165 23.168 0.161 0.216 23.336 0.168 0.347 23.692 0.237 ProgDTD 0.133 24.701 0.979 0.221 25.695 1.007 0.359 26.711 0.604 LossResilientLIC 0.131 26.342 0.061 0.210 27.605 0.100 0.342 28.801 0.047 ResiComp 0.169 26.991 0.178 0.216 28.516 0.141 0.370 30.232 0.077 Baseline 0.128 25.946 0.498 0.216 26.489 0.188 0.332 27.385 0.712 Random 0.130 26.819 0.099 0.208 28.103 0.077 0.334 29.131 0.114 Ours 0.125 27.470 0.009 0.217 28.845 0.005 0.346 30.271 0.002
+> 20% JPEG2000 0.165 21.274 0.257 0.216 21.366 0.275 0.347 21.384 0.295 ProgDTD 0.133 23.625 0.518 0.221 23.740 1.258 0.359 23.919 1.913 LossResilientLIC 0.131 25.578 0.108 0.210 26.617 0.043 0.346 27.966 0.043 ResiComp 0.169 24.046 0.563 0.216 27.390 0.234 0.370 29.540 0.077 Baseline 0.128 23.534 2.011 0.216 22.724 1.344 0.332 23.753 2.034 Random 0.130 26.482 0.107 0.208 27.441 0.187 0.334 28.168 0.114 Ours 0.125 27.211 0.012 0.217 28.561 0.010 0.346 29.931 0.003
+
+## 3.5 Two-Layer Dual-Branch Autoregression 
+
+The loss of a single packet results in the complete loss of all informa-tion it carries, potentially disrupting the decoding of other content that depends on it. However, a naive non-autoregressive approach comes with limitations of entropy modeling capacity. Therefore, we adopt a two-layer dual-branch autoregressive architecture. To mitigate cascading effects of autoregression, we establish short cross-slice dependencies, a two-layer design where decoding of 𝑠 2 is contingent upon 𝑠 1. As for our dual-branch design, an autore-gressive relationship is established between 𝑦 1 and 𝑦 3, and between 
+
+𝑦 2 and 𝑦 4. Specifically, 𝑦 1 and 𝑦 2 are encoded first, and their learned probability models are leveraged to estimate distribution parame-ters of 𝑦 3 and 𝑦 4, facilitating entropy estimation under low-bitrate conditions. Despite the fact that a single packet loss within 𝑦 1 can impair probability estimation for 𝑦 3, under our proposed training strategy, information allocated to 𝑦 3 and 𝑦 4 is of low criticality, such that their loss has minimal impact on overall reconstruction quality. 
+
+## 3.6 Packet Loss Design 
+
+During training, packet loss is simulated in the feature domain, whereas during testing, it is implemented by discarding correspond-ing binary files. The ICG module yields a set of packets that conform to the specified size constraints. Although LossResilientLIC [37] employs a packetization scheme based on spatial-channel rearrange-ment, it simulates packet loss at the individual channel level during training, which may result in scenarios where some channels within a packet are lost while others are retained. This is inconsistent with real-world transmission behavior. Given the inter-channel corre-lations within a packet, we adopt a packet-level loss simulation strategy instead. Specifically, for each lost packet, a binary mask 
+
+𝑀 𝐶 ∈ { 0, 1}𝐶 is applied to zero out all channels within the affected packet, where 𝐶 denotes the total number of channels. Based on the channel index set 𝐼 𝑘 of the lost packet 𝑘 , the corresponding mask en-tries are set to zero, i.e., 𝑀 𝑖 = 0, ∀𝑖 ∈ 𝐼 𝑘 . Furthermore, packet loss in the first-layer slice additionally triggers masking of the dependent entries in the second-layer slice in accordance with autoregressive dependencies. This packet-level loss simulation enables the model to handle real-world scenarios where 𝑦 3 and 𝑦 4 may experience degraded decoding due to inaccurate autoregressive estimation caused by upstream packet loss. Prior to decoding, the mask is fed into a mask-conditioned aggregation module [37], which identifies the positions of lost channels and performs feature restoration. 
+
+## 4 Experiment 4.1 Implementation Details 
+
+Datasets. Our model is trained on the high-quality Flickr2W dataset [30], with images randomly cropped to 256 × 256 pixels and a batch size of 8. For evaluation, we employ Kodak dataset [17], which con-tains images at a resolution of 768 × 512, and CLIC2020 dataset [40], which contains images at 2K resolution. 
+
+Training Settings. We adopt the LIC model HPCM [29] into a non-autoregressive variant as our baseline. The training objective follows Equation 1, with mean squared error (MSE) as the distortion metric to meet the high-fidelity requirements of low-bandwidth communication. The Lagrangian multiplier 𝜆 is set to 0.0018, 0.0035, and 0.0067, corresponding to average bitrates of 0.125 bpp, 0.217 bpp, and 0.346 bpp on Kodak dataset, respectively. The training procedure consists of three stages, each compris-ing 5 × 10 5 steps. In the first stage, modules related to packet loss MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil Yuhang Wei, Chuqin Zhou, Yibo Shi, Jing Wang, & Guo Lu 
+
+Table 2: Gains over Baseline under packet loss with a uniform distribution on CLIC dataset.                                                                                                                                                                                     
+
+> 𝑝 𝑒 Method Low Bitrate Medium Bitrate High Bitrate bpp mean ↑Δ↑bpp mean ↑Δ↑bpp mean ↑Δ↑
+> 5% LossResilientLIC Baseline 0.102 28.119 -0.160 28.644 -0.247 29.586 -LossResilientLIC Random 0.102 28.379 0.260 0.164 29.737 1.093 0.258 30.958 1.372 LossResilientLIC 0.100 28.795 0.676 0.158 30.074 1.430 0.252 31.154 1.568 Our Baseline 0.090 29.197 -0.147 30.299 -0.230 31.078 -Our Random 0.091 30.106 0.909 0.148 31.096 0.797 0.225 31.736 0.658 Ours 0.090 30.550 1.353 0.148 31.928 1.629 0.228 33.262 2.184
+> 10% LossResilientLIC Baseline 0.102 26.450 -0.160 27.290 -0.247 27.638 -LossResilientLIC Random 0.102 27.329 0.879 0.164 28.697 1.407 0.258 30.037 2.399 LossResilientLIC 0.100 28.261 1.811 0.158 29.210 1.920 0.252 30.491 2.853 Our Baseline 0.090 27.152 -0.147 27.862 -0.230 28.544 -Our Random 0.091 29.300 2.148 0.148 30.004 2.142 0.225 30.276 1.732 Ours 0.090 30.212 3.060 0.148 31.461 3.599 0.228 32.990 4.446
+> 20% LossResilientLIC Baseline 0.102 23.460 -0.160 23.994 -0.247 24.714 -LossResilientLIC Random 0.104 26.781 3.321 0.174 26.957 2.963 0.265 28.879 4.165 LossResilientLIC 0.103 27.316 3.856 0.167 27.873 3.879 0.257 29.469 4.755 Our Baseline 0.090 24.056 -0.147 24.702 -0.230 25.818 -Our Random 0.091 27.417 3.361 0.148 27.940 3.238 0.225 28.244 2.426 Ours 0.090 29.862 5.806 0.148 31.200 6.498 0.228 32.508 6.690
+
+are excluded, and training focuses exclusively on optimizing rate-distortion performance with a learning rate of 10 −4. In the second stage, all modules are activated and random packet loss is intro-duced on the quantized latent representation ˆ 𝑦 . The maximum packet loss probability 𝑝 max follows a stepwise schedule that pro-gressively increases from 0% to 30% over training epochs, with each packet independently subject to random loss at probability 
+
+𝑝 ∼ U [ 0, 𝑝 max ] within each batch. In the third stage, 𝑝 max is fixed at 0.3, and the learning rate is decayed every 1 .25 × 10 5 steps to fine-tune the model for optimal performance. 
+
+Evaluation Setup. Model evaluation incorporates the full packet encapsulation process. Following commercial short-burst data spec-ifications, we impose a packet size constraint of 1500 bytes. Under our ICG scheme, the hyperprior feature 𝑧 is encapsulated as a stan-dalone packet, while each 𝑦 𝑖 is partitioned into 𝑁 𝑖 independent packets along the channel dimension. All packets are stored as binary files via arithmetic coding. The number of packet parti-tions varies across images depending on the bitrate, with detailed packaging configurations described in Section 3.4. During decod-ing, certain files are randomly discarded to emulate packet loss in real-world transmission. Two packet loss simulation protocols are considered, uniform loss and trace-driven loss. Uniform loss rates are set at 5%, 10%, and 20%. Note that the hyperprior bitstream must be reliably received, as it is essential for estimating the latent distribution in the LIC hyperprior module. In our scheme, the hy-perprior bitstream accounts for less than 8% of the total bitstream and can be encapsulated within a single packet. All experiments are conducted on a single GPU with 24 GB VRAM. 
+
+## 4.2 Performance Under Uniform Loss 
+
+We begin by presenting a comparative analysis of the rate-distortion performance under uniform packet loss. In our experiments, "Base-line" refers to a non-autoregressive variant based on HPCM [29], with implementation details specified in the supplementary ma-terial. The random mask model, denoted as "Random", extends "Baseline" by incorporating channel-wise random packet loss and the MCA module [37]. For comprehensive comparisons, we ad-ditionally incorporate experimental results from JPEG2000 [38], ProgDTD [22], LossResilientLIC [37], and ResiComp [42]. JPEG2000 adopts a layered progressive transmission scheme, and we assume base layers remain loss-free for fair. For ProgDTD, we follow its source code and evaluate it under uniform packet loss conditions. Results for LossResilientLIC are sourced from the original paper. For ResiComp, we use Layered and LayeredMDC modes at low bitrates, and Intra Slice mode at higher bitrates. Analogous to JPEG2000, base slices are assumed to be loss-free. To account for the stochastic-ity of packet loss, all results are averaged over 10 independent trials, with variance reported to characterize reconstruction stability. Experimental results on Kodak dataset are presented in Table 1. Our method achieves state-of-the-art reconstruction quality across virtually all bitrate regimes and packet loss rates, while simultane-ously attaining the lowest variance in PSNR across all evaluated loss conditions. Specifically, at a moderate packet loss rate of 𝑝 𝑒 = 10%, our model outperforms ResiComp by 0.48 dB, 0.33 dB, and 0.73 dB at low, medium, and high bitrates, respectively, while consuming much less bandwidth. As 𝑝 𝑒 increases to 20%, the advantage of our method becomes even more pronounced, with PSNR gains of 3.17 dB and 1.17 dB over ResiComp at low and medium bitrates, demonstrating significantly superior robustness under severe loss conditions. The variance metric further highlights the stability of our method. While competing approaches exhibit variance val-ues exceeding 0.1 at 𝑝 𝑒 = 20%, our model consistently maintains variance below 0.012, which is an order of magnitude lower than LossResilientLIC and ResiComp. This stability is critical in practice, as it implies that reconstruction quality remains reliably high re-gardless of the specific pattern of packet loss. Although our PSNR Every Packet Counts: Dispersing Information for Loss-Resilient Learned Image Compression MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil GT Packet Quantity Rate/bpp ↓   
+
+> PSNR/dB ↑
+> LossResilientLIC 14 0.186 29.080 Ours(Medium Bitrate) 80.110 31.360 Ours(High Bitrate) 14 0.183 33.416 ResiComp 26 0.210 32.391 Ours(Low Bitrate) 60.063 29.514 GT Packet Quantity Rate/bpp ↓
+> PSNR/dB ↑
+> LossResilientLIC 26 0.299 26.545 Ours(Medium Bitrate) 18 0.239 27.519 Ours(High Bitrate) 25 0.368 29.346 ResiComp 26 0.359 28.724 Ours(Low Bitrate) 12 0.135 26.220
+
+Figure 4: Visualization of reconstructed images on Kodak dataset. All methods lose the first two packets. Our proposed method achieves better results at a lower bitrate. 
+
+at 𝑝 𝑒 = 5% high bitrate is marginally below that of ResiComp, our method achieves this at a 6.5% lower bitrate and with two orders of magnitude lower variance, making it clearly more effective in bandwidth-constrained and reliability-sensitive scenarios. 
+
+## 4.3 Comparison via Gain 
+
+Table 2 presents results on CLIC dataset, where our model is com-pared against LossResilientLIC and its intermediate variants. In addition to absolute PSNR, we report Δ, the gain in mean PSNR over respective baselines, which isolates the loss-resilience gain from the codec baseline. Our method consistently achieves the high-est absolute PSNR and the largest Δ across all settings. Our model yields more gains compared to LossResilientLIC, and the advantage grows substantially under heavier packet loss. At 𝑝 𝑒 = 20%, our method consistently outperforms LossResilientLIC, achieving im-provements of over 1.8 dB across all bitrates. These results confirm that our model possesses stronger and more scalable loss-resilience than competing methods. As the channel degrades, our model in-creasingly outperforms LossResilientLIC in absolute quality. Taken together, the results on both datasets demonstrate that our proposed method achieves a superior balance of rate-distortion performance, anti-packet-loss robustness, and prediction stability. 
+
+## 4.4 Performance Under Simulated Loss 
+
+To further assess the generalization of our scheme to realistic network conditions, we evaluate it under the Gilbert-Elliott (GE) model [19]. Real-world transmission environments are often char-acterized by complexity and variability, where fluctuations in long-distance communication give rise to bursty packet losses that can-not be adequately captured by uniform loss models. The GE model 0.15 0.20 0.25 0.30 0.35 
+
+> Bitrate (bpp)
+> 24 25 26 27 28 29 30
+> PSNR (dB)
+> LR-LIC Resicomp Ours
+
+Figure 5: Rate-distortion performance under GE model sim-ulation. Each data point reports the mean PSNR, and the vertical extent of the error bar indicates the variance across 10 independent trials, reflecting both reconstruction quality and stability under bursty packet loss. 
+
+addresses this limitation through a two-state Markov chain that simulates communication channels switching between Good and Bad states with certain probabilities, and has been widely adopted for modeling channel errors and evaluating loss-resilient strategies. The steady-state probabilities of Good and Bad states are given by 𝑟 𝑝 +𝑟 and 𝑝 𝑝 +𝑟 , respectively. Denoting the loss rates in Good and Bad states as 𝑙 𝑔 and 𝑙 𝑏 , the overall theoretical packet loss rate is expressed as 𝑃 𝐸 = 𝑟 𝑝 +𝑟 𝑙 𝑔 + 𝑝 𝑝 +𝑟 𝑙 𝑏 . A key characteristic of this model is that the state at any given time influences the subsequent state; following a packet loss event, the probability of losing the next packet is elevated, faithfully reflecting the bursty nature of real MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil Yuhang Wei, Chuqin Zhou, Yibo Shi, Jing Wang, & Guo Lu 0.15 0.20 0.25 0.30 0.35 0.40           
+
+> Rate/bpp
+> 27.5 28.0 28.5 29.0 29.5 30.0 30.5
+> PSNR/dB
+> Packet Loss Rate = 5%
+> 0.15 0.20 0.25 0.30 0.35 0.40
+> Rate/bpp
+> 27.0 27.5 28.0 28.5 29.0 29.5 30.0
+> PSNR/dB
+> Packet Loss Rate = 10%
+> 0.15 0.20 0.25 0.30 0.35 0.40
+> Rate/bpp
+> 27.0 27.5 28.0 28.5 29.0 29.5 30.0
+> PSNR/dB
+> Packet Loss Rate = 20%
+> w/o ICR & Inv-ICR Spatial Partition Continuous Channel Partition Quadtree Partition Four Layer Autoregression Ours
+
+Figure 6: Ablation on module design, partition strategy, and autoregression mode at packet loss rates of 5%, 10%, and 20% (left to right). Ours adopts ICR and Inv-ICR modules with interleaved channel grouping and two-layer dual-branch autoregression. 
+
+network losses. This temporal dependency provides a more rigorous basis for evaluating loss resilience than memoryless uniform loss. We instantiate the GE model with parameter set [𝑝, 𝑟, 𝑙 𝑔 , 𝑙 𝑏 ] =
+
+[0.417 , 0.973 , 0.052 , 0.380 ], corresponding to an average packet loss rate of approximately 15%, and evaluate LossResilientLIC, Resi-Comp, and our method. As depicted in Figure 5, our model con-sistently outperforms competing methods. It achieves the highest mean PSNR at every operating point, with the margin becoming more pronounced at lower bitrates where robustness to bursty loss is most critical. Error bars of our method are substantially narrower than those of competing approaches, indicating significantly lower variance across independent trials. This is particularly evident for ResiComp, whose large error bars at medium bitrates reveal consid-erable sensitivity to specific packet loss. These findings are consis-tent with the conclusions drawn from the uniform loss experiments, confirming that the superiority of our method generalizes across different loss models. Notably, while LossResilientLIC explicitly in-corporates a GE channel model during training, our model is trained exclusively under uniform loss. Dispite no GE-base simulation dur-ing training, our model achieves superior performance, which we attribute to well-balanced information distributions across packets facilitated by our proposed ICR and ICG mechanism. 
+
+## 4.5 Visual Results 
+
+To provide a more intuitive illustration of our method’s performance under packet loss, we conduct a visual comparison of first-two-packet loss among LossResilientLIC, ResiComp, and our approach. For LossResilientLIC, the front packets encapsulate more critical information owing to its drop-tail designs. Consequently, if the first two packets are lost, the reconstruction quality remains poor even when all subsequent packets are successfully received, and re-constructed images exhibit gray artifacts in regions corresponding to lost packets. A similar limitation is observed in Layered mode of ResiComp, where packet loss leads to visible decoding failures manifested as corrupted object boundaries in the reconstructed image. Although Intra Slice mode offers better anti-packet-loss ca-pabilities, its rate-distortion performance is suboptimal. In contrast, our proposed method is insensitive to the position of loss, pro-ducing visually clean reconstructions free of artifacts or boundary distortions, while achieving superior PSNR at lower bitrates. 
+
+## 4.6 Ablation Study 
+
+We conduct ablation experiments to validate the contribution of each proposed component, including the ICR mechanism, the ICG strategy, and the two-layer dual-branch autoregression design. Re-sults are reported across three packet loss rates in Figure 6, with quantitative results and complexity analysis shown in Appendix. Removing ICR and Inv-ICR modules leads to significant per-formance degradation, especially at high bitrates and loss rates, confirming that these modules are critical for achieving robust re-construction under packet loss. Replacing the ICG module with other partition strategies results in a consistent performance drop, demonstrating that interleaved grouping is essential for alleviating non-uniform distribution of information across packets and thereby improving loss resilience. Notably, the spatial partitioning strategy is the least effective for packetization, which is consistent with anal-ysis in Section 3.2. Increasing the number of autoregressive layers from two to four yields degradation that increases with bitrate, sug-gesting that deeper autoregression introduces a longer dependency chain without contributing to robustness. The full model combining all proposed components achieves the best performance across all conditions, and the performance gap relative to the ablated variants widens as the packet loss rate increases, further underscoring the importance of each design choice. 
+
+## 5 Conclusion and Limitation 
+
+In this paper, we propose a loss-resilient image compression scheme based on channel-wise packetization and hierarchical prediction. By introducing the Inter-Channel Redistribution mechanism alongside the Interleaved Channel Grouping strategy, our method achieves an even information dispersal across packets. Extensive experiments demonstrate that our scheme consistently outperforms existing approaches in terms of both reconstruction quality and stability across varying packet loss rates and transmission environments. Our method shares a common limitation with all hyperprior-based LIC approaches that the hyperprior bitstream must be re-ceived intact for correct decoding. In practice, protecting hyperprior with FEC, such as Reed–Solomon coding [35], incurs only about 7% bandwidth overhead while achieving over 99% recovery probability under GE-based simulations. We also leave the exploration of deep learning-based protection for the hyperprior as future work. Every Packet Counts: Dispersing Information for Loss-Resilient Learned Image Compression MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil 
+
+## Acknowledgments 
+
+This work was supported by the National Key Research and De-velopment Program of China under Grant 2024YFF0509700, the National Natural Science Foundation of China (62471290, 62431015, 62331014) and the Fundamental Research Funds for the Central Universities. 
+
+## References 
+
+[1] Muhammad Salman Ali, Yeongwoong Kim, Maryam Qamar, Sung-Chang Lim, Donghyun Kim, Chaoning Zhang, Sung-Ho Bae, and Hui Yong Kim. 2023. To-wards efficient image compression without autoregressive models. Adv. Neural Inf. Process. Syst. 36 (2023), 7392–7404. [2] Johannes Ballé, Valero Laparra, and Eero P Simoncelli. 2017. End-to-end Opti-mized Image Compression. In Int. Conf. Learn. Represent. 
+
+[3] Johannes Ballé, David Minnen, Saurabh Singh, Sung Jin Hwang, and Nick John-ston. 2018. Variational image compression with a scale hyperprior. In Int. Conf. Learn. Represent. 
+
+[4] F. Bellard. 2018. Bpg image format. https://bellard.org/bpg/ [5] Benjamin Bross, Ye-Kui Wang, Yan Ye, Shan Liu, Jianle Chen, Gary J. Sullivan, and Jens-Rainer Ohm. 2021. Overview of the Versatile Video Coding (VVC) Standard and its Applications. IEEE Trans. Circuits Syst. Video Technol. 31, 10 (2021), 3736–3764. [6] Yunuo Chen, Bing He, Zezheng Lyu, Hongwei Hu, Qunshan Gu, Yuan Tian, and Guo Lu. 2026. Adaptive Learned Image Compression with Graph Neural Networks. In Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. 12150–12161. [7] Yunuo Chen, Zezheng Lyu, Bing He, Ning Cao, Gang Chen, Guo Lu, and Wenjun Zhang. 2025. Knowledge Distillation for Learned Image Compression. In Proc. IEEE/CVF Int. Conf. Comput. Vis. 4996–5006. [8] Yunuo Chen, Zezheng Lyu, Bing He, Hongwei Hu, Qi Wang, Yuan Tian, Li Song, Wenjun Zhang, and Guo Lu. 2026. Content-aware mamba for learned image compression. In Int. Conf. Learn. Represent. , Vol. 2026. 78452–78477. [9] Yihua Cheng, Ziyi Zhang, Hanchen Li, Anton Arapin, Yue Zhang, Qizheng Zhang, Yuhan Liu, Kuntai Du, Xu Zhang, Francis Y Yan, et al. 2024. GRACE: Loss-Resilient Real-Time Video Through Neural Codecs. In Proc. USENIX Symp. Netw. Syst. Des. Implement. 509–531. [10] Zhengxue Cheng, Heming Sun, Masaru Takeuchi, and Jiro Katto. 2020. Learned Image Compression With Discretized Gaussian Mixture Likelihoods and Atten-tion Modules. In Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. 
+
+[11] Wen-Jeng Chu and Jin-Jang Leou. 1998. Detection and concealment of transmis-sion errors in H. 261 images. IEEE Trans. Circuits Syst. Video Technol. 8, 1 (1998), 74–84. [12] Ze Cui, Jing Wang, Shangyin Gao, Tiansheng Guo, Yihui Feng, and Bo Bai. 2021. Asymmetric Gained Deep Image Compression With Continuous Rate Adaptation. In Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. 10532–10541. [13] Zhihao Duan, Ming Lu, Jack Ma, Yuning Huang, Zhan Ma, and Fengqing Zhu. 2023. QARV: Quantization-aware resnet vae for lossy image compression. IEEE Trans. Pattern Anal. Mach. Intell. 46, 1 (2023), 436–450. [14] Zhihao Duan, Ming Lu, Zhan Ma, and Fengqing Zhu. 2023. Lossy image com-pression with quantized hierarchical vaes. In Proc. IEEE/CVF Winter Conf. Appl. Comput. Vis. 198–207. [15] Donghui Feng, Zhengxue Cheng, Shen Wang, Ronghua Wu, Hongwei Hu, Guo Lu, and Li Song. 2025. Linear attention modeling for learned image compression. In Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. 7623–7632. [16] Runsen Feng, Zongyu Guo, Weiping Li, and Zhibo Chen. 2023. Nvtc: Nonlinear vector transform coding. In Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. 
+
+6101–6110. [17] Rich Franzen. 1993. Kodak Lossless True Color Image Suite (PhotoCD PCD0992). http://r0k.us/graphics/kodak/. [18] Tobias Gruber, Sebastian Cammerer, Jakob Hoydis, and Stephan Ten Brink. 2017. On deep learning-based channel decoding. In Proc. Annu. Conf. Inf. Sci. Syst. IEEE, 1–6. [19] Gerhard Haßlinger and Oliver Hohlfeld. 2008. The Gilbert-Elliott model for packet loss in real time services on the Internet. In Proc. GI/ITG Conf. Meas. Model. Eval. Comput. Commun. Syst. VDE, 1–15. [20] Dailan He, Ziming Yang, Weikun Peng, Rui Ma, Hongwei Qin, and Yan Wang. 2022. ELIC: Efficient Learned Image Compression with Unevenly Grouped Space-Channel Contextual Adaptive Coding. In Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. 5708–5717. [21] Dailan He, Yaoyan Zheng, Baocheng Sun, Yan Wang, and Hongwei Qin. 2021. Checkerboard Context Model for Efficient Learned Image Compression. In Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. 14771–14780. [22] Ali Hojjat, Janek Haberer, and Olaf Landsiedel. 2023. ProgDTD: Progressive learned image compression with double-tail-drop training. In Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. 1130–1139. [23] Ismaeil Ismaeil, Shahram Shirani, Faouzi Kossentini, and Rabab Ward. 2000. An efficient, similarity-based error concealment method for block-based coded images. In Proc. IEEE Int. Conf. Image Process. , Vol. 3. IEEE, 388–391. [24] Wei Jiang and Ronggang Wang. 2023. MLIC++: Linear Complexity Multi-Reference Entropy Modeling for Learned Image Compression. In Proc. Int. Conf. Mach. Learn. Workshops .[25] Wei Jiang, Jiayu Yang, Yongqi Zhai, Peirong Ning, Feng Gao, and Ronggang Wang. 2023. Mlic: Multi-reference entropy model for learned image compression. In 
+
+Proc. ACM Int. Conf. Multimedia . 7618–7627. [26] Jae-Han Lee, Seungmin Jeon, Kwang Pyo Choi, Youngo Park, and Chang-Su Kim. 2022. DPICT: Deep progressive image compression using trit-planes. In Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. 16113–16122. [27] Han Li, Shaohui Li, Wenrui Dai, Maida Cao, Nuowen Kan, Chenglin Li, Junni Zou, and Hongkai Xiong. 2025. On Disentangled Training for Nonlinear Transform in Learned Image Compression. In Int. Conf. Learn. Represent. 
+
+[28] Yanghao Li, Tongda Xu, Yan Wang, Jingjing Liu, and Ya-Qin Zhang. 2023. Idem-potent learned image compression with right-inverse. Adv. Neural Inf. Process. Syst. 36 (2023), 12878–12896. [29] Yuqi Li, Haotian Zhang, Li Li, and Dong Liu. 2025. Learned image compression with hierarchical progressive context modeling. In Proc. IEEE/CVF Int. Conf. Comput. Vis. 18834–18843. [30] Jiaheng Liu, Guo Lu, Zhihao Hu, and Dong Xu. 2020. A Unified End-to-End Frame-work for Efficient Deep Image Compression. arXiv preprint arXiv:2002.03370 
+
+(2020). [31] David Minnen, Johannes Ballé, and George Toderici. 2018. Joint Autoregressive and Hierarchical Priors for Learned Image Compression. In Adv. Neural Inf. Process. Syst. 10794–10803. [32] David Minnen and Saurabh Singh. 2020. Channel-wise autoregressive entropy models for learned image compression. In Proc. IEEE Int. Conf. Image Process. 
+
+IEEE, 3339–3343. [33] Guanbo Pan, Guo Lu, Zhihao Hu, and Dong Xu. 2022. Content adaptive latents and decoder for neural image compression. In Proc. Eur. Conf. Comput. Vis. 556– 573. [34] Shiyu Qin, Jinpeng Wang, Yimin Zhou, Bin Chen, Tianci Luo, Baoyi An, Tao Dai, Shutao Xia, and Yaowei Wang. 2024. MambaVC: Learned visual compression with selective state spaces. arXiv preprint arXiv:2405.15413 (2024). [35] Irving S Reed and Gustave Solomon. 1960. Polynomial codes over certain finite fields. Journal of the society for industrial and applied mathematics 8, 2 (1960), 300–304. [36] Michael Rudow, Francis Y Yan, Abhishek Kumar, Ganesh Ananthanarayanan, Martin Ellis, and KV Rashmi. 2023. Tambur: Efficient loss recovery for videocon-ferencing via streaming codes. In Proc. USENIX Symp. Netw. Syst. Des. Implement. 
+
+953–971. [37] Hongwei Sha, Muchen Dong, Quanyou Luo, Ming Lu, Hao Chen, and Zhan Ma. 2025. Towards loss-resilient image coding for unstable satellite networks. In Proc. AAAI Conf. Artif. Intell. , Vol. 39. 12506–12514. [38] Athanassios Skodras, Charilaos Christopoulos, and Touradj Ebrahimi. 2001. The JPEG 2000 still image compression standard. IEEE Signal Process. Mag. 18, 5 (2001), 36–58. [39] Lucas Theis, Wenzhe Shi, Andrew Cunningham, and Ferenc Huszár. 2017. Lossy image compression with compressive autoencoders. In Int. Conf. Learn. Represent. 
+
+[40] George Toderici, Lucas Theis, Nick Johnston, Eirikur Agustsson, Fabian Mentzer, Johannes Ballé, Wenzhe Shi, and Radu Timofte. 2020. Clic 2020: Challenge on learned image compression. 29 (2020), 2021. [41] Gregory K. Wallace. 1991. The JPEG Still Picture Compression Standard. Com-munication ACM 34, 4 (1991), 30–44. [42] Sixian Wang, Jincheng Dai, Xiaoqi Qin, Ke Yang, Kai Niu, and Ping Zhang. 2025. ResiComp: Loss-Resilient Image Compression via Dual-Functional Masked Visual Token Modeling. IEEE Trans. Circuits Syst. Video Technol. (2025). [43] Siqi Wu, Yinda Chen, Dong Liu, and Zhihai He. 2025. Conditional Latent Coding with Learnable Synthesized Reference for Deep Image Compression. In Proc. AAAI Conf. Artif. Intell. , Vol. 39. 12863–12871. [44] Fanhu Zeng, Hao Tang, Yihua Shao, Siyu Chen, Ling Shao, and Yan Wang. 2025. MambaIC: State space models for high-performance learned image compression. In Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. 18041–18050. [45] Chuqin Zhou, Guo Lu, Jiangchuan Li, Xiangyu Chen, Zhengxue Cheng, Li Song, and Wenjun Zhang. 2025. Controllable distortion-perception tradeoff through latent diffusion for neural image compression. In Proc. AAAI Conf. Artif. Intell. ,Vol. 39. 10725–10733. [46] MingSheng Zhou and MingMing Kong. 2025. GLIC: General Format Learned Image Compression. In Proc. AAAI Conf. Artif. Intell. , Vol. 39. 10815–10824. MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil Yuhang Wei, Chuqin Zhou, Yibo Shi, Jing Wang, & Guo Lu 
+
+## A Details of Architecture 
+
+We adopt the state-of-the-art learned image compression frame-work, HPCM, with only the hierarchical coding schedule at multiple scales being modified. As the Baseline model, we employ a non-autoregressive architecture with independent estimation of each latent element, serving as a performance reference in the absence of packet-loss-aware training. The “Random” model introduces a random masking strategy and the Mask Conditional Aggregation (MCA) module, establishing a performance benchmark for packet-loss-aware training. Building upon the “Random” model, our proposed method fur-ther incorporates three key design components, including an Inter-Channel Redistribution (ICR) mechanism, an Interleaved Channel Grouping (ICG) packetization design, and a two-layer dual-branch autoregressive structure. The architecture of ICR, Inv-ICR, and ICG modules have been illustrated in main paper. The ICR mechanism redistributes high-energy channels, i.e., channel 179, across the latent feature by channel-wise attention and shuffle/unshuffle mod-ules, the architectures of which are illustrated in Figure 7. As a result, all channels are reweighted to a state of comparable impor-tance. We also provide a conceptual illustration of our two-layer dual-branch autoregression in Figure 7. In contrast to the limited entropy modeling capacity of non-autoregressive architectures, our two-layer autoregression encodes the first-slice elements to serve as contexts for predicting the second-slice ones, so that subsequent packets can accommodate more channels at a lower bit rate. The dual-branch design mitigates cascading errors from lost packets by confining loss impact to a single branch without cross-branch contamination. This also better aligns with the requirements of anti-packet-loss transmission under real-world scenarios. 
+
+## B Assumptions for Transmission 
+
+Our proposed scheme features a hierarchical prior model that cap-tures scale priors of latent elements via hyperprior information, to enhance the accuracy of distribution estimation and improve rate-distortion performance. However, loss of the hyperprior bit-stream during transmission leads to biased latent distribution es-timation, rendering subsequent packets undecodable. Therefore, reliable transmission of this bitstream is critical. To address this challenge, we decompose the rate loss into prior and hyperprior components and triple the weight of hyperprior rate loss. With this design, the hyperprior bitstream accounts for 7.23%, 4.84%, and 3.76% of the overall at low, medium, and high bitrates, respectively, based on our experimental results. Furthermore, the maximum size of the hyperprior bitstream does not exceed 750 bytes, satisfying the packet-size constraints of commercial short-burst data protocols. Therefore, the hyperprior can be protected with limited overhead using reliability enhancement techniques such as selective retransmission or forward error correction (FEC). A detailed analysis of the specific FEC configuration and protection overhead is provided in the following section. It is worth noting that the requirement of protecting essential side information is not unique to our approach. Existing robust compression schemes also depend on a protected core payload for successful reconstruction. Specifically, JPEG2000 requires protec-tion of the initial base layers, while ResiComp assumes the first two packets to be loss-free. Table 3 compares the sizes of the protected payloads among different methods. As shown, the hyperprior in our approach occupies only a small fraction of the overall bitstream and is comparable to or smaller than the protected payloads required by competing schemes. This demonstrates that our reliability assump-tion is consistent with existing approaches and that the additional protection cost introduced by our method remains limited. 
+
+## C FEC Cost for Hyperprior 
+
+Under the 900-byte packetization constraint, the hyperprior bit-stream can typically be transmitted within a single packet. However, since packet losses occur at the packet level, applying RS coding [35] directly to a single packet cannot recover from a complete packet erasure. Therefore, when FEC protection is adopted, the hyper-prior is partitioned into multiple packets to enable cross-packet redundancy and recovery. Under the Gilbert–Elliott (GE) model with parameters 𝑝 = 0.417, 
+
+𝑟 = 0.973, 𝑙 𝑔 = 0.052, and 𝑙 𝑏 = 0.380, average packet loss rate is approximately 15%, while the probability of experiencing five or more consecutive packet losses is below 10 −6. Accordingly, we set the maximum burst loss length to 𝐿 = 4 and employ RS(12, 8) coding with a 64-byte packet format, including a 2-byte header and up to 62-byte payload. For a 452-byte hyperprior bitstream (e.g., Kodim11), the proposed configuration requires 8 source packets and 4 parity packets, result-ing in a total transmission size of 768 bytes. As a result, the effective bitrate increases from 0.0898 bpp to 0.0962 bpp, corresponding to an additional overhead of approximately 7%. Under the GE model, this RS configuration guarantees successful recovery whenever the number of lost packets does not exceed the four available redun-dancy packets, which occurs with a probability exceeding 99%. 
+
+## D Uniform Loss and Trace-Driven Loss 
+
+We adopt two packet loss simulation protocols, uniform loss and trace-driven loss, to evaluate our method across different loss rates. Due to varying packet counts across different images, multi-plying the packet count directly by the loss rate often yields a non-integer number of lost packets, which introduces inaccuracies in loss rate simulation. To address this, uniform loss independently generates a random number for each packet based on the given loss rate to determine whether it is lost. Furthermore, to mitigate the effects of random fluctuations, we repeat each experiment ten times per configuration and report the averaged results. For trace-driven loss, we adopt the Gilbert–Elliott (GE) model. Built upon a two-state Markov chain, the GE model defines state transition parameters 𝑝 and 𝑟 , representing the probabilities of switching from the good state to the bad state and vice versa, along with state-dependent loss rates 𝑙 𝑔 and 𝑙 𝑏 . The overall packet loss rate is given by 𝑃 𝐸 = 𝑟 𝑝 +𝑟 𝑙 𝑔 + 𝑝 𝑝 +𝑟 𝑙 𝑏 . Unlike uniform loss, GE-based simu-lations propagate the current channel state to the next state, thereby better reflecting real-world transmission channel characteristics. Under both above packet loss patterns, our method consistently achieves higher reconstruction quality with lower variance, under-scoring its superiority and strong versatility across bandwidths and datasets. Every Packet Counts: Dispersing Information for Loss-Resilient Learned Image Compression MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil ො𝑦 4   
+
+> Conv 1x1
+> Channel Attention
+> Channel
+> Unshuffle
+> /Shuffle
+> +
+> Channel Unshuffle /Shuffle
+> x
+> x
+> +
+> Conv  1x1
+> DWConvRB  q
+> DWConvRB
+> DWConvRB
+> DWConvRB
+> DWConvRB
+> DWConvRB
+> x
+> Two -Layer Dual -Branch Autoregression
+> Gprior
+> AvgPool
+> Conv  1×1
+> Leaky
+> ReLU
+> Conv  1×1
+> +
+> Conv  3×3
+> Channel Attention Module
+> Conv  1×1
+> Leaky
+> ReLU
+> Conv  1×1
+> Channel
+> Unshuffle
+> /Shuffle
+> +
+> Channel Unshuffle/Shuffle Module
+> ××
+> Conv  1×1
+
+ො𝑦 4
+
+ො𝑦 3
+
+ො𝑦 
+
+ො𝑦 1
+
+𝛷 1(3) 
+
+ො𝑦 2
+
+𝛷 2(4) 
+
+Gprior 
+
+Gprior 
+
+> Two -Layer Dual -Branch Autoregression
+> Conv  1x1
+> DWConvRB  q
+> DWConvRB
+> DWConvRB
+> DWConvRB
+> DWConvRB
+> DWConvRB
+> x
+> Architecture of G prior
+
+Figure 7: The left two blocks depict details of Channel Unshuffle/Shuffle and Channel Attention modules in ICR and Inv-ICR. The right two blocks represent the dependency chain of the dual-Branch autoregressive structure and details of 𝑔 𝑝𝑟𝑖𝑜𝑟 ,respectively. The coding of 𝑦 3 is independent of 𝑦 2, and likewise, that of 𝑦 4 is independent of 𝑦 1.Table 3: Comparison of protected payload sizes. 
+
+Measure JPEG2000 ResiComp LossResilientLIC Ours low medium high low medium high low medium high low medium high Total Bitrate 0.165 0.216 0.347 0.169 0.216 0.370 0.131 0.210 0.346 0.125 0.217 0.346 Protected Payload 775.8 775.8 775.8 1276.7 1236.5 1405.5 ∼ 386 .3 ∼ 619 .3 ∼ 1020 .4 447.3 516.1 638.5 Proportion 9.57% 7.31% 4.55% 15.37% 11.65% 7.73% ∼ 6% ∼ 6% ∼ 6% 7.23% 4.84% 3.76% lost 
+
+decoding failed 
+
+Gilbert -Elliot Simulated Network 
+
+SG
+
+lg
+
+𝒑 
+
+𝒓 
+
+𝟏 − 𝒑  𝟏 − 𝒓 
+
+SB
+
+lb
+
+packet  of y 3
+
+packet  of y 4
+
+packets of y 1
+
+packets of y 2
+
+Sequencing 
+
+packet  of y 3
+
+packet  of y 4
+
+packets of y 1
+
+packets of y 2
+
+failure in 
+
+decoding 
+
+Sequencing 
+
+Figure 8: GE-based simulation of packet loss transmission. 
+
+## E Additional Experimental Results E.1 Error-Free Performance and Component Effects. 
+
+First, we provide a performance comparison of all schemes under the loss-free condition, along with qualitative degradations under 20% packet loss rate in Figure 9. This demonstrates that the advan-tage of our method lies not only in its strong baseline performance, but also in its superior robustness against packet losses. ICR and Inv-ICR modules incur only a marginal RD penalty (≈ 0.1 dB), while the ICG module and dual-branch autoregression improve compression performance. To verify that the advantage under packet loss does not simply stem from stronger lossless per-formance, we compare the PSNR degradation of different methods under packet loss. Our method consistently exhibits the smallest degradation, indicating that its robustness arises from the proposed designs rather than a more favorable error-free baseline. 
+
+## E.2 Comprehensive Results on Datasets 
+
+The analysis of rate-distortion performances on the Kodak dataset and PSNR gains over the baseline model on CLIC dataset have been 0.15 0.20 0.25 0.30 0.35 0.40   
+
+> Rate/bpp
+> 24 25 26 27 28 29 30 31
+> PSNR/dB
+> w/o ICR & Inv-ICR w/o ICG Ours JPEG Resicomp Resicomp under 20% loss
+> Method
+> 5
+> 4
+> 3
+> 2
+> 1
+> 0
+> PSNR Drop (dB)
+> -4.410 -2.878 -0.603 -0.562 -0.497
+> JPEG Resicomp w/o ICG w/o ICR & Inv-ICR Ours
+
+Figure 9: Rate-Distortion curves under no packet loss, and comparison of performance degradation under a 20% packet loss rate. 
+
+presented in main paper. For a more comprehensive comparison, we provide PSNR gains over the baseline on the Kodak dataset, as well as complete comparisons on the CLIC dataset. Experimental results demonstrate that our method achieves higher reconstruction quality and stronger stability at the same or even lower bitrates, consistent with the findings in main paper. MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil Yuhang Wei, Chuqin Zhou, Yibo Shi, Jing Wang, & Guo Lu 
+
+Table 4: BD-PSNR under different packet loss rates (dB). Packet Loss Rate 5% 10% 20% 
+
+Ours 0.000 0.000 0.000 w/o ICR Inv-ICR -0.425 -0.369 -0.407 w/o ICG -0.500 -0.462 -0.372 Quadtree Partition -0.536 -0.548 -0.575 Four Layer Autoregression -0.627 -0.623 -0.556 Spatial Partition -0.849 -1.530 -2.019 w/o Training Stage 1 -0.599 -0.558 -0.495 w/o Training Stage 2 -0.885 -0.809 -0.680 w/o Mask Propagation -0.035 -0.287 -0.674 0.125 0.217 0.346 0.628 
+
+> Rate/bpp
+> 27 28 29 30 31
+> PSNR/dB
+> PSNR vs Bitrate under Different Packet Loss Rates
+> 0% packet loss 5% packet loss 10% packet loss 20% packet loss
+
+Figure 10: The rate-distortion curves of our model on the Kodak dataset across packet loss rates. 
+
+Notably, to ensure fair comparisons with LossResilientLIC, we followed its setup and set the packet size to 4500 bytes on the CLIC dataset. The corresponding results for 900-byte packetization are also included. Due to the progressive coding of JPEG2000 and the concentration of critical information in preceding channels of LossResilientLIC, neither method supports 900-byte packetization. Layered and LayeredMDC modes of ResiComp involve decoding dependency chains, where packet loss causes error propagation. Consequently, with a 900-byte packet size, the increased number of encapsulated packets leads to uncontrollable degradations in reconstruction quality. In contrast, our method achieves excellent performance across different packet size configurations. 
+
+## E.3 Performance under Targeted Packet Loss 
+
+We conduct targeted packet loss tests on the Kodak dataset, with results presented in Table 5. For clearer comparisons, we map MS-SSIM to a distortion measure using −10 log 10 (1−MS-SSIM ). Regard-less of which single packet is lost, our method maintains robust overall reconstruction quality without substantial degradations. Even with complete loss of the first or second slice, the PSNR drop is limited to within 1.5 dB. 
+
+Table 5: Performance comparison of our method under spe-cific packet loss on Kodim11 at 0.117 bpp. × denotes that the packet in the corresponding column is lost.                                          
+
+> 𝑦 1𝑦 2𝑦 3𝑦 4PSNR ↑MS-SSIM ↑
+> 𝑃 1𝑃 2𝑃 3𝑃 4𝑃 5𝑃 6𝑃 7𝑃 8
+> 27.151 9.589
+> ××26.970 9.484
+> ××26.708 9.210
+> ××26.807 9.442
+> ××26.790 9.433
+> ××26.916 9.375
+> ××26.892 9.366
+> ××××25.652 8.701
+> ××××25.693 8.490
+
+## E.4 Ablation on Design 
+
+The proposed architecture involves several key design choices, in-cluding the two-slice latent decomposition, the Interleaved Channel Grouping (ICG) strategy, the ICR/Inv-ICR modules, the three-stage training strategy, and masking propagation. We conduct compre-hensive ablation studies to evaluate the contribution of each com-ponent to compression performance and loss resilience. We use BD-PSNR in Table 4 to quantitatively measure the perfor-mance degradation caused by replacing or removing each proposed component. The results consistently validate the effectiveness of all proposed designs. Specifically, removing the ICR/Inv-ICR modules or replacing ICG with alternative partitioning strategies leads to noticeable performance degradation, demonstrating their impor-tance for robust reconstruction under packet loss. Moreover, in-creasing the autoregressive depth does not improve robustness and instead introduces additional dependency, resulting in degraded per-formance under challenging loss conditions. The complete model achieves the best overall performance across different packet loss rates, with particularly significant advantages at higher loss rates. We also provide additional ablations on the training strategy and masking propagation. Specifically, removing either the first or second training stage leads to performance degradation, while the gains from masking propagation become more pronounced as the packet loss rate increases. It is worth noting that the proposed Two-Layer Dual-Branch Au-toregression differs from the channel-wise autoregression strategy in [32]. Specifically, [32] relies on multi-layer contextual dependen-cies for entropy prediction, leading to a longer dependency chain. This design is analogous to the deeper autoregressive configuration evaluated in our ablation study. Our results show that increasing autoregressive depth does not improve robustness and may even de-grade performance under packet loss, especially at higher bitrates. This observation motivates the adoption of the proposed two-layer dual-branch design. 
+
+## F Analysis of Complexity 
+
+The ablation study demonstrates that the ICR mechanism provides a substantial PSNR improvement under packet loss. To further analyze its computational impact, we report the complexity of the Every Packet Counts: Dispersing Information for Loss-Resilient Learned Image Compression MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil 
+
+Table 6: Complexity comparison on Kodak under 20% packet loss. Model Params (M) FLOPs (G) Inf. Time (ms) BD-Rate                             
+
+> ResiComp 130.82 985.586 451 0Spatial Partition 89.12 228.691 364 -0.222% w/o ICG 89.12 228.691 355 -15.227% Four Layer Autoregression 109.16 259.430 386 -8.706% Quadtree Partition 89.12 228.691 371 -8.793% w/o ICR & Inv-ICR 84.33 221.386 352 -14.534% Ours 89.12 228.691 355 -25.274%
+
+ICR and Inv-ICR modules, including their parameter counts, FLOPs, and the resulting inference time increase, in Table 6. The results show that these modules introduce only negligible computational overhead. Moreover, the proposed dual-branch autoregressive architec-ture does not introduce additional computational complexity com-pared with the commonly used quadtree partitioning strategy, while achieving lower inference time than conventional four-layer autore-gressive entropy models. The proposed Interleaved Channel Group-ing (ICG) replaces contiguous channel partitioning with stride-based grouping and is implemented with the same channel-wise partitioning operation, resulting in no additional computational cost. Overall, compared with ResiComp, our method reduces FLOPs by 77% and achieves a 21% reduction in inference time, demonstrat-ing its superior efficiency. 
+
+## G More Visual Results 
+
+More visual comparisons on the Kodak and CLIC datasets are pro-vided in Figure 11 and Figure 12. These additional examples cover diverse image contents and demonstrate the consistency of re-construction performance across different scenarios. The visual results are consistent with the quantitative evaluation, showing that our method maintains higher perceptual quality under packet loss while effectively suppressing reconstruction artifacts. These results further validate the robustness of the proposed design under challenging transmission conditions. MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil Yuhang Wei, Chuqin Zhou, Yibo Shi, Jing Wang, & Guo Lu 
+
+Table 7: Gains over Baseline under packet loss with a uniform distribution on Kodak dataset. 
+
+𝑝 𝑒 Method Low Bitrate Medium Bitrate High Bitrate bpp mean ↑ Δ ↑ bpp mean ↑ Δ ↑ bpp mean ↑ Δ ↑
+
+5% LossResilientLIC Baseline 0.133 26.551 - 0.215 26.976 - 0.336 28.619 -LossResilientLIC Random 0.133 26.657 0.106 0.220 27.754 0.778 0.351 29.256 0.637 LossResilientLIC 0.131 26.850 0.299 0.210 28.247 1.271 0.338 29.561 0.942 Our Baseline 0.1284 26.934 - 0.216 27.013 - 0.332 29.194 -Our Random 0.130 27.251 0.317 0.208 28.497 1.484 0.334 29.704 0.511 Ours 0.125 27.546 0.612 0.217 28.98 1.967 0.346 30.433 1.239 
+
+10% LossResilientLIC Baseline 0.133 25.131 - 0.215 25.855 - 0.336 27.056 -LossResilientLIC Random 0.133 25.858 0.727 0.221 27.320 1.465 0.351 28.569 1.513 LossResilientLIC 0.131 26.342 1.211 0.210 27.605 1.750 0.342 28.801 1.745 Our Baseline 0.1284 25.946 - 0.216 26.489 - 0.332 27.385 -Our Random 0.130 26.819 0.873 0.208 28.103 1.614 0.334 29.131 1.746 Ours 0.125 27.470 1.524 0.217 28.845 2.356 0.346 30.271 2.886 
+
+20% LossResilientLIC Baseline 0.133 23.257 - 0.215 22.524 - 0.336 23.592 -LossResilientLIC Random 0.133 25.217 1.960 0.228 25.886 3.362 0.358 27.620 4.028 LossResilientLIC 0.131 25.578 2.321 0.210 26.617 4.093 0.346 27.966 4.374 Our Baseline 0.1284 23.534 - 0.216 22.724 - 0.332 23.753 -Our Random 0.130 26.482 2.948 0.208 27.441 4.717 0.334 28.168 4.415 Ours 0.125 27.211 3.677 0.217 28.561 5.837 0.346 29.931 6.178 
+
+Table 8: Performance comparison of models under packet loss with a uniform distribution on CLIC dataset. Setting 1 corresponds to a packet size of 4500 bytes, and Setting 2 to 900 bytes. 
+
+𝑝 𝑒 Method Low Bitrate Medium Bitrate High Bitrate bpp mean ↑ var ↓ bpp mean ↑ var ↓ bpp mean ↑ var ↓
+
+5% JPEG2000(Setting 1) 0.104 22.083 0.072 0.166 25.261 0.109 0.252 27.181 0.157 LossResilientLIC(Setting 1) 0.100 28.795 0.039 0.158 30.074 0.060 0.252 31.154 0.062 ResiComp(Setting 1) 0.124 30.864 0.088 0.147 32.132 0.161 0.218 32.551 0.227 ResiComp(Setting 2) 0.126 28.104 0.142 0.147 30.552 0.297 0.269 32.550 0.116 Our Baseline 0.090 29.197 0.023 0.147 30.299 0.056 0.230 31.078 0.091 Our Random(Setting 1) 0.091 30.106 0.003 0.148 31.096 0.003 0.225 31.736 0.005 Our Random(Setting 2) 0.091 29.084 0.005 0.148 29.382 0.003 0.225 29.887 5.4 × 10 −4
+
+Ours(Setting 1) 0.090 30.550 1.1 × 10 −4 0.148 31.928 8.9 × 10 −5 0.228 33.262 3.4 × 10 −5
+
+Ours(Setting 2) 0.090 30.551 2.8 × 10 -5 0.148 31.931 1.6 × 10 -5 0.228 33.282 1.3 × 10 -5 
+
+10% JPEG2000(Setting 1) 0.104 20.417 0.081 0.166 22.680 0.085 0.252 25.53 0.155 LossResilientLIC(Setting 1) 0.100 28.261 0.115 0.158 29.210 0.200 0.252 30.491 0.080 ResiComp(Setting 1) 0.124 28.693 0.112 0.147 31.531 0.177 0.228 32.263 0.167 ResiComp(Setting 2) 0.126 26.076 0.197 0.147 28.688 0.312 0.269 32.241 0.104 Our Baseline 0.090 27.152 0.062 0.147 27.862 0.153 0.230 28.544 0.170 Our Random(Setting 1) 0.091 29.300 0.005 0.148 30.004 0.023 0.225 30.276 0.113 Our Random(Setting 2) 0.091 27.798 0.011 0.148 28.220 0.006 0.225 29.201 2.3 × 10 −4
+
+Ours(Setting 1) 0.090 30.212 3.4 × 10 −4 0.148 31.461 6.8 × 10 −4 0.228 32.990 7.0 × 10 −5
+
+Ours(Setting 2) 0.090 30.382 3.3 × 10 -5 0.148 31.789 5.7 × 10 -5 0.228 33.138 3.1 × 10 -5 
+
+20% JPEG2000(Setting 1) 0.104 17.033 0.092 0.166 19.698 0.278 0.252 21.87 0.203 LossResilientLIC(Setting 1) 0.103 27.316 0.110 0.167 27.873 0.318 0.257 29.469 0.122 ResiComp(Setting 1) 0.124 26.135 0.319 0.147 30.311 0.300 0.228 31.636 0.414 ResiComp(Setting 2) 0.126 22.164 0.273 0.147 26.447 0.417 0.269 31.611 0.254 Our Baseline 0.090 24.056 0.098 0.147 24.702 0.137 0.230 25.818 0.253 Our Random(Setting 1) 0.091 27.417 0.082 0.148 27.940 0.092 0.225 28.244 0.049 Our Random(Setting 2) 0.091 25.957 0.012 0.148 26.946 0.021 0.225 28.054 0.007 Ours(Setting 1) 0.090 29.862 2.9 × 10 −4 0.148 31.200 2.6 × 10 −4 0.228 32.508 3.4 × 10 −4
+
+Ours(Setting 2) 0.090 30.013 6.3 × 10 -5 0.148 31.449 3.6 × 10 -4 0.228 32.785 2.2 × 10 -4 Every Packet Counts: Dispersing Information for Loss-Resilient Learned Image Compression MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil GT 
+
+Packet Quantity 
+
+Rate/bpp  ↓
+
+PSNR/dB  ↑
+
+LossResilientLIC 
+
+17 
+
+0.207 
+
+25.034 
+
+Ours(Medium Bitrate) 
+
+10 
+
+0.124 
+
+29.662 
+
+Ours(High Bitrate) 
+
+15 
+
+0.201 
+
+31.835 
+
+ResiComp 
+
+26 
+
+0.238 
+
+31.533 
+
+Ours(Low Bitrate) 
+
+7
+
+0.078 
+
+28.095 
+
+GT 
+
+Packet Quantity 
+
+Rate/bpp  ↓
+
+PSNR/dB  ↑
+
+LossResilientLIC 
+
+17 
+
+0.231 
+
+28.083 
+
+Ours(Medium Bitrate) 
+
+12 
+
+0.133 
+
+30.064 
+
+Ours(High Bitrate) 
+
+16 
+
+0.222 
+
+31.430 
+
+ResiComp 
+
+26 
+
+0.240 
+
+30.682 
+
+Ours(Low Bitrate) 
+
+8
+
+0.078 
+
+28.517 
+
+GT 
+
+Packet Quantity 
+
+Rate/bpp  ↓
+
+PSNR/dB  ↑
+
+LossResilientLIC 
+
+17 
+
+0.211 
+
+29.272 
+
+Ours(Medium Bitrate) 
+
+13 
+
+0.148 
+
+31.368 
+
+Ours(High Bitrate) 
+
+17 
+
+0.224 
+
+32.997 
+
+ResiComp 
+
+26 
+
+0.240 
+
+32.044 
+
+Ours(Low Bitrate) 
+
+8
+
+0.088 
+
+29.284 
+
+GT 
+
+Packet Quantity 
+
+Rate/bpp  ↓
+
+PSNR/dB  ↑
+
+LossResilientLIC 
+
+21 
+
+0.237 
+
+28.626 
+
+Ours(Medium Bitrate) 
+
+14 
+
+0.169 
+
+30.042 
+
+Ours(High Bitrate) 
+
+20 
+
+0.262 
+
+31.589 
+
+ResiComp 
+
+26 
+
+0.276 
+
+30.811 
+
+Ours(Low Bitrate) 
+
+9
+
+0.104 
+
+28.063 
+
+GT 
+
+Packet Quantity 
+
+Rate/bpp  ↓
+
+PSNR/dB  ↑
+
+LossResilientLIC 
+
+15 
+
+0.178 
+
+28.549 
+
+Ours(Medium Bitrate) 
+
+10 
+
+0.120 
+
+32.111 
+
+Ours(High Bitrate) 
+
+14 
+
+0.182 
+
+34.092 
+
+ResiComp 
+
+26 
+
+0.231 
+
+32.839 
+
+Ours(Low Bitrate) 
+
+8
+
+0.079 
+
+29.900 
+
+Figure 11: Visualization of reconstructed images on Kodak dataset. All methods lose the first two packets, while in our method, the packet of 𝑦 3 is also lost due to the autoregressive dependency. Our method achieves better results at a lower bitrate. MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil Yuhang Wei, Chuqin Zhou, Yibo Shi, Jing Wang, & Guo Lu GT 
+
+Packet Quantity 
+
+Rate/bpp  ↓
+
+PSNR/dB  ↑
+
+LossResilientLIC 
+
+19 
+
+0.147 
+
+31.122 
+
+Ours(Medium Bitrate) 
+
+12 
+
+0.090 
+
+36.150 
+
+Ours(High Bitrate) 
+
+15 
+
+0.123 
+
+37.059 
+
+ResiComp 
+
+26 
+
+0.184 
+
+36.551 
+
+Ours(Low Bitrate) 
+
+8
+
+0.065 
+
+34.246 
+
+GT 
+
+Packet Quantity 
+
+Rate/bpp  ↓
+
+PSNR/dB  ↑
+
+LossResilientLIC 
+
+35 
+
+0.280 
+
+28.950 
+
+Ours(Medium Bitrate) 
+
+19 
+
+0.167 
+
+28.159 
+
+Ours(High Bitrate) 
+
+28 
+
+0.280 
+
+29.549 
+
+ResiComp 
+
+30 
+
+0.287 
+
+29.110 
+
+Ours(Low Bitrate) 
+
+12 
+
+0.099 
+
+26.251 
+
+GT 
+
+Packet Quantity 
+
+Rate/bpp  ↓
+
+PSNR/dB  ↑
+
+LossResilientLIC 
+
+35 
+
+0.275 
+
+32.040 
+
+Ours(Medium Bitrate) 
+
+17 
+
+0.151 
+
+30.650 
+
+Ours(High Bitrate) 
+
+24 
+
+0.246 
+
+32.393 
+
+ResiComp 
+
+30 
+
+0.243 
+
+31.147 
+
+Ours(Low Bitrate) 
+
+10 
+
+0.081 
+
+28.491 
+
+Figure 12: Visualization of reconstructed images on CLIC dataset. All methods lose the first two packets, while in our method, the packet of 𝑦 3 is also lost due to the autoregressive dependency. Our method achieves better results at a lower bitrate.

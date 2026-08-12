@@ -6,74 +6,79 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-08-10
-- 运行时间：2026-08-10 21:22:08 UTC
+- 最新运行日期：2026-08-12
+- 运行时间：2026-08-12 21:26:48 UTC
 - 运行状态：成功
-- 本次总论文数：18
-- 精读区：6
+- 本次总论文数：19
+- 精读区：7
 - 速读区：12
 
 ### 今日简报（AI）
-今日完成18篇论文筛选，精读6篇、速读12篇，重点关注高效边缘动作识别与神经网络量化方向。最值得研读的是满分的CoDAT双注意力Transformer低耗时时序建模方案，以及8分的低维子空间优化量化训练方法。建议优先复现CoDAT的边缘动作识别架构，同时可跟进视觉语言模型测试时适应与零样本特征上采样等速读佳作。
-- 详情：[/202608/10/README](/202608/10/README)
+今日精选19篇推荐，7篇精读12篇速读，重点关注图像压缩与高效视觉模型两大方向。  
+最值得精读的是满分论文《Mixture-of-Experts-based Entropy Model for Learned Image Compression》，以及9分的《HSMLA》多尺度线性注意力机制，后者为视觉Transformer提速提供新思路。  
+建议普通读者优先浏览这两篇精读内容，其余速读文章可作背景拓展。
+- 详情：[/202608/12/README](/202608/12/README)
 
 ### 精读区论文标签
-1. [CoDAT: Collaborative Dual-Attention Transformer with Low-Cost Temporal Modeling for Efficient Edge Action Recognition](/202608/10/2608.06691v1-codat-collaborative-dual-attention-transformer-with-low-cost-temporal-modeling-for-efficient-edge-action-recognition)  
+1. [Mixture-of-Experts-based Entropy Model for Learned Image Compression](/202608/12/2608.10947v1-mixture-of-experts-based-entropy-model-for-learned-image-compression)  
+   标签：评分：10.0/10、query:compress
+   evidence：直接提出基于混合专家的熵模型用于学习图像压缩，提升率失真性能
+2. [HSMLA: Hierarchical Softmax Multi-scale Linear Attention for Efficient Vision Transformers](/202608/12/2608.07616v2-hsmla-hierarchical-softmax-multi-scale-linear-attention-for-efficient-vision-transformers)  
    标签：评分：9.0/10、query:neural-arch
-   evidence：面向边缘动作识别的高效双注意力Transformer展示了视觉任务轻量化架构设计方法。
-2. [Low-Dimensional High-Leverage Subspace Optimization: Beyond Full-Parameter Coupled Training for Neural Network Quantization](/202608/10/2608.03919v1-low-dimensional-high-leverage-subspace-optimization-beyond-full-parameter-coupled-training-for-neural-network-quantization)  
-   标签：评分：8.0/10、query:neural-arch
-   evidence：提出面向神经网络量化的低维高杠杆子空间优化，属于模型优化策略
-3. [Robustness Emerges Early in Training Dynamics, but Is Not Preserved](/202608/10/2608.04442v1-robustness-emerges-early-in-training-dynamics-but-is-not-preserved)  
-   标签：评分：8.0/10、query:neural-arch
-   evidence：提出早期阶段稳定与非对称权重回退，保留浅层鲁棒表示
-4. [Training Crossroads for Recurrent Vision Transformers: Recurrence, Neural ODEs, and Deep Supervision](/202608/10/2608.04879v1-training-crossroads-for-recurrent-vision-transformers-recurrence-neural-odes-and-deep-supervision)  
-   标签：评分：8.0/10、query:neural-arch
-   evidence：对循环视觉Transformer的训练与推断进行受控实证研究，为架构设计与训练实践提供指导。
-5. [Flow-Map Distillation on Relation Manifolds for Image Restoration](/202608/10/2608.05769v1-flow-map-distillation-on-relation-manifolds-for-image-restoration)  
-   标签：评分：8.0/10、query:neural-arch
-   evidence：将知识蒸馏重构为关系流形上的流映射，属于模型优化策略
-6. [Suppress and Diversify: Refining Robust Pathways for Corruption Robustness](/202608/10/2608.06712v1-suppress-and-diversify-refining-robust-pathways-for-corruption-robustness)  
-   标签：评分：8.0/10、query:neural-arch
-   evidence：一种与架构无关的精炼方法，提升视觉模型对图像污染的鲁棒性
+   evidence：面向视觉Transformer的高效架构设计，结合多尺度线性注意力
+3. [Visual Token Codec: Unleashing Spatial Redundancy for ViT Feature Coding](/202608/12/2608.08832v1-visual-token-codec-unleashing-spatial-redundancy-for-vit-feature-coding)  
+   标签：评分：9.0/10、query:compress
+   evidence：以熵模型为核心的双路径学习编解码器，用于ViT特征压缩
+4. [Multiple Scale Latents for Learned Image Compression](/202608/12/2608.10952v1-multiple-scale-latents-for-learned-image-compression)  
+   标签：评分：9.0/10、query:compress
+   evidence：提出分层多尺度潜变量用于学习型图像压缩，较VVC降低17.9% BD-rate。
+5. [Every Packet Counts: Dispersing Information for Loss-Resilient Learned Image Compression](/202608/12/2608.11096v1-every-packet-counts-dispersing-information-for-loss-resilient-learned-image-compression)  
+   标签：评分：9.0/10、query:compress
+   evidence：端到端抗丢包学习式图像压缩，结合率失真优化与抗丢包设计
+6. [Bit Allocation Transfer for Perceptual Quality Enhancement of Traditional Video Codecs](/202608/12/2608.07799v1-bit-allocation-transfer-for-perceptual-quality-enhancement-of-traditional-video-codecs)  
+   标签：评分：8.0/10、query:compress
+   evidence：学习基于感知损失的量化步长生成模型实现比特分配迁移，改进传统视频编解码器的率失真优化
+7. [MRIComp4Flow: Compression of 3D Brain MRI for Training Multi-Modal Generative Models](/202608/12/2608.10291v1-mricomp4flow-compression-of-3d-brain-mri-for-training-multi-modal-generative-models)  
+   标签：评分：8.0/10、query:compress
+   evidence：利用JPEG2000小波变换编码与近无损JPEG-LS压缩3D脑MRI
 
 ### 速读区论文标签
-1. [Local Margin Restoration for Test-Time Adaptation of Vision-Language Models](/202608/10/2608.02216v1-local-margin-restoration-for-test-time-adaptation-of-vision-language-models)  
+1. [Adapting Vision Foundation Models with Cascaded Semantics](/202608/12/2608.05393v1-adapting-vision-foundation-models-with-cascaded-semantics)  
+   标签：评分：8.0/10、query:neural-arch
+   evidence：向视觉提示调优中注入级联语义先验，提升ViT适配性能
+2. [URNet: A Unified Reparameterized Network for Efficient RGB-D Semantic Segmentation](/202608/12/2608.05671v1-urnet-a-unified-reparameterized-network-for-efficient-rgb-d-semantic-segmentation)  
+   标签：评分：8.0/10、query:neural-arch
+   evidence：面向RGB-D分割的统一重参数化网络，展示高效视觉架构设计
+3. [LiteKD-Net: Lightweight Knowledge-Distilled Network for Mobile Image Denoising](/202608/12/2608.05739v1-litekd-net-lightweight-knowledge-distilled-network-for-mobile-image-denoising)  
+   标签：评分：8.0/10、query:neural-arch
+   evidence：为移动端去噪设计轻量高效架构
+4. [UniJEPA: A Unified Joint-Embedding Predictive Architecture for Task-Agnostic Visual World Modeling](/202608/12/2608.07409v1-unijepa-a-unified-joint-embedding-predictive-architecture-for-task-agnostic-visual-world-modeling)  
+   标签：评分：8.0/10、query:neural-arch
+   evidence：面向任务无关视觉世界建模的统一联合嵌入预测架构，属于计算机视觉与深度学习的通用方法
+5. [Self-Supervised Representation-Guided Generative Dataset Distillation](/202608/12/2608.03218v1-self-supervised-representation-guided-generative-dataset-distillation)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：通过局部边界恢复增强视觉-语言模型在分布偏移下的测试时自适应
-2. [PixelUp: Zero-Shot Semantic Feature Upsampling for Fine-Grained Vision Tasks](/202608/10/2608.02792v1-pixelup-zero-shot-semantic-feature-upsampling-for-fine-grained-vision-tasks)  
+   evidence：通过表示引导的数据集蒸馏优化训练
+6. [MOSAIK: Multi-Patch Content-Aware Spatial Allocation of Image Tokens for Efficient Generation](/202608/12/2608.05450v1-mosaik-multi-patch-content-aware-spatial-allocation-of-image-tokens-for-efficient-generation)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：面向细粒度视觉任务的零样本语义特征上采样模块，计算机视觉架构改进
-3. [Maglev: Sliding Recurrent Memory](/202608/10/2608.02870v2-maglev-sliding-recurrent-memory)  
+   evidence：提出损害引导的自适应patch分配，提升图像生成效率，契合面向视觉任务的高效神经架构设计需求。
+7. [LoRSA: Toward Generalizable Parameter-Efficient Fine-Tuning for Biomedical Downstream Tasks](/202608/12/2608.07749v1-lorsa-toward-generalizable-parameter-efficient-fine-tuning-for-biomedical-downstream-tasks)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：带固定大小记忆的循环Transformer架构
-4. [iFAN: Inference-Aware Learning for Plain Mask Transformers](/202608/10/2608.03216v1-ifan-inference-aware-learning-for-plain-mask-transformers)  
+   evidence：参数高效微调方法提升泛化，属于模型优化策略。
+8. [Three Necessary Principles for Self-Supervised Visual Representation Learning](/202608/12/2608.08309v1-three-necessary-principles-for-self-supervised-visual-representation-learning)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：面向推理的感知学习框架，含排序调整和跨层蒸馏，属于性能提升技术
-5. [Lightweight 3D Object Detection via Mamba-Based Knowledge Distillation](/202608/10/2608.03490v1-lightweight-3d-object-detection-via-mamba-based-knowledge-distillation)  
-   标签：评分：7.0/10、query:neural-arch
-   evidence：基于Mamba的知识蒸馏将体素表示迁移至轻量3D检测器，属模型优化策略。
-6. [MuRA: Multi-Rank Adaptation for Efficient and Effective Test-Time Vision-Language Generalization](/202608/10/2608.03885v1-mura-multi-rank-adaptation-for-efficient-and-effective-test-time-vision-language-generalization)  
-   标签：评分：7.0/10、query:neural-arch
-   evidence：面向测试时视觉-语言泛化的多秩自适应
-7. [Think in Sets for Streaming Video Token Compression](/202608/10/2608.01169v1-think-in-sets-for-streaming-video-token-compression)  
+   evidence：形式化自监督视觉表示学习的必要原则，提升神经网络性能。
+9. [Design-Time Optimization of Deep Neural Networks for Intermittent Learning on Microcontrollers](/202608/12/2608.03589v1-design-time-optimization-of-deep-neural-networks-for-intermittent-learning-on-microcontrollers)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：利用集合选择对流式视频视觉令牌进行高效压缩
-8. [SPARE: Structural Parameter-Free Affinity Regularization for Flow Matching](/202608/10/2608.01990v1-spare-structural-parameter-free-affinity-regularization-for-flow-matching)  
-   标签：评分：6.0/10、query:neural-arch
-   evidence：无参数结构亲和力正则化加速扩散Transformer训练
-9. [SpikeRestormer: Towards Energy-Efficient All-in-One Image Restoration via Unified Event Reasoning](/202608/10/2608.02290v1-spikerestormer-towards-energy-efficient-all-in-one-image-restoration-via-unified-event-reasoning)  
-   标签：评分：6.0/10、query:neural-arch
-   evidence：面向视觉（图像复原）的节能神经网络架构设计
-10. [Attention-Only White-Box Transformer via LeJEPA-Based Self-Supervised Pretraining](/202608/10/2608.04213v1-attention-only-white-box-transformer-via-lejepa-based-self-supervised-pretraining)  
-   标签：评分：6.0/10、query:neural-arch
-   evidence：联合自监督预训练用于白盒Transformer架构设计
-11. [GVC-RT: Towards Real-Time Generative Video Compression at Ultra-Low Bitrates](/202608/10/2608.04891v1-gvc-rt-towards-real-time-generative-video-compression-at-ultra-low-bitrates)  
+   evidence：面向能量受限边缘深度学习的设计时模型优化
+10. [GVC-RT: Towards Real-Time Generative Video Compression at Ultra-Low Bitrates](/202608/12/2608.04891v1-gvc-rt-towards-real-time-generative-video-compression-at-ultra-low-bitrates)  
    标签：评分：6.0/10、query:compress
-   evidence：利用无查找量化（LFQ）和率失真优化的生成式视频压缩，其方法可迁移到学习型图像压缩流程中。
-12. [An active-learning framework for real-time depth perception from monocular vision streams](/202608/10/2608.04917v2-an-active-learning-framework-for-real-time-depth-perception-from-monocular-vision-streams)  
+   evidence：利用免查找量化实现实时生成式视频压缩，方法可迁移至图像压缩。
+11. [A Survey of Adversarial Efficiency Degradation for Vision Transformer by Exploiting Input-adaptive Optimization](/202608/12/2608.05217v1-a-survey-of-adversarial-efficiency-degradation-for-vision-transformer-by-exploiting-input-adaptive-optimization)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：面向动态环境的主动学习模型优化框架
+   evidence：关于ViT中输入自适应优化与词元剪枝的综述，为高效架构设计提供参考
+12. [A neural operator view on U-Nets for inverse imaging problems](/202608/12/2608.05839v1-a-neural-operator-view-on-u-nets-for-inverse-imaging-problems)  
+   标签：评分：6.0/10、query:neural-arch
+   evidence：综述并改进逆成像问题的U-Net架构
 
 
 <div class="dpr-home-promo-card">
