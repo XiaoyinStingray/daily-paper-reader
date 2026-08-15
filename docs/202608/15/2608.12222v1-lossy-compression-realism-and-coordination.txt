@@ -1,0 +1,618 @@
+Title: Lossy Compression, Realism, and Coordination
+
+URL Source: https://arxiv.org/pdf/2608.12222v1
+
+Published Time: Thu, 13 Aug 2026 01:13:54 GMT
+
+Number of Pages: 12
+
+Markdown Content:
+# Lossy Compression, Realism, and Coordination 
+
+Yassine Hamdi ∗, Member, IEEE and Deniz Gündüz ∗, Fellow, IEEE 
+
+> ∗
+
+Department of Electrical and Electronic Engineering, Imperial College London, UK, {y.hamdi, d.gunduz}@imperial.ac.uk 
+
+Abstract —Classical rate-distortion theory characterizes the fundamental limits of lossy compression under fi-delity constraints, but minimizing distortion often yields perceptually unsatisfying reconstructions—blurry images, over-smoothed textures, and unnatural artifacts. This has motivated a growing body of work on compression with realism constraints, which require reconstructions to be statistically indistinguishable from natural signals, giving rise to the three-way rate-distortion-perception (RDP) trade-off. This paper provides an accessible overview of this emerging area and reveals deep connections to another fundamental problem: distributed coordination under rate-limited communication. Under strong distribu-tion matching formulations, both problems lead to nearly identical information-theoretic characterizations, both re-quire common randomness (CR) for optimal performance, and both rely on similar analytical tools such as the soft covering lemma. Beyond a unifying perspective, we sur-vey recent developments in formalizing realism, including batched critics and algorithmic realism, and propose to transfer such paradigms to coordination — illustrating how the connection continues to generate new problems. 
+
+I. I NTRODUCTION 
+
+Despite decades of progress, our storage, communica-tion, and computation resources remain limited relative to our data-acquisition capabilities, making data com-pression ubiquitous in the digital age. Lossy compres-sion, the art of discarding information that is less relevant for a given application, is essential, from streaming video to training large-scale machine learning models [1]. The mathematical foundations of lossy compression were laid by Shannon (see, e.g., [2, Chapter 3]), whose rate-distortion theory characterizes the minimum number of bits required to represent a source signal within a specified fidelity level. Shannon’s framework has guided the development of practical lossy compression systems for over seven decades, yet it leaves a fundamental question unresolved: what exactly should we preserve? In Shannon’s formulation, fidelity is measured by a distortion function that quantifies the point-wise dif-ference between the source and its reconstruction ; for example, mean squared error (MSE) for images or audio waveforms. Minimizing distortion ensures the recon-struction remains close to the original in a well-defined metric space, and this approach has proven remarkably successful for many applications. However, practitioners have long observed that low distortion does not always translate to high perceptual quality. Particularly at low bit rates, distortion-optimal compression produces recon-structions that are technically ‘close’ to the source yet appear unnatural: blurry images, over-smoothed textures, or the disappearance of high-frequency detail. This tension between fidelity and perceptual quality has motivated a fundamental rethinking of what lossy compression should achieve. Rather than asking only “how close is the reconstruction to the source?”, we should also ask “does the reconstruction look realistic?” Accordingly, perception measures the statistical realism 
+
+or naturalness of the reconstruction, independent of its point-wise correspondence to the source. A perceptually optimal reconstruction should be indistinguishable from samples drawn from the true data distribution. In image compression, this means textures appear realistic, edges are sharp, and the overall appearance matches what we expect from natural images, even if specific pixel values deviate from the original. Generative models have achieved remarkable success in recent years in synthe-sizing realistic images, audio, and video, and demon-strated that highly realistic content can be produced; the challenge for compression is to do so while remaining faithful to a specific source signal. It has been recognized (e.g., [3], [4]) that achieving high perceptual quality (making reconstructions statisti-cally indistinguishable from real data) generally requires introducing distortion beyond the minimum achievable at a given rate. This gives rise to a three-way trade-off among rate, distortion, and perception [4]. Note that, in the absence of any distortion constraint, rate and perception are not at odds: unlike distortion, perceptual quality is not related to any source sample; hence, opti-mal perception [4] can be achieved even at zero rate, e.g., arXiv:2608.12222v1 [cs.IT] 12 Aug 2026 by drawing a high-quality reconstruction at random from a fixed database. In contrast, satisfying a given distortion constraint requires a certain minimum compression rate. If we additionally impose a perception constraint, the compression rate increases. We will discuss the rate-distortion-perception (RDP) trade-off at length. But how should high perceptual quality, or “realism,” be formalized mathematically? This question lies at the heart of much recent research [5]. We will present vari-ous ways of formalizing perceptual quality requirements, with an emphasis on distribution matching constraints: these require the distribution of the reconstruction to be close to that of the source, according to some mea-sure of similarity between distributions. When the two distributions are nearly identical, a large collection of reconstructions would be statistically indistinguishable from genuine source samples. Such distribution match-ing has deep intuitive appeal: it captures the idea that reconstructions should ‘look like the real thing’ as an ensemble, exhibiting the same statistical properties as natural signals. Indeed, distribution matching constraints are ubiqui-tous in another area of network information theory: dis-tributed coordination . Consider two autonomous drones conducting a search operation, each making its own flight-path decisions. They must coordinate their move-ments using limited communication, e.g., to maximize coverage. Due to bandwidth or latency constraints, one drone cannot simply transmit its complete flight plan to the other; instead, it must compress relevant information into a short message. The receiving drone must then choose an action (its own flight path) that is appro-priately coordinated with the first drone’s movement. What does ‘appropriately coordinated’ mean? One nat-ural formalization is that the joint distribution of both drones’ actions should match some target distribution representing desirable coordinated behavior. The target joint distribution qX,Y is chosen by a system designer to encode the desired coordination objective: it assigns high probability to pairs of flight paths providing comple-mentary coverage and low probability to collision-prone configurations. The communication constraint makes it generally impossible to achieve this target exactly at finite rate, giving rise to a rate-coordination trade-off. This is precisely a distribution matching constraint, now applied to the joint behavior of multiple agents rather than to reconstructions of a source signal. A common mathematical formulation, known as channel synthesis or strong coordination [6], [7], asks: what is the minimum communication rate required for the decoder (second agent) to produce outputs such that the joint input-output distribution matches a specified target? This problem seems far removed from perceptual image compression. Yet, as we shall demonstrate, the two problems share deep structural similarities when the latter is formulated with strong distribution matching requirements: 
+
+(i) Near-identical achievable regions: the information-theoretic characterizations of the optimal trade-offs differ only in minor ways. 
+
+(ii) The necessity of randomization: both problems re-quire randomized encoders and decoders, whereas deter-ministic schemes suffice for distortion-only compression. 
+
+(iii) The critical role of common randomness (CR): both problems require the encoder and decoder to share CR whose entropy may exceed the communication rate. 
+
+(iv) Common analytical tools: proofs of both results rely on the soft covering lemma and employ similar coding schemes, notably the likelihood encoder. These parallels suggest that perceptual compression and distributed coordination are, in a precise mathemat-ical sense, two manifestations of the same underlying phenomenon: the challenge of inducing a target prob-ability distribution through rate-limited communication. More importantly, these connections have proven pro-ductive. Historically, the first characterization of the role of CR in compression with realism constraints [8] was obtained using a proof structure nearly identical to the one for channel synthesis [7]. In the presence of side information, the connection suggested the definition of a joint realism constraint [9], and the proof technique used for channel synthesis was once again successful, albeit requiring a soft covering lemma tailored to side informa-tion. In the present paper, we propose to transfer other paradigms for formalizing the RDP trade-off, namely batched critics and algorithmic realism, to coordination. This leads to new open problems (Table I). Beyond distribution matching, recent work has ex-plored alternative formalizations of realism that may better align with human perception and practical con-straints. As mentioned previously, distribution matching constraints essentially require that a large ensemble of reconstructions be statistically similar to the source. What if, instead, one considers a realism requirement involving a small ensemble of reconstructions, or asingle reconstruction? In general, batched critics evaluate realism by inspecting multiple reconstructions simulta-neously, interpolating between single-sample evaluation and full distributional constraints. Another paradigm, namely algorithmic realism , draws on concepts from Rate-Distortion-Perception (RDP)                                                            
+
+> Lossy Compression with Realism
+> Source Encoder
+> F(n)Decoder
+> G(n)Reconstr.
+> CR JX1: nM
+> nR bits
+> Y1: nnR cbits
+> Constraints:
+> Distortion: E[d(X, Y )] ≤λ1
+> Realism: pY=pX
+> Achievable Region:
+> R≥I(X;V)
+> R+Rc≥I(Y;V)
+> X−V−Y
+> Channel Synthesis
+> Distributed Coordination
+> Input Encoder
+> F(n)Decoder
+> G(n)Output
+> CR JX1: nM
+> nR bits
+> Y1: nnR cbits
+> Constraint:
+> Coordination: pX,Y =qX,Y
+> Achievable Region:
+> R≥I(X;V)
+> R+Rc≥I(X, Y ;V)
+> X−V−YY↔(X, Y )
+
+Fig. 1: The structural parallel between RDP with strong realism constraints (left) and channel synthesis for distributed coordination (right) — formalized in Section II and described in detail in Section III. Both problems share identical system architectures with encoder, decoder, and CR. The key difference lies in the distribution matching constraint: RDP requires the marginal distribution pY to match pX , while channel synthesis requires the joint distribution pX,Y 
+
+to match a target qX,Y . This single change—replacing Y with (X, Y )—is the only substantive difference between the achievable regions, revealing that these seemingly disparate problems are fundamentally the same. algorithmic information theory to define realism through a large family of computationally bounded tests, bridging certain gaps between distribution matching theory and practice [10]. Developments on the RDP side naturally raise the question of whether analogous frameworks exist for coordination, a question we discuss in Section IV, illustrating the broader thesis that the RDP-coordination connection is a continual source of new problems and insights. 
+
+Organization of the paper: This paper aims to pro-vide an accessible overview of lossy compression with realism constraints and distributed coordination theory, organized around their deep structural connections. In Section II, we present a unified mathematical formalism that encompasses rate-distortion theory, the RDP trade-off, and distributed coordination as special cases, and we introduce the taxonomy of constraints that underpins the parallel (Table I). In Section III, we present some of the known achievable regions for both problem classes side by side, along with the quantities that govern the role of common randomness, across the point-to-point setting, remote source compression, and compression with side information. In Section IV, we discuss batched critics and algorithmic realism — recent advances on the RDP side — and argue that they exemplify the productive transfer of ideas across the parallel by suggesting open problems for coordination. Throughout, we emphasize intuition and connections over technical proofs, aiming to provide a reference for researchers at the intersection of lossy compression, distributed coordination, and gen-erative modeling. II. A U NIFIED PROBLEM FORMULATION 
+
+This section develops a framework broad enough to capture Shannon’s rate-distortion theory, the RDP trade-off, and distributed coordination as special cases; casting them in a common formalism is what lets us expose their structural similarities in Section III. Readers primarily interested in the conceptual parallels may skim the technical details on first reading and return to them as needed. 
+
+On the role of the i.i.d. model. Throughout this paper, we model the source as a sequence of independent and identically distributed (i.i.d.) symbols. Natural signals such as images are not i.i.d., and practical compression operates on individual signals rather than asymptoti-cally long sequences. The i.i.d. block coding model is an idealization whose value lies in its tractability: it enables precise characterizations of fundamental trade-offs and reveals structural properties, such as the role of randomization, the necessity of common randomness, and the deep parallels between realism and coordination, which would have been difficult to discover in more complex models. It has also proven a productive starting point throughout information theory [2]: from the source coding theorem, through the rate-distortion function, to channel capacity, insights first established in this ideal-ized regime have informed both the theory and practice of compression and communication. 
+
+A. The Basic Setup 
+
+For clarity of exposition, we consider a point-to-point communication system with two terminals: an encoder 
+
+that observes a source and transmits a compressed message, and a decoder that receives the message and produces an output. The setup is depicted in Figure 1. The source is a sequence X1: n = ( X1, X 2, . . . , X n) of 
+
+n i.i.d. symbols, each drawn from alphabet X according to distribution pX . We write this as X1: n ∼ p⊗nX .The encoder compresses this source sequence into a message M consisting of approximately nR bits, where 
+
+R is called the compression rate (measured in bits per source symbol). The decoder receives M and produces an output sequence Y1: n on alphabet Y. In rate-distortion problems, Y1: n is called the reconstruction sequence and we typically have Y = X ; whereas in coordination problems, Y1: n represents the actions of a second agent. A key feature of our formulation, one that distin-guishes it from classical rate-distortion theory, is that both the encoder and decoder may be randomized . That is, rather than being deterministic functions, they may be stochastic mappings that use local random number generators. Moreover, they may have access to common randomness (CR): a random variable J that is available to both terminals before communication begins. We assume the CR is genuinely random, not the output of a pseudo-random generator. One can think of a pseudo-random number generator but with a truly random (i.e., unpredictable) state — or with a truly random seed: that is, a fixed sequence {J(k)}1≤k≤⌊ 2nRc ⌋ such that for every new source sample X1: n processed by the encoder, both terminals can agree on a new random index K independently of the content of X1: n and M 1,where K follows a uniform distribution. As we shall see, this CR plays a crucial role in problems with stringent distribution matching constraints. This is in stark contrast to classical rate-distortion theory, where deterministic schemes suffice. 
+
+Definition 1: Given rates R, R c ≥ 0, and blocklength 
+
+n ∈ N, an (n, R, R c) code consists of an encoder F (n):a conditional distribution F (n)  
+
+> M|X1: n,J
+
+that maps the source sequence X1: n and CR J to a message M in the set          
+
+> 1For instance, the decoder may infer the value of Kfrom the knowledge that a new message Mhas been sent by the encoder and from an external source of CR, but should not need to read the content of Mto determine Kor J(K).
+
+[2 nR ]2, and a decoder G(n): a conditional distribution 
+
+G(n) 
+
+> Y1: n|M,J
+
+that maps the message and CR to an output sequence Y1: n ∈ Y n. The induced distribution of the code is the joint distribution over all variables: 
+
+P (n) ≜ p⊗nX · pU  
+
+> [2 nRc ]
+
+· F (n)  
+
+> M|X1: n,J
+
+· G(n) 
+
+> Y1: n|M,J
+
+, (1) where pU  
+
+> [2 nRc ]
+
+denotes the uniform distribution over 
+
+[2 nR c ] (the distribution of the CR J). A code is said to be deterministic if both encoder and decoder are deterministic and do not depend on J:
+
+∀x1: n, ∃ m such that F (n)  
+
+> M|X1: n,J
+
+(m | x1: n, j ) = 1 ∀j, 
+
+∀m, ∃ y1: n such that G(n) 
+
+> Y1: n|M,J
+
+(y1: n | m, j ) = 1 ∀j. 
+
+The CR J takes ⌊2nR c ⌋ possible values, so Rc rep-resents the rate of shared randomness in bits per source symbol. When Rc = 0 and the code is deterministic, we recover the classical setup of Shannon’s rate-distortion theory. 
+
+B. Enter: Realism Constraints 
+
+While Shannon’s rate-distortion theory has driven the design of countless compression systems, it has a basic limitation: distortion measures are imperfect proxies for human perception. This mismatch becomes apparent in several ways. Consider an i.i.d. Gaussian source compressed under MSE distortion. The optimal reconstruction has lower variance than the source. For stationary Gaussian sources with non-flat power spectrum, the reverse waterfilling procedure [2] nulls the spectrum at high frequencies. This is why JPEG images appear blurry at low bit rates. More broadly, all distortion measures used in multi-media compression are stand-ins for what we truly care about: how the reconstruction will be perceived by the end user. A reconstruction might achieve low MSE while appearing unnatural—overly smooth, lacking texture, or exhibiting artifacts that the human visual system imme-diately detects. This has motivated the development of perceptual distortion measures such as SSIM [11] and LPIPS [12], which attempt to capture aspects of human perception within the classical rate-distortion framework. More recently, the Wasserstein distortion function [13] has been proposed. Inspired by the human visual system, it compares distributions of local features in a latent space. It has contributed to a state-of-the-art neural compression codec [14].         
+
+> 2For any positive real number a, we denote by [a]the set of integers less than or equal to ⌊a⌋, i.e., [a] = {1,2, . . . , ⌊a⌋} .
+
+An alternative approach is to constrain the statistical properties of reconstructions directly, rather than design-ing ever more sophisticated distortion functions. Natural signals exhibit characteristic statistical regularities. A realistic reconstruction should possess these regulari-ties, independent of its point-wise correspondence to any particular source sample. This idea of distribution matching has a long history, appearing in early work on distribution-preserving quantization [3]. The recent success of deep generative models has brought renewed interest in this approach. Neural codecs can now outperform traditional algorithms under various quality metrics [15], and at very low bit rates, generative models such as GANs [16] or diffusion models [17] can synthesize plausible image content that is semantically similar to the source but may differ in fine details. These developments have revealed a fundamental tension: high perceptual quality often requires accepting higher distor-tion, as formalized in the RDP trade-off [4]. 
+
+C. Problem formulation 
+
+The main objective of the remainder of Section II is to exhibit the substantial similarity between problems with realism (perception) and coordination constraints in terms of formulation. We defer the presentation of the similarity in terms of information-theoretic results to Section III. The reader may focus on Sections II-C1, II-C2a, II-C3a, II-D, and II-E on first reading. We organize the problem formulation into three parts: 
+
+distortion , realism , and coordination . The calligraphic letter P stands for (mathematical) property .
+
+1) Distortion Constraints: Shannon’s rate-distortion theory considers the average distortion between the source and reconstruction: 
+
+Pdist (n, P (n), λ ) : EP (n)
+
+d(X1: n, Y 1: n) ≤ λ, (2) where d measures the discrepancy between the source se-quence and its reconstruction. The most common choice is an additive (or single-letter) distortion: 
+
+d(X1: n, Y 1: n) = 1
+
+n
+
+> n
+
+X
+
+> t=1
+
+d(Xt, Y t), (3) where d : X × X → [0 , ∞) is a single-letter distortion measure such as squared error d(x, y ) = ( x − y)2 or Hamming distance d(x, y ) = 1{x̸ = y}.A central result in rate-distortion theory is that the optimal trade-off between rate R and distortion λ can be achieved by deterministic codes; that is, CR provides no benefit. This can change dramatically when we add certain realism constraints. 
+
+2) Realism Constraints: The most studied realism constraints require the reconstruction to be statistically similar to natural signals, independent of its correspon-dence to any particular source sample. The idea is 
+
+distribution matching : the distribution of reconstructions should resemble that of the sources. 
+
+a) Strong Realism Constraints: The most stringent form requires the joint distribution of the entire recon-struction sequence to match that of the source [3], [8], [18]: 
+
+Pstrong (n, P (n), λ ) : Dn
+
+ P (n) 
+
+> Y1: n
+
+, p ⊗nX
+
+ ≤ λ, (4) where Dn is a measure of discrepancy between distri-butions over Yn = X n, such as total variation distance (TVD). When λ = 0 , this requires P (n) 
+
+> Y1: n
+
+= p⊗nX : the reconstruction sequence must be statistically indistin-guishable from an i.i.d. source sequence. 
+
+b) Per-Symbol Realism Constraints: A weaker re-quirement constrains only the marginal distributions of individual symbols [18], [19]: 
+
+Pper -symbol (n, P (n), λ ) : max  
+
+> 1≤t≤n
+
+D P (n) 
+
+> Yt
+
+, p X
+
+ ≤ λ, (5) where D measures discrepancy between distributions over X . One could also consider the variant with an aver-age over t instead of a maximum. This type of constraint ensures each reconstruction symbol has approximately the right distribution, but does not constrain dependen-cies between symbols. In particular, it is invariant with respect to the order of symbols. 
+
+c) Empirical Realism Constraints: In Shannon’s rate-distortion scheme, the reconstruction sequence Y1: n
+
+is, with high probability, typical ; that is, its empirical statistics converge to population statistics as n grows: 
+
+D( ˆPY1: n , q ) P
+
+−→ 0, (6) for some distribution q on Y, where the empirical distribution ˆPy1: n of a sequence y1: n is the frequency distribution (on Y) of its symbols, and P
+
+−→ means that for any ε > 0, the probability that D( ˆPY1: n , q ) > ε 
+
+vanishes as n → ∞. This motivates constraints that require reconstructions to have the “right” empirical statistics. An empirical realism constraint requires that 
+
+ˆPY1: n be close to pX [8], [18]. It can take the form (6) with q = pX , or involve a requirement on every individual realization: 
+
+Pempr (n, P (n), λ ) : P (n) D( ˆPY1: n , p X ) ≤ λ = 1 . (7) Like the per-symbol constraint, it is invariant to the order of symbols. 3) Coordination Constraints: In coordination prob-lems, the goal is not to reconstruct the source, but to generate an output Y1: n that is appropriately correlated with the input X1: n according to some target distribution 
+
+qX,Y . This models scenarios where two agents must coordinate their actions through limited communication. The problem of generating samples from a chosen target joint distribution in a distributed manner has long been of interest [6], [20], [21]. 
+
+a) Strong Coordination Constraints: The most stringent form requires the joint distribution of 
+
+(X1: n, Y 1: n) to match the i.i.d. target q⊗nX,Y :
+
+Pstrong -coord (n, P (n), λ ) : Dn
+
+ P (n) 
+
+> X1: n,Y 1: n
+
+, q ⊗nX,Y 
+
+ ≤ λ. (8) When λ = 0, the encoder-decoder pair effectively implements a memoryless channel qY |X from input to output, despite the rate constraint. This problem is known as channel synthesis .
+
+b) Empirical Coordination Constraints: The weaker empirical version requires the joint empirical distribution of (X1: n, Y 1: n) to converge to the target: 
+
+Pemp -coord 
+
+ {P (n)} : D  ˆPX1: n,Y 1: n , q X,Y 
+
+ P
+
+−→ 0, (9) where ˆPX1: n,Y 1: n is the joint empirical distribution (fre-quency of pairs), and P
+
+−→ denotes convergence in prob-ability under P (n).
+
+Remark. Comparing (4) and (8) reveals the structural similarity between realism and coordination constraints. In both cases, we require a distribution induced by the code to match a target distribution. The difference lies in which distribution:  
+
+> •
+
+Realism: marginal P (n) 
+
+> Y1: n
+
+should match p⊗nX ; 
+
+> •
+
+Coordination: joint P (n) 
+
+> X1: n,Y 1: n
+
+should match q⊗nX,Y .The observation that Y is replaced by (X, Y ) is central to the parallels we explore in Section III. Figure 1 illustrates this correspondence. 
+
+4) Realization-Based Constraints and Batched Crit-ics: Intuitively, the distortion constraint (2) and the strong realism constraint (4) differ fundamentally in how they depend on the induced distribution P (n). Equa-tion (2) is of the form 
+
+E[ϕ(n)(samples from P (n))] ≤ λ, (10) where ϕ(n) is a fixed function (no dependence on 
+
+P (n)) and λ is a constant. We call any such constraint a realization-based constraint and ϕ(n) a realization-based metric ; we also allow inequalities of the form 
+
+lim sup n E[ϕ(n)(samples from P (n))] < λ, where λ                
+
+> Strong Empirical Batched critic RDP [3], [18] [8], [18] [10]
+> Coordination [7] [6] Open
+> TABLE I. The parallel between realism constraints (RDP) and coordination constraints across formulation types. References indicate where the corresponding trade-off has been characterized in the point-to-point setting. The systematic correspondence across rows is a central theme of this paper; the open entry illustrates how advances in one row can suggest new problems in the other.
+
+may be ∞. Note that the expectation becomes a prob-ability if ϕ(n) is an indicator function. Examples in-clude constraints (2), (7), and (9) (the latter through the equivalence, for bounded D, between convergence in probability and convergence of expectations). All other constraints are called distributional constraints . For most divergences D, Dn, such as the TVD, the constraints (4), (5), and (8) are not realization-based. A realization-based metric may jointly inspect multi-ple reconstructions: 
+
+E[δ(Y (1) 1: n , . . . , Y (Bn)1: n )] , (11) where {Y (k)1: n }k∈[Bn] is a batch of Bn i.i.d. samples from 
+
+P (n) 
+
+> Y1: n
+
+, and δ is a real-valued function. Naturally, any such function is called a batched critic [5]. Note that the coding scheme itself does not involve any batch; only the realism metric does. The key property of this class of metrics is that the batch size Bn effectively interpolates between two fundamentally different con-straints: realization-based metrics with a single sample (Bn = 1) and full distributional constraints. Indeed, for certain choices of δ, a realization-based constraint involving (11) is equivalent to a distributional constraint in the limit Bn → ∞ . Heuristically, inspecting a large batch of reconstructions jointly amounts to examining their full distribution P (n) 
+
+> Y1: n
+
+. In Section IV, we present an application of this paradigm to the RDP problem, for which the role of randomness varies dramatically with 
+
+Bn.
+
+The batched critics paradigm encompasses a vast set of realization-based metrics: in an RDP setup, the samples from P (n) are reconstructions, but one could equally consider pairs (X1: n, Y 1: n). The structural par-allel between realism and coordination documented in Section III suggests that similar ideas can be translated to coordination, filling the open entry in Table I. We develop this direction in Section IV, after introducing the necessary formalism. D. Formal definitions of trade-offs 
+
+The preceding discussion suggests that a “good” code may need to satisfy multiple, potentially competing objectives: fidelity to the source, realism of the recon-struction, or coordination between actions. We formalize these objectives through mathematical properties of the induced distribution P (n).Each of the constraints presented in Section II-C takes one of two forms: 1) A parametric constraint P(n, P (n), λ ) (e.g., (2) or (4)) that must be satisfied for each sufficiently large 
+
+n, where λ is a parameter (e.g., a distortion level); 2) An asymptotic property P({P (n)}n∈N) that per-tains to the limiting behavior of the sequence of induced distributions as n → ∞ (e.g., a conver-gence in probability such as (6) or (9)). The fundamental limits of compression correspond to the asymptotic regime where the blocklength n tends to infinity. This leads to the following definition. 
+
+Definition 2 (Achievability): Consider a set of con-straints. A tuple (R, R c, λ 1, . . . , λ K ) is asymptotically achievable if, for any ε > 0, there exists a sequence of (n, R + ε, R c + ε) codes whose induced distributions 
+
+{P (n)}n satisfy the constraints. The tuple is achievable with deterministic schemes if the codes can be chosen to be deterministic. This abstract formulation may seem overly general, but, as shown next, it provides a unified language for discussing rate-distortion theory, RDP trade-offs, and coordination problems. 
+
+E. Classical Results as Special Cases 
+
+To ground this abstract framework, we note how classical results emerge as special cases. 
+
+Rate-distortion theory uses one parametric con-straint (2) with additive distortion. A pair (R, λ ) is achievable with deterministic schemes iff R is at least: 
+
+R(λ) = min     
+
+> pY|X:E[d(X,Y )] ≤λ
+
+Ip(X; Y )3. (12) Whether a tuple is achievable does not depend on CR. 
+
+The RDP trade-off combines distortion (2) and strong realism (4); it generally requires Rc > 0.
+
+Channel synthesis imposes constraint (8) with λ = 0 ;the minimum rate is R = Iq(X; Y ), but achieving it requires CR at rate Rc = Hq(Y |X).             
+
+> 3The mutual information between Xand Yis a function of the joint distribution, here pX·pY|X,which appears as subscript in
+> Ip(X;Y).
+> Encoder Decoder
+
+p⊗nX,Z 
+
+X1: n
+
+Z1: n Y1: n
+
+M ∈ [2 nR ]
+
+J ∈ [2 nR c ]
+
+Fig. 2: The remote source compression setting.  
+
+> Encoder Decoder
+
+X1: n Y1: n
+
+M ∈ [2 nR ]
+
+J ∈ [2 nR c ]
+
+Z1: n
+
+Fig. 3: Compression in the presence of side information. 
+
+F. Side Information and Remote Source Compression 
+
+The basic setup extends naturally to scenarios with additional sources. We mention two important cases. 
+
+a) Remote Source Compression: In some applica-tions, the encoder does not observe the source X1: n di-rectly, but only a noisy version Z1: n with (X1: n, Z 1: n) ∼
+
+p⊗nX,Z (Figure 2). The decoder must still produce a recon-struction Y1: n that is close to (and realistic with respect to) the remote source X1: n. This can be formalized similarly to Definition 1, and Definition 2 applies. The constraints (2) and (4) define the remote RDP trade-off. 
+
+b) Side Information: Suppose a second source 
+
+Z1: n, correlated with X1: n as (X1: n, Z 1: n) ∼ p⊗nX,Z , is available at the decoder or at both terminals (Figure 3). When combined with realism constraints, one may re-quire not just that Y1: n looks realistic, but that the pair 
+
+(Y1: n, Z 1: n) has the correct joint distribution: 
+
+Pjoint (n, P (n), λ ) : Dn
+
+ P (n) 
+
+> Y1: n,Z 1: n
+
+, p ⊗nX,Z 
+
+ ≤ λ. (13) The striking parallel between RDP and channel syn-thesis is the subject of the next section. III. C OMMON CHARACTERISTICS OF PROBLEMS WITH DISTRIBUTION MATCHING CONSTRAINTS 
+
+In this section, we present the known achievable regions for RDP with strong realism constraints and channel synthesis side by side. Our goal is to build the reader’s intuition that the achievable regions for these problems differ only by the substitution Y →
+
+(X, Y ), and that this pattern persists across multiple problem variants (point-to-point, remote source, side information). For the information theorist, internalizing this pattern has immediate value: it provides a template for conjecturing achievable regions in new settings. Indeed, the productive connections documented in this paper were discovered precisely through this pattern: the characterization of the role of CR in the point-to-point RDP problem [8] followed the proof structure of channel synthesis [7], and the same holds for the RDP problem in the presence of side information [9], where the joint realism constraint (13) is also inspired by the strong coordination constraint (8). We begin with the basic point-to-point setting before extending to scenarios with additional sources. 
+
+A. The point-to-point scenario 
+
+We consider two problems formulated in Section II: the RDP problem with a strong realism constraint, and channel synthesis. The former combines the distortion constraint (2) with the strong realism constraint (4); the latter imposes only the strong coordination constraint (8). Throughout this section, we assume the distortion mea-sure is additive as in (3). 
+
+1) Why Randomization is Necessary: A sharp depar-ture from classical rate-distortion theory is that determin-istic codes cannot satisfy stringent distribution matching constraints [3], [18]. For a deterministic code at rate R < H(X) (the regime of interest for lossy compression), we have 
+
+HP (n) (Y1: n) ≤ HP (n) (M ) ≤ nR < nH (X) = H(p⊗nX ).
+
+Thus, a deterministic code cannot satisfy a strong realism constraint with λ = 0 , which requires P (n) 
+
+> Y1: n
+
+= p⊗nX .
+
+The same argument applies to channel synthesis: if the target distribution qY |X has Hq(Y ) > R, then deterministic codes cannot achieve λ = 0 in (8). To satisfy these constraints, the decoder must “inject” additional randomness to increase the entropy of its output. This randomness can come from two sources: local randomness at the decoder (which suffices for other problems with weaker realism constraints) or CR shared with the encoder (which is necessary for optimal performance). The amount of CR required is quantified in the achievable regions below. 
+
+2) Achievable Region - The RDP Problem: Consider the RDP problem with perfect strong realism ( λ2 = 0 
+
+in (4)). What tuples (R, R c, λ 1) of compression rate, CR rate, and distortion are achievable? The answer, established in [8], is that the closure of achievable tuples is the region: 
+
+
+
+∃ pY,V |X : pY = pX
+
+R ≥ Ip(X; V )
+
+R + Rc ≥ Ip(Y ; V )
+
+λ1 ≥ Ep[d(X, Y )] 
+
+X − V − Y
+
+
+
+, (14) where Ip denotes the mutual information according to the joint distribution p, and X − V − Y denotes that 
+
+(X, V, Y ) form a Markov chain in that order. This characterization holds for general alphabets X (e.g., R)under mild assumptions [9]. Hereafter, we only consider finite alphabets. 
+
+3) Achievable Region - Channel Synthesis: Now con-sider the problem of channel synthesis with perfect co-ordination ( λ1 = 0 in (8)). The closure of the set of pairs 
+
+(R, R c), such that (R, R c, λ 1 = 0) is asymptotically achievable, is [7]: 
+
+
+
+∃ pY,V |X : pX,Y = qX,Y 
+
+R ≥ Ip(X; V )
+
+R + Rc ≥ Ip(X, Y ; V )
+
+X − V − Y
+
+
+
+. (15) Comparing (14) and (15), the only differences (besides the distortion constraint) are the distribution-matching equality and the bound on R + Rc: Y is replaced by (X, Y ). This is precisely because channel synthesis requires coordinating the joint distribution of input and output, while RDP with strong realism only requires the output marginal to match. 
+
+4) Minimum Rates and the Role of Common Random-ness: What is the minimum compression rate for each problem, and how much CR is needed to achieve it? For the RDP problem with distortion constraint λ1,the minimum rate is [3], [8]: 
+
+R(λ1) = min pY |X : pY =pX 
+
+> Ep[d(X,Y )] ≤λ1
+
+Ip(X; Y ). (16) This is analogous to Shannon’s rate-distortion function, but with the additional constraint that the reconstruction distribution must match the source distribution. For channel synthesis with target channel qY |X , the minimum rate is simply [7], [22]: 
+
+R(qY |X ) = Iq(X; Y ). (17) Moreover, the minimum CR rate Rc(λ1) necessary to achieve the minimum compression rate R(λ1), and the minimum Rc(qY |X ) necessary to achieve R(qY |X ) have similar expressions [8, Proposition 1]: 
+
+Rc(λ1) = min         
+
+> pY|Xs.t. pY=pX,Ep[d(X,Y )] ≤λ1
+> Ip(X;Y)= R(λ1)
+
+Hp(Y †X), (18) 
+
+Rc(qY |X ) = Hq(Y †X), (19) where H(Y †X) denotes the necessary conditional en-tropy [6]. Intuitively, this quantity measures the mini-mum amount of randomness the decoder needs, beyond what can be extracted from the message, to generate Ywith the correct conditional distribution given X. For many distributions of practical interest, H(Y † X) = 
+
+H(Y |X), the standard conditional entropy [6], [7]. If 
+
+H(Y †X) is replaced by H(Y |X) above, we obtain 
+
+Rc(λ1) = Hp(X) − R(λ1), (20) 
+
+Rc(qY |X ) = Hq(Y ) − R(qY |X ). (21) where the equality Hp(Y ) = Hp(X) in (20) follows from the realism constraint pY = pX .
+
+5) Practical Implications: CR Can Dominate: Since in lossy compression the regime of interest is R ≪
+
+H(X), equations (20) and (21) imply that: 
+
+Rc ≫ R, (22) i.e., the required CR rate can far exceed the compres-sion rate. Concretely, the shared random seed must be much longer than the compressed representation, and any shortfall in CR must be compensated by increased communication rate, since R+Rc ≥ I(Y ; V ) must hold. This theoretical prediction, that strong realism requires substantial CR, stands in tension with practical experi-ence: to the best of our knowledge, no existing neural codec has reported needing large amounts of shared randomness. We return to this puzzle in Section IV, where the framework of algorithmic realism offers a natural resolution. 
+
+Remark. The CR requirement above is specific to per-fect strong realism ( λ2 = 0 ); for λ2 > 0, substantial CR is conjectured [18] to remain necessary for optimal performance. Under per-symbol realism (5), CR is not needed [18]; deterministic schemes suffice when λ2 > 0,while decoder randomization is needed when λ2 = 0 .Under empirical realism (7), deterministic schemes also suffice. As mentioned in Section II, the tractability of the i.i.d. source model allows one to uncover properties of compression with realism constraints that we expect to raise relevant questions for practical scenarios. Such a conjecture is arguably less principled for per-symbol and empirical constraints as they are insensitive to the order 
+
+of symbols: producing only the two periodic sequences 
+
+0101 · · · and 1010 · · · with equal probability would be deemed realistic for a Bernoulli( 1/2) source [10]. 
+
+6) Common Analytical Tools: The proofs of (14) and (15) [7], [8] both rely on the soft covering lemma ,which ensures that random codebook selection induces approximately the correct output distribution (in contrast to the standard covering lemma [2, Section 3.7], which ensures proximity to typical source sequences). Both schemes employ the likelihood encoder [23], which selects codewords with probabilities proportional to their likelihood under the source. With sufficient CR rate, optimal RDP performance can be achieved by running an optimal channel synthesis scheme for the channel pY |X
+
+attaining the minimum in (16) [8], [17], [19]. 
+
+B. Scenarios with more sources and/or terminals 
+
+The parallels documented in Section III-A extend to the settings with additional sources introduced in Section II: remote source compression (Figure 2) and compression with side information (Figure 3). 
+
+Remote source compression. For perfect strong realism (λ2 = 0 ), the closure of the set of achievable rates is given by [8, Theorem 1]: 
+
+
+
+∃ pY,V |Z,X : pY = pX
+
+R ≥ Ip(Z; V )
+
+R + Rc ≥ Ip(Y ; V )
+
+λ1 ≥ Ep[d(X, Y )] 
+
+X − Z − V − Y
+
+
+
+. (23) Similarly, the constraint (8) defines a trade-off between 
+
+R, R c, and λ1 called the remote channel synthesis trade-off [24]. When λ1 = 0, the closure of the set of achievable tuples is the following region [24]: 
+
+
+
+∃ pY,V |Z,X : pX,Y = qX,Y 
+
+R ≥ Ip(Z; V )
+
+R + Rc ≥ Ip(X, Y ; V )
+
+X − Z − V − Y
+
+
+
+. (24) Thus, the optimal trade-offs in the remote source setting are likewise closely related. Moreover, it can be shown that when the CR rate is sufficiently large, the expres-sions for the optimal rate resemble (16) and (17). 
+
+Side information. We present the case where Z1: n is available at both terminals. Constraints (2) and (13) define a trade-off characterized by the following region when λ2 = 0 [9]: 
+
+
+
+∃ pY,V |Z,X : pY,Z = pX,Z 
+
+R ≥ Ip(X; V |Z)
+
+R + Rc ≥ Ip(Y ; V |Z)
+
+λ1 ≥ Ep[d(X, Y )] 
+
+X − (Z, V ) − Y
+
+
+
+. (25) Similarly, the following constraint defines a trade-off: 
+
+P1(n, P (n), λ 1) : Dn(P (n) 
+
+> X1: n,Y 1: n,Z 1: n
+
+, q ⊗nX,Y,Z ) ≤ λ1. (26) When λ1 = 0 , the closure of the set of achievable rates is [25]: 
+
+
+
+∃ pY,V |Z,X : pX,Y,Z = qX,Y,Z 
+
+R ≥ Ip(X; V |Z)
+
+R + Rc ≥ Ip(X, Y ; V |Z)
+
+X − (Z, V ) − Y
+
+
+
+. (27) Therefore, once again, the optimal trade-offs for the RDP problem and the distributed coordination problem are closely analogous. When Z1: n is only available at the decoder, the above characterizations of the achievable tuples still hold provided that the additional requirement 
+
+Z − X − V is added to each of (25) and (27) [9], [25], and the same close correspondence continues to hold. 
+
+1) Open Problems, Extensions: The tight connections described above suggest fertile ground for research. 
+
+Connections to optimal transport. The optimal trans-port (OT) problem seeks, given two distributions μ and 
+
+ν and a cost function c, the coupling with marginals μ
+
+and ν that minimizes the expected cost [26]. The RDP function (16) has a related structure: it optimizes over couplings of pX with itself under a distortion budget 
+
+E[d(X, Y )] ≤ λ1. When the target reconstruction distri-bution differs from the source, the connection becomes even more explicit, and, together with its coordination counterpart — remote channel synthesis [24] — it pro-vides a framework for studying generalized transport under communication constraints [27]. 
+
+Multi-terminal settings. Do similar parallels hold for broadcast and multiple access channels, or networks with more than two agents? Initial work appears in [28]. 
+
+Successive refinement and multiple descriptions. RDP problems in these settings have been studied, but con-nections to coordination theory remain unexplored. 
+
+Partial coordination. The case where side information is present and only (X1: n, Y 1: n) (not Z1: n) must be coordinated remains open [29]. In the following section, we turn to recent develop-ments that address limitations of the distribution match-ing framework as a model of realism. IV. B ATCHED CRITICS AND ALGORITHMIC REALISM 
+
+The preceding section focused on distributional con-straints, which have a conceptual limitation: under re-alism constraints like (4) and (5), it is not meaningful to speak of whether an individual realization is real-istic [10]; realism is a property of the ensemble. Yet human observers judge realism one image at a time. This motivates the use of a realization-based metric (critic) to formalize realism: Y1: n 7 → δ(Y1: n) ∈ R. One may also consider a batched critic, i.e., a function that jointly inspects multiple samples: (Y (1) 1: n , . . . , Y (Bn)1: n ) 7 →
+
+δ(Y (1) 1: n , . . . , Y (Bn)1: n ) (cf. Section II). In this section, we discuss the use of batched critics to model both realism and coordination. We start by providing examples of realization-based metrics for realism. For an i.i.d. source, what properties should agood critic detect in reconstructions? Consider aBernoulli (1 /2) source. A critic might measure how much the frequency of ones departs from 1/2, relative to the typical fluctuation √n. For true source sequences, this ratio stays bounded; but if a coding scheme produces reconstructions whose frequency of ones departs from 
+
+1/2 by more than n−(1 /2−ϵ) for some ϵ > 0, the critic’s expected output grows without bound as n increases. Similarly, a critic could inspect the frequency of the block 01 , or any other pattern. Note that such critics only test the empirical distribution and are insensitive to the ordering of symbols. A more powerful critic can inspect the length of the longest run of consecutive ones: for an i.i.d. Bernoulli( 1/2) sequence of length n, this length concentrates around log 2 n. If a coding scheme produces reconstructions whose longest run grows at a different rate, the expected output of this critic diverges with n. More generally, any limit theorem satisfied by the source distribution can be embodied in a critic that diverges when the theorem is violated [10]. In other words, satisfying a given limit theorem can be formalized as sup n E[δ(·)] < ∞ for some critic δ. 
+
+Each RDP (resp. coordination) problem mentioned in previous sections involved only one realism (resp. coor-dination) constraint. However, one can impose multiple constraints, e.g., by selecting some of the examples of critics described above and imposing a constraint for each critic; while each of these examples arguably does not suffice to model realism, combining constraints from a sufficiently rich family may yield a strong model. Formally, consider Bn ∈ N, and let C denote a family of batched critics with batch size Bn. Given a constraint for each critic, and a potential distortion constraint, one obtains a trade-off (Definition 2). For Bn = 1 , the critics inspect individual samples; as Bn grows, they can detect increasingly subtle distributional properties. The role of randomness (including CR) may vary dramatically across these different cases. In Subsection IV-A, we provide an example of a class C of critics and a corresponding RDP problem for which such a phenomenon holds [10]. In Subsection IV-B, we propose to apply this paradigm to coordination, once again transferring a development across the parallel. A. Algorithmic realism 
+
+A particularly powerful choice of C is provided by algorithmic information theory [5], [30]. One can think of this class as a vast set that includes tests for all limit theorems. See [10] for a comprehensive exposition, and [5] for a lucid high-level presentation. In [5], the author argues in favor of measuring realism via a batched versions of these critics in a variety of problems, such as outlier detection and generative modeling. In [10], the RDP problem is studied with finite alpha-bets, a distortion constraint (2) with an additive distortion function, and the following realism constraint, given a sequence {Bn}n∈N of batch sizes: for every critic δ ∈ C ,
+
+sup 
+
+> n∈N
+
+Eδ(Y (1) 1: n , . . . , Y (Bn)1: n ) < ∞, (28) where {Y (k)1: n }k∈[Bn] is a batch of i.i.d. samples from P (n) 
+
+> Y1: n
+
+. This formally defines a trade-off between 
+
+R, R c, λ 1 (Definition 2). Satisfying (28) requires the re-constructions to be highly realistic: they must asymptoti-cally satisfy a vast range of algorithmically testable prop-erties of {p⊗nX }n∈N, including the examples discussed above — which were also of the form sup n E[δ(·)] < ∞
+
+— and essentially all limit theorems. The main result in [10] is that if Bn does not grow exponentially fast with n, then deterministic schemes can achieve the optimal trade-off. Moreover, if Bn grows fast enough, the optimal trade-off is identical to the one presented in Section III, and the region is given by (14). Intuitively, jointly inspecting a very large number of reconstructions is equivalent to inspecting the recon-struction distribution P (n) 
+
+> Y1: n
+
+. This provides a compelling explanation for the fact that no need for large amounts of CR has been observed in state-of-the-art codecs. 
+
+B. An open problem: batched critics for coordination 
+
+The framework above suggests an analogous formula-tion for coordination: for certain applications, the coordi-nation requirement may be more suitably formalized by batched critics, and this may result in a fundamentally different trade-off compared to standard formulations. Consider the channel synthesis setup of Section III, but replace the strong coordination constraint (8) with a realization-based requirement of the following form: for a distribution P (n) induced by a scheme, consider a constraint for each critic in a class C of batched critics, each taking as input a batch of Bn i.i.d. pairs 
+
+(X(k)1: n , Y (k)1: n ) sampled from P (n). The resulting trade-off is expected to inherit the interpolation property described above: for Bn = 1 , deterministic codes suffice, while for large enough Bn, strong coordination is recovered and CR becomes necessary. Characterizing the role of randomness as a function of Bn constitutes an open problem (Table I). This formulation is the Y → (X, Y ) translation of the RDP formulation described above (see also [10]), but its analysis may involve additional technical difficulties since X is not under the designer’s control. If the class 
+
+C is rich enough, the coordination constraint would be much stronger than empirical coordination (9), which only pertains to frequency statistics. A canonical choice of C is the class of randomness tests from algorithmic information theory introduced above: requiring that real-izations pass all algorithmic tests for being i.i.d. accord-ing to the target qX,Y provides a natural realization-based interpolation of the notion of strong coordination. V. C ONCLUSION AND FUTURE DIRECTIONS 
+
+We have shown that lossy compression with realism constraints and distributed coordination are connected in ways that are not merely aesthetically appealing but concretely productive. The RDP trade-off with strong realism constraints and channel synthesis have nearly identical information-theoretic characterizations. These connections have guided the characterization of the role of CR in RDP problems and suggested new con-straint definitions for compression with side information. We have also surveyed recent developments, including batched critics and algorithmic realism, and shown how advances on the RDP problem naturally suggest new problems for coordination theory, and vice versa. The connections revealed here open several avenues for future research. The extension of batched critics to coordination (Table I) is one concrete instance; more broadly, multi-terminal networks (broadcast, multiple access, relay), successive refinement, and connections to optimal transport theory all offer opportunities for the parallel to generate new results. As AI moves toward systems of multiple interacting agents, the theory of distributed coordination provides a principled framework for understanding fundamental limits under communica-tion constraints, and the bridge to compression theory documented here may accelerate progress on both sides. ACKNOWLEDGMENT 
+
+This work received funding from EU Horizon 2020 MSC-ITN Greenedge (GA. No. 953775), from UKRI for projects INFORMED-AI (EP/Y028732/1), AI-R (ERC Consolidator Grant, EP/X030806/1) and NSF-EPSRC Neural JSCC (UKRI1463), and from SNS JU for project 6G-GOALS (GA. No. 101139232). REFERENCES 
+
+[1] D. Gündüz et al. , “Beyond Transmitting Bits: Context, Se-mantics, and Task-Oriented Communications,” IEEE Journal on Selected Areas in Communications , vol. 41, no. 1, 2023. [2] A. El Gamal and Y. Kim, Network Information Theory . Cam-bridge (UK): Cambridge University Press, 2011. [3] M. Li et al. , “On Distribution Preserving Quantization,” 2011, arXiv:1108.3728. [4] Y. Blau and T. Michaeli, “Rethinking Lossy Compression: The Rate-Distortion-Perception Tradeoff,” in ICML , 2019. [5] L. Theis, “Position: What Makes an Image Realistic?” in ICML ,2024. [6] P. Cuff et al. , “Coordination Capacity,” IEEE Transactions on Information Theory , vol. 56, no. 9, 2010. [7] P. Cuff, “Distributed Channel Synthesis,” IEEE Transactions on Information Theory , vol. 59, no. 11, 2013. [8] N. Saldi et al. , “Output Constrained Lossy Source Coding With Limited Common Randomness,” IEEE Transactions on Information Theory , vol. 61, no. 9, 2015. [9] Y. Hamdi et al. , “Rate-Distortion-Perception Trade-off with Strong Realism Constraints: Role of Side Information and Com-mon Randomness,” IEEE Transactions on Information Theory ,2026, Early Access, DOI: 10.1109/TIT.2026.3702694. [10] Y. Hamdi et al. , “The Rate-Distortion-Perception Trade-Off with Algorithmic Realism,” in IEEE International Symposium on Information Theory , 2025. [11] Z. Wang et al. , “Multiscale Structural Similarity for Image Quality Assessment,” in Asilomar Conference on Signals, Sys-tems & Computers , 2003. [12] R. Zhang et al. , “The Unreasonable Effectiveness of Deep Fea-tures as a Perceptual Metric,” in IEEE/CVF CVPR Conference ,2018. [13] Y. Qiu and A. B. Wagner, “Low-Rate, Low-Distortion Com-pression with Wasserstein Distortion,” in IEEE International Symposium on Information Theory , 2024. [14] J. Ballé et al. , “Good, Cheap, and Fast: Overfitted Image Compression with Wasserstein Distortion,” in IEEE/CVF CVPR Conference , 2025. [15] D. He et al. , “PO-ELIC: Perception-Oriented Efficient Learned Image Coding,” in IEEE/CVF CVPR Workshops , 2022. [16] E. Agustsson et al. , “Generative Adversarial Networks for Extreme Learned Image Compression,” in IEEE/CVF CVPR Conference , 2019. [17] L. Theis et al. , “Lossy Compression with Gaussian Diffusion,” 
+
+arXiv e-prints , 2022, arxiv:2206.08889. [18] J. Chen et al. , “On the Rate-Distortion-Perception Function,” 
+
+IEEE Journal on Selected Areas in Information Theory , vol. 3, no. 4, 2022. [19] L. Theis and A. B. Wagner, “A Coding Theorem for the Rate-Distortion-Perception Function,” in Neural Compresison Workshop @ ICML , 2021. [20] P. Gács and J. Korner, “Common Information Is Far Less Than Mutual Information,” Problems of Control and Information Theory , vol. 2, 1973. [21] A. Wyner, “The Common Information of Two Dependent Random Variables,” IEEE Transactions on Information Theory ,vol. 21, no. 2, 1975. [22] A. Winter, “Compression of Sources of Probability Distribu-tions and Density Operators,” 2002, arXiv:quant-ph/0208131. [23] E. C. Song et al. , “The Likelihood Encoder for Lossy Com-pression,” IEEE Transactions on Information Theory , vol. 62, no. 4, 2016. [24] Y. Hamdi and D. Gündüz, “Remote Channel Synthesis,” in 
+
+IEEE Information Theory Workshop , 2025. [25] M. H. Yassaee, A. Gohari, and M. R. Aref, “Channel Simu-lation via Interactive Communications,” IEEE Transactions on Information Theory , vol. 61, no. 6, 2015. [26] C. Villani, Optimal Transport: Old and New . Springer, 2009. [27] H. Liu et al. , “Cross-Domain Lossy Compression as Entropy Constrained Optimal Transport,” IEEE Journal on Selected Areas in Information Theory , 2022. [28] Y. Hamdi et al. , “Non-interactive Remote Coordination,” in 
+
+Workshop on Machine Learning and Compression @ NeurIPS ,2025. [29] V. Ramachandran et al. , “Strong Coordination with Side In-formation,” in IEEE International Symposium on Information Theory , 2020. [30] M. Li and P. Vitányi, An Introduction to Kolmogorov Complexity and Its Applications , 4th ed. Springer, 2019. 
+
+Yassine Hamdi (Member, IEEE) is a Research Asso-ciate in Machine Learning and Wireless Communications at Imperial College London, working with Pr. Deniz Gündüz (Imperial College) and Pr. Ioannis Kontoyiannis (Cambridge University) as part of the UKRI project INFORMED-AI which focuses on the intersection be-tween information theory and machine learning. He was a PhD student at the Intelligent Systems and Networks Group at Imperial College London from 2021 to 2026. He graduated from Ecole Polytechnique (Palaiseau, France) in 2020, where he undertook research in applied probability theory. He received his MSc degree from the University of Paris-Saclay (France) in Statistics and Machine Learning in 2021. His research interests include realism constraints in lossy compression and the rate-distortion-perception trade-off, as well as coordination constraints in networks, and diffusion models theory. 
+
+Deniz Gündüz (Fellow, IEEE) received the Ph.D. degree in electrical engineering from the NYU Tandon School of Engineering in 2007. In 2012, he joined Imperial College London, U.K., where he is currently a Professor of information processing. He is also an Ama-zon Scholar. He held positions with Princeton University as a Post-Doctoral Researcher and Stanford University as a Research Assistant Professor from 2007 to 2009. He is an Elected Member of the IEEE SPCOM and MLSP Technical Committees. He received the IEEE CommSoc CTTC Early Achievement Award in 2017, and the Start-ing (2016), Consolidator (2022), and Proof-of-Concept (2023) Grants of European Research Council (ERC). He served in editorial roles for IEEE TRANS. INF. THEORY, IEEE TRANS. COMMUN., IEEE TRANS. WIRELESS COMMUN., IEEE J. SEL. AREAS COM-MUN., and IEEE J. SEL. AREAS INF. THEORY.

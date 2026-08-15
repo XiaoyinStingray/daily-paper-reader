@@ -1,0 +1,1612 @@
+ControlRef: Efficient Layout-Guided Multi-Instance Generation via Anchored
+4D-RoPE
+Yunkai Yang1, Yudong Zhang2, Xinying Chen3, Haoyuan Liang2, Yizhuo Niu1, Jinshuai Cheng1,
+Kunquan Zhang1, Liziyue Fang1, Weitao Wan4, Runmin Dong1∗
+1Sun Yat-Sen University
+2Tsinghua University
+3Beijing Institute of Technology
+4TS Martech
+yangyk26@mail2.sysu.edu.cn, dongrm3@mail.sysu.edu.cn
+Abstract
+Layout-guided multi-instance generation is essential for con-
+trollable image synthesis in Multi-Modal Diffusion Trans-
+formers (MM-DiTs). However, integrating this capability into
+unified architectures remains challenging. Prior frameworks
+rely on redundant full-resolution canvas padding and Shifted-
+RoPE to manage multiple reference images. This mechanism
+drastically inflates computational overhead for sparse layouts
+and disrupts critical low-frequency RoPE features, creating a
+severe spatial-frequency compromise that blurs absolute spa-
+tial correspondence. To overcome these limitations, we pro-
+pose ControlRef, a highly efficient and precise multi-instance
+synthesis framework. ControlRef utilizes a Unified Instance-
+Layout Control (UILC) attention mask to strictly decouple
+inter-instance semantic interactions and enforce precise re-
+gional binding. To further promote region-level spatial align-
+ment, we introduce Anchored 4D-RoPE, a novel positional
+encoding mechanism that directly anchors tokens to their ab-
+solute geometric centers. By pre-aligning reference images
+to their corresponding bounding box resolutions, physically
+anchoring both layout and reference tokens to their abso-
+lute geometric centers, and stacking the references along the
+z-axis, Anchored 4D-RoPE natively preserves spatial priors
+and mitigates the spatial-frequency compromise without lossy
+shifting. Extensive experiments demonstrate that ControlRef
+achieves state-of-the-art visual fidelity and localization ac-
+curacy, while concurrently slashing inference latency by over
+80% in sparse layouts and reducing memory overhead by 50%
+in dense scenarios.
+Introduction
+Diffusion Transformers (DiTs) (Peebles and Xie 2023) have
+significantly advanced high-fidelity image synthesis. Recent
+Multi-Modal DiTs (MM-DiTs) (Esser et al. 2024) process
+text and visual tokens within unified architectures to improve
+multimodal alignment. Building upon this progress, layout-
+guided multi-instance generation has emerged as a crucial
+step towards highly controllable authoring. This task requires
+synthesizing multiple entities that strictly conform to spatial
+bounding boxes and reference images.
+Prior frameworks like ContextGen (Xu et al. 2025) achieve
+layout control by pasting reference images onto a full-
+resolution blank canvas. To process multiple references, they
+append additional image tokens to the sequence and prevent
+∗Corresponding author.
+spatial overlap by assigning them bottom-right coordinates
+via Shifted 3D-RoPE (Wu et al. 2025c). However, this ap-
+proach introduces notable overhead: the full-resolution can-
+vas inflates computation for sparse layouts, while spatial
+shifting disrupts the low-frequency components of RoPE.
+This creates a spatial-frequency compromise that blurs abso-
+lute spatial correspondence. Furthermore, early architectures
+uniformly anchor the text modality to a static zero origin co-
+ordinate, which limits effective spatial disentanglement.
+To overcome these limitations within unified architec-
+tures, we propose ControlRef, an efficient framework de-
+signed for layout-guided multi-instance synthesis. Built upon
+FLUX.2 [klein] (Labs 2025), ControlRef maintains instance-
+level isolation by deploying a Unified Instance-Layout Con-
+trol (UILC) attention mask across all transformer blocks.
+By restricting each reference image to its corresponding
+layout region, the UILC mask prevents semantic crosstalk
+among instances without disrupting the generative back-
+bone’s spatial understanding. Moreover, the framework ac-
+curately grounds these regions by formulating layout tokens
+through the concatenation of text embeddings and Fourier
+encoding of bounding box coordinates (Li et al. 2023), en-
+abling token-sparse layout binding. Appending reference to-
+kens alongside these compact layout tokens reduces the over-
+all sequence overhead, establishing a computationally effi-
+cient foundation for multi-modal conditional routing.
+We introduce Anchored 4D-RoPE, a novel encoding mech-
+anism for precise layout adherence. Instead of relying on spa-
+tial shifting or full-resolution padding, Anchored 4D-RoPE
+projects localized coordinates into a 4D-RoPE subspace that
+jointly encodes text, spatial dimensions, and multiple refer-
+ence images. It aligns the resolution of each reference image
+to match its corresponding bounding box area. Both layout
+and reference tokens are anchored to their absolute geometric
+centers, while the multiple reference conditions are stacked
+within an additional subspace at discrete strides for instance
+separation. By using the inherent distance-dependent de-
+cay of RoPE within this geometric space, Anchored 4D-
+RoPE preserves absolute spatial correspondence and low-
+frequency features, addressing the spatial-frequency com-
+promise of prior shifting methods. In summary, our main
+contributions are three-fold:
+• We propose ControlRef, an efficient layout-guided multi-
+arXiv:2608.06878v1  [cs.CV]  7 Aug 2026
+
+
+Figure 1: ControlRef resolves the spatial-frequency compromise in MM-DiTs by utilizing a novel Anchored 4D-RoPE and UILC
+masking to achieve highly efficient, precise layout-guided multi-instance synthesis without redundant canvas padding.
+instance framework for DiTs, utilizing a Unified Instance-
+Layout Control (UILC) attention mask to enforce precise
+regional binding.
+• We introduce Anchored 4D-RoPE, a novel multi-axis
+RoPE that anchors conditional tokens to absolute geo-
+metric spaces, effectively resolving the spatial-frequency
+compromise of prior shifting methods.
+• ControlRef achieves SOTA visual fidelity and localization
+accuracy, while concurrently slashing inference latency
+and memory overhead by over 80% and 50% in sparse and
+dense layouts compared to prior art.
+Related Work
+Layout-to-Image Generation
+Layout-to-Image (L2I) generation (Zhou et al. 2024b,a;
+Zhang et al. 2025b; Zheng et al. 2023; Chen et al. 2026b;
+Lee, Yoon, and Sung 2024; Yang et al. 2023) aims to syn-
+thesize high-fidelity images that strictly conform to user-
+provided spatial bounding boxes. While early methods like
+GLIGEN (Li et al. 2023) enabled efficient layout-guided
+synthesis via Fourier feature encoding, extending this ca-
+pability to modern MM-DiTs (Esser et al. 2024) remains
+challenging. Although CreatiLayout (Zhang et al. 2025b)
+mitigates "modal competition" through a decoupled siamese
+structure, it suffers from doubled parameter overhead and
+poor structural scalability, hindering its extension to layout-
+guided multi-instance generation. Recent models, such as
+Z-Image (Cai et al. 2025) and FLUX.2 (Labs 2025), in-
+creasingly rely on unified contexts and shared parameters
+to synchronously process text and visual tokens, maximiz-
+ing multi-modal alignment natively. Moreover, prior meth-
+ods typically entangle layout and text positional encodings,
+leading to spatial ambiguity. Maintaining the integrity of
+unified architectures, our approach deploys decoupled multi-
+axis positional encoding alongside a unified attention mask
+to achieve precise layout control and region binding.
+Image-to-Image Generation
+The core challenge of Image-to-Image (I2I) generation (Mou
+et al. 2024; Zhang, Rao, and Agrawala 2023; Tan et al. 2025b;
+Wang et al. 2025a) lies in balancing visual fidelity to refer-
+ence images with textual controllability. UNet-based frame-
+works (Ye et al. 2023) typically employ decoupled cross-
+attention to strictly separate textual and visual conditions
+during reference integration.
+Recent MM-DiT architectures (Labs 2024, 2025; Cai et al.
+2025) rely on RoPE (Su et al. 2024) to compensate for the
+position-agnostic nature of self-attention. While UNO (Wu
+et al. 2025c) advocates for Shifted 3D-RoPE to integrate ref-
+erence features, OmniControl (Tan et al. 2025a) identifies
+a crucial trade-off: Shifted 3D-RoPE improves fidelity for
+size-mismatched signals, whereas unshifted RoPE remains
+superior for size-aligned inputs by maintaining precise spa-
+tial correspondence. ContextGen (Xu et al. 2025), a layout-
+guided multi-reference generation framework, replicates a
+layout canvas of identical resolution to the source image
+and stacks it along the temporal axis. Within this temporal
+layer, shifted 3D-RoPE is applied to the reference image to-
+kens to spatially decouple them from the denoising image
+
+
+Figure 2: (a) Overview of ControlRef. Conditioned jointly on GLIGEN-style layout tokens and corresponding reference images,
+our architecture based on FLUX.2 [klein] employs the UILC attention mask to guarantee precise regional binding and instance-
+level isolation. (b) Anchored 4D-RoPE positional strategy. By mapping tokens to a (z, y, x, t) tuple and integrating bounding
+box spatial offsets into the reference and layout position encodings, we establish a highly efficient spatial prior.
+and layout canvas. Whether utilizing Shifted 3D-RoPE for
+non-temporal tasks or temporal stacking for many-to-many
+generation (e.g., iMontage (Fu et al. 2025)), prior shifting
+mechanisms merely prevent spatial overlap at the severe cost
+of disrupting low-frequency RoPE components. Bypassing
+this spatial-frequency compromise, our Anchored 4D-RoPE
+stacks references within a multi-axis subspace using local-
+ized positional biases, fully exploiting both high- and low-
+frequency features to maintain absolute spatial anchors.
+Methodology
+Preliminary
+Multi-axis RoPE.
+RoPE (Su et al. 2024) encodes relative
+positions by partitioning d-dimensional components into d/2
+pairs. By representing the t-th pair at position m as a complex
+number x(t)
+m = x(2t)
+m
++ ix(2t+1)
+m
+, the transformation applies
+a position-dependent rotation:
+˜q(t)
+m = q(t)
+m eimθt,
+˜k(t)
+n = k(t)
+n einθt,
+(1)
+where θt = 2000−2t/d in practice of FLUX.2. This ensures
+that the attention score depends only on the relative posi-
+tion m −n: Re[˜q(t)
+m (˜k(t)
+n )∗] = Re[q(t)
+m (k(t)
+n )∗ei(m−n)θt].
+The generalized Multi-axis RoPE extends this positional
+modeling to a K-dimensional coordinate tuple p
+=
+(p1, p2, . . . , pK) by partitioning the total embedding dimen-
+sion d into K distinct subspaces (d1, d2, . . . , dK), satisfying
+d = PK
+k=1 dk. By applying independent rotary transforma-
+tions within each subspace, this formulation equips DiT ar-
+chitectures to effectively model complex multi-dimensional
+positional relationships while rigorously preserving relative
+shift-invariance.
+FLUX.2 [klein].
+By adopting Rectified Flow (Liu, Gong,
+and Liu 2022) to linearize the transformation from noise
+x1 to data x0 via a learned velocity field v(xt, t), FLUX.2
+[klein] (Labs 2025) elegantly unifies generation and editing
+capabilities within a single, cohesive framework. However,
+while recent architectures like FLUX.1 (Labs 2024) and Z-
+Image (Cai et al. 2025) also leverage multi-axis RoPE (Zhuo
+et al. 2024), their spatial modeling remains constrained to 3-
+axis formulations. In contrast, FLUX.2 [klein] advances this
+paradigm by introducing a specialized 4D-RoPE variant. Fur-
+thermore, rather than employing layer-specific parameters for
+AdaLN (Peebles and Xie 2023), FLUX.2 utilizes an efficient
+parameter-sharing mechanism. Specifically, within the dual-
+stream blocks, the text and image branches each maintain
+a distinct set of shared AdaLN parameters. Conversely, the
+single-stream blocks apply a globally unified set of AdaLN
+parameters across all modalities.
+The Architecture of Our ControlRef
+We propose ControlRef (Fig. 2(a)), a 4D-RoPE-empowered
+framework designed to further optimize computational effi-
+
+
+ciency, particularly for sparse layouts, while ContextGen (Xu
+et al. 2025) pioneers layout-guided generation by operat-
+ing on full-resolution canvases. Building upon the FLUX.2
+[klein] backbone and inspired by OminiControl (Tan et al.
+2025a), we elegantly adapt the architecture for layout-guided
+multi-instance synthesis. Crucially, to ensure precise lay-
+out grounding and enhanced entity detail generation, we
+introduce Anchored 4D-RoPE (Fig. 2(b)), a tailored posi-
+tional encoding mechanism that seamlessly projects local-
+ized instance coordinates into the unified 4D positional space
+(z, y, x, t).
+Conditional Tokenization.
+Following GLIGEN (Li et al.
+2023), we derive the layout tokens hl, consisting of bound-
+ing boxes cbbox = (y1, x1, y2, x2) and regional text cregion,
+using the following formulation:
+hl = MLP ([ϕ(cregion), Fourier(cbbox)]) .
+(2)
+Here, ϕ is the text encoder, Fourier denotes the Fourier
+spatial encoding, and [·, ·] represents concatenation along
+the last dimension. This concise formulation facilitates a
+highly efficient and seamless injection of layout information
+into the generative backbone. Following the default FLUX.2
+[klein] configuration, reference images are VAE-encoded and
+appended to the sequence dimension.
+LoRA Injection.
+To maintain minimal trainable parame-
+ters, we employ a highly selective LoRA (Hu et al. 2022),
+injecting trainable matrices exclusively into the linear lay-
+ers of the Attention and MLP modules. Specifically, within
+the dual-stream blocks, LoRA is strictly limited to the lay-
+out tokens within the text branch and the reference tokens
+within the denoising branch. Conversely, in the single-stream
+blocks, a unified, shared LoRA is utilized to process tokens
+across all modalities jointly.
+Unified Instance-Layout Control Attention Mask.
+Un-
+like (Zhou et al. 2025), which utilizes different atten-
+tion masks across various FLUX block levels, we exploit
+the native multi-reference editing capabilities of FLUX.2
+[klein]. This allows us to utilize a single, consistent Unified
+Instance-Layout Control (UILC) attention mask throughout
+all FLUX blocks to achieve precise regional layout binding
+and instance-level isolation.
+Consequently, let Rimg and Rtxt denote the disjoint sets
+of indices corresponding to the denoising image tokens and
+text embeddings, respectively. For each instance i, the layout
+indices Rlayi and reference image indices Rrefi form a bijec-
+tive pair, collectively representing the i-th entity. To regulate
+mutual interactions, the UILC mask is defined as:
+M(q,k) =
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+True,
+if q ∈Rimg ∪Rtxt ∪Rlay,
+k ∈Rimg ∪Rtxt ∪Rlay,
+True,
+if q ∈Rimg ∩Mask(Rlayi),
+k ∈Rrefi,
+i ∈[1, . . . , N],
+True,
+if q, k ∈Rrefi,
+i ∈[1, . . . , N],
+False,
+otherwise.
+(3)
+Here, Rimg ∩Mask(Rlayi) denotes the set of spatial in-
+dices within the denoising image that correspond to the i-th
+layout bounding box. The UILC mask is designed to fa-
+cilitate instance-specific isolation while preserving global
+layout awareness. Specifically, it prevents semantic crosstalk
+by decoupling the interactions between disparate instances.
+Meanwhile, it ensures that layout information remains glob-
+ally accessible, allowing the model to maintain a coherent
+spatial understanding.
+Anchored 4D-RoPE
+In recent FLUX-based models (Wu et al. 2025c; Song et al.
+2025; Xu et al. 2025; Zhang et al. 2025b), reference to-
+kens use Shifted Multi-axis RoPE, whereas layout tokens
+overlap with text encodings. This spatial expansion naturally
+reduces attention magnitude via RoPE’s distance-dependent
+decay. To address this, our Anchored 4D-RoPE fully lever-
+ages the multi-axis subspace to capture spatial priors, align-
+ing with RoPE’s foundational assumption linking semantic
+similarity to spatial proximity. Fundamentally, the entangle-
+ment observed in previous methods stems from the original
+design of FLUX.1, where the native 3D-RoPE implementa-
+tion remains significantly underutilized. Specifically, the text
+modality is uniformly anchored to a static (0, 0, 0) coordinate
+irrespective of the sequence length. Consequently, the entire
+text representation collapses into a singular spatial point,
+hindering effective spatial disentanglement and leading to
+suboptimal layout controllability.
+The recently proposed FLUX.2 [klein] effectively ad-
+dresses these structural deficiencies by introducing a special-
+ized 4D-RoPE variant that jointly encodes reference, text, and
+denoising tokens into four distinct positional subspaces span-
+ning a (z, y, x, t) coordinate tuple. Specifically, t encodes the
+text sequence, (y, x) captures the spatial dimensions of the
+target image, and z serves as the index for reference images,
+rigorously preserving relative shift-invariance. Formally, the
+positional indices are assigned as follows:
+Pos(t) ∈
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+{0} × {0} × {0} × {0, . . . , Ltxt −1},
+t ∈Ttxt,
+{0} × {0, . . . , Himg −1}
+× {0, . . . , Wimg −1} × {0},
+t ∈Timg,
+{tstep · i} × {0, . . . , Hi
+ref −1}
+× {0, . . . , W i
+ref −1} × {0},
+t ∈T i
+ref.
+(4)
+Here, Ttxt, Timg, and T i
+ref denote the token sets for the
+text, target image, and the i-th reference image, respec-
+tively. The positional subspaces are formally constructed
+via Cartesian products of discrete coordinate sets. Specif-
+ically, Ltxt represents the text sequence length, generat-
+ing the index set {0, . . . , Ltxt −1}. Similarly, (Himg, Wimg)
+and (Hi
+ref, W i
+ref) define the spatial dimensions of the target
+and reference images, yielding 2D coordinate grids such as
+{0, . . . , Himg −1} × {0, . . . , Wimg −1}. Furthermore, tstep
+defines a temporal stride (defaulting to 10 in FLUX.2 [klein])
+to explicitly isolate different reference instances.
+Building upon this paradigm, we extend 4D-RoPE to lay-
+out tokens. We spatially anchor each layout token using its
+bounding box coordinate center (¯yi, ¯xi) discretized by patch
+size P. Combined with the instance isolation stride tstep and
+the region sequence length Li
+region, the 4D positional index
+
+
+Method
+Fewer-Subject
+More-Subject
+AVG
+ITC
+AES
+IDS
+IPS
+AVG
+ITC
+AES
+IDS
+IPS
+AVG
+LAMIC
+42.27
+50.26
+37.02
+74.17
+50.93
+28.29
+50.84
+24.63
+60.87
+41.16
+45.61
+XVerse
+77.65
+53.79
+39.47
+71.25
+60.54
+43.48
+47.68
+15.26
+56.12
+40.63
+50.29
+UNO
+89.86
+58.04
+17.53
+75.34
+60.19
+77.25
+58.90
+7.83
+62.94
+51.73
+55.58
+MS-Diffusion
+89.13
+57.67
+12.45
+75.49
+58.69
+78.46
+59.65
+9.06
+69.75
+54.23
+56.35
+Qwen-Image-Edit
+93.63
+57.97
+17.71
+73.30
+60.65
+86.35
+59.57
+9.32
+65.26
+55.13
+57.57
+OmniGen2
+95.40
+57.58
+32.17
+73.14
+64.57
+89.69
+58.49
+15.15
+69.31
+58.16
+61.08
+Klein 9B
+90.58
+54.12
+40.16
+77.94
+65.70
+89.87
+56.53
+26.60
+69.79
+60.66
+62.64
+Kontext 12B
+90.16
+54.87
+42.65
+77.87
+66.39
+90.30
+56.08
+27.91
+70.93
+61.31
+63.33
+ContextGen (12B)
+92.54
+57.50
+35.86
+81.23
+66.78
+89.89
+59.18
+30.42
+73.35
+63.21
+64.66
+Ours (9B)
+94.42
+57.06
+35.72
+80.74
+66.98
+91.14
+58.61
+29.03
+73.98
+63.19
+64.72
+Closed-Source Commercial Models
+Seedream
+96.92
+59.89
+29.43
+78.76
+66.25
+95.11
+62.55
+16.79
+73.24
+61.92
+63.66
+GPT-4o
+97.63
+59.52
+28.49
+79.53
+66.29
+95.37
+62.77
+17.12
+72.64
+61.98
+63.71
+Nano Banana
+96.58
+58.48
+34.36
+80.87
+67.57
+95.48
+60.81
+16.67
+74.11
+61.77
+64.11
+Ours (9B)
+94.42
+57.06
+35.72
+80.74
+66.98
+91.14
+58.61
+29.03
+73.98
+63.19
+64.72
+Table 1: Quantitative comparison on LAMICBench++. Bold and underline represent the best and second best methods.
+Method
+Static Mem. (GB)
+Fewer-Subject
+More-Subject
+Infer. Mem. (GB)
+Latency (s)
+Infer. Mem. (GB)
+Latency (s)
+Kontext 12B
+23.80
+2.39
+1.34
+2.39
+1.34
+Klein 9B
+18.16
+1.53
+0.76
+1.53
+0.76
+ContextGen (12B)
+27.29
+1.50
+1.98
+1.66
+2.60
+Ours (9B)
+19.00
+0.67
+0.40
+0.75
+0.46
+Table 2: Efficiency comparison of different methods on Sparse and Dense layouts. Static Mem. denotes the model size, and
+Infer. Mem. represents the operational overhead during inference. All metrics are evaluated on a NVIDIA A100 80GB GPU.
+for a layout token ti ∈Tlay is formulated as:
+Pos(t) ∈{tstep·i}×{⌊¯yi
+P ⌋}×{⌊¯xi
+P ⌋}
+×{0, . . . , Li
+region −1},
+t ∈T i
+lay.
+(5)
+Here, ¯yi and ¯xi are the bounding box centers, and P denotes
+the patch size. The sequence {0, . . . , Li
+region −1} encodes
+the local positional indices for the regional text, while tstep · i
+serves as an instance-specific offset. Leveraging RoPE’s in-
+herent distance-dependent decay, this anchoring mechanism
+ensures that layout tokens naturally prioritize their corre-
+sponding local regions. By anchoring layout elements to
+their geometric centers (⌊¯yi/P⌋, ⌊¯xi/P⌋), the model simul-
+taneously perceives their sequential text order and instance
+separation through the t and z axes, while utilizing the (y, x)
+dimensions to enforce precise spatial binding.
+To enable fine-grained detail transfer, we extend the spa-
+tial priors of Anchored 4D-RoPE to reference images. This
+spatially aware encoding rigorously enforces spatial isomor-
+phism between conditions and target image. By pre-aligning
+the resolution of each reference image to its corresponding
+bounding box, we ensure an identical token count across
+both regions. Consequently, the 4D positional indices for the
+tokens of the i-th reference image can be formulated as:
+Pos(t) ∈{tstep·i}×Hbboxi×Wbboxi×{0},
+i ∈{1, . . . , Nlay}, (6)
+where Hbboxi and Wbboxi are the discrete sets of height and
+width coordinates defining the i-th bounding box area in
+the denoising image. This formulation effectively projects
+reference images onto a text-independent 3D spatial mani-
+fold (z, y, x) to facilitate precise region-to-region correspon-
+dence. Accordingly, denoising tokens form the base of this
+3D stack, with reference images layered above at tstep inter-
+vals along the z-axis.
+Experiments
+Implementation Details
+We finetune FLUX.2 [klein] 9B (Labs 2025) using LoRA
+(r = 256) (Hu et al. 2022) on the IMIG-100K (Xu et al. 2025)
+dataset at a 512 × 512 resolution. Optimization is performed
+via AdamW, setting the learning rate to η = 1 × 10−5 and
+the weight decay to 0.01, with a total batch size of 32 on 8
+NVIDIA A100 GPUs. The training pipeline comprises 8,000
+SFT steps, followed by 2,000 DPO (Rafailov et al. 2023)
+
+
+Figure 3: Visual comparison on LAMICBench++.
+steps, strictly adhering to the preference alignment strategy
+established in ContextGen (Xu et al. 2025).
+Datasets and Evaluation
+LayoutSAM-Eval.
+Our model is evaluated on a subset of
+1,000 LayoutSAM-Eval (Zhang et al. 2025b) samples con-
+taining large bounding boxes for reliable instance-level anal-
+ysis. We measure instance-level attributes (spatial layout,
+color, texture, shape) via MLLM (Yao et al. 2024), while
+global text-image alignment and human preference are as-
+sessed using CLIP Score and PickScore (Kirstain et al. 2023).
+LAMICBench++.
+For multi-subject consistency evalua-
+tion, we adopt LAMICBench++ (Xu et al. 2025), an ag-
+gregated benchmark containing 160 complex subject-driven
+generation cases. To rigorously test the scalability of our
+method, we evaluate across its two distinct subsets: Fewer-
+Subject (≤3 images) and More-Subject (≥4 images).
+Our quantitative assessment employs the four standard met-
+rics tailored by the authors: Image-Text Consistency (ITC)
+via VQA (Ye et al. 2025), Object Preservation (IPS) (Liu
+et al. 2024; Oquab et al. 2023), Facial Identity Retention
+(IDS) (Guo et al. 2021), and Aesthetic Quality (AES) (Schuh-
+mann 2023).
+Comparison Results
+Overall Quality and Instance Fidelity.
+To evaluate gen-
+eration quality and instance fidelity on LAMICBench++,
+we present extensive quantitative comparisons in Table 1.
+Our baselines encompass both open-source prior arts
+(LAMIC (Chen et al. 2026c), XVerse (Chen et al. 2026a),
+UNO (Wu et al. 2025c), MS-Diffusion (Wang et al. 2025b),
+Qwen-Image-Edit (Wu et al. 2025a), OmniGen2 (Wu et al.
+2025b), Klein 9B (Labs 2025), Kontext 12B (Batifol et al.
+2025), ContextGen (Xu et al. 2025)) and leading closed-
+source commercial models, including GPT-4o-Image, Nano
+Banana and Seedream 4.0 (Seedream et al. 2025)).
+Our framework demonstrates outstanding instruction ad-
+herence and instance fidelity, evidenced by achieving the
+highest ITC and IPS scores in the more-subject scenario. Ad-
+ditionally, it maintains the best overall performance (highest
+AVG score) in fewer-subject. Furthermore, when compared
+to the similarly tasked ContextGen (based on Kontext 12B),
+ControlRef (based on Klein 9B) demonstrates a much more
+pronounced improvement relative to the baseline. Specifi-
+cally, ControlRef achieves substantially larger performance
+gains in both fewer-subject (+1.28 vs. +0.39) and more-
+subject (+2.53 vs. +1.90). These gains validate our frame-
+work’s superior performance despite a smaller backbone.
+Despite falling short of commercial models in ITC and AES,
+ControlRef excels in IDS and IPS metrics. Ultimately, this
+significant advantage in instance-level control culminates in
+a leading overall AVG score, demonstrating superior instance
+fidelity.
+Inference Efficiency and Memory Overhead.
+We evalu-
+ate our framework’s efficiency on LAMICBench++. As sum-
+marized in Table 2, all metrics (measured as the average
+per-step latency on an NVIDIA A100 GPU in BF16 pre-
+cision under identical inference steps) are compared across
+fewer-subject and more-subject scenarios. Focusing on infer-
+ence memory and latency, ControlRef exhibits exceptional
+algorithmic efficiency. It not only achieves a massive 82.3%
+reduction in latency and a 54.8% decrease in inference mem-
+ory compared to ContextGen (in more-subject), but also re-
+markably outperforms its unconditioned baseline. Specifi-
+cally, ControlRef reduces the latency and memory footprint
+of Klein 9B by 39.5% and 51.0%, respectively. These gains
+
+
+Method
+Spatial
+Shape
+Color
+Texture
+CLIP
+Pick
+GLIGEN
+77.35
+57.75
+54.86
+59.38
+26.68
+21.53
+LAMIC
+77.27
+68.74
+69.04
+69.96
+23.49
+21.91
+MS-Diffusion
+85.41
+75.21
+73.94
+76.08
+26.92
+22.22
+3DIS
+88.34
+81.30
+80.97
+82.52
+26.75
+21.89
+CreatiLayout
+93.59
+78.89
+77.43
+79.62
+27.99
+22.44
+MIGC
+86.04
+73.37
+71.07
+74.88
+25.50
+21.10
+EliGen
+94.05
+87.01
+83.84
+87.31
+26.89
+22.27
+ContextGen
+93.96
+88.36
+87.44
+89.26
+27.26
+22.47
+Ours
+94.52
+89.18
+88.76
+89.05
+27.93
+22.45
+Table 3: LayoutSAM-Eval Quantitative Results.
+demonstrate that by replacing redundant canvas padding with
+our explicit spatial offset mechanism, ControlRef effectively
+decouples generation overhead from instance quantity, en-
+suring scalability in complex layouts.
+Layout Control and Attribute Binding.
+We evaluate our
+layout control against leading methods on LayoutSAM-Eval,
+including GLIGEN (Li et al. 2023), LAMIC (Chen et al.
+2026c), MS-Diffusion (Wang et al. 2025b), 3DIS (Zhou et al.
+2024c), CreatiLayout (Zhang et al. 2025b), MIGC (Zhou
+et al. 2024b), EliGen (Zhang et al. 2025a) and Con-
+textGen (Xu et al. 2025). Table 3 presents the quantitative
+results on LayoutSAM-Eval benchmark. ControlRef achieves
+the highest spatial alignment score among the evaluated
+methods, indicating the effectiveness of the Anchored 4D-
+RoPE mechanism in regional localization. In terms of in-
+stance fidelity, our approach outperforms most baselines in
+shape and color preservation, and performs comparably to
+the leading methods in texture synthesis. These results sug-
+gest that the UILC attention mask helps isolate instances
+and mitigate semantic leakage. Finally, the evaluations on
+CLIP Score and PickScore show that the framework main-
+tains overall visual quality while adhering to the layout con-
+straints.
+Ablation Study
+Effect of UILC Attention Mask Across FLUX Blocks.
+We evaluate the performance of ControlRef across different
+block-level configurations on LAMICBench++ to determine
+the optimal integration of the UILC attention mask. The eval-
+uated configurations include a baseline without the mask,
+injection only in dual-stream blocks, injection only in single-
+stream blocks, and injection across all blocks. Table 4 shows
+that incorporating the mask throughout all blocks yields the
+highest average score, driven by peak performance in image-
+text consistency and aesthetic quality. While the single-
+stream block configuration approaches the performance of
+the full integration, it exhibits a slight drop in overall fidelity.
+In contrast, applying the mask exclusively to dual-stream
+blocks underperforms the baseline across most metrics. This
+indicates that an incomplete application fails to ensure suf-
+ficient instance-level isolation and permits attribute leakage.
+The strategy of integrating the mask across all blocks ensures
+that spatial and attribute constraints are enforced consistently
+throughout the entire architecture, maximizing global aes-
+thetic alignment and instance-level precision.
+Method
+ITC
+AES
+IDS
+IPS
+AVG
+w/o Mask
+88.35
+54.70
+31.93
+73.96
+62.24
+Dual Blocks
+88.54
+53.91
+28.54
+72.89
+60.97
+Single Blocks
+91.23
+56.99
+31.28
+76.61
+64.03
+All Blocks
+92.73
+57.74
+31.86
+76.53
+64.72
+Table 4: Ablation Study on UILC Injection Strategy.
+Method
+Spatial
+Shape
+Color
+Texture
+Pick
+w/o Ref Offset
+92.95
+86.18
+86.22
+88.45
+21.97
+w/o Layout Offset
+94.01
+87.40
+86.09
+88.68
+22.03
+w/o Layout Tokens
+93.83
+88.24
+87.48
+89.54
+22.51
+ControlRef
+94.52
+89.18
+88.76
+89.05
+22.45
+Table 5: Ablation Study on Anchored 4D-RoPE Positional
+Index.
+Analysis of Anchor-RoPE Positional Index.
+We conduct
+ablation studies on the LayoutSAM-Eval benchmark to eval-
+uate the layout binding capability of the Anchored 4D-RoPE
+mechanism, with results presented in Table 5. Removing ref-
+erence or layout offsets results in degraded spatial precision.
+This indicates that injecting absolute bounding box offsets
+into both reference images and layout tokens is necessary for
+accurate spatial grounding. Otherwise, the model maps vi-
+sual features with positional ambiguity. The variant omitting
+layout tokens, which relies solely on reference offsets, ex-
+hibits a drop in spatial alignment. This highlights the role of
+layout tokens in explicitly modeling inter-instance relation-
+ships within complex configurations. The full ControlRef
+framework achieves the most balanced performance across
+all evaluated metrics. By explicitly encoding geometry, An-
+chored 4D-RoPE limits the interference between layout con-
+straints and instance-level features, effectively decoupling
+spatial layouts from visual attributes.
+Conclusion
+In this paper, we introduce ControlRef, a novel framework
+designed to address the challenges of layout-guided multi-
+instance generation. By decoupling spatial configurations
+from visual attribute binding, our approach effectively mit-
+igates attribute leakage and instance fidelity degradation
+common in existing models. Specifically, the Anchored 4D-
+RoPE mechanism uses absolute coordinate offsets for precise
+spatial grounding, while the UILC attention mask enforces
+instance-level isolation during synthesis. Experiments on the
+LayoutSAM-Eval and LAMICBench++ benchmarks demon-
+strate that ControlRef achieves leading performance in spatial
+controllability and instance fidelity. Furthermore, the frame-
+work substantially improves computational efficiency, requir-
+ing lower inference latency and a smaller memory footprint
+than prior spatial padding methods. Future work includes
+extending these layout-binding mechanisms to video genera-
+tion tasks and exploring fine-grained attribute routing within
+unified transformer architectures.
+
+
+References
+Batifol, S.; Blattmann, A.; Boesel, F.; Consul, S.; Diagne,
+C.; Dockhorn, T.; English, J.; English, Z.; Esser, P.; Kulal,
+S.; et al. 2025. Flux. 1 kontext: Flow matching for in-context
+image generation and editing in latent space. arXiv e-prints,
+arXiv–2506.
+Cai, H.; Cao, S.; Du, R.; Gao, P.; Hoi, S.; Hou, Z.; Huang,
+S.; Jiang, D.; Jin, X.; Li, L.; et al. 2025. Z-image: An effi-
+cient image generation foundation model with single-stream
+diffusion transformer. arXiv preprint arXiv:2511.22699.
+Chen, B.; Sun, H.; Chen, L.; Wang, X.; Du, D.; Wu, X.; et al.
+2026a. Xverse: Consistent multi-subject control of identity
+and semantic attributes via dit modulation.
+Advances in
+Neural Information Processing Systems, 38: 7437–7459.
+Chen, R.; Bai, Y.; Zhang, X.; Zeng, J.; Wang, L.; Song, D.;
+Sun, L.; Chu, X.; and Liu, A. 2026b. Layer-wise instance
+binding for regional and occlusion control in text-to-image
+diffusion transformers. arXiv preprint arXiv:2603.05769.
+Chen, Y.; Ma, Z.; Wang, J.; Kang, K.; Yao, S.; and Zhang,
+W. 2026c. Lamic: Layout-aware multi-image composition
+via scalability of multimodal diffusion transformer. In Pro-
+ceedings of the AAAI Conference on Artificial Intelligence,
+volume 40, 3174–3182.
+Esser, P.; Kulal, S.; Blattmann, A.; Entezari, R.; Müller, J.;
+Saini, H.; Levi, Y.; Lorenz, D.; Sauer, A.; Boesel, F.; et al.
+2024. Scaling rectified flow transformers for high-resolution
+image synthesis. In Forty-first international conference on
+machine learning.
+Fu, Z.; Zeng, X.; Lan, J.; Liao, X.; Chen, C.; Chen, J.; Wei,
+J.; Cheng, W.; Liu, S.; Chen, Y.; et al. 2025. iMontage:
+Unified, Versatile, Highly Dynamic Many-to-many Image
+Generation. arXiv preprint arXiv:2511.20635.
+Guo, J.; Deng, J.; Lattas, A.; and Zafeiriou, S. 2021. Sample
+and computation redistribution for efficient face detection.
+arXiv preprint arXiv:2105.04714.
+Hu, E. J.; Shen, Y.; Wallis, P.; Allen-Zhu, Z.; Li, Y.; Wang, S.;
+Wang, L.; Chen, W.; et al. 2022. Lora: Low-rank adaptation
+of large language models. Iclr, 1(2): 3.
+Kirstain, Y.; Polyak, A.; Singer, U.; Matiana, S.; Penna, J.;
+and Levy, O. 2023.
+Pick-a-pic: An open dataset of user
+preferences for text-to-image generation. Advances in neural
+information processing systems, 36: 36652–36663.
+Labs, B. F. 2024. FLUX. https://github.com/black-forest-
+labs/flux.
+Labs, B. F. 2025.
+FLUX.2: Frontier Visual Intelligence.
+https://bfl.ai/blog/flux-2.
+Lee, P. Y.; Yoon, T.; and Sung, M. 2024. Groundit: Ground-
+ing diffusion transformers via noisy patch transplantation.
+Advances in Neural Information Processing Systems, 37:
+58610–58636.
+Li, Y.; Liu, H.; Wu, Q.; Mu, F.; Yang, J.; Gao, J.; Li, C.; and
+Lee, Y. J. 2023. Gligen: Open-set grounded text-to-image
+generation. In Proceedings of the IEEE/CVF conference on
+computer vision and pattern recognition, 22511–22521.
+Lin, T.-Y.; Maire, M.; Belongie, S.; Hays, J.; Perona, P.;
+Ramanan, D.; Dollár, P.; and Zitnick, C. L. 2014. Microsoft
+coco: Common objects in context. In European conference
+on computer vision, 740–755. Springer.
+Liu, S.; Zeng, Z.; Ren, T.; Li, F.; Zhang, H.; Yang, J.; Jiang,
+Q.; Li, C.; Yang, J.; Su, H.; et al. 2024. Grounding dino:
+Marrying dino with grounded pre-training for open-set object
+detection. In European conference on computer vision, 38–
+55. Springer.
+Liu, X.; Gong, C.; and Liu, Q. 2022. Flow straight and fast:
+Learning to generate and transfer data with rectified flow.
+arXiv preprint arXiv:2209.03003.
+Mou, C.; Wang, X.; Xie, L.; Wu, Y.; Zhang, J.; Qi, Z.; and
+Shan, Y. 2024. T2i-adapter: Learning adapters to dig out
+more controllable ability for text-to-image diffusion models.
+In Proceedings of the AAAI conference on artificial intelli-
+gence, volume 38, 4296–4304.
+Oquab, M.; Darcet, T.; Moutakanni, T.; Vo, H.; Szafraniec,
+M.; Khalidov, V.; Fernandez, P.; Haziza, D.; Massa, F.; El-
+Nouby, A.; et al. 2023. Dinov2: Learning robust visual fea-
+tures without supervision. arXiv preprint arXiv:2304.07193.
+Peebles, W.; and Xie, S. 2023. Scalable diffusion models with
+transformers. In Proceedings of the IEEE/CVF international
+conference on computer vision, 4195–4205.
+Rafailov, R.; Sharma, A.; Mitchell, E.; Manning, C. D.; Er-
+mon, S.; and Finn, C. 2023. Direct preference optimization:
+Your language model is secretly a reward model. Advances
+in neural information processing systems, 36: 53728–53741.
+Schuhmann, C. 2023.
+Improved Aesthetic Predictor:
+CLIP+MLP Aesthetic Score Predictor. GitHub repository.
+Accessed: 2025-09-09.
+Schulman, J.; Wolski, F.; Dhariwal, P.; Radford, A.; and
+Klimov, O. 2017. Proximal policy optimization algorithms.
+arXiv preprint arXiv:1707.06347.
+Seedream, T.; Chen, Y.; Gao, Y.; Gong, L.; Guo, M.; Guo,
+Q.; Guo, Z.; Hou, X.; Huang, W.; Huang, Y.; et al. 2025. See-
+dream 4.0: Toward next-generation multimodal image gen-
+eration. arXiv preprint arXiv:2509.20427.
+Song, Y.; Dong, W.; Wang, S.; Zhang, Q.; Xue, S.; Yuan, T.;
+Yang, H.; Feng, H.; Zhou, H.; Xiao, X.; et al. 2025. Query-
+kontext: An unified multimodal model for image generation
+and editing. arXiv preprint arXiv:2509.26641.
+Su, J.; Ahmed, M.; Lu, Y.; Pan, S.; Bo, W.; and Liu, Y.
+2024. Roformer: Enhanced transformer with rotary position
+embedding. Neurocomputing, 568: 127063.
+Tan, Z.; Liu, S.; Yang, X.; Xue, Q.; and Wang, X. 2025a.
+Ominicontrol: Minimal and universal control for diffusion
+transformer. In Proceedings of the IEEE/CVF International
+Conference on Computer Vision, 14940–14950.
+Tan, Z.; Xue, Q.; Yang, X.; Liu, S.; and Wang, X. 2025b.
+Ominicontrol2: Efficient conditioning for diffusion trans-
+formers. arXiv preprint arXiv:2503.08280.
+Wallace, B.; Dang, M.; Rafailov, R.; Zhou, L.; Lou, A.; Pu-
+rushwalkam, S.; Ermon, S.; Xiong, C.; Joty, S.; and Naik,
+N. 2024. Diffusion model alignment using direct preference
+optimization. In Proceedings of the IEEE/CVF Conference
+on Computer Vision and Pattern Recognition, 8228–8238.
+
+
+Wang, H.; Peng, J.; He, Q.; Yang, H.; Jin, Y.; Wu, J.; Hu, X.;
+Pan, Y.; Gan, Z.; Chi, M.; et al. 2025a. Unicombine: Unified
+multi-conditional combination with diffusion transformer. In
+Proceedings of the IEEE/CVF International Conference on
+Computer Vision, 18325–18334.
+Wang, X.; Fu, S.; Huang, Q.; He, W.; and Jiang, H. 2025b.
+Ms-diffusion: Multi-subject zero-shot image personalization
+with layout guidance. In International Conference on Learn-
+ing Representations, volume 2025, 95118–95146.
+Wu, C.; Li, J.; Zhou, J.; Lin, J.; Gao, K.; Yan, K.; Yin, S.-m.;
+Bai, S.; Xu, X.; Chen, Y.; et al. 2025a. Qwen-image technical
+report. arXiv preprint arXiv:2508.02324.
+Wu, C.; Zheng, P.; Yan, R.; Xiao, S.; Luo, X.; Wang, Y.; Li,
+W.; Jiang, X.; Liu, Y.; Zhou, J.; et al. 2025b. Omnigen2: Ex-
+ploration to advanced multimodal generation. arXiv preprint
+arXiv:2506.18871.
+Wu, S.; Huang, M.; Wu, W.; Cheng, Y.; Ding, F.; and He, Q.
+2025c. Less-to-more generalization: Unlocking more con-
+trollability by in-context generation. In Proceedings of the
+IEEE/CVF International Conference on Computer Vision,
+18682–18692.
+Xu, R.; Zhou, D.; Ma, F.; and Yang, Y. 2025. ContextGen:
+Contextual Layout Anchoring for Identity-Consistent Multi-
+Instance Generation. arXiv preprint arXiv:2510.11000.
+Yang, B.; Luo, Y.; Chen, Z.; Wang, G.; Liang, X.; and Lin, L.
+2023. Law-diffusion: Complex scene generation by diffusion
+with layouts. In Proceedings of the IEEE/CVF International
+Conference on Computer Vision, 22669–22679.
+Yao, Y.; Yu, T.; Zhang, A.; Wang, C.; Cui, J.; Zhu, H.; Cai,
+T.; Li, H.; Zhao, W.; He, Z.; et al. 2024. Minicpm-v: A gpt-4v
+level mllm on your phone. arXiv preprint arXiv:2408.01800.
+Ye, H.; Zhang, J.; Liu, S.; Han, X.; and Yang, W. 2023. Ip-
+adapter: Text compatible image prompt adapter for text-to-
+image diffusion models. arXiv preprint arXiv:2308.06721.
+Ye, J.; Xu, H.; Liu, H.; Hu, A.; Yan, M.; Qian, Q.; Zhang,
+J.; Huang, F.; and Zhou, J. 2025.
+mplug-owl3: Towards
+long image-sequence understanding in multi-modal large
+language models. In International Conference on Learning
+Representations, volume 2025, 98891–98913.
+Zhang, H.; Duan, Z.; Wang, X.; Chen, Y.; and Zhang, Y.
+2025a. Eligen: Entity-level controlled image generation with
+regional attention. In Proceedings of the 7th ACM Interna-
+tional Conference on Multimedia in Asia, 1–7.
+Zhang, H.; Hong, D.; Wang, Y.; Shao, J.; Wu, X.; Wu, Z.;
+and Jiang, Y.-G. 2025b. Creatilayout: Siamese multimodal
+diffusion transformer for creative layout-to-imagegeneration.
+In Proceedings of the IEEE/CVF International Conference
+on Computer Vision, 18487–18497.
+Zhang, L.; Rao, A.; and Agrawala, M. 2023. Adding condi-
+tional control to text-to-image diffusion models. In Proceed-
+ings of the IEEE/CVF international conference on computer
+vision, 3836–3847.
+Zhang, Y.; Yuan, Y.; Song, Y.; Wang, H.; and Liu, J. 2025c.
+Easycontrol: Adding efficient and flexible control for diffu-
+sion transformer. In Proceedings of the IEEE/CVF Interna-
+tional Conference on Computer Vision, 19513–19524.
+Zheng, G.; Zhou, X.; Li, X.; Qi, Z.; Shan, Y.; and Li, X. 2023.
+Layoutdiffusion: Controllable diffusion model for layout-to-
+image generation. In Proceedings of the IEEE/CVF confer-
+ence on computer vision and pattern recognition, 22490–
+22499.
+Zhou, D.; Li, M.; Yang, Z.; and Yang, Y. 2025. Dreamren-
+derer: Taming multi-instance attribute control in large-scale
+text-to-image models. In Proceedings of the IEEE/CVF In-
+ternational Conference on Computer Vision, 16712–16722.
+Zhou, D.; Li, Y.; Ma, F.; Yang, Z.; and Yang, Y. 2024a.
+Migc++: Advanced multi-instance generation controller for
+image synthesis. IEEE Transactions on Pattern Analysis and
+Machine Intelligence, 47(3): 1714–1728.
+Zhou, D.; Li, Y.; Ma, F.; Zhang, X.; and Yang, Y. 2024b.
+Migc: Multi-instance generation controller for text-to-image
+synthesis. In Proceedings of the IEEE/CVF conference on
+computer vision and pattern recognition, 6818–6828.
+Zhou, D.; Xie, J.; Yang, Z.; and Yang, Y. 2024c. 3dis: Depth-
+driven decoupled instance synthesis for text-to-image gener-
+ation. arXiv preprint arXiv:2410.12669.
+Zhuo, L.; Du, R.; Xiao, H.; Li, Y.; Liu, D.; Huang, R.; Liu,
+W.; Zhu, X.; Wang, F.-Y.; Ma, Z.; et al. 2024.
+Lumina-
+next: Making lumina-t2x stronger and faster with next-dit.
+Advances in Neural Information Processing Systems, 37:
+131278–131315.
+
+
+Appendix
+More Implementation Details
+More Details on UILC attention mask.
+Compared to its
+predecessor, FLUX.1.Kontext, FLUX.2 [klein] introduces
+support for multi-reference image conditioning. Regarding
+AdaLN modulation, the reference images are assigned a fixed
+timestep of 0 (denoting the noise-free data distribution) and
+share the identical AdaLN linear projection layer with the
+denoising image. Owing to the time-invariance of the ref-
+erence timestep, FLUX.2 [klein] inherently accommodates
+native KV Cache optimization through an asymmetric at-
+tention routing mechanism. Specifically, the reference image
+tokens exclusively undergo self-attention, while their KV
+states are concatenated with those of the textual and de-
+noising branches, enabling the model to effectively capture
+multi-reference contexts for guided image editing.
+Figure 1: The attention mask settings in ablation experiments.
+To preserve the native KV Cache optimization, we as-
+sign all reference images a fixed timestep of t = 0, while
+maintaining the architectural consistency illustrated in Fig. 1
+across all ablation studies involving the UILC attention
+mask. Concretely, the reference tokens exclusively undergo
+intra-branch self-attention, whereas the textual and denois-
+ing queries are allowed to attend to the cached KV states
+of the reference context. Furthermore, regarding the isola-
+tion masks among multiple reference images, we adopt the
+standard practice of prior multi-reference generation DiT-
+based frameworks (Xu et al. 2025; Zhang et al. 2025c; Zhou
+et al. 2025). This masking strategy serves a dual purpose:
+it strictly precludes information leakage between distinct in-
+stances and significantly reduces the computational overhead
+of the attention mechanism.
+Generative Backbone Selection.
+Our proposed Control-
+Ref framework features a model-agnostic architecture, theo-
+retically allowing any model compatible with the anchored
+4D-RoPE design to serve as its backbone. Currently, within
+the open-source community, 4D-RoPE is uniquely adopted
+by the FLUX.2 series. Accordingly, we evaluate our ap-
+proach on both FLUX.2 [klein] 4B and FLUX.2 [klein]
+9B to demonstrate its efficacy and scalability. As detailed
+in Table 1, we compare our method with both the founda-
+tional FLUX.2 backbones and prior leading architectures,
+namely the FLUX.1-based Kontext 12B and its advanced
+variant ContextGen. Quantitative results indicate that Con-
+trolRef yields a more substantial performance lift over its
+Method
+ITC
+AES
+IDS
+IPS
+AVG
+Klein 4B
+89.84
+54.28
+31.91
+72.15
+61.85
+Klein 9B
+90.21
+55.16
+32.33
+72.86
+62.64
+Kontext 12B
+90.30
+55.40
+34.12
+73.53
+63.33
+ContextGen
+91.38
+58.24
+32.72
+76.32
+64.66
+Ours (4B)
+91.70
+57.07
+32.09
+75.35
+64.05
+Ours (9B)
+92.73
+57.74
+31.86
+76.53
+64.72
+Table 1: Ablation Study on different generative backbone.
+baselines. Specifically, Ours (4B) and Ours (9B) achieve ab-
+solute improvements of +2.20 and +2.08 in the AVG metric
+over Klein 4B and 9B, respectively, significantly outpacing
+the marginal +1.33 gain that ContextGen achieves over its
+Kontext 12B baseline. Crucially, ControlRef establishes a
+new state-of-the-art (SOTA) with exceptional parameter ef-
+ficiency. Ours (9B) attains the highest overall performance
+while requiring considerably fewer parameters than the 12B-
+based ContextGen. Furthermore, even our lightweight 4B
+variant remarkably surpasses the Kontext 12B baseline, un-
+derscoring the architectural superiority of our design.
+Prompt Details for Image Generation.
+The underlying
+FLUX.2 backbone functions as a unified architecture for
+both image editing and generation. Consequently, when con-
+ditioned on multiple reference images, it can accept either
+editing-oriented or generation-oriented prompt templates.
+Through preliminary evaluations on the vanilla FLUX.2
+[klein] 9B within a multi-reference generation paradigm, we
+empirically observe that editing-based templates yield no-
+tably superior generation quality. Motivated by this finding,
+our proposed framework explicitly adopts editing-oriented
+prompt templates during the training and inference phase.
+Our editing-based prompt template was used: “Generate an
+image described as ‘{GENERATIVE PROMPT}’ by arrang-
+ing the given reference images. While preserving the original
+layout, key object features and human identities (including
+facial details), adjust element poses for better composition
+and naturally fill in the background. Ensure the result appears
+natural and visually harmonious.”
+More Method Details
+DPO for Diffusion Models.
+Recently, Reinforcement
+Learning from Human Feedback (RLHF) has emerged as
+a pivotal paradigm for aligning generative models with hu-
+man preferences. While standard supervised training es-
+tablishes foundational generation capabilities, RL-based
+optimization enables direct fine-tuning toward complex,
+non-differentiable objectives, such as perceptual aesthetics,
+prompt adherence, and structural fidelity, which traditional
+likelihood-based losses fail to explicitly capture. While the
+Supervised Fine-Tuning stage successfully equips the model
+with layout-conditioned reference placement capabilities, it
+inadvertently introduces a copy-and-paste hacking problem.
+
+
+Because reference images in the training set are directly ex-
+tracted from the target ground-truth images, the model easily
+degenerates into this trivial hacking shortcut rather than per-
+forming true context-aware generation. To address this lim-
+itation, following ContextGen (Xu et al. 2025), we leverage
+Diffusion-DPO (Wallace et al. 2024) during the post-training
+stage to refine text-visual alignment and align with human
+preferences. This transition enables the model to evolve from
+mastering simple collage-like compositions to synthesizing
+complex, harmoniously integrated multi-instance scenes.
+Formally, RLHF aims to optimize a conditional distribu-
+tion pθ(x0|c) over conditioning contexts c ∼Dc. The ob-
+jective is to maximize the expected reward r(c, x0) while
+penalizing the Kullback-Leibler (KL) divergence relative to
+a pre-trained reference distribution pref(x0|c):
+max
+θ
+Ec∼Dc,x0∼pθ(x0|c)[r(c, x0)]
+−βDKL (pθ(x0|c) ∥pref(x0|c)) ,
+(7)
+where β is a hyperparameter governing the strength of KL
+regularization to prevent policy drift.
+Directly solving Eq. (7) via reinforcement learning, most
+notably PPO (Schulman et al. 2017), suffers from severe
+instability and heavy computational overhead due to the re-
+quirement of fitting an explicit reward model. DPO (Rafailov
+et al. 2023) circumvent these challenges by reparameterizing
+the reward function. Mathematically, the constrained opti-
+mization problem in Eq. (7) yields an analytical closed-form
+solution for the optimal policy p∗
+θ:
+p∗
+θ(x0|c) =
+1
+Z(c)pref(x0|c) exp
+ 1
+β r(c, x0)
+
+,
+(8)
+where Z(c) =
+R
+pref(x0|c) exp
+
+1
+β r(c, x0)
+
+dx0 is the par-
+tition function. Rearranging Eq. (8) allows us to express the
+ground-truth reward function r(c, x0) strictly in terms of the
+optimal policy and reference distribution:
+r(c, x0) = β log p∗
+θ(x0|c)
+pref(x0|c) + β log Z(c).
+(9)
+For preference optimization, we assume access to a pair-
+wise preference dataset D = {(c, xw
+0 , xl
+0)}, where xw
+0 and
+xl
+0 denote the preferred (winner) and dispreferred (loser)
+outputs given context c, human preferences are commonly
+modeled via the Bradley-Terry model: P(xw
+0 ≻xl
+0|c) =
+σ
+ r(c, xw
+0 ) −r(c, xl
+0)
+
+, where σ(·) is the sigmoid function.
+By substituting the reparameterized reward from Eq. (9) into
+the Bradley-Terry model, the partition function Z(c) conve-
+niently cancels out. Consequently, the parameterized policy
+pθ can be directly optimized using the negative log-likelihood
+loss:
+LDPO(θ) = −E(c,xw
+0 ,xl
+0)∼D
+
+log σ
+
+β log pθ(xw
+0 |c)
+pref(xw
+0 |c)
+−β log pθ(xl
+0|c)
+pref(xl
+0|c)
+
+.
+(10)
+While the objective in Eq. (10) operates on explicit log-
+likelihoods in autoregressive models, evaluating pθ(x0|c)
+in diffusion models is computationally intractable due to
+the high-dimensional marginalization over latent trajecto-
+ries. Following Diffusion-DPO, we reparameterize the log-
+likelihood ratio using the Evidence Lower Bound, which
+simplifies the preference optimization into a weighted dif-
+ference of noise prediction errors across diffusion timesteps
+t ∼U(0, 1). Specifically, given a condition c, comprising
+prompt and layout constraints, noise ϵ ∼N(0, I), and noisy
+latents xt = (1−t)∗x0 +t∗x1, the Diffusion-DPO training
+objective is formulated as:
+LDiff-DPO(θ) = −ED,t,ϵ
+
+log σ
+
+−β
+2
+ ∥ϵw −ϵθ(xw
+t , t, c)∥2
+2
+−∥ϵw −ϵref(xw
+t , t, c)∥2
+2
+−(∥ϵl −ϵθ(xl
+t, t, c)∥2
+2
+−∥ϵl −ϵref(xl
+t, t, c)∥2
+2)
+
+,
+(11)
+where β is a hyperparameter controlling the trade-off be-
+tween preference alignment and regularization against the
+reference model. Following the empirical validation in Con-
+textGen (Xu et al. 2025), we set β = 1000 as the opti-
+mal trade-off value to ensure stable preference optimization.
+The preference dataset conforming to Diffusion-DPO is con-
+structed by designating the ground-truth image as the winner
+sample xw
+0 . Correspondingly, the loser sample xl
+0 is con-
+structed by naively pasting the multi-reference image crops
+onto a blank canvas according to their specified layout bound-
+ing boxes. This construction explicitly penalizes rigid layout
+stitching and encourages the model to generate seamless vi-
+sual transitions.
+More Quantitative Experiments
+Improvement of Reinforcement Learning.
+To evaluate
+the effectiveness of DPO post-training strategy, we present
+an ablation study in Table 2. For a fair comparison, all
+baseline and proposed variants are trained under identical
+LoRA rank configurations and β. As observed, integrating
+Diffusion-DPO brings consistent and remarkable improve-
+ments in both aesthetic quality and image-text consistency.
+Specifically, applying DPO to our framework boosts the AES
+score by +2.11 points and enhances the ITC score by +1.40
+points. A similar upward trend is observed in ContextGen,
+where DPO elevates AES and ITC by +2.91 and +4.19, re-
+spectively. These empirical results demonstrate that while
+SFT effectively establishes structural layout generation capa-
+bilities, preference optimization via DPO significantly aligns
+the model with fine-grained visual aesthetics and seman-
+tic prompt adherence, ultimately driving our final model to
+achieve the highest overall average score.
+Figure 2 presents qualitative comparisons that highlight
+the perceptual enhancements brought by preference align-
+ment. As illustrated, models post-trained with DPO exhibit
+substantially smoother transitions and seamless blending at
+object boundaries and intersections, effectively removing
+boundary artifacts observed in the SFT baseline. Further-
+more, in challenging multi-reference scenarios, DPO demon-
+strates a superior capability in preserving entity consistency
+
+
+Figure 2: Visual comparison of DPO Strategy.
+Method
+ITC
+AES
+IDS
+IPS
+AVG
+ContextGen (SFT)
+86.84
+54.19
+32.37
+76.78
+62.55
+ContextGen (SFT+DPO)
+91.03
+57.10
+26.83
+75.71
+62.67
+Ours (SFT)
+91.33
+55.63
+32.79
+76.95
+64.17
+Ours (SFT+DPO)
+92.73
+57.74
+31.86
+76.53
+64.72
+Table 2: Ablation Study on DPO Strategy.
+for small-scale objects, faithfully maintaining their fine-
+grained visual features and structural identity across gen-
+erations. These visual refinements confirm that DPO suc-
+cessfully steers the generation trajectory toward human per-
+ceptual preferences, yielding more visually pleasing and con-
+textually harmonized outputs.
+Additional Results on COCO-MIG
+Due to space limitations in the main manuscript, we provide
+extended quantitative experiments on COCO-MIG (Zhou
+et al. 2024b) to further validate the superiority of our frame-
+work in spatial layout binding and attribute grounding.
+Benchmark and Metrics.
+Derived from the established
+COCO (Lin et al. 2014) distribution, COCO-MIG serves as
+a challenging layout-to-image benchmark comprising 800
+rigorously color-annotated instances, specifically curated to
+penalize spatial ambiguity and cross-object interference. To
+thoroughly dissect model performance across distinct gener-
+ation facets, spatial and attribute accuracy are quantitatively
+measured via global and instance-level Success Rates (SR
+and I-SR, relying on precise mIoU computations and strict
+color correctness), while semantic alignment is captured by
+both global and local CLIP scores (G-C and L-C).
+Quantitative Comparisons.
+We evaluate our layout bind-
+ing against leading methods on COCO-MIG, including GLI-
+Method
+SR
+I-SR
+mIoU
+G-C
+L-C
+GLIGEN
+4.25
+29.56
+27.44
+25.21
+20.90
+LAMIC
+1.25
+13.56
+21.17
+21.82
+18.71
+MS-Diffusion
+4.50
+28.22
+34.69
+25.50
+20.77
+3DIS
+18.88
+55.44
+49.35
+23.72
+20.40
+CreatiLayout
+19.12
+54.69
+48.96
+26.22
+20.70
+MIGC
+27.75
+66.44
+56.96
+26.21
+21.47
+EliGen
+26.00
+64.12
+59.23
+24.92
+20.58
+ContextGen
+33.12
+69.72
+65.12
+25.86
+21.87
+Ours
+32.76
+69.91
+65.23
+26.12
+21.95
+Table 3: COCO-MIG Quantitative Results.
+GEN (Li et al. 2023), LAMIC (Chen et al. 2026c), MS-
+Diffusion (Wang et al. 2025b), 3DIS (Zhou et al. 2024c), Cre-
+atiLayout (Zhang et al. 2025b), MIGC (Zhou et al. 2024b),
+EliGen (Zhang et al. 2025a), and ContextGen (Xu et al.
+2025).
+As presented in Table 3, our framework establishes new
+sota performance across key spatial control and attribute
+binding metrics. Specifically, our method achieves top-
+ranked performance on instance-level success rate, spa-
+tial overlap precision, and localized text-visual consistency,
+while maintaining a highly competitive second-place stand-
+ing on global success rate. Compared to the strongest existing
+baseline ContextGen, our approach yields consistent gains in
+fine-grained instance grounding and layout accuracy, along-
+side superior local prompt alignment. Furthermore, when
+evaluated against earlier region-aware diffusion baselines,
+our model exhibits decisive performance leads across all
+structural indicators. These quantitative results confirm that
+our framework successfully mitigates attribute leakage and
+boundary blurriness, ensuring highly faithful spatial layout
+binding in multi-instance synthesis scenarios.

@@ -1,0 +1,4287 @@
+Title: Generalized Convexity and Smoothness via Conjugate Duality: Optimization Theory for Deep Neural Networks
+
+URL Source: https://arxiv.org/pdf/2608.09523v1
+
+Published Time: Tue, 11 Aug 2026 02:16:15 GMT
+
+Number of Pages: 84
+
+Markdown Content:
+# Generalized Convexity and Smoothness via Conjugate Duality: Optimization Theory for Deep Neural Networks 
+
+Binchuan Qi 2080068@tongji.edu.cn 
+
+College of Electronics and Information Engineering Tongji University Shanghai, 200092, China Sihao Street Zhejiang Yuying College of Vocational Technology Zhejiang, 310018, China 
+
+Abstract 
+
+Deep neural network (DNN) training with stochastic gradient descent (SGD) and its vari-ants achieves strong empirical performance, yet classical optimization theory does not fully explain this success. This limitation arises because conventional analyses rely on assump-tions such as differentiability, convexity, or smoothness, which are often violated by DNN objectives. In this paper, we establish a unified optimization framework for DNN training by generalizing classical convexity and smoothness through Legendre functions and con-vex conjugation. Specifically, we introduce H(ψ)-convexity and H(Ψ)-smoothness, which unify convex and non-convex as well as smooth and non-smooth objectives within a sin-gle formalism and reveal a natural duality between generalized smoothness and convexity. Building on these generalized properties, we introduce generalized gradient descent (GD) and generalized SGD through convex conjugation. We theoretically prove that generalized GD admits an optimal learning rate of exactly 1, and derive rigorous gradient-energy-based convergence rates for both proposed optimizers. We further reformulate DNN training as a composite optimization problem, demonstrating that its convergence relies on jointly re-ducing the gradient energy and controlling the induced norm of the network Jacobian. To characterize the practical influences of network architectures and training configurations, we introduce the gradient correlation factor and model capacity risk, and quantitatively an-alyze how architectural designs, batch size, and model capacity shape training convergence. Extensive experiments across diverse network architectures, datasets, optimizers, and loss functions validate our theoretical bounds and demonstrate precise alignment between our theoretical predictions and empirical training dynamics. 
+
+Keywords: non-convex optimization, non-Lipschitz smoothness, convex conjugate dual-ity, deep neural networks 
+
+1 Introduction 
+
+Training deep neural networks (DNNs) yields highly non-convex, non-smooth empirical risk objectives, yet stochastic gradient descent (SGD) and its variants consistently converge to high-quality solutions with low empirical risk, despite the absence of the convexity or regularity assumptions required for classical theoretical guarantees (Zhang et al., 2021). This empirical success stands in sharp contrast to classical non-convex optimization theory, which typically only guarantees convergence to stationary points (Jentzen et al., 2021); indeed, even simple non-convex problems are NP-hard in general (Nesterov, 2008). This gap between theory and practice motivates the development of new optimization-theoretic frameworks that can characterize DNN training.  
+
+> ©2024 Binchuan Qi. License: CC-BY 4.0, see https://creativecommons.org/licenses/by/4.0/ .arXiv:2608.09523v1 [cs.LG] 10 Aug 2026 Qi
+
+To address this problem, current research primarily follows two main directions: 1. The first direction exploits special structural properties of DNNs. The Neural Tangent Kernel (NTK) framework (Jacot et al., 2018) analyzes training dynamics in the lazy regime where parameters change minimally, but struggles to capture the optimiza-tion dynamics during feature learning in finite-width networks of practical interest. Fenchel–Young-loss-based approaches (Qi et al., 2025a) link gradient norms to dis-tribution fitting errors by restricting the loss to the Fenchel–Young loss family, but are limited to the convergence of conditional label distributions under MSE loss for supervised classification and, by construction, lack generality across loss functions. As detailed in Section 9, both approaches have significant limitations in scope and applicability. 2. The second direction extends classical strong convexity and Lipschitz smoothness. For convexity, higher-order strong convexity has been explored in various domains (Lin and Fukushima, 2003; Mohsen et al., 2019; Alabdali et al., 2019; Noor and Noor, 2020, 2021). For smoothness, Zhang et al. (Zhang et al., 2020b) introduced ( L0, L 1)-smoothness, which was subsequently analyzed in convex and non-convex settings (Zhang et al., 2020a; Qian et al., 2021; Zhao et al., 2021; Crawshaw et al., 2022) and combined with variance reduction techniques (Reisizadeh et al., 2023). Chen et al. (Chen et al., 2023) proposed α-symmetric generalized smoothness, and Li et al. (Li et al., 2023a) introduced the more general ℓ-smoothness condition. Most recently, Qi et al. (2025b) extended strong convexity and Lipschitz smoothness using norm power functions, proving DNN trainability under convexity and differentiability of the loss. Never-theless, restricting to norm-power functions introduces restrictive assumptions and complicates the analysis of gradient descent (GD) and SGD. Despite this progress, all existing generalizations either still require convexity or differentiability assump-tions for SGD to converge to global optima, or yield intractable analytical complexity that limits their practical utility, and these requirements are inconsistent with the non-convex, non-smooth objectives typical of DNN training. These two directions share a common limitation: they still rely on assumptions such as infinite width, convexity, or differentiability, which are often violated by practical DNN objectives and often lead to substantial analytical complexity. Our starting point is the well-known duality between strong convexity and Lipschitz smoothness (Lemma 8.2) (Kakade et al., 2009; Zhou, 2018; Qi et al., 2025b). Both classical properties, at their core, bound how fast a function can vary through the quadratic term ∥ · ∥ 22. This suggests a natural generalization: if the quadratic energy is replaced by a broader family of functions built from Legendre functions and convex conjugates, the same duality may extend far beyond the convex, smooth setting. Following this line of reasoning, we develop generalized notions of convexity and smoothness, together with the corresponding generalized GD and SGD, and use them to formulate DNN training as a composite optimization problem. The formal definitions, the precise duality, and the resulting convergence guarantees are presented in the following sections, while the main consequences for optimization are summarized in the Contributions below. 
+
+Contributions The main contributions of this work are summarized as follows: 
+
+> 2Generalized Convexity and Smoothness
+
+• We generalize classical strong convexity and Lipschitz smoothness to H(ψ)-convexity and H(Ψ)-smoothness using Legendre functions, and investigate their mathematical properties. This framework unifies convex and non-convex, smooth and non-smooth functions and reveals a duality between smoothness and convexity. 
+
+• We define generalized GD and SGD via convex conjugation and prove their conver-gence with respect to the gradient energy under the generalized conditions. Notably, the optimal learning rate of generalized GD is identically 1, thereby eliminating the need to tune the learning rate as in classical GD and SGD. 
+
+• We construct a composite optimization framework that encompasses DNN training. We prove that such problems can be solved by jointly reducing the gradient energy and controlling the induced norm of the model’s Jacobian matrix, which together provide tight bounds on the optimization objective. 
+
+• We apply the framework to DNN optimization, demonstrating theoretically and em-pirically that SGD effectively reduces the gradient energy, while architectural tech-niques such as skip connections, random initialization, and over-parameterization control the Jacobian’s induced norm. Comprehensive experiments across multiple datasets and architectures support the generality and robustness of the framework. 
+
+Organization The remainder of this paper is organized as follows: 
+
+• Section 2 introduces the foundational concepts and definitions used throughout the paper. 
+
+• Section 3 presents the key tools introduced in this work, H(ψ)-convexity and H(Ψ)-smoothness, along with their fundamental properties. 
+
+• Section 4 reformulates the problem of training DNNs and establishes the theoretical foundation for non-convex optimization in deep learning. 
+
+• Section 5 extends the framework to composite optimization problems and analyzes their convergence properties. 
+
+• Section 6 details the experimental setup and reports the empirical results. 
+
+• Section 7 summarizes the main contributions and outlines potential directions for future research. 
+
+• Section 8 presents supporting lemmas from convex analysis and information theory. 
+
+• Section 9 reviews related work. Supplementary material is provided in the appendix: 
+
+• Appendix A contains detailed proofs of all theoretical results. 
+
+> 3
+
+Qi W
+
+Def.3.1: Energy Function 
+
+> Prop.3.1 : core properties
+
+Def.3.2: -Convexity  
+
+> ,Unifies convex & nonconvex
+
+Def.3.2: -Smoothness  
+
+> ,Unifies smooth & nonsmooth
+
+Prop.3.2: Duality & Structural Props   
+
+> -convex -smooth, Scaling & Fenchel–Young inheritance
+
+Prop.3.3: General Universe   
+
+> DNN objective is both -smooth & -convex
+
+Prop.3.4: Construction Principles  
+
+> Minimize ; tight bounds
+
+Prop.3.5: Special Cases 
+
+> Hessian eigen; MSE; Softmax CE
+
+Thm.3.1: Gradient–Optimality Bound 
+
+> Cor.3.1 : recovers classical convex/smooth bounds
+
+Def.4.1: Generalized GD  
+
+> ,Grad energy:
+
+Def.4.2: Generalized SGD  
+
+> ,Grad energy:
+
+Prop.4.1 & 4.2: GD Equivalence 
+
+> Prop.4.1: Classical GD is special case of GenGD Prop.4.2: Time-varying LR ↔ Generalized GD
+
+Def.4.3 + Prop.4.3: Gradient Correlation  
+
+> on Prop.4.3: minimizes variance
+
+Def.4.4 + Prop.4.4: Model Capacity Risk 
+
+> Prop.4.4: Non-increasing in
+
+Thm.4.1 + Cor.4.1: GenGD Convergence  
+
+> Optimal ;Cor.4.1: recovers classical GD convergence
+
+Thm.4.2 + Cor.4.2: GenSGD Convergence 
+
+> Cor.4.2: recovers classical SGD convergence
+
+Def.5.1: Composite Opt. Problem Def.5.2: Induced Norm of Jacobian    
+
+> ,,:,
+
+Thm.5.1 + Cor.5.1: Composite Risk Bound  
+
+> Cor.5.1: -norm version with
+
+Def.5.3: ERM Problem Cor.5.2: ERM Bound Cor.5.3: KL/MSE/Fenchel Bound 
+
+> MSE, Softmax CE, Fenchel loss bounds
+
+Prop.5.1: Random Init 
+
+> ,
+
+Prop.5.2: Skip Connections  
+
+> Preserve , prevent depth decay
+
+Generalized Convexity and Smoothness Generalized GD and SGD Composite Optimization Problem 
+
+Fig. 1: An overview of the logical relationships among the key definitions and conclusions. The logical relationships among the core results are shown in Fig. 1. The energy function (Definition 3.1) is the core tool used by this framework to construct generalized convexity and smoothness, and we investigate its key properties (Proposition 3.1). Using the energy function, this framework defines generalized smoothness ( H(Ψ)-smoothness) and general-ized convexity ( H(ψ)-convexity) in Definition 3.2. It then investigates the generality of these notions (Proposition 3.3), their behavior under conjugation, scaling, translation, and 
+
+4Generalized Convexity and Smoothness 
+
+Fenchel–Young loss construction (Proposition 3.2), the relationship between gradients and optimal solutions (Theorem 3.1 and Corollary 3.1), and their construction and determina-tion (Proposition 3.4 and Proposition 3.5). Based on generalized smoothness and convexity, we define generalized GD and its gra-dient energy (Definition 4.1), as well as generalized SGD and its gradient energy (Defi-nition 4.2). We also investigate their relationships with classical GD and SGD (Proposi-tion 4.1 and Proposition 4.2). To study the influence of model structure and data properties on optimization, we define the Gradient Correlation Factor (Definition 4.3) and the Model Capacity Risk (Definition 4.4), and investigate their relationships with batch size (Proposi-tion 4.3 and Proposition 4.4). Building on these definitions, we derive convergence results for generalized GD (Theorem 4.1 and Corollary 4.1) and for generalized SGD (Theorem 4.2 and Corollary 4.2). Using generalized convexity and generalized smoothness, we define a class of composite optimization problems that encompasses DNN training (Definition 5.1), and define the key quantity for optimizing such problems, namely the induced norm of the Jacobian matrix (Definition 5.2). Theorem 5.1 and its corollary, Corollary 5.1, prove that composite opti-mization problems can be solved by reducing the gradient energy and controlling the induced norm of the model’s Jacobian. For DNN training, Empirical Risk Minimization (ERM) is formulated in Definition 5.3. Corollary 5.2 provides an upper bound constructed from the energy and the extreme singular values of the model’s Jacobian matrix, and Corollary 5.3 provides upper and lower bounds on the empirical risk under MSE, Softmax CrossEntropy, and Fenchel–Young loss. Furthermore, Proposition 5.1 characterizes the influence of random parameter initialization and the number of parameters on the extreme singular values of the Jacobian matrix, while Proposition 5.2 characterizes the influence of skip connections. To-gether with the established result that generalized SGD reduces the gradient energy, these results jointly characterize the non-convex optimization mechanism of deep learning. 
+
+2 Preliminaries 
+
+This section establishes the foundational concepts, notation and basic assumptions used throughout the paper. 
+
+2.1 Notation 
+
+• For a differentiable function fθ(x) with parameters θ ∈ Rm and outputs in Rd, we adopt the denominator layout convention. Thus, the Jacobian matrix of f with respect to θ is denoted by 
+
+Jθfθ(x) := ∂f θ(x)
+
+∂θ ∈ Rm×d,
+
+ ∂f θ(x)
+
+∂θ 
+
+
+
+> ij
+
+= ∂f j
+
+∂θ i
+
+,
+
+where i = 1 , . . . , m indexes the parameters and j = 1 , . . . , d indexes the outputs. In the scalar case ( d = 1), this reduces to a row vector, and we denote its transpose (the column gradient) by ∇θfθ(x) ∈ Rm.
+
+> 5Qi
+
+• The convex conjugate (Legendre–Fenchel conjugate) of a function Ψ is defined as Ψ∗(ν) := sup 
+
+> μ∈dom(Ψ)
+
+⟨μ, ν ⟩ − Ψ( μ) , (1) where ⟨· , ·⟩ denotes the standard inner product (Todd, 2003). When Ψ is strictly convex and differentiable, its gradient with respect to μ is denoted by ∇Ψ( μ). We define the conjugate dual of μ with respect to Ψ as μ∗ 
+
+> Ψ
+
+:= ∇Ψ( μ). When Ψ( ·) = 12 ∥·∥ 22,we have μ∗ 
+
+> Ψ
+
+= μ.
+
+• The Fenchel–Young loss induced by a convex function G is defined as 
+
+dG(μ, ν ) := G(μ) + G∗(ν) − ⟨ μ, ν ⟩, (2) where μ ∈ dom( G) and ν ∈ dom( G∗) (Blondel et al., 2020). This formulation plays a central role in our analysis. 
+
+• The maximum and minimum singular values of a matrix A are denoted by σmax (A)and σmin (A), respectively. The maximum and minimum eigenvalues of a matrix A
+
+are denoted by λmax (A) and λmin (A), respectively. 
+
+• The random pair Z = ( X, Y ) follows the distribution qX Y (abbreviated as q) and takes values in the product space Z = X × Y , where X denotes the input feature space and Y is a finite set of targets (labels). The cardinality of Z is denoted by 
+
+|Z| . Throughout this paper, we assume that |X | is finite, a condition that aligns with practical machine learning scenarios. Since |Y| is finite, |Z| is finite whenever |X | is finite. 
+
+• Let ∥ · ∥ be a vector norm on Rn, and let ∥A∥ := sup x̸=0 ∥Ax ∥/∥x∥ denote its upper induced norm (abbreviated as the induced matrix norm). Define the lower induced norm of A ∈ Rm×n as m(A) := inf x̸=0 ∥Ax ∥∥x∥ .
+
+• When A is not square or is singular, the Moore–Penrose pseudoinverse A+ provides a natural generalization of the inverse. 
+
+• ∥·∥ F : The Frobenius norm of a matrix A ∈ Rm×n, defined as ∥A∥F =
+
+qPmi=1 
+
+Pnj=1 A2 
+
+> ij
+
+=
+
+ptr( A⊤A), where tr( ·) denotes the trace. 
+
+2.2 Basic Assumptions 
+
+Since maximizing a function is equivalent to minimizing its negative counterpart, we ex-clusively consider the minimization of real-valued functions without loss of generality. All functions investigated in this work are continuous, proper, and defined over convex domains. 
+
+At any non-differentiable point, we set the surrogate gradient to zero. 
+
+3 Generalized Convexity and Smoothness 
+
+In this section, we introduce the concept of an energy function and use it to generalize the classical notions of convexity and Lipschitz smoothness. This generalization gives rise to the concepts of H(ψ)-convexity and H(Ψ)-smoothness. We further analyze their properties and implications in optimization theory. 
+
+> 6Generalized Convexity and Smoothness
+
+3.1 Energy Functions 
+
+We begin with the formal definition of an energy function. 
+
+Definition 3.1 (Energy Function) A function Ψ : Rm → R is called an energy function if it is a Legendre function with its unique minimum attained at the origin, i.e., Ψ( 0) is the minimal value, and it admits the radial representation: 
+
+Ψ( μ) = Ψ ◦(∥μ∥), (3) 
+
+where ∥ · ∥ denotes an arbitrary norm on Rm. If the norm is restricted to the L2-norm, we refer to it as an L2-norm energy function. 
+
+We first present the properties of energy functions. 
+
+Proposition 3.1 1. If Ψ( μ) is an energy function, then Ψ∗(ν) is also an energy func-tion, and 
+
+Ψ∗(ν) = Ψ ∗◦(∥ν∥∗),
+
+Ψ(0) + Ψ ∗(0) = 0 ,μ⊤μ∗ 
+
+> Ψ
+
+≥ 0,
+
+(4) 
+
+where Ψ∗◦ is the one-dimensional convex conjugate of Ψ◦.2. If Ψ( μ) = ∥aΨμ∥rΨ 
+
+> 2
+
+/r Ψ + cΨ is an energy function with parameters aΨ ∈ R>0, rΨ > 1,and cΨ ∈ R, then its convex conjugate Ψ∗(ν) = ∥aΨ∗ ν∥rΨ∗ 
+
+> 2
+
+/r Ψ∗ + cΨ∗ is also an energy function, where 
+
+1/r Ψ + 1 /r Ψ∗ = 1 ,aΨaΨ∗ = 1 ,cΨ∗ + cΨ = 0 .
+
+(5) 
+
+3. Let Ψ( μ) be an energy function. For any μ ∈ Rm, F (a) = Ψ( aμ ) is monotonically non-decreasing on [0 , ∞); if μ̸ = 0 , then F is strictly increasing and convex. 
+
+The proof of this proposition is provided in Appendix A.1. 
+
+3.2 Generalized Convexity and Smoothness 
+
+To handle potential non-differentiable points in DNNs, we generalize the classical gradient. Let G : Rm → ¯R be a function with finitely many non-differentiable points. For any point 
+
+μ ∈ Rm, the meaning of ∇G(μ) is extended as follows: 1. If G is differentiable at μ, then ∇G(μ) reduces to the classical gradient; 2. If G is not differentiable at μ, then ∇G(μ) := 0.Under this definition, all operations involving gradients (such as the first-order Taylor re-mainder and the gradient descent update rule) are well-defined, providing a foundation for subsequent theoretical analysis. This setting is designed to encompass more general opti-mization scenarios and to provide theoretical support for analyzing neural networks with 
+
+> 7Qi
+
+non-smooth units such as the Rectified Linear Unit (ReLU). In deep learning practice, the gradient at non-differentiable points of ReLU is set to zero, so this convention is consistent with real-world applications. Moreover, it ensures that the assumption of zero gradient at the global optimum is satisfied. Using energy functions and the extended gradient, we introduce generalized notions of convexity and smoothness. Throughout, uppercase energy functions (Ψ, Φ) characterize smoothness and lowercase ones ( ψ, ϕ) characterize convexity. 
+
+Definition 3.2 (Generalized Convexity and Smoothness) Define the first-order Tay-lor remainder SG(μ, ν ) = G(μ) − G(ν) − ⟨∇ G(ν), μ − ν⟩. Note that SG(μ, ν ) is the residual of the first-order expansion of G around ν evaluated at μ. We define the following notions of generalized convexity and smoothness. 
+
+• H(Ψ) -smooth function . A real-valued function G(·) is said to be H(Ψ) -smooth if 
+
+SG(μ, ν ) ≤ Ψ( μ − ν), ∀μ, ν ∈ dom( G), (6) 
+
+where Ψ is an energy function. 
+
+• H(ψ)-convex function . A function G(·) is said to be H(ψ)-convex if 
+
+SG(μ, ν ) ≥ ψ(μ − ν), ∀μ, ν ∈ dom( G), (7) 
+
+where ψ is an energy function. Since SG(μ, μ ) = 0 , these inequalities imply Ψ(0) ≥ 0 and ψ(0) ≤ 0.
+
+Generalized smoothness and convexity further satisfy the following properties: 
+
+Proposition 3.2 1. Let G and its convex conjugate G∗ be differentiable on their do-mains. Then the following statements are equivalent: (i) G is H(Ψ) -smooth; (ii) G∗
+
+is H(Ψ ∗)-convex. 2. For constants a > 0, b > 0, and c ∈ R, define F (x) := aG (bx ) + c on the domain 
+
+{x : bx ∈ dom G}. If G is H(Ψ) -smooth, then F is H(aΨ( b ·)) -smooth. If G is H(ψ)-convex, then F is H(aψ (b ·)) -convex. 3. Let the random variable Z take values in Z. If G(θ, z ) has the same generalized convexity and smoothness properties with respect to θ for all z ∈ Z , then G(θ, s ) also shares the same properties with respect to θ.4. Let s be a fixed constant vector. If G(·) is H(ψ)-convex, then dG(·, s ) has the same generalized convexity and smoothness properties as G(·), and dG(s, ·) has the same generalized convexity and smoothness properties as G∗(·).
+
+The proof of this proposition is provided in Appendix A.3. Item 1 reflects the conjugacy between generalized convexity and generalized smooth-ness. Item 2 reveals the scaling and vertical-shift invariance of generalized convexity and smoothness. Item 3 shows that the generalized convexity and smoothness of the dataset 
+
+> 8Generalized Convexity and Smoothness
+
+are identical to those at the sample level. Item 4 reveals the relationship between the gen-eralized convexity and smoothness of the Fenchel–Young loss and those of its generating function. It is well established that a wide range of commonly used loss functions in statistics and machine learning, including CrossEntropy loss, mean squared error (MSE) loss, and perceptron loss, can be expressed as Fenchel–Young losses dF (y, f θ(x)) through an appro-priate choice of F (Blondel et al., 2020). Proposition 4 demonstrates that the generalized smoothness and convexity of the Fenchel–Young loss can be analyzed through its generating function. More generally, for a general function G(μ), the inequality SG(μ, ν ) ≤ (aΨ∥μ − ν∥2)rΨ +
+
+cΨ can be satisfied by increasing aΨ, rΨ, and cΨ, so that G(μ) is H(Ψ)-smooth. The construction of ψ under H(ψ)-convexity is analogous. Thus, H(ψ)-convexity and H(Ψ)-smoothness provide a unified framework that encompasses a wide range of loss functions. From this, we obtain the following proposition: 
+
+Proposition 3.3 The objective function corresponding to neural network training is both 
+
+H(Ψ) -smooth and H(ψ)-convex with respect to the parameters. 
+
+According to the definitions of H(ψ)-convexity and H(Ψ)-smoothness, G need not be convex nor smooth. Specifically, when ψ(0) = 0, G is convex; however, when ψ(0) ̸ = 0, G
+
+need not be convex. The constant term ψ(0) of the energy function thus unifies convex and non-convex functions, with different values corresponding to different degrees of convexity. In the following, we no longer distinguish between convex and non-convex functions, but instead use H(ψ)-convexity for unified analysis. Similarly, H(Ψ)-smoothness also generalizes smoothness. The constant term Ψ(0) of the energy function unifies smooth and non-smooth functions, with different values corresponding to different degrees of smoothness. In the following, we no longer distinguish between smooth and non-smooth functions, but instead use H(Ψ)-smoothness for unified analysis. 
+
+3.3 Connecting Gradients and Optimal Solutions 
+
+The following theorem bounds the suboptimality G(μ) − G∗ in terms of the gradient energy, connecting gradient dynamics to global optimality without requiring classical convexity or smoothness. 
+
+Theorem 3.1 Let G∗ = min μ G(μ), G∗ = {μ | G(μ) = G∗}, and μ∗ ∈ G ∗. The following results hold: 1. If G(μ) is H(Ψ) -smooth, then: 
+
+Ψ∗(∇G(μ)) ≤ G(μ) − G∗ ≤ Ψ( μ − μ∗). (8) 
+
+2. If G(μ) is H(ψ)-convex, then: 
+
+ψ(μ − μ∗) ≤ G(μ) − G∗ ≤ ψ∗(∇G(μ)) . (9) 
+
+3. If G(μ) is both H(Ψ) -smooth and H(ψ)-convex, then: 
+
+Ψ∗(∇G(μ)) ≤ G(μ) − G∗ ≤ ψ∗(∇G(μ)) . (10) 
+
+> 9Qi
+
+The proof of this theorem is provided in Appendix A.4. This theorem shows that H(ψ)-convexity and H(Ψ)-smoothness symmetrically relate global optimality to gradient behavior, without requiring classical convexity or smoothness. This relationship provides a flexible yet rigorous framework for analyzing the optimization dynamics of gradient-based algorithms in complex settings. Building upon Theorem 3.1, we derive the following corollary: 
+
+Corollary 3.1 If G(μ) is both H(ψ)-convex and H(Ψ) -smooth, with Ψ( μ) = kΨ 
+
+> 2
+
+∥μ∥22 and 
+
+ψ(μ) = kψ 
+
+> 2
+
+∥μ∥22, where kΨ ≥ kψ > 0, the following holds: 
+
+∥∇ G(μ)∥22
+
+2kΨ
+
+≤ G(μ) − G∗ ≤ ∥∇ G(μ)∥22
+
+2kψ
+
+. (11) This recovers the classical bounds under Lipschitz smoothness and strong convexity (Lemma 8.2), verifying the generality of Theorem 3.1. 
+
+3.4 Determining Generalized Convexity and Smoothness 
+
+The definitions of H(ψ)-convexity and H(Ψ)-smoothness are general and can be applied to virtually any neural network objective. However, this generality introduces a challenge: a single objective function may admit multiple valid choices of ( ψ, Ψ). To illustrate, consider an H(Ψ)-smooth function G(θ); one can construct Ψ ′(·) = Ψ( ·) + c, where c > 0. Clearly, 
+
+G(θ) is also H(Ψ ′)-smooth. An analogous issue exists for H(ψ)-convexity. While different constructions of Ψ still satisfy the gradient-value inequalities in Theo-rem 3.1, they may render the resulting bounds on the global optimum too loose to offer practical guidance for optimization. This is analogous to classical GD/SGD convergence analysis under the Lipschitz smoothness assumption: if the employed Lipschitz constant is excessively large (which is indeed the case for DNNs, where the constant is often nonexistent or extremely large (Virmaux and Scaman, 2018; Liu et al., 2022)), the resulting optimal learning rate approaches zero. Such a prediction fails to reflect the actual convergence behavior observed with realistic learning rates. Therefore, the construction of the core pa-rameters for H(ψ)-convexity and H(Ψ)-smoothness directly impacts the practical utility of the theory. According to Theorem 3.1, the gradient energy controls the distance between stationary points and the global optimum. When the objective function is both H(Ψ)-smooth and 
+
+H(ψ)-convex, the minimum values attainable by the upper and lower bounds are Ψ ∗(0) and ψ∗(0), respectively. By Proposition 3.1, we have Ψ(0) + Ψ ∗(0) = 0. Therefore, the minimum values of the upper and lower bounds are −Ψ(0) and −ψ(0), respectively, and the gap between them is Ψ(0) − ψ(0), where Ψ(0) ≥ 0 and ψ(0) ≤ 0. To minimize this gap, both Ψ(0) and ψ(0) should be chosen as close to zero as possible. Under the H(Ψ)-smooth setting, Theorems 4.1 and 4.2 prove that the minimum value to which the gradient energy can theoretically converge is determined by Ψ(0), which represents the optimization limit of gradient descent–type algorithms. Since generalized convexity and smoothness are intrinsic properties of the optimization objective, they control the optimization limit achievable by directly applying gradient descent–type algorithms. However, as we will show in Section 5, by constructing a benign composite optimization problem, gradient descent–type algorithms 
+
+> 10 Generalized Convexity and Smoothness
+
+can be used to approach the global optimum. We therefore state the following proposition characterizing the construction principles for generalized convexity and smoothness: 
+
+Proposition 3.4 For (ψ, Ψ) to be useful in optimization analysis, the following two con-struction principles should be satisfied: 1. ψ(0) and Ψ(0) should be as close to 0 as possible; 2. The pair (Ψ , ψ ) should provide tight upper and lower bounds for the remainder SG(θ, η ).
+
+According to the finite-dimensional norm-equivalence Lemma 8.3, in finite-dimensional settings, norms are equivalent, i.e., there exist positive real numbers such that a∥μ∥2 ≤∥μ∥ ≤ b∥μ∥2. If G(·) is H(Ψ)-smooth, then it is also necessarily H(Ψ ◦(b∥·∥ 2))-smooth, where Ψ( μ) = Ψ ◦(∥μ∥). Similarly, H(ψ)-convexity also implies H(ψ◦(a∥ · ∥ 2))-convexity. This substitution of an arbitrary norm by the L2-norm still captures the essence of generalized convexity and smoothness, namely, using energy functions to bound the first-order Taylor remainder. Therefore, in general, when constructing generalized convexity and smoothness, we preferentially use the L2-norm for the norm component of the energy function. We acknowledge that precisely computing the globally optimal Ψ for complex DNNs is extremely challenging. We conjecture that computing the globally optimal Ψ for a given DNN is NP-hard, consistent with the established NP-hardness of computing global Lipschitz constants for DNNs (Virmaux and Scaman, 2018; Liu et al., 2022). However, as demon-strated below, this computational challenge does not negate the theoretical or practical value of our framework. Theoretically, the H(ψ)-convexity and H(Ψ)-smoothness frame-work generalizes classical strictly convex and Lipschitz smooth frameworks. It provides relationships between gradients and global optima for non-convex and non-differentiable problems, alleviating the difficulties classical frameworks face when analyzing DNNs. In Section 4, we utilize this to explain the non-convex optimization mechanism of SGD for DNNs. Practically, the convergence properties under these generalized conditions guide architectural design towards better optimization landscapes. By adhering to the construc-tion principles (Proposition 3.4), one can design modules for DNNs with provably favorable spectral properties, enhancing trainability without explicit computation of the global con-stants. For several important special cases, we derive the following criteria for generalized con-vexity and smoothness. 
+
+Proposition 3.5 1. Suppose G is a continuously differentiable function defined on a closed convex set, twice differentiable on the interior of its domain, and with a positive definite Hessian matrix. Let λmin and λmax denote the smallest and largest eigenvalues of the Hessian matrix ∇2G(μ) for all μ in the domain of G. Then G is both H(λmax ∥ · ∥22/2) -smooth and H(λmin ∥ · ∥ 22/2) -convex. 2. The MSE loss 12 ∥fθ(x) − y∥22 with respect to fθ(x) is both H(∥ · ∥ 22/2) -convex and 
+
+H(∥ · ∥ 22/2) -smooth. 3. The Softmax CrossEntropy loss CrossEntropy( q, Softmax( fθ(x))) with respect to fθ(x)
+
+is both H(min i pi∥ · ∥ 22)-convex and H(2 ln 2 ∥ · ∥ 22)-smooth, where p = Softmax( fθ(x)) 
+
+and q is the target distribution. 
+
+The proof of this proposition is provided in Appendix A.2. 
+
+> 11 Qi
+
+4 Generalized GD and SGD 
+
+In this section, we present a more general form of gradient-based optimization algorithms, which we refer to as generalized GD and generalized SGD. We analyze their convergence rates under the framework of generalized convexity and generalized smoothness. Unlike classical GD and SGD, the generalized GD and SGD proposed in this paper do not require learning rate tuning, as the optimal learning rate is consistently 1. 
+
+4.1 Generalized GD 
+
+4.1.1 Definitions 
+
+Definition 4.1 (Generalized GD) Consider the deterministic optimization problem 
+
+min  
+
+> θ
+
+G(θ), (12) 
+
+where G is an H(Ψ) -smooth objective. We define its gradient energy as 
+
+Ψ∗(∇G(θ)) , (13) 
+
+with Ψ an arbitrary energy function. The generalized GD method with constant step size α then follows the update rule 
+
+θk+1 := θk − α(∇G(θk)) ∗ 
+
+> Ψ∗
+
+, (14) 
+
+where (∇G(θk)) ∗ 
+
+> Ψ∗
+
+:= ∇Ψ∗(∇G(θk)) .
+
+The gradient energy measures the distance of the gradient from the origin, and from a conceptual viewpoint it characterizes the stability of the objective function with respect to the model parameters. Generalized GD no longer proceeds strictly along the gradient direction; instead, it follows the dual variable direction of ∇G(θk) with respect to Ψ ∗. We now present a proposition showing that the update direction coincides with the gradient direction if and only if Ψ( ·) = Ψ ◦(∥ · ∥ 2). The formal statement is as follows. 
+
+Proposition 4.1 If, for any nonzero vector x, the gradient ∇∥ x∥ is collinear with the original vector x, i.e., there exists a scalar-valued function λ(x) such that 
+
+∇∥ x∥ = λ(x) · x, (15) 
+
+then there exists a positive constant c > 0 such that, for all x ∈ Rn, we have ∥x∥ = c · ∥ x∥2,
+
+i.e., the norm must be a positive scalar multiple of the Euclidean ( L2) norm. Conversely, all positive scalar multiples of the Euclidean norm satisfy the property that the gradient is collinear with the original vector. 
+
+The proof of this proposition can be found in Appendix A.5. When the smoothness energy is Ψ( ·) = L 
+
+> 2
+
+∥ · ∥ 22, generalized GD reduces to classical GD. For comparison, the classical GD method with a constant step size α is defined by the following update rule: 
+
+θk+1 = θk − α∇G(θk). (16) 
+
+> 12 Generalized Convexity and Smoothness
+
+4.1.2 Convergence Analysis 
+
+Next, we establish the convergence rates of generalized GD for the deterministic optimiza-tion problem and the stochastic optimization problem. 
+
+Theorem 4.1 Consider the deterministic optimization problem in Definition 4.1. Suppose 
+
+G(θ) is H(Ψ) -smooth. Then the generalized GD algorithm satisfies the following properties: 1. The optimal learning rate is given by α = 1 . Substituting this value into the update rule yields 
+
+G(θk+1 ) ≤ G(θk) − Ψ∗(∇G(θk)) . (17) 
+
+2. The number of iterations required to satisfy the convergence criterion 
+
+Ψ∗(0) ≤ Ψ∗ ∇G(θk) ≤ Ψ∗(ε) (18) 
+
+is bounded by T = O 1/Ψ∗(ε).3. If G(θ) is both H(ψ)-convex and H(Ψ) -smooth, the number of iterations required for the generalized GD algorithm to achieve the error bound 
+
+G(θk) − G∗ ≤ ψ∗(ε) (19) 
+
+is bounded by T = O(1 /Ψ∗(ε)) .4. Assume that G(θ) is both H(ψ)-convex and H(Ψ) -smooth, where Ψ and ψ satisfy 
+
+Ψ∗(μ) ≥ tψ ∗(μ) + b, 0 < t < 1 and b ∈ R. The number of iterations for the generalized GD algorithm to reach 
+
+G(θk) − G∗ ≤ ψ∗(ε) − ψ∗(0) − bt (20) 
+
+is bounded by T = O
+
+
+
+κ log 1
+
+> ψ∗(ε)−ψ∗(0)
+
+
+
+, where the condition number is defined as 
+
+κ = −1/log(1 − t).
+
+The proof of this theorem can be found in Appendix A.6. The above theorem provides the following insight: if we use the gradient energy to control the distance between the current solution and the optimal solution, then smaller 
+
+ψ∗(0) (i.e., ψ(0) closer to zero) gives tighter control. In particular, when the gradient norm is zero, ψ∗(0) serves as an upper bound on the distance between the current solution and the optimal solution. Specifically, when ψ∗(0) is zero, if the gradient norm is zero, then the current solution coincides with the optimal solution. Different forms of energy functions yield different approximation performance. From the above theorem, we know that the smaller the absolute values of ψ(0) and Ψ(0), the better the achievable result. The order of the energy function determines the convergence rate. We now use the above theorem to derive the convergence of classical GD under the Lipschitz smoothness assumption. When G(θ) is Lipschitz smooth with constant L, this condition is equivalent to the function being bounded above by a quadratic: G(y) ≤ G(x) + 
+
+∇G(x)⊤(y − x) + L 
+
+> 2
+
+∥y − x∥22. Therefore, according to the definition of H(Ψ)-smoothness, 
+
+> 13 Qi
+
+we have Ψ( ·) = L 
+
+> 2
+
+∥ · ∥ 22 and Ψ ∗(·) = 12L ∥ · ∥ 22. In this case, generalized GD and classical GD are identical. Similarly, if G(θ) is σ-strongly convex, then according to the definition of H(ψ)-convexity, we have ψ(·) = σ 
+
+> 2
+
+∥ · ∥ 22 and ψ∗(·) = 12σ ∥ · ∥ 22. By Theorem 4.1, we obtain the following corollary. 
+
+Corollary 4.1 Assume that G(θ) is both H(ψ)-convex and H(Ψ) -smooth with Ψ( ·) = L 
+
+> 2
+
+∥·∥ 22
+
+and ψ(·) = σ 
+
+> 2
+
+∥ · ∥ 22.1. For the equivalent classical GD update, the optimal learning rate is α = 1 
+
+> L
+
+, and any 
+
+α ≤ 2 
+
+> L
+
+guarantees descent at each step. 2. The number of iterations required for the GD algorithm to reach the convergence con-dition 
+
+G(θk+1 ) − G∗ ≤ ε2
+
+2σ (21) 
+
+is T = O(κ log 2σε2 ), where the condition number is defined as κ = − 1log(1 −t) and t = σL .
+
+This is consistent with the classical convergence rate under strong convexity and Lipschitz smoothness, which indirectly verifies the correctness and generality of the framework pro-posed in this paper. We now show that classical GD is a special case of generalized GD, and that its standard convergence guarantees rely on Lipschitz smoothness. 
+
+Proposition 4.2 Given that G(θ) is H(Ψ) -smooth but not Lipschitz smooth, classical GD as described in Equation (16) is adopted to optimize G(θ). It follows that: 1. There exists no constant step size that is universally optimal for this optimization process. 2. If a time-varying learning rate is employed, the classical GD is equivalent to generalized GD. 
+
+The proof of this proposition can be found in Appendix A.7. The above proposition shows that if a function is H(Ψ)-smooth but not Lipschitz smooth, then classical GD no longer admits a universally optimal constant learning rate, and its convergence guarantees no longer apply in the same way. In addition to being more general than classical GD, generalized GD offers several advantages over classical GD under the generalized convexity and smoothness framework: 1. It provides convergence rates for non-convex optimization objectives, where the achiev-able error relative to the optimal solution is controlled by ψ(0). If ψ(0) is close to 0 (i.e., the function is nearly convex), the upper bound provides effective control; we re-fer to such problems as approximately convex optimization problems. However, if ψ(0) is very negative (i.e., ψ∗(0) is large), the resulting upper bound becomes too loose to guarantee convergence to the global optimum, motivating the composite optimization framework introduced below. 
+
+> 14 Generalized Convexity and Smoothness
+
+2. Under the general H(Ψ)-smooth setting, classical GD does not have a constant op-timal learning rate; to achieve its optimal convergence rate, the learning rate must be carefully computed at each iteration. In contrast, for generalized GD, the optimal learning rate is inherently determined to be 1, eliminating the need for manual tun-ing of the learning rate. This simplicity is a direct consequence of the H(Ψ)-smooth property encapsulated in the algorithm’s design. 
+
+4.2 Generalized SGD 
+
+While generalized GD provides convergence guarantees for deterministic problems, the stochastic setting of DNN training introduces two additional phenomena that must be captured: (1) Parameter coupling: gradient updates computed on a batch affect the loss or risk associated with samples outside the batch; (2) Limited model capacity: when the complexity of the data exceeds the model capacity, no optimization algorithm can drive the empirical risk to zero, regardless of the choice of algorithm. Without accounting for these factors, one cannot characterize how model structure and capacity affect optimization, making it difficult to systematically elucidate SGD’s optimization mechanism in DNNs. To address these issues, we propose generalized SGD together with the gradient correlation factor and the model capacity risk; generalized SGD not only encompasses classical SGD but also captures parameter coupling and model capacity limitations. 
+
+4.2.1 Definitions 
+
+Definition 4.2 (Generalized SGD) Let s denote a sampled dataset whose elements take values in the space Z. We consider the stochastic optimization problem 
+
+min  
+
+> θ
+
+G(θ, s ) = 1
+
+|s|
+
+X
+
+> z∈s
+
+G(θ, z ) = EZ∼ˆq[G(θ, Z )] , (22) 
+
+where G(θ, z ) is H(Ψ) -smooth with respect to θ for all z ∈ Z , and ˆq is the empirical distri-bution induced by the sample set s. We define its gradient energy as 
+
+EZ∼ˆqΨ∗(∇θG(θ, Z )) . (23) 
+
+The generalized SGD method with constant step size α is given by the update rule 
+
+θk+1 = θk − α(g(θk, s k)) ∗ 
+
+> Ψ∗
+
+, (24) 
+
+where g(θk, s k) = ∇θG(θk, s k) is the stochastic gradient at iteration k, (g(θk, s k)) ∗ 
+
+> Ψ∗
+
+:= 
+
+∇Ψ∗(g(θk, s k)) , θk denotes the parameter value at iteration k, and sk ⊆ s is the mini-batch sampled at iteration k with cardinality |sk|. We write s \ sk for the complement of sk in s,so that |s \ sk| = |s| − | sk|.
+
+We note that the gradient energy is defined through the per-sample gradient ∇θG(θ, Z )rather than the mini-batch gradient ∇θG(θ, s ); this distinction is essential because the energy averages over the empirical distribution ˆ q instead of a single batch. The deterministic optimization problem is recovered as the special case in which Z follows a Dirac distribution 
+
+δz . Since most machine learning training problems based on sampled data admit such a 
+
+> 15 Qi
+
+stochastic formulation, the stochastic setting and its primary algorithm, SGD, constitute the main focus of this work. Similar to generalized GD, generalized SGD does not move strictly along the gradient direction; rather, it follows the conjugate direction of g(θk, s k)with respect to Ψ ∗. This update direction coincides with the mini-batch gradient direction if and only if Ψ( ·) = Ψ ◦(∥ · ∥ 2), in which case generalized SGD reduces exactly to classical SGD. To characterize the coupling among model parameters, i.e., the impact of a single mini-batch update on samples not included in that batch, we introduce the following concept: 
+
+Definition 4.3 (Gradient Correlation Factor) We define the gradient correlation fac-tor M as: 
+
+M = max 
+
+> k,s k
+
+G(θk+1 , s \ sk) − G(θk, s \ sk), (25) 
+
+where k denotes the iteration index and sk denotes the randomly sampled mini-batch at the 
+
+k-th iteration. 
+
+The gradient correlation factor M is introduced to formally characterize this model-dependent coupling. Specifically, even when an optimal update is performed on sk, the loss on s \ sk
+
+may still change; M provides an upper bound on the magnitude of this change. It depends on the following factors: 1. Data consistency: When samples and labels are highly consistent, the batches sk and 
+
+s \ sk exhibit high similarity, leading to similar gradient directions. This causes M to become small, or even negative. 2. Parameter coupling: If the coupling among model parameters is low, updates on sk
+
+affect only a subset of parameters with minimal impact on others. A typical example is embedding models, where each feature has its own mapping vector/parameters; changes to one vector do not affect the losses of other features or samples. 3. Batch size: The closer the distributions of sk and s \ sk, the higher the similar-ity between the surrogate gradient ∇θG(θk, s k) computed on sk and the gradient 
+
+∇θG(θk, s \ sk) corresponding to s \ sk. Consequently, ∇θG(θk, s k) more closely ap-proximates the direction of steepest descent of G(θk, s \ sk), yielding a smaller M . A quantitative evaluation of the effect of batch size is provided by the following propo-sition: when m = ⌊n/ 2⌋ (or m = n/ 2 when n is even), the distributions of sk and 
+
+s \ sk are closest. 
+
+Proposition 4.3 For any fixed value a, define pa := 1
+
+> n
+
+Pni=1 1{G(θk, z i) = a} as the true proportion of the population taking the value a. The empirical probability mass function (PMF) values at a for the two groups are ˆpa,m := 1
+
+> m
+
+P 
+
+> zi∈sk
+
+1{G(θk, z i) = a}, ˆpa,n −m := 
+
+> 1
+> n−m
+
+P 
+
+> zi∈s\sk
+
+1{G(θk, z i) = a}. Then the variance of their difference is 
+
+Var (ˆ pa,m − ˆpa,n −m) = pa(1 − pa) · n2
+
+m(n − m)( n − 1) . (26) 
+
+Consequently, the variance is minimized when m(n − m) is maximized, i.e., at m = ⌊n/ 2⌋
+
+(or m = n/ 2 when n is even). 
+
+> 16 Generalized Convexity and Smoothness
+
+The proof of this proposition can be found in Appendix A.8. 
+
+M depends on the network architecture and data distribution. For DNNs, computing 
+
+M exactly is generally impractical, just as exactly estimating the variance of stochastic gradients or the Lipschitz constant (Ghadimi and Lan, 2013; Bottou et al., 2018). In classical SGD analysis, the variance bound σ2 is a theoretical quantity whose existence is assumed to derive convergence rates; in practice, it is rarely computed exactly. Similarly, M
+
+serves as a theoretical construct that enables principled convergence analysis while explicitly accounting for the influence of architecture. In addition to the gradient correlation factor arising from parameter coupling, the ca-pacity of the model also affects the final convergence result during DNN training. If the model capacity is sufficiently large, we can expect the model to fit all samples, driving the gradient energy toward zero. Conversely, when the capacity is insufficient, the model cannot fully fit all samples, and the gradient energy remains positive. The model capacity risk is defined as follows: 
+
+Definition 4.4 (Model Capacity Risk) Let sm be a batch of size m randomly sampled from s. Let G(s)∗ = min θ G(θ, s ) and G(sm)∗ = min θ G(θ, s m) denote the global minima of 
+
+G(θ, s ) and G(θ, s m), respectively. The model capacity risk is defined as 
+
+RG(s, m ) = G(s)∗ − EG(sm)∗
+
+. (27) The model capacity risk characterizes the discrepancy, arising from insufficient model ca-pacity, between the optimal solution achievable on the full sample set and the expected optimal solution achievable on individual batches. Consider the MSE loss as an example: a simple linear model can achieve zero fitting error for a single sample, but due to bounded model capacity, it generally cannot achieve zero fitting error for all samples. This is inde-pendent of the optimization algorithm and is determined by the model’s own capacity. To facilitate the analysis of this model-intrinsic property, we abstract it as the model capacity risk. 
+
+4.2.2 Convergence Analysis 
+
+We now prove an important property of the model capacity risk, namely that RG(s, m ) is monotonically non-increasing in m:
+
+Proposition 4.4 RG(s, m ) is monotonically non-increasing in batch size m:
+
+RG(s, m + 1) ≤ RG(s, m ). (28) 
+
+Consequently, RG(s, m ) attains its maximum at m = 1 and minimum at m = |s|.
+
+The proof of this proposition is detailed in Appendix A.9. The following theorem delineates the convergence behavior of generalized SGD within the H(Ψ)-smooth setting. 
+
+Theorem 4.2 Let n = |s|, m = |sk|, and M be the gradient correlation factor. Applying generalized SGD yields the following convergence properties: 
+
+> 17
+
+Qi 
+
+1. Setting the learning rate to 1, the number of iterations T required for generalized SGD to achieve 
+
+max   
+
+> sk⊆s
+
+Ψ∗(∇θG(θk, s k)) ≤ Ψ∗(ε) (29) 
+
+is O( nmΨ∗(ε)−(n−m)M ), provided mΨ∗(ε) > (n − m)M .2. Assume that G(θ, z ) is both H(ψ)-convex and H(Ψ) -smooth. Setting the learning rate to 1, the number of iterations required to satisfy 
+
+G(θ, s ) − G(s)∗ ≤ ψ∗(ε) − RG(s, m )
+
+is O( nmΨ∗(ε)−(n−m)M ), provided mΨ∗(ε) > (n − m)M .3. Assume that G(θ, s k) is both H(ψ)-convex and H(Ψ) -smooth, where Ψ and ψ satisfy 
+
+Ψ∗(μ) ≥ tψ ∗(μ) + b, 0 < t < 1 and b ∈ R. Setting the learning rate to 1, the number of iterations for the generalized SGD algorithm to reach 
+
+Esk G(θk, s ) − G(s)∗ ≤ ψ∗(ε) − RG(s, m ) − bt − n − mtm M (30) 
+
+is bounded by T = O
+
+
+
+κ log 1
+
+> ψ∗(ε)−ψ∗(0)
+
+
+
+, where the condition number is defined as 
+
+κ = −1/ log(1 − mt/n ), which is well defined since 0 < mt/n < 1. For small t,
+
+κ ≈ 1/t , analogous to the classical condition number L/σ .
+
+The proof of this theorem is detailed in Appendix A.10. We now use the above theorem to derive the convergence of classical SGD under Lipschitz smoothness. When G(θ, z ) is Lipschitz smooth with constant L, by the definition of H(Ψ)-smoothness, we have Ψ( ·) = L 
+
+> 2
+
+∥ · ∥ 22 and Ψ ∗(·) = 12L ∥ · ∥ 22. According to Theorem 4.2, we obtain the following corollary. 
+
+Corollary 4.2 Let n = |s|, m = |sk|, and M be the gradient correlation factor. If G(θ, z ) is Lipschitz smooth with constant L, applying generalized SGD yields the following convergence properties: 1. The number of iterations T required for generalized SGD to achieve 
+
+E ∥∇ θG(θk, s k)∥22
+
+ ≤ ε2
+
+2L (31) 
+
+is T = O( 2Ln mε 2−2L(n−m)M ).2. Assume that G(θ) is also σ-strongly convex. Define the constant t = σ/L . If t ≤ 1,the number of iterations required for the SGD algorithm with batch size m to reach the convergence condition 
+
+G(θk, s ) − G(s)∗ ≤ ε2
+
+2σ − RG(s, m ) − n − mtm M (32) 
+
+is T = O(κ log 2σε2 ), where the condition number is defined as κ = − 1log(1 −mt/n ) .
+
+18 Generalized Convexity and Smoothness 
+
+We now analyze Theorem 4.2. Theorem 4.2 implies that if max sk ⊆s Ψ∗(∇θG(θk, s k)) ≤
+
+Ψ∗(ε) is achievable by SGD, then ε must satisfy: Ψ∗(ε) ≥ n − mm M, ψ∗(ε) ≥ RG(s, m ).
+
+(33) First, this indicates that the gradient energy does not necessarily converge to zero; ε is required to satisfy the above conditions. These two conditions describe the influence of model structure and capacity on the achievable optimum in optimization: (1) A smaller gradient correlation factor M facilitates convergence to a better gradient energy level; (2) A larger model capacity facilitates convergence toward the global optimum. The effect of batch size on the final convergence result is complex: a larger m (typi-cally less than ⌊n/ 2⌋) is more favorable for reducing both n−mm M and RG(s, m ). However, notably, the tightest upper bound on G(θk, s ) − G(s)∗ is always ψ∗(0) − RG(s, m ). When 
+
+ψ∗(0) is large (i.e., ψ(0) is small), meaning that G(θ, s ) is highly non-convex, this upper bound becomes too loose to enable convergence toward the global optimum. This is con-sistent with the issue encountered in classical convex optimization, where convexity is a prerequisite for GD/SGD to find the global optimum. As a result, large ψ∗(0) values render the existing bounds too loose to precisely characterize the non-convex optimization mech-anism of SGD training in DNNs. This constitutes the core motivation for formulating the composite optimization problem introduced in the subsequent section. 
+
+5 Composite Optimization Problem 
+
+This section provides a theoretical solution method for a special class of non-convex and non-smooth optimization problems represented by DNN training. The training objective of DNNs typically possesses a composite structure: a nonlinear mapping (e.g., a neural network) maps the input through parameters θ to produce a predicted output, which is then evaluated by a task-specific loss function. This two-tier “model–loss” structure nat-urally forms a composite function. However, traditional optimization theory is primarily designed for smooth or convex functions and cannot directly capture the complex geomet-ric properties of such composite objectives. To more accurately model the optimization problem of DNNs, this section formally defines composite optimization problems based on the generalized convexity and generalized smoothness introduced earlier, and presents an optimization mechanism based on gradient energy and the induced norms of the model’s Jacobian matrix. 
+
+5.1 Definitions 
+
+We define the composite optimization problem as follows: 
+
+Definition 5.1 (Composite Optimization Problem) The deterministic composite op-timization problem is defined as follows: 
+
+min  
+
+> θ∈Rm
+
+G(θ), (34) 
+
+where G(θ) = F (h(θ)) , and for almost all samples z, the following conditions hold: 
+
+> 19 Qi
+
+• The outer function F : Rd → ¯R maintains H(ϕ)-convexity and H(Φ) -smoothness; 
+
+• The composite function G(θ) is H(Ψ) -smooth with respect to θ;The stochastic composite optimization problem is defined as follows: 
+
+min  
+
+> θ∈Rm
+
+EZ∼q
+
+G(θ, Z ), (35) 
+
+where G(θ, z ) = F (hθ(z)) , and for almost all samples z, the following conditions hold: 
+
+• The outer function F : Rd → ¯R maintains H(ϕ)-convexity and H(Φ) -smoothness; 
+
+• The composite function G(θ, z ) is H(Ψ) -smooth with respect to θ;For consistency with the deterministic case, we also use G(θ, s ) to denote the stochastic composite optimization problem, where s ∼ qn.
+
+Since the deterministic composite optimization problem can be viewed as a special case of the stochastic composite optimization problem when q is a Dirac delta at z or s = {z}, we focus on the stochastic case for brevity. 
+
+Definition 5.2 (Jacobian Matrix and Its Induced Norm) For a stochastic compos-ite optimization problem, let hθ(z) : Rm → Rd be a differentiable mapping parameterized by 
+
+θ ∈ Rm. The Jacobian matrix of hθ(z) with respect to θ is denoted by Jθhθ(z) ∈ Rd×m, and its induced norm is ∥Jθhθ(z)∥.By Lemma 8.5, the lower induced norm of a full-column-rank Jacobian (i.e., d ≥ m)satisfies 
+
+m(Jθhθ(z)) = 1
+
+∥Jθhθ(z)+∥ , (36) 
+
+where (·)+ denotes the Moore–Penrose pseudoinverse. For a dataset s, the surrogate upper and lower induced norms are defined as 
+
+∥Jθh(θ, s )∥ := max  
+
+> z∈s
+
+∥Jθhθ(z)∥, (37) 
+
+m(Jθh(θ, s )) := min  
+
+> z∈s
+
+m(Jθhθ(z)) = min 
+
+> z∈s
+
+1
+
+∥Jθhθ(z)+∥ . (38) 
+
+In the special case where the norm is the Euclidean ( L2) induced norm, the above quan-tities reduce to the largest and smallest singular values: 
+
+∥Jθhθ(z)∥2 = σmax (Jθhθ(z)) , (39) 
+
+m(Jθhθ(z)) = σmin (Jθhθ(z)) , (40) 
+
+∥Jθh(θ, s )∥2 = max  
+
+> z∈s
+
+σmax (Jθhθ(z)) , (41) 
+
+m(Jθh(θ, s )) = min  
+
+> z∈s
+
+σmin (Jθhθ(z)) . (42) 
+
+> 20 Generalized Convexity and Smoothness
+
+5.2 Convergence Analysis Theorem 5.1 For the stochastic composite optimization objective G(θ, s ) (Definition 5.1), the following statements hold: 1. For any sample z:
+
+Φ∗( ∇θG(θ, z )
+
+∥Jθhθ(z)∥ ) ≤ G(θ, z ) − G(z)∗ ≤ ϕ∗(∇θG(θ, z )∥Jθhθ(z)+∥).
+
+2. For the dataset s:
+
+EΦ∗( ∇θG(θ, Z )
+
+∥Jθhθ(Z)∥ ) ≤ G(θ, s ) − G(s)∗ + RG(s, 1) ≤ Eϕ∗(∇θG(θ, Z )∥Jθhθ(Z)+∥).
+
+The proof can be found in Appendix A.11. When the energy function is based on the L2-norm, the induced norm and the lower induced norm correspond to the largest and smallest singular values of the matrix, respec-tively. Therefore, the following corollary follows from the above theorem. 
+
+Corollary 5.1 For the stochastic composite optimization objective G(θ, s ) (Definition 5.1), if the energy function is based on the L2-norm, the following statements hold: 1. For any sample z:
+
+Φ∗
+
+ ∇θG(θ, z )
+
+σmax (Jθhθ(z)) 
+
+
+
+≤ G(θ, z ) − G(z)∗ ≤ ϕ∗
+
+ ∇θG(θ, z )
+
+σmin (Jθhθ(z)) 
+
+
+
+.
+
+2. For the dataset s:
+
+EΦ∗
+
+ ∇θG(θ, Z )
+
+σmax (Jθhθ(Z)) 
+
+
+
+≤ G(θ, s ) − G(s)∗ + RG(s, 1) ≤ Eϕ∗
+
+ ∇θG(θ, Z )
+
+σmin (Jθhθ(Z)) 
+
+
+
+.
+
+The above theorem indicates that G(θ, s ) can be optimized by reducing the gradient energy and increasing the induced norm of the model’s Jacobian matrix. Since G(θ, z )is H(Ψ)-smooth, Theorem 4.2 implies that generalized SGD reduces the gradient energy, consequently reducing G(θ, s ). The fact that generalized SGD achieves a reduction in gradient energy without directly reducing the induced norm provides a theoretical basis for solving composite optimization problems. According to Theorem 4.2, under the H(Ψ)-smoothness setting, the final convergence result of generalized SGD is constrained by the batch size m, the gradient correlation factor 
+
+M , and the model capacity risk RG(s, m ). Below, we analyze the impact of these factors on the convergence speed and solution quality for the composite optimization problem. 1. Impact of batch size. According to Theorem 4.2, increasing m helps reduce the gradient correlation factor M and the model capacity risk RG(s, m ), thereby enabling 
+
+EΨ∗(∇θG(θ, s k)) to converge to a smaller value at a faster rate. By Theorem 5.1, the suboptimality gap in the composite optimization problem is controlled by the gradient energy EΨ∗(∇θG(θ, Z )). Since E[Ψ ∗(∇θG(θk, s k))] is itself a mini-batch estimate of 
+
+> 21 Qi
+
+the gradient energy, smaller batch sizes allow finer control over it. Thus, the choice of batch size in SGD represents a fundamental tradeoff between two key objectives: (1) small batches enhance the precision of gradient energy control (enabling convergence to better solutions) and (2) moderately larger batches improve convergence speed. Therefore, for generalized SGD, the preferred strategy is to first use a larger m to quickly converge to a reasonably good solution, and then reduce m to further decrease the gradient energy and obtain a better solution. This is consistent with the batch size scheduling strategy commonly employed in practice for training DNNs. 2. Impact of the gradient correlation factor M . A smaller M yields a smaller achievable upper bound for E[Ψ ∗(∇θG(θk, s k))] and a faster convergence rate. M
+
+characterizes the coupling among model parameters; therefore, for a fixed batch size, lower parameter coupling is more favorable for convergence to a better solution. Since low coupling is equivalent to parameter sparsity, this provides a novel perspective on how model architecture and parameterization influence a model’s capacity to fit the data, and it theoretically links model sparsity to trainability (optimizability). 3. Impact of model capacity risk. By Theorem 5.1, the suboptimality gap in the composite optimization problem is controlled by RG(s, 1). A larger model capacity risk RG(s, 1) tightens the upper bound on G(θ, s ) − G(s)∗, meaning that for the same gradient energy level, the distance to the global optimum is more tightly constrained. However, a larger RG(s, 1) also implies that the global optimum G(s)∗ is further from the per-sample optima, indicating greater difficulty in fitting all samples simultane-ously. Thus, while a larger model capacity risk facilitates convergence to the (worse) global optimum, it reflects a fundamental limitation of model capacity rather than an advantage. As shown in Theorem 5.1, the induced norms of the model’s Jacobian matrix are another key factor controlling the optimization objective. Since ∇θG(θ, z ) = Jθhθ(z)∇hF (hθ(z)), the gradient energy and the induced norms are coupled: as the gradient energy decreases, the loss gradient ∇hF diminishes, which may in turn affect the conditioning of the Jacobian matrix. Therefore, while reducing the gradient energy, it is essential to maintain or control the magnitude of the induced norms of the model’s Jacobian matrix. 
+
+• Direct optimization. Increasing these induced norms directly can thus contribute to further reduction of the objective function. Notably, these induced norms are com-puted solely from parameter gradients and do not require detailed knowledge of the model architecture or higher-order derivatives such as the Hessian. However, com-puting the induced norms of a matrix, for instance, computing the induced norms via singular value decomposition, costs O(min {md 2, dm 2}) for an m × d matrix, making direct computation of the extreme singular values impractical for large-scale neural networks. 
+
+• Structural design and control. As a more practical alternative, the method pro-posed to solve composite optimization problems only requires that the induced norm be nonzero, and that larger values are more favorable for optimization. This condi-tion can be satisfied by controlling or designing the functional structure. A typical 
+
+> 22 Generalized Convexity and Smoothness
+
+approach is to use skip connections (He et al., 2016), i.e., to set fθ(x) = x + gθ(x) with 
+
+∥∇ xgθ(x)∥22 ≪ 1. In this construction, the singular values of the Jacobian matrix are close to 1, ensuring that ∥∇ θfθ(x)∥ remains bounded away from zero. In the following section, we demonstrate that the skip connection technique is a concrete realization of this design principle in deep learning. 
+
+5.3 Applications in Explaining DNN Trainability 
+
+In this section, we analyze the optimization mechanisms underlying the trainability of DNNs. 
+
+5.3.1 Bounds on Empirical Risk 
+
+In the field of deep learning, training DNNs is formulated as an ERM problem. In this section, we reformulate the ERM problem by incorporating the concepts of composite op-timization problems. This allows us to provide theoretical support from our framework for gradient descent–type algorithms in optimizing DNN training. We define the ERM problem and the constraints considered in this paper as follows: 
+
+Definition 5.3 (ERM problem) Let ℓ be the loss function. The ERM problem on the dataset s = {(X(i), Y (i))}ni=1 is defined as: 
+
+min  
+
+> θ
+
+L(θ, s ) = EXY ℓ(fθ(x), Y ) = EZ L(θ, Z ). (43) 
+
+The loss function ℓ(·, ·) and the model fθ(x) satisfy the following conditions: 
+
+• Condition 1: ℓ(fθ(x), y ) (i.e., L(θ, z )) is H(ϕ)-convex and H(Φ) -smooth with respect to the model’s output fθ(x), where ϕ(0) is close to 0, and both ϕ and Φ are L2-norm energy functions. 
+
+• Condition 2: ℓ(fθ(x), y ) is H(Ψ) -smooth with respect to θ, where Ψ is an L2-norm energy function. Define L(z)∗ = min θ L(θ, z ) and L(s)∗ = min θ L(θ, s ).
+
+Since the generalized convexity and generalized smoothness assumptions hold for common objective functions, we focus on interpreting the requirement in Condition 1 that ϕ(0) is close to 0. This condition implies that the loss function is convex or nearly convex with respect to the model prediction. Indeed, practical supervised-learning loss functions are typically constructed to be convex (or strictly convex) in the model’s output prediction to facilitate tractable optimization. Let ˆ y = fθ(x) denote the model prediction. Several standard loss functions satisfying this convexity property include MSE, Mean Absolute Error (MAE), Binary CrossEntropy (Log Loss), Hinge Loss, and Softmax CrossEntropy Loss. Accordingly, ϕ(0) stays close to 0 for widely-used deep-learning losses, meaning the conditions within our ERM formulation are reasonable and align with practical settings. In deep learning, ERM is a prototypical composite optimization problem involving two fundamental components: the loss function and the model output. In the following sections, we will leverage the tools introduced in this section to characterize both the loss function 
+
+> 23 Qi
+
+and the model architecture. This allows us to derive a principled understanding of the optimization mechanisms underlying deep learning. According to Theorem 5.1, the following corollary establishes bounds that characterize the global optimum of the ERM problem defined in Definition 5.3. 
+
+Corollary 5.2 For the ERM problem, the following results hold: 1. For any sample z:
+
+Φ∗
+
+ ∇θL(θ, z )
+
+σmax (Jθfθ(z)) 
+
+
+
+≤ L (θ, z ) − L (z)∗ ≤ ϕ∗
+
+ ∇θL(θ, z )
+
+σmin (Jθfθ(z)) 
+
+
+
+.
+
+2. For the dataset s:
+
+EΦ∗
+
+ ∇θL(θ, Z )
+
+σmax (Jθfθ(Z)) 
+
+
+
+≤ L (θ, s ) − L (s)∗ + RL(s, 1) ≤ Eϕ∗
+
+ ∇θL(θ, Z )
+
+σmin (Jθfθ(Z)) 
+
+
+
+.
+
+The above corollary indicates that training DNNs only requires reducing the gradient energy while controlling the induced norm of the model’s Jacobian matrix. Theorem 4.2 demonstrates that SGD can reduce the gradient energy. This provides a theoretical expla-nation for the optimizability of DNNs using SGD. The most widely used losses in deep learning are MSE loss for regression tasks and Softmax CrossEntropy loss for classification tasks, both of which belong to the Fenchel– Young loss family. The former is the Fenchel–Young loss generated by Ω( μ) = 12 ∥μ∥22, in which case μ∗ 
+
+> Ω∗
+
+= μ. The latter is the Fenchel–Young loss corresponding to Ω( p) = −H(p), where p ∈ ∆, in which case μ∗ 
+
+> Ω∗
+
+= Softmax( μ). To ground these general bounds in practical settings, we specialize them to two widely used loss functions in machine learning: MSE and Softmax CrossEntropy. 
+
+Corollary 5.3 Assume that the model fθ(x) can fit any single sample, i.e., L(z)∗ = 0 for all z ∈ Z . Then the following results hold: 1. For the MSE loss L(θ, z ) = 12 ∥y − fθ(x)∥22, we have 
+
+∥∇ θL(θ, z )∥22
+
+2σ2max (Jθfθ(z)) ≤ L (θ, z ) ≤ ∥∇ θL(θ, z )∥22
+
+2σ2min (Jθfθ(z)) ,
+
+E∥∇ θL(θ, Z )∥22
+
+2σ2max (Jθfθ(s)) ≤ L (θ, s ) ≤ E∥∇ θL(θ, Z )∥22
+
+2σ2min (Jθfθ(s)) .
+
+2. For the Softmax CrossEntropy loss L(θ, z ) = CrossEntropy( y, Softmax( fθ(x))) , where 
+
+y is a one-hot label, we have 
+
+∥∇ θL(θ, z )∥22
+
+8 ln 2 σ2max (Jθfθ(z)) ≤ L (θ, z ) ≤ ∥∇ θL(θ, z )∥22
+
+4 min i pi(x)σ2min (Jθfθ(z)) ,
+
+E∥∇ θL(θ, Z )∥22
+
+8 ln 2 σ2max (Jθfθ(s)) ≤ L (θ, s ) ≤ E∥∇ θL(θ, Z )∥22
+
+4 min i pi(s)σ2min (Jθfθ(s)) ,
+
+where p(x) = Softmax( fθ(x)) is the Softmax output, min i pi(s) = min x∈s min i pi(x) is the minimum value of p, and y is a one-hot label. 
+
+> 24 Generalized Convexity and Smoothness
+
+3. Fenchel Loss Bound: Suppose Ω is a function defined on a closed convex domain, continuously differentiable and twice differentiable on its domain, with a positive def-inite Hessian matrix. Let λmin and λmax denote the smallest and largest eigenvalues of the Hessian matrix ∇2Ω( μ) for all μ in the domain of Ω. Then we have 
+
+∥∇ θL(θ, z )∥22
+
+2λmin σ2max (Jθfθ(z)) ≤ L (θ, z ) ≤ ∥∇ θL(θ, z )∥22
+
+2λmax σ2min (Jθfθ(z)) ,
+
+E∥∇ θL(θ, Z )∥22
+
+2λmin σ2max (Jθfθ(s)) ≤ L (θ, s ) ≤ E∥∇ θL(θ, Z )∥22
+
+2λmax σ2min (Jθfθ(s)) .
+
+The proof of Corollary 5.3 is provided in Appendix A.12. The above corollary establishes the relationship between the empirical risk in DNN training and both the gradient energy and the induced norm, i.e., the singular values, of the model’s Jacobian matrix. Compared to Corollary 5.2, this form is more concise because we have made an assumption: the model fθ(x) can fit any single sample, i.e., L(z)∗ = 0 for all z ∈ Z . In practice, this assumption is reasonable, since the loss function can generally be driven close to zero when there is only a single training sample, as is the case for MSE and Softmax CrossEntropy loss. Furthermore, according to Theorem 4.2, generalized SGD has been shown to reduce the gradient energy without directly affecting the induced norm of the model’s Jacobian matrix, thereby providing a theoretical explanation for SGD-based training of DNNs. 
+
+5.3.2 Induced Norm Control through Random Parameter Initialization 
+
+We first introduce an idealized assumption characterizing gradient properties of randomly initialized DNNs. For DNNs with randomly initialized parameters (e.g., He or Xavier initialization), the gradients of each output dimension with respect to model parameters are approximately statistically independent. That is, each column of the Jacobian matrix 
+
+Jθf (x) is independently and uniformly sampled from the ball Bmϵ = {v ∈ Rm : ∥v∥2 ≤
+
+ϵ}. We refer to this as the approximate gradient independence assumption. Under this assumption, we can prove the following result that connects model parameter dimensionality to the condition number of the Jacobian matrix: 
+
+Proposition 5.1 Let d denote the dimension of the model output and m denote the number of model parameters, with d ≤ m−1. If each column of the Jacobian matrix Jθf (x) is drawn independently and uniformly from the ball Bmϵ = {v ∈ Rm : ∥v∥2 ≤ ϵ}, then with probability at least 1 − O(1 /d ), it follows that: 
+
+σmin (Jθf (x)) ≥ (1 − 2 log dm )ϵ, σ2max (Jθf (x)) 
+
+σ2min (Jθf (x)) ≤ ζ(m, d ) + 1 ,
+
+(44) 
+
+where ζ(m, d ) = 2d√6 log d√m−1
+
+
+
+1 − 2 log dm
+
+−2
+
+. For fixed d and sufficiently large m, ζ(m, d ) is decreasing in m; for fixed m, it is increasing in d.
+
+> 25
+
+Qi 
+
+The proof of Proposition 5.1 is provided in Appendix A.13. Proposition 5.1 shows that increasing m relative to d makes the extreme singular values more balanced and larger, so the risk bounds tighten and gradient-energy reduction translates directly into risk reduction. 
+
+5.3.3 Induced Norm Control through Skip Connections 
+
+We next explain how skip connections preserve Jacobian singular values. Corollary 5.3 requires controlling both the gradient energy and the Jacobian singular values; skip con-nections prevent the latter from decaying with depth. For quantitative analysis, we decompose the model fθ(x) into a sequence of k stacked blocks, with the output of the i-th block denoted h(i) (and h(0) = x, h(k) = fθ(x)). Let θ(j)
+
+denote the parameters of the j-th block, I the identity matrix of appropriate dimension, 
+
+∇h(i) h(i+1) the Jacobian of the ( i + 1)-th block’s output with respect to its input, and 
+
+∇θ(j) fθ(x) the Jacobian of the final output with respect to the j-th block’s parameters. For a standard feedforward network (no skip connections), applying this convention gives: 
+
+∇θ(j) fθ(x) = ∇θ(j) h(j) ·
+
+
+
+> k−1
+
+Y
+
+> i=j
+
+∇h(i) h(i+1) 
+
+ , (45) where the product is taken in the natural left-to-right order, i.e., the Jacobian of block 
+
+j + 1 is multiplied after that of block j. Under standard random initialization, parameter norms are small (e.g., He initialization for ReLU networks). Consequently, the entries of 
+
+∇h(i) h(i+1) are smaller than 1 with high probability. The product of these Jacobians decays exponentially with the number of blocks k − j, causing ∥∇ θ(j) fθ(x)∥F to vanish as depth increases. This leads to the singular values of the Jacobian approaching zero, which weakens the risk-gradient energy bounds (Corollary 5.3) and impairs trainability. Residual blocks with skip connections address this decay by adding an identity skip path to each block. For a residual network gθ(x), the chain rule becomes: 
+
+∇θ(j) gθ(x) = ∇θ(j) h(j) ·
+
+
+
+> k−1
+
+Y
+
+> i=j
+
+
+
+∇h(i) h(i+1) + I
+
+ . (46) Since the entries of ∇h(i) h(i+1) are much smaller than 1, we have ∇h(i) h(i+1) + I ≈ I,so ∇θ(j) gθ(x) ≈ ∇ θ(j) h(j). This prevents the Jacobian norm from decaying with depth, preserving the induced norm of the model’s Jacobian matrix. We formalize this insight in the following proposition: 
+
+Proposition 5.2 (Role of Skip Connections) For ERM optimization: 1. Skip connections mitigate the exponential decay of the Jacobian matrix’s induced norm with increasing network depth, preserving the tightness of the risk-gradient energy bounds (Corollary 5.3) and maintaining trainability. 2. If skip connections ensure the singular values of ∇h(i) h(i+1) + I are greater than 1 (a mild condition satisfied by standard residual blocks with ReLU activations), increasing network depth increases the induced norm of the model’s Jacobian matrix, strength-ening the risk-gradient energy bounds and improving trainability. 
+
+26 Generalized Convexity and Smoothness 
+
+This proposition provides a theoretical justification for the empirical success of residual networks: skip connections not only prevent vanishing gradients (a well-known benefit) but also preserve the conditioning of the model’s Jacobian matrix, ensuring gradient en-ergy minimization translates directly to empirical risk reduction, even for extremely deep networks. 
+
+6 Empirical Validation 
+
+This section presents an empirical validation of the core theoretical conclusions established in this paper through a series of targeted experiments. 
+
+6.1 Experimental Configuration 
+
+The experiments are implemented in Python 3.7 with PyTorch 2.2.2 and executed on a GeForce RTX 2080 Ti GPU. 
+
+6.2 Verification of GD/SGD Convergence 
+
+6.2.1 Experimental Designs 
+
+Because the convergence analysis of generalized SGD builds on the result that the optimal learning rate of generalized GD is one, we first verify under H(Φ)-smoothness that the optimal learning rate of generalized GD is α∗ = 1. Because the case Φ( ·) = a∥ · ∥ 22 reduces generalized GD to classical GD, which has been extensively studied, we instead evaluate the framework on a family of non-Lipschitz objectives whose corresponding Φ is tractable: 
+
+F (x) = ∥x∥r
+
+> 2
+
+, r ∈ { 1.1, 1.2, . . . , 2.0}, (47) where r is the polynomial exponent. We first establish the following technical lemma to determine the tightest energy function Φ: 
+
+Lemma 6.1 Let G(θ) = ∥θ∥r 
+
+> 2
+
+with 1 < r < 2. Then G satisfies H(Φ) -smoothness, where 
+
+Φ( θ − η) = 2 2−r∥θ − η∥r 
+
+> 2
+
+constitutes a tight upper bound for SG(η, θ ).
+
+The proof is provided in Appendix A.14. In our experiments, we initialize 100-dimensional parameters from N (0 , 1) and optimize using generalized GD with learning rate α ∈ { 0.1, 0.3, 0.5, 0.7, 1.0, 1.5, 1.8, 2.0, 3.0}. We monitor the gradient energy log 2 ∥∇ F (θk)∥22 to quantify convergence behavior. 
+
+6.2.2 Experimental Results 
+
+Experimental Results and Discussion 
+
+The convergence curves in Figs. 2 and 3 show consistent empirical patterns across the tested non-Lipschitz-smooth functions. The best convergence performance is persistently attained at α = 1; convergence degrades monotonically as α deviates from 1, optimiza-tion stagnates at α = 2, and divergence occurs for α > 2. These trends hold uniformly over all examined exponent values r ∈ { 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0}, offering direct empirical evidence for the optimal learning-rate condition and stability boundary stated 
+
+> 27
+
+Qi 0 50 100 150 200                                                             
+
+> Iteration k
+> -40 -30 -20 -10 010
+> log 2||  F( k)|| 22
+> =0.1
+> 050 100 150 200
+> Iteration k
+> -40 -30 -20 -10 010
+> log 2||  F( k)|| 22
+> =0.3
+> 050 100 150 200
+> Iteration k
+> -40 -30 -20 -10 010
+> log 2||  F( k)|| 22
+> =0.5
+> 050 100 150 200
+> Iteration k
+> -40 -30 -20 -10 010
+> log 2||  F( k)|| 22
+> =0.7
+> 050 100 150 200
+> Iteration k
+> -40 -30 -20 -10 010
+> log 2||  F( k)|| 22
+> =1.0
+> 050 100 150 200
+> Iteration k
+> -40 -30 -20 -10 010
+> log 2||  F( k)|| 22
+> =1.5
+> 050 100 150 200
+> Iteration k
+> -40 -30 -20 -10 010
+> log 2||  F( k)|| 22
+> =1.8
+> 050 100 150 200
+> Iteration k
+> 2468
+> log 2||  F( k)|| 22
+> =2.0
+> 050 100 150 200
+> Iteration k
+> 010 20 30 40 50 60 70
+> log 2||  F( k)|| 22
+> =3.0
+> r= 1.1
+> r= 1.2
+> r= 1.3
+> r= 1.4
+> r= 1.5
+> r= 1.6
+> r= 1.7
+> r= 1.8
+> r= 1.9
+> r= 2.0
+
+Fig. 2: Convergence curves for all r ∈ [1 .1, 2.0] under fixed α. Optimal convergence, in terms of both speed and stability, is achieved at α = 1, corresponding to the theoretically optimal learning rate. Deviations from α = 1 reduce convergence speed, stagnation appears at α = 2, and divergence occurs for α > 2, which is consistent with Proposition 4.2. in Proposition 4.2. Complementing these findings, Fig. 4 visualizes dynamics under the optimal setting α = 1: larger r yields faster convergence and a lower final objective value. This corroborates Theorem 4.1 and Proposition 4.2, revealing that the convergence speed increases monotonically with r. Taken together, the full set of experimental results validates our generalized-smoothness theoretical analysis. 
+
+6.3 Verification of Optimization Mechanism 
+
+This subsection presents experimental designs aimed at validating the optimization mecha-nism described in Corollary 5.2 and Corollary 5.3. We empirically verify that SGD reduces the gradient energy and that, together with controlling the Jacobian induced norm, this governs the empirical risk bounds predicted by Theorem 4.2. 
+
+28 Generalized Convexity and Smoothness 0 50 100 150 200 
+
+Iteration k
+
+> -40 -20 020 40 60
+> log 2||  F( k)|| 22
+
+r = 1.2     
+
+> 050 100 150 200
+
+Iteration k
+
+> -40 -20 020 40 60
+> log 2||  F( k)|| 22
+
+r = 1.3     
+
+> 050 100 150 200
+
+Iteration k
+
+> -40 -20 020 40 60
+> log 2||  F( k)|| 22
+
+r = 1.4     
+
+> 050 100 150 200
+
+Iteration k
+
+> -40 -20 020 40 60
+> log 2||  F( k)|| 22
+
+r = 1.5     
+
+> 050 100 150 200
+
+Iteration k
+
+> -40 -20 020 40 60
+> log 2||  F( k)|| 22
+
+r = 1.6     
+
+> 050 100 150 200
+
+Iteration k
+
+> -40 -20 020 40 60
+> log 2||  F( k)|| 22
+
+r = 1.7     
+
+> 050 100 150 200
+
+Iteration k
+
+> -40 -20 020 40 60
+> log 2||  F( k)|| 22
+
+r = 1.8     
+
+> 050 100 150 200
+
+Iteration k
+
+> -40 -20 020 40 60
+> log 2||  F( k)|| 22
+
+r = 1.9     
+
+> 050 100 150 200
+
+Iteration k
+
+> -40 -20 020 40 60
+> log 2||  F( k)|| 22
+
+r = 2.0          
+
+> =0.1
+> =0.3
+> =0.5
+> =0.7
+> =1.0
+> =1.5
+> =1.8
+> =2.0
+> =3.0
+
+Fig. 3: Convergence curves for fixed r under different values of α. For every tested r, α = 1 yields the best performance, verifying the universality of the optimal learning rate. 0.0 0.5 1.0 1.5 2.0 2.5 3.0 3.5 4.0 
+
+Iteration k
+
+-40 -30 -20 -10 010 
+
+> log 2||  F( k)|| 22
+
+Convergence with optimal learning rate = 1 
+
+r = 1.1 
+
+r = 1.2 
+
+r = 1.3 
+
+r = 1.4 
+
+r = 1.5 
+
+r = 1.6 
+
+r = 1.7 
+
+r = 1.8 
+
+r = 1.9 
+
+r = 2.0 
+
+Fig. 4: Convergence speed under α = 1, the optimal learning rate. Larger r leads to faster convergence. 
+
+6.3.1 Experimental Designs 
+
+To comprehensively monitor the training dynamics and verify the effectiveness of the the-oretical bounds, the following three core quantities are recorded during training, with sim-plified notation adopted in the figures for improved readability: 
+
+29 Qi 
+
+• log L(θ, z ): the logarithmic risk (hereafter referred to as risk), reflecting the degree of suboptimality of the current model on sample z;
+
+• bound up = − log σ2min (Jθf (x)) + log ∥∇ θL(θ, z )∥22: the core components of the risk’s upper bound; 
+
+• bound low = − log σ2max (Jθf (x)) + log ∥∇ θL(θ, z )∥22: the core components of the risk’s lower bound; According to Corollary 5.2, bound up and bound low do not serve as strict bounds on log L(θ, z ), but rather as core components determining the bounds of log L(θ, z ). Since Φ( ·) and ϕ(·) are generally difficult to compute exactly, but are increasing functions of the norm of their argument, we can instead monitor the correlations of bound up and bound low 
+
+with log L(θ, z ), respectively. If a high degree of consistency is observed, it indicates that the risk is governed by its upper and lower bounds, thereby validating the effectiveness of the proposed framework. Corollary 5.3 indicates that when using the MSE and Softmax CrossEntropy losses, bound up and bound low need only be augmented by specific constants to constitute strict upper and lower bounds on log L(θ, z ). Therefore, when these two loss functions are employed, we additionally monitor whether the upper and lower bounds formed by bound up and bound low hold for log L(θ, z ). Under these circumstances, we rely on the local Pearson correlation coefficient between these quantities to verify the core conclusion that “the gradient energy and the induced norms of the Jacobian matrix jointly govern the evolution of the empirical risk.” To quantify the dynamic evolutionary relationships among the various quantities during training, a sliding window approach is employed to compute the local Pearson correlation coefficient. Given a window length of m, the local Pearson correlation coefficient between two variables 
+
+X and Y is defined as 
+
+rw =
+
+Pmi=1 (Xi − ¯X)( Yi − ¯Y )
+
+qPmi=1 (Xi − ¯X)2
+
+qPmi=1 (Yi − ¯Y )2
+
+, (48) where ¯X = 1
+
+> m
+
+Pmi=1 Xi and ¯Y = 1
+
+> m
+
+Pmi=1 Yi. The value of rw ranges over [ −1, 1], with the following interpretations: rw = 1 indicates perfect positive correlation, rw = −1 indicates perfect negative correlation, and rw = 0 indicates no linear correlation. In the subsequent analysis, a sliding window of length 50 is uniformly adopted to compute the dynamic cor-relation between the risk and its associated bounds. 
+
+Datasets. To verify that the theoretical conclusions are independent of data modality, the experiments cover two types of tasks: visual recognition and text classification. For image data, three benchmark datasets are employed: MNIST (Lecun et al., 1998), CIFAR-10, and CIFAR-100 (Krizhevsky, 2009). For text data, two benchmark datasets are used: TREC (Li and Roth, 2002) and SST-2 (Socher et al., 2013). This diverse selection of datasets facilitates the evaluation of the applicability of the theoretical framework under varying data complexities and feature structures. 
+
+Model Architectures. To verify that the theoretical conclusions are independent of the choice of model architecture, a variety of mainstream deep network architectures are employed in the experiments. For image-based tasks, two groups of models are used to 
+
+> 30
+
+Generalized Convexity and Smoothness Conv4: Conv2d(16x16x3x3) Conv5: Conv2d(32x16x3x3) Conv6: Conv2d(32x32x3x3) Conv7: Conv2d(64x32x3x3) Conv8: Conv2d(64x64x3x3) FC4: FC(W:64x10, B:10) 
+
+Fig. 5: Model architectures and configuration parameters. This figure illustrates the model architectures and their configuration parameters. Models b and d are extended from models a and c by introducing skip connections. verify the theoretical properties of the proposed framework: one consists of custom-designed models, and the other comprises widely used classical network architectures. The overall architecture and specific configuration parameters of the custom models are illustrated in Figure 5, where the gray blocks denote repeated modules. The parameter nd denotes the number of modules repeated along the depth direction (e.g., nd = 2 indicates two identical modules cascaded sequentially), and nw denotes the number of modules repeated along the width direction (varied in steps of 16 in the experiments). In the optimization mechanism experiments, nd = 1 and nw = 20. In the experiments on the induced norm, both parameters are adjusted. These custom models are evaluated on the MNIST dataset. To ensure applicability to real-world scenarios, we conduct experiments on the more com-plex and commonly used CIFAR-10 and CIFAR-100 datasets (Krizhevsky et al., 2009) using a series of classical deep learning models. LeNet (Haykin and Kosko, 2001), ResNet-18 (He et al., 2016), and Vision Transformers (ViT) (Dosovitskiy et al., 2020) are selected as repre-sentative examples of standard convolutional networks, architectures with skip connections, and Transformer-based models, respectively. The architectural designs of these models can be found in Yoshioka (2024). For text-based tasks, three widely adopted text classification architectures are used: TextCNN (Kim, 2014), a residual Multi-Layer Perceptron (MLP) with layer normalization (Ba et al., 2016), and a lightweight Transformer (Vaswani et al., 2017). Their implementation follows standard open-source configurations (Hu, 2025). Un-less otherwise noted, we train all models with the SGD optimizer. We set the learning rate to 0 .01, momentum to 0 .9, and batch size to 32. We conduct the following sets of experiments: 
+
+• Architecture Independence. We examine the training dynamics of the custom models as well as different architectures including LeNet, ResNet-18, and ViT, to verify that the non-convex optimization mechanism of DNNs described in this paper is independent of the model architecture. 
+
+31 Qi 
+
+• Non-Triviality of Bounds. We additionally conduct a sanity check via false-label evaluation : the model is trained with true labels but evaluated on randomly chosen incorrect labels. Under this setting, the model parameters and the Jacobian matrix remain identical to the true-label run, but the gradient energy becomes excessively large. Consequently, the theoretical upper bound becomes too loose to constrain the risk. Comparing the correlation between the loss and its bounds under true-label and false-label conditions verifies that the bounds are non-trivial, they are informative only when SGD sufficiently reduces the gradient energy. 
+
+• Optimizer and Regularization Independence. The generality of the results is further examined by introducing standard optimization techniques. On CIFAR-10, ResNet-18 with Batch Normalization enabled is used, and Dropout with a rate of 0 .5 is applied before the fully connected layer. The number of training epochs is set to 80. Models are trained under multiple optimization configurations: SGD (initial learning rate 0 .1), Adam (adaptive moment estimation, initial learning rate 0.0001), and RMSprop (root mean square propagation, initial learning rate 0 .0001), each combined with either a StepLR scheduler (step size 30, γ = 0 .1) or a cosine annealing scheduler ( Tmax = 80, ηmin = 0). 
+
+• Loss-Function Independence. To ensure that the findings are not limited to the Softmax CrossEntropy loss, additional experiments are conducted using a variety of loss functions, including the PyTorch built-in MSE, Kullback–Leibler (KL) divergence (KLDiv), and PoissonNLL, as well as a custom loss family ∥fθ(x)−y∥kk with k ranging from 2 to 6. 
+
+• Data-Modality Independence. Text classification benchmark datasets TREC (Li and Roth, 2002) and SST-2 (Socher et al., 2013), along with the corresponding models TextCNN, residual MLP with layer normalization, and lightweight Transformer, are used to examine the training dynamics. The hyperparameter settings follow standard open-source configurations (Hu, 2025). 
+
+• Model-Scale Independence. On CIFAR-10, ResNet-18, ResNet-34, ResNet-50, ResNet-101, and ResNet-152, all with Batch Normalization enabled, are used to ob-serve the training dynamics. Training employs the Adam optimizer with a learning rate of 0 .001 for 80 epochs. 
+
+6.3.2 Experimental Results 
+
+Figures 6–15 summarize the training dynamics under the six verification settings described above. In all cases, the local Pearson correlation between the risk and its bounds approaches 1, indicating that the theoretical bounds consistently characterize the observed optimization behavior. The empirical observations above consistently support the theoretical framework. Based on these results, we draw the following conclusions: 1. Risk optimization in DNNs is achieved by controlling its upper and lower bounds. For models evaluated with true labels, the evolution of the risk becomes 
+
+> 32
+
+Generalized Convexity and Smoothness -30 -20 -10 0                         
+
+> Model a
+> Loss and bounds
+> bound up
+> bound low
+> log 2( , z)
+> -20 -15 -10 -5 05
+> Induced norm and gradient energy
+> log 22min (Jf(x)))
+> log 22max (Jf(x)))
+> log 22max log 22min
+> log 2|| ( , z)|| 22
+> -1 01
+> Local Pearson correlation coefficients
+> log 2( , z)and bound low
+> log 2( , z)and bound up
+> -30 -20 -10 0
+> Model b
+> -20 -10 0-1 01-30 -20 -10 0
+> Model c
+> -25 -20 -15 -10 -5 05-1 01012
+> Epoch
+> -30 -20 -10 0
+> Model d
+> 012
+> Epoch
+> -20 -15 -10 -5 05012
+> Epoch
+> -1 01
+
+Fig. 6: Training dynamics of the custom models on MNIST. Left: risk and its upper/lower bounds. Middle: risk and the components constituting the bounds. Right: local Pearson correlation between the risk and its bounds. increasingly consistent with its theoretical upper and lower bounds as training pro-gresses. This consistency indicates that the theoretical bounds can characterize the behavior of the risk. The gap between the upper and lower bounds narrows signif-icantly over time, and both converge to zero. Across all models, the local Pearson correlation coefficient between the risk and the bounds approaches 1, confirming that the theoretical bounds tightly characterize the risk dynamics. These results are con-sistent with the theoretical analysis in this paper: the optimization of the risk in DNNs is closely tied to the evolution of its theoretical upper and lower bounds. 2. The derived bounds are non-trivial. Under false-label evaluation, although the algebraic relationship between the risk and its bounds still holds, the gradient energy becomes excessively large, and the spectral properties of the Jacobian matrix are severely mismatched with those under true labels. Consequently, the bounds can no longer effectively constrain the risk. This indicates that the bounds in Theorem 5.1, 
+
+33 Qi -2 -1 0123                         
+
+> Model a
+> Loss and bounds
+> bound up
+> bound low
+> log 2( , z)
+> -10 -5 0510
+> Induced norm and gradient energy
+> log 22min (Jf(x)))
+> log 22max (Jf(x)))
+> log 22max log 22min
+> log 2|| ( , z)|| 22
+> -1 01
+> Local Pearson correlation coefficients
+> log 2( , z)and bound low
+> log 2( , z)and bound up
+> -2 -1 01234
+> Model b
+> -10 -5 0510 -1 01-2 024
+> Model c
+> -10 -5 0510 -1 01012
+> Epoch
+> -2 024
+> Model d
+> 012
+> Epoch
+> -10 -5 0510 012
+> Epoch
+> -1 01
+
+Fig. 7: Training dynamics of the custom models under the false-label setting. Left: risk and its upper/lower bounds. Middle: risk and the components constituting the bounds. Right: local Pearson correlation between the risk and its bounds. while universally valid, are non-trivial: they reveal a fundamental training mechanism specific to the true-label setting. 3. SGD reduces the gradient energy. The evolution of the extreme singular values of the Jacobian matrix and the gradient energy throughout training confirms the prediction of Theorem 4.2, demonstrating that mini-batch SGD can progressively reduce the gradient energy, thereby achieving effective optimization of non-convex objectives. 4. The above optimization mechanism is observed across different datasets and model architectures. Figures 8, 9, and 10 further indicate that these findings generalize across different datasets and model architectures. Moreover, Figure 15 shows that model scale does not affect the main conclusions, and Figure 14 shows that data modality likewise does not affect the conclusions. This universality stems 
+
+34 Generalized Convexity and Smoothness -40 -30 -20 -10 0
+
+> CIFAR-10
+
+Loss and bounds   
+
+> bound up
+> bound low
+> log 2( , z)
+> -20 -10 010
+
+Induced norm and gradient energy          
+
+> log 22min (Jf(x)))
+> log 22max (Jf(x)))
+> log 22max log 22min
+> log 2|| ( , z)|| 22
+> -1 01
+
+Local Pearson correlation coefficients                                 
+
+> log 2( , z)and bound low
+> log 2( , z)and bound up
+> 0510 15 20 25 30 35 40
+> Epoch
+> -10 -8 -5 -2 025
+> CIFAR-100
+> 0510 15 20 25 30 35 40
+> Epoch
+> -10 010 0510 15 20 25 30 35 40
+> Epoch
+> -1 01
+
+Fig. 8: Training dynamics of LeNet on CIFAR-10 and CIFAR-100. -15 -10 -5 0510 
+
+> CIFAR-10
+
+Loss and bounds   
+
+> bound up
+> bound low
+> log 2( , z)
+> -10 -5 0510 15
+
+Induced norm and gradient energy          
+
+> log 22min (Jf(x)))
+> log 22max (Jf(x)))
+> log 22max log 22min
+> log 2|| ( , z)|| 22
+> -1 01
+
+Local Pearson correlation coefficients                                 
+
+> log 2( , z)and bound low
+> log 2( , z)and bound up
+> 0510 15 20 25 30 35 40
+> Epoch
+> -25 -20 -15 -10 -5 05
+> CIFAR-100
+> 0510 15 20 25 30 35 40
+> Epoch
+> -15 -10 -5 0510 15 0510 15 20 25 30 35 40
+> Epoch
+> -1 01
+
+Fig. 9: Training dynamics of ResNet-18 on CIFAR-10 and CIFAR-100. from Theorem 5.1, which states that the empirical risk is jointly determined by the gradient energy and the extreme singular values of the Jacobian matrix. 5. The revealed mechanism is independent of the specific optimization algo-rithm or strategy. As shown in Figure 11, under various combinations of techniques including Batch Normalization, Dropout, different optimizers (SGD, Adam), and mul-tiple learning rate schedulers, the training dynamics remain fully consistent with the conclusions of this paper. Thus, the proposed explanation of the DNN optimization mechanism is essentially independent of the choice of optimization strategy. 6. The empirical risk in DNNs is governed by the interaction between the gradient energy and the singular values of Jacobian matrix across different loss functions. Figures 12 and 13 demonstrate that the bounds formed by the gradient energy and the extreme singular values of the Jacobian matrix closely track the risk in both overall trend and local fluctuations. This consistency across different 
+
+35 Qi -30 -20 -10 0                                            
+
+> CIFAR-10
+> Loss and bounds
+> bound up
+> bound low
+> log 2( , z)-15 -10 -5 0510
+> Induced norm and gradient energy
+> log 22min (Jf(x)))
+> log 22max (Jf(x)))
+> log 22max log 22min
+> log 2|| ( , z)|| 22
+> -1 01
+> Local Pearson correlation coefficients
+> log 2( , z)and bound low
+> log 2( , z)and bound up
+> 0510 15 20 25 30 35 40
+> Epoch
+> -20 -15 -10 -5 05
+> CIFAR-100
+> 0510 15 20 25 30 35 40
+> Epoch
+> -15 -10 -5 0510 0510 15 20 25 30 35 40
+> Epoch
+> -1 01
+
+Fig. 10: Training dynamics of Vision Transformer (ViT) on CIFAR-10 and CIFAR-100. Left: risk and its upper/lower bounds. Middle: risk and the components constituting the bounds. Right: local Pearson correlation between the risk and its bounds. loss functions further supports the applicability of the theoretical framework proposed in this paper, indicating that it is not limited to a specific choice of loss. 7. Model capacity determines the achievable convergence limit of the gradient energy, which can be analyzed through the gradient correlation factor M .
+
+The final values of the gradient energy in Figures 8 and 9 exhibit differences: the value for LeNet is significantly larger (ranging from 2 0 to 2 10 ), while that for ResNet-18 approaches zero. In contrast, on the smaller MNIST dataset, all custom models are highly over-parameterized, with the gradient energy of all four models falling within the range of 2 −20 to 2 −30 . This result supports Theorem 4.2 and the introduction of the gradient correlation factor M . Theorem 4.2 indicates that the convergence behavior of the gradient energy is jointly determined by the optimization algorithm, the model architecture, and the training data; convergence is not solely dictated by the optimizer but critically depends on M . More precisely, for a fixed training set size, simpler models typically have a larger M , leading to a larger final gradient energy. On complex datasets, simpler models tend to have a relatively large M , preventing the gradient energy from converging to zero and thereby resulting in a larger final risk compared to high-capacity models (where M ≈ 0). 
+
+36 Generalized Convexity and Smoothness -20 -10 0
+
+> SGD+CosineAnnealingLR
+
+Loss and bounds 
+
+bound up 
+
+bound low 
+
+log 2 ( , z) -15 -10 -5 0510 
+
+Induced norm and gradient energy 
+
+log 2 2min (J f(x))) 
+
+log 2 2max (J f(x))) 
+
+log 2 2max log 2 2min 
+
+log 2|| ( , z)|| 22
+
+-1 01
+
+Local Pearson correlation coefficients 
+
+log 2 ( , z) and bound low 
+
+log 2 ( , z) and bound up 
+
+-30 -20 -10 0
+
+> SGD+StepLR
+
+-15 -10 -5 0510 -1 01-60 -40 -20 0
+
+> Adam+CosineAnnealingLR
+
+-50 -40 -30 -20 -10 010 -1 01-40 -30 -20 -10 0
+
+> Adam+StepLR
+
+-30 -20 -10 010 -1 01-50 -40 -30 -20 -10 0
+
+> RMSprop+CosineAnnealingLR
+
+-30 -20 -10 010 -1 010 10 20 30 40 50 60 70 80 
+
+Epoch 
+
+-50 -40 -30 -20 -10 010 
+
+> RMSprop+StepLR
+
+0 10 20 30 40 50 60 70 80 
+
+Epoch 
+
+-30 -20 -10 010 0 10 20 30 40 50 60 70 80 
+
+Epoch 
+
+-1 01
+
+Fig. 11: Training dynamics of ResNet-18 on CIFAR-10 under different optimization con-figurations with Batch Normalization and Dropout enabled. This figure demonstrates that the conclusions of this paper hold even when Batch Normalization, Dropout, and various optimizers with different learning rate schedulers are applied. 
+
+37 Qi -15 -10 -5 0510 
+
+> MSE
+
+Loss and bounds 
+
+bound up 
+
+bound low 
+
+log 2 ( , z) -15 -10 -5 0510 15 
+
+Induced norm and gradient energy 
+
+log 2 2min (J f(x))) 
+
+log 2 2max (J f(x))) 
+
+log 2 2max log 2 2min 
+
+log 2|| ( , z)|| 22
+
+-1 01
+
+Local Pearson correlation coefficients 
+
+log 2 ( , z) and bound low 
+
+log 2 ( , z) and bound up 
+
+-40 -20 0
+
+> KL Divergnce
+
+-40 -30 -20 -10 010 -1 010 200 400 600 800 1000 1200 1400 1600 
+
+Epoch 
+
+-20 -15 -10 -5 05
+
+> PoissonNLL
+
+0 200 400 600 800 1000 1200 1400 1600 
+
+Epoch 
+
+-20 -10 010 0 200 400 600 800 1000 1200 1400 1600 
+
+Epoch 
+
+-1 01
+
+Fig. 12: Training dynamics of ResNet-18 on CIFAR-10 using different PyTorch built-in loss functions (MSE, KLDiv, and PoissonNLL). 
+
+38 Generalized Convexity and Smoothness -30 -20 -10 0
+
+> C2
+
+Loss and bounds 
+
+bound up 
+
+bound low 
+
+log 2 ( , z)
+
+-20 -15 -10 -5 0510 
+
+Induced norm and gradient energy 
+
+log 2 2min (J f(x))) 
+
+log 2 2max (J f(x))) 
+
+log 2 2max log 2 2min 
+
+log 2|| ( , z)|| 22
+
+-1 01
+
+Local Pearson correlation coefficients 
+
+log 2 ( , z) and bound low 
+
+log 2 ( , z) and bound up 
+
+-15 -10 -5 05
+
+> C3
+
+-10 -5 05-1 01-15 -10 -5 05
+
+> C4
+
+-10 -5 05-1 01-10 -5 05
+
+> C5
+
+-10 -8 -5 -2 025-1 010 200 400 600 800 1000 1200 1400 1600 
+
+Epoch 
+
+-5 05
+
+> C6
+
+0 200 400 600 800 1000 1200 1400 1600 
+
+Epoch 
+
+-5 050 200 400 600 800 1000 1200 1400 1600 
+
+Epoch 
+
+-1 01
+
+Fig. 13: Training dynamics of model a on MNIST using the custom loss family ∥fθ(x) − y∥kk
+
+(k ∈ { 2, . . . , 6}). Only 10 randomly selected samples are used to ensure fast convergence. 
+
+39 Qi -8 -6 -4 -2 02
+
+> SST2+MLP
+
+Loss and bounds 
+
+bound up 
+
+bound low 
+
+log 2 ( , z) -10 -5 0510 
+
+Induced norm and gradient energy 
+
+log 2 2min (J f(x))) 
+
+log 2 2max (J f(x))) 
+
+log 2 2max log 2 2min 
+
+log 2|| ( , z)|| 22
+
+-1 01
+
+Local Pearson correlation coefficients 
+
+log 2 ( , z) and bound low 
+
+log 2 ( , z) and bound up 
+
+-50 -40 -30 -20 -10 0
+
+> SST2+TextCNN
+
+-40 -30 -20 -10 010 -1 01-15 -10 -5 0
+
+> SST2+Transformer
+
+-10 -5 05-1 01-8 -6 -4 -2 02
+
+> TREC+MLP
+
+-15 -10 -5 0510 -1 01-30 -20 -10 0
+
+> TREC+TextCNN
+
+-20 -10 010 -1 010 5 10 15 20 25 30 35 40 
+
+Epoch 
+
+-12 -10 -8 -5 -2 0
+
+> TREC+Transformer
+
+0 5 10 15 20 25 30 35 40 
+
+Epoch 
+
+-10 -5 050 5 10 15 20 25 30 35 40 
+
+Epoch 
+
+-1 01
+
+Fig. 14: Training dynamics on text classification datasets (TREC, SST-2). This figure demonstrates the applicability of the conclusions across different data modalities. The loss function is Softmax CrossEntropy, and the optimizer is Adam with a learning rate of 0.001. 
+
+40 Generalized Convexity and Smoothness -80 -60 -40 -20 0
+
+> ResNet18
+
+Loss and bounds 
+
+bound up 
+
+bound low 
+
+log 2 ( , z)
+
+-60 -40 -20 0
+
+Induced norm and gradient energy 
+
+log 2 2min (J f(x))) 
+
+log 2 2max (J f(x))) 
+
+log 2 2max log 2 2min 
+
+log 2|| ( , z)|| 22
+
+-1 01
+
+Local Pearson correlation coefficients 
+
+log 2 ( , z) and bound low 
+
+log 2 ( , z) and bound up 
+
+-60 -40 -20 0
+
+> ResNet34
+
+-60 -40 -20 0-1 01-80 -60 -40 -20 0
+
+> ResNet50
+
+-80 -60 -40 -20 0-1 01-60 -40 -20 0
+
+> ResNet101
+
+-40 -20 0-1 010 10 20 30 40 50 60 70 80 
+
+Epoch 
+
+-60 -40 -20 0
+
+> ResNet152
+
+0 10 20 30 40 50 60 70 80 
+
+Epoch 
+
+-60 -40 -20 00 10 20 30 40 50 60 70 80 
+
+Epoch 
+
+-1 01
+
+Fig. 15: Training dynamics under different model scales (ResNet variants). This figure demonstrates the applicability of the conclusions as the number of model parameters in-creases. The loss function is Softmax CrossEntropy, and the optimizer is Adam with a learning rate of 0.001. 
+
+41 Qi 
+
+6.4 Verification on the Impact of Induced Norm 
+
+We next disentangle the respective effects of width and depth. Specifically, we examine whether model depth, width, and skip connections behave as expected: increasing the number of parameters and reducing parameter dependence tend to narrow the singular-value distribution of the Jacobian matrix, whereas skip connections can suppress the decay of extreme singular values caused by increasing depth. 
+
+6.4.1 Experimental Designs 
+
+Using model a and model b (see Figure 5) as the subjects of study, two sets of controlled experiments are conducted on the MNIST and Fashion-MNIST (Xiao et al., 2017) datasets to investigate the relationship between model architecture and the spectral properties of the Jacobian matrix: 1. Fixing the width parameter nw = 64, the depth parameter nd is gradually increased from 1 to 100 to examine the effect of depth on the singular values of the Jacobian matrix; 2. Fixing the depth parameter nd = 1, the width parameter nw is gradually increased from 16 to 1600 to examine the effect of width on the singular values of the Jacobian matrix. For each experimental setting, the maximum singular value log 2 σ2max (Jθf (x)), the minimum singular value log 2 σ2min (Jθf (x)), and their gap are observed at the initialization stage as functions of the architectural parameters. All models are trained using the SGD optimizer with a learning rate of 0 .01 and a momentum coefficient of 0 .9. In each experiment, the spectral characteristics of the Jacobian matrix are computed at the initialization stage, to observe the modulatory effect of the training process on the properties of the Jacobian matrix. 
+
+6.4.2 Experimental Results 
+
+> 42
+
+Generalized Convexity and Smoothness 0 200 400 600 800 1000 1200 1400 1600 
+
+Width 
+
+0246MNIST 
+
+Model a 
+
+log 2 2max (J f (x)) 
+
+log 2 2min (J f (x)) 
+
+log 2 2max (J f (x)) log 2 2min (J f (x)) 
+
+0 200 400 600 800 1000 1200 1400 1600 
+
+Width 
+
+02468MNIST 
+
+Model b 
+
+0 200 400 600 800 1000 1200 1400 1600 
+
+Width 
+
+0246FashionMNIST 
+
+Model a 
+
+0 200 400 600 800 1000 1200 1400 1600 
+
+Width 
+
+02468FashionMNIST 
+
+Model b 
+
+Induced norm versus model width 
+
+Fig. 16: Variation of the extreme singular values with model width. 0 20 40 60 80 100 
+
+Depth 
+
+0246MNIST 
+
+Model a 
+
+log 2 2max (J f (x)) 
+
+log 2 2min (J f (x)) 
+
+log 2 2max (J f (x)) log 2 2min (J f (x)) 
+
+0 20 40 60 80 100 
+
+Depth 
+
+020 40 60 MNIST 
+
+Model b 
+
+0 20 40 60 80 100 
+
+Depth 
+
+0246FashionMNIST 
+
+Model a 
+
+0 20 40 60 80 100 
+
+Depth 
+
+020 40 60 FashionMNIST 
+
+Model b 
+
+Induced norm versus model depth 
+
+Fig. 17: Variation of the extreme singular values with model depth. Fig. 18: Relationship between the extreme singular values and model depth/width under random initialization. 
+
+43 Qi 
+
+Synergistic Effect of Random Parameter Initialization As shown in Figure 18, the spectral gap log 2 σ2max (Jθf (x)) − log 2 σ2min (Jθf (x)) gradually decreases as either the model width or the model depth increases. Increasing either model depth or width expands the total number of trainable parameters, thereby verifying the conclusion that, under the approximate gradient independence assumption, increasing the number of parameters helps reduce the ratio between the extreme singular values of the Jacobian matrix. 
+
+Network Width and Extreme Singular Values As shown in Figure 18, when the model width increases, the extreme singular values log 2 σ2max (Jθf (x)) and log 2 σ2min (Jθf (x)) of model a and model b exhibit an oscillatory upward trends and gradually stabilize. If the model parameters change minimally during training (i.e., they remain close to their initialization values), the extreme singular values of the Jacobian matrix for wider models remain approximately constant. Under these circumstances, the upper and lower bounds of the empirical risk are determined solely by the gradient energy, which can be effectively optimized through mini-batch stochastic gradient descent. This observation is consistent with the “lazy training” perspective in neural tangent kernel theory; however, the theoretical framework of this paper does not require the infinite-width assumption (which is one of the main limitations of neural tangent kernel-based approaches). 
+
+Network Depth and Skip Connections As shown in Figure 18, as the model depth increases, the extreme singular values of models a and b exhibit markedly different trends. The extreme singular values of model a (without skip connections) decay rapidly with increasing depth, while the logarithm of the extreme singular values of model b (with skip connections) grows linearly with depth. This result is consistent with the theoretical prediction: the overall Jacobian matrix can be approximated as the product of the Jacobian matrices of individual local modules. Under the standard initialization where the entries of each local Jacobian have mean zero and variance σ2 < 1, their product leads to exponential decay of the extreme singular values with depth. In contrast, skip connections add an identity term to the local module Jacobian matrices, causing the extreme singular values of model b to grow exponentially with depth. The larger the extreme singular values of the Jacobian matrix, the tighter the upper and lower bounds of the empirical risk. Therefore, Figure 17 verifies the conclusion of this paper: skip connections cause the extreme singular values of the Jacobian matrix to increase with depth, thereby helping to tighten the upper and lower bounds of the empirical risk. 
+
+7 Conclusion 
+
+This work set out from a central puzzle in deep learning: why SGD reliably succeeds on highly non-convex, non-smooth objectives for which classical optimization theory provides no guarantees. Instead of imposing convexity or differentiability, we addressed this question through the lens of conjugate duality. By replacing the quadratic energy ∥ · ∥ 22 underlying classical strong convexity and Lipschitz smoothness with a broad family of Legendre energy functions, we introduced H(ψ)-convexity and H(Ψ)-smoothness. These generalized notions not only unify convex and non-convex, as well as smooth and non-smooth, objectives within a single formalism, but also reveal an inherent duality between convexity and smoothness. The proposed viewpoint yields two concrete benefits. First, under the generalized condi-
+
+> 44 Generalized Convexity and Smoothness
+
+tions, the optimal learning rate of generalized GD is identically 1, eliminating the need to tune this most delicate hyperparameter in classical analyses. Second, for the composite formulation that captures DNN training, optimization admits a transparent two-term char-acterization: SGD reduces the gradient energy, while the induced norm of the Jacobian is governed by architecture, initialization, and stochasticity. Extensive experiments confirm that the resulting upper and lower bounds faithfully track the empirical risk across a wide range of models, datasets, optimizers, and loss functions. Several directions remain open for future work. It would be valuable to connect the gradient-energy perspective with gen-eralization and implicit-regularization theory, and to develop optimization strategies that directly control the induced norm of the Jacobian matrix. We hope that the conjugate-duality viewpoint developed here provides a reusable foundation for such analyses. 
+
+8 Supporting Lemmas 
+
+This section collects the auxiliary results used in the proofs of this paper. 
+
+8.1 Convex Analysis Lemma 8.1 (Properties of Convex Conjugate Duality) For all μ, ν ∈ Rk, the fol-lowing hold: 1. Fenchel–Young inequality :
+
+Ψ( μ) + Ψ ∗(ν) ≥ ⟨ μ, ν ⟩, ∀μ ∈ dom(Ψ) , ν ∈ dom(Ψ ∗). (49) 
+
+Equality holds if and only if ν ∈ ∂Ψ( μ). If, furthermore, Ψ is strictly convex and differentiable, then equality holds if and only if ν = μ∗
+
+> Ψ
+
+.2. Suppose Φ( x) is a convex function and a > 0. Letting Ψ( x) = aΦ( x), we have Ψ∗(f ) = 
+
+aΦ∗(f /a ).3. Suppose Φ( x) is a convex function and a > 0. Letting Ψ( x) = Φ( ax ), we obtain 
+
+Ψ∗(f ) = Φ ∗(f /a ).4. Conjugate of radial functions . Let ∥·∥ be a norm on Rd and ∥·∥ ∗ its dual norm. If 
+
+Ψ( x) = ϕ(∥x∥), where ϕ : R → (−∞ , +∞] is an even , lower semicontinuous, proper convex function, then Ψ∗(y) = ϕ∗(∥y∥∗).5. If f (x) ≤ g(x) pointwise, then f ∗(y) ≥ g∗(y) pointwise. 
+
+For detailed expositions of these properties, see Rockafellar (1970) and Todd (2003). 
+
+8.2 Legendre Functions Definition 8.1 (Legendre Function) A proper, lower semicontinuous convex function 
+
+Ψ : Rm → ¯R is called a Legendre function if it satisfies the following conditions: 1. Essentially smooth: The interior of the domain is nonempty, i.e., int(dom(Ψ)) ̸ = ∅,and Ψ is differentiable on int(dom(Ψ)) such that ∥∇ Ψ( wν )∥ → ∞ whenever wν →
+
+w ∈ bdry dom(Ψ) ;
+
+> 45 Qi
+
+2. Essentially strictly convex: Ψ is strictly convex on dom( ∂Ψ) := {w ∈ Rm :
+
+∂Ψ( w)̸ = ∅} ;3. Legendre: Ψ is both essentially smooth and essentially strictly convex (Rockafellar, 1970). 
+
+The essential strict convexity of a Legendre function is transformed into essential smoothness under duality. The following proposition states that the conjugate of a Legendre function is also a Legendre function (Str¨ omberg, 2009; Rockafellar, 1970). 
+
+Proposition 8.1 If F is a Legendre function, then its convex conjugate F ∗ is also a Leg-endre function. 
+
+Lemma 8.2 Let f∗ be the global minimum of the differentiable function f (x). If f is strongly convex with parameter c, it follows that 
+
+f (y) ≥ f (x) + ∇f (x)⊤(y − x) + c
+
+2 ∥y − x∥2, ∀x, y, f (x) − f∗ ≤ 12c ∥∇ f (x)∥22.
+
+(50) 
+
+If f is Lipschitz smooth over Rn with Lipschitz constant L, then it follows that 
+
+f (y) ≤ f (x) + ∇f (x)⊤(y − x) + L
+
+2 ∥y − x∥2, ∀x, y, f (x) − f∗ ≥ 12L ∥∇ f (x)∥22.
+
+(51) 
+
+For the proofs of the above results, see the studies (Kakade et al., 2009; Zhou, 2018). They further reveal the duality properties between strong convexity and Lipschitz smoothness as follows. For a function f and its Fenchel conjugate f ∗, the following assertions hold: 
+
+• If f is closed and strongly convex with parameter c, then f ∗ is Lipschitz smooth with parameter 1/c .
+
+• If f is convex and Lipschitz smooth with parameter L, then f ∗ is strongly convex with parameter 1/L .
+
+8.3 Vector Norms Lemma 8.3 (Equivalence of Norms on Finite-Dimensional Spaces) Let V be a finite-dimensional vector space over R (or C), and let ∥ · ∥ α and ∥ · ∥ β be any two norms on V .Then there exist constants c, C > 0 such that for all x ∈ V ,
+
+c ∥x∥α ≤ ∥ x∥β ≤ C ∥x∥α. (52) 
+
+Consequently, all norms on V induce the same topology; in particular, convergence, conti-nuity, and compactness are preserved under norm changes (Rockafellar, 1970). 
+
+> 46 Generalized Convexity and Smoothness
+
+Dual Norm. Let ∥ · ∥ be a norm on Rd. The dual norm ∥ · ∥ ∗ is defined by 
+
+∥y∥∗ = sup 
+
+> ∥x∥≤ 1
+
+⟨x, y ⟩ = sup 
+
+> x̸=0
+
+⟨x, y ⟩∥x∥ .
+
+The dual norm is indeed a norm and possesses the following key properties: 
+
+Lemma 8.4 1. Norm axioms. ∥ · ∥ ∗ is positive definite, absolutely homogeneous, and satisfies the triangle inequality; hence it is a norm on Rd.2. Generalized Cauchy–Schwarz inequality. For any x, y ∈ Rd,
+
+|⟨ x, y ⟩| ≤ ∥ x∥ ∥ y∥∗.
+
+3. Bidual. In finite-dimensional spaces (or reflexive Banach spaces), the dual of the dual recovers the original norm: ∥ · ∥ ∗∗ = ∥ · ∥ .4. Duality of ℓp norms. For p ≥ 1 and q satisfying 1/p + 1 /q = 1 , the dual of ∥ · ∥ p
+
+is ∥ · ∥ q. In particular, the Euclidean norm ∥ · ∥ 2 is self-dual. 5. Convex conjugate of a norm. The Fenchel conjugate of f (x) = ∥x∥ is the indicator function of the dual unit ball: f ∗(y) = 1∥y∥∗≤1.6. Radial convex functions. For an even, proper, lower semicontinuous convex func-tion ϕ : R → (−∞ , +∞], the convex conjugate of Φ( x) = ϕ(∥x∥) is Φ∗(y) = ϕ∗(∥y∥∗),where ϕ∗ is the Legendre conjugate of ϕ as a function on R. This property is crucial when handling sparsity-promoting regularizers and energy functions built from norms. 
+
+The proofs of these properties can be found in standard convex analysis textbooks (Rock-afellar, 1970). 
+
+8.4 Induced Matrix Norms Lemma 8.5 For the induced matrix norm and the lower induced matrix norm, the following properties hold (Boyd and Vandenberghe, 2014): 1. If A is injective (i.e., has full column rank), then 
+
+m(A) = 1
+
+∥A+∥ , (53) 
+
+where A+ denotes the Moore–Penrose pseudoinverse of A and ∥A+∥ is its induced norm. If A is not injective (i.e., ker( A)̸ = {0}), then m(A) = 0 and the identity above degenerates since ∥A+∥ = ∞.2. In the special case of the Euclidean ( L2) norm, the upper and lower induced norms admit the following singular-value characterizations: 
+
+∥A∥2 = σmax (A), m2(A) = σmin (A), (54) 
+
+where σmax (A) and σmin (A) denote the largest and smallest singular values of A,respectively. The expression for m2(A) follows directly from the identity ∥A+∥2 =1/σ min (A) when A has full column rank; otherwise σmin (A) = 0 .
+
+> 47 Qi
+
+8.5 Properties of Fenchel–Young Losses Lemma 8.6 (Properties of Fenchel–Young Losses (Blondel et al., 2020)) 
+
+1. Non-negativity. dΨ(μ, ν ) ≥ 0 for any μ ∈ dom(Ψ) and ν ∈ dom(Ψ ∗). If Ψ is a proper, lower semicontinuous, convex function, then dΨ(μ, ν ) = 0 if and only if 
+
+ν ∈ ∂Ψ( μ). If Ψ is strictly convex and differentiable, then dΨ(μ, ν ) = 0 if and only if 
+
+ν = μ∗
+
+> Ψ
+
+.2. Differentiability. If Ψ is strictly convex and differentiable, then dΨ(μ, ν ) is differ-entiable in both arguments. In particular, ∇ν dΨ(μ, ν ) = ν∗ 
+
+> Ψ∗
+
+− μ.
+
+8.6 Spectral Properties of Matrices Lemma 8.7 Suppose that we sample n points x(1) , . . . , x (n) uniformly from the unit ball 
+
+Bm 
+
+> 1
+
+:= {x ∈ Rm | ∥ x∥2 ≤ 1}. Then with probability 1 − O(1 /n ) the following holds (Blum et al., 2020, Theorem 2.8): 
+
+x(i) 
+
+> 2
+
+≥ 1 − 2 log nm , for i = 1 , . . . , n. 
+
+|⟨ x(i), x (j)⟩| ≤ √6 log n
+
+√m − 1 for all i, j = 1 , . . . , n, i ̸ = j. 
+
+(55) 
+
+Lemma 8.8 (Gershgorin’s circle theorem) Let A be a real symmetric n × n matrix, with entries aij . For i ∈ { 1, · · · , n } let Ri be the sum of the absolute values of the non-diagonal entries in the i-th row: Ri = P  
+
+> 1≤j≤n,j ̸=i
+
+|aij |. For any eigenvalue λ of A, there exists i ∈ { 1, · · · , n } such that 
+
+|λ − aii | ≤ Ri. (56) 
+
+8.7 Information-Theoretic Inequalities Lemma 8.9 (KL Divergence Upper Bound) If p and q are probability densities/masses both supported on a bounded interval I, then we have (Csiszar and Talata, 2006) 
+
+DKL (p, q ) ≤ 1inf x∈I q(x) ∥p − q∥22. (57) 
+
+Lemma 8.10 (Pinsker’s Inequality (Cover, 2017)) If p and q are probability densi-ties/masses both supported on a bounded interval I, then we have 
+
+DKL (p∥q) ≥ 12 ln 2 ∥p − q∥21. (58) 
+
+9 Related Work 
+
+This section reviews the evolution of convexity and smoothness assumptions and the gradient-based algorithms built upon them. By identifying where existing theories fall short of ex-plaining deep network training, we motivate the unified conjugate framework proposed in this paper. 
+
+> 48 Generalized Convexity and Smoothness
+
+9.1 Evolution of Strong Convexity and Smoothness Assumptions 
+
+Classical convex optimization is built upon strong convexity and global Lipschitz smoothness (Nesterov, 2013). The loss landscapes of deep networks violate both assumptions, giving rise to a series of generalized formulations. 
+
+9.1.1 Extensions of Strong Convexity 
+
+To capture finer geometric structures, researchers have proposed higher-order strong con-vexity. Lin and Fukushima (2003) introduced this notion, which allows curvature to vary with direction and scale instead of enforcing a fixed quadratic lower bound. Formally, let 
+
+K ⊆ Rn be a closed convex set. A function F : K → R is higher-order strongly convex if there exist constants μ ≥ 0 and p ≥ 1 such that for all u, v ∈ K and t ∈ [0 , 1], 
+
+F (u + t(v − u)) ≤ (1 − t)F (u) + tF (v) − μφ (t)∥v − u∥p (59) where φ(t) = t(1 − t). For p = 2, this recovers standard strong convexity. Subsequent work further extended this framework. Studies including Noor and Noor (2020), Mohsen et al. (2019), and Alabdali et al. (2019) proposed variants of higher-order strongly convex functions and applied them to variational inequalities, multilevel games, and engineering optimization. Collectively, these generalizations enable flexible modeling of a continuous spectrum from weak to super convexity by adjusting the exponent p and weight function φ(t). 
+
+9.1.2 Extensions of Lipschitz Smoothness 
+
+On the smoothness side, Grimmer (2021) systematically studied H¨ older smoothness, defined via the H¨ older continuity of subgradients: 
+
+∥g − g′∥ ≤ L∥x − x′∥η, (60) for all x, x ′ ∈ Q and all subgradients g ∈ ∂f (x), g′ ∈ ∂f (x′), where L ≥ 0, η ∈ [0 , 1], and ∂f (x) denotes the subdifferential. This framework unifies smooth and non-smooth regimes: η = 1 recovers Lipschitz smoothness, and the condition applies to functions with polynomially growing Hessians (e.g., f (x) = |x|1+ η), but cannot capture exponential growth. (L0, L 1)-smoothness , proposed by Zhang et al. (2020b), is designed to match the em-pirical observation in neural networks that larger gradients correspond to larger curvature: 
+
+∥∇ 2f (x)∥ ≤ L0 + L1∥∇ f (x)∥, (61) with L0, L 1 ≥ 0. This naturally fits losses such as CrossEntropy, where gradients and Hessians grow simultaneously when predictions deviate far from labels. The assumption has been widely validated (Crawshaw et al., 2022) and applied to adaptive step-size and variance-reduction methods (Reisizadeh et al., 2023; Gorbunov et al., 2024). 
+
+ℓ-smoothness , a more general formulation by Li et al. (2023a), takes the form 
+
+∥∇ 2f (x)∥ ≤ ℓ(∥∇ f (x)∥), (62) where ℓ : R+ → R+ is a non-decreasing continuous function. This allows arbitrary mono-tonic relationships between Hessian and gradient (logarithmic, exponential, piecewise lin-ear), providing high flexibility for complex loss landscapes. 
+
+> 49 Qi
+
+Most recently, Qi et al. (2025b) exploited the duality between strong convexity and Lipschitz smoothness to propose an extended framework and established DNN trainability for convex differentiable losses. However, all existing generalizations still require convexity and differentiability to derive global SGD convergence guarantees, and these requirements are violated by the non-convex, non-smooth objectives typical of deep network training. Moreover, existing frameworks treat convexity and smoothness independently, lacking a unified perspective. These gaps motivate the H(ψ)-convexity and H(Ψ)-smoothness proposed in this work: we couple the two into a conjugate dual pair based on Legendre functions, providing a new geometric characterization for deep learning objectives. 
+
+9.2 Gradient-Based Optimization Algorithms 
+
+Gradient-based methods have been thoroughly studied for Lipschitz-smooth objectives in both convex and non-convex settings (Li et al., 2023b). In convex optimization, the goal is to find an ε-suboptimal point with f (x) − f∗ ≤ ε.For smooth convex functions, gradient descent (GD) achieves gradient complexity O(1 /ε ); under μ-strong convexity, GD improves to O(κ log(1 /ε )), where κ is the condition number, and this rate is optimal. In non-convex optimization, where global minimization is NP-hard, research focuses on finding ε-stationary points with ∥∇ f (x)∥ ≤ ε. For deterministic smooth non-convex problems, GD achieves optimal gradient complexity O(1 /ε 2), matching the known lower bound (Carmon et al., 2020). In the stochastic setting, with unbiased bounded-variance gradients, SGD achieves sample complexity O(1 /ε 4) (Ghadimi and Lan, 2013), which also matches the corresponding lower bound (Arjevani et al., 2023; Abbaszadehpeivasti et al., 2023). To reduce the high sample complexity of SGD, variance-reduction algorithms have been proposed, such as SPIDER (Fang et al., 2018), SARAH (Nguyen et al., 2017), SpiderBoost (Wang et al., 2019), STORM (Cutkosky and Orabona, 2019), and SNVRG (Zhou et al., 2020), all achieving the optimal O(1 /ε 3) sample complexity under stronger smoothness assumptions. Alongside generalized smoothness assumptions, algorithms have evolved accordingly. For ( L0, L 1)-smooth functions, clipped GD and normalized GD preserve the optimal O(1 /ε 2)deterministic complexity, and clipped SGD achieves O(1 /ε 4) stochastic complexity (Zhang et al., 2020b). Momentum-accelerated variants follow the same rates (Zhang et al., 2020a), and SPIDER-based variance reduction further improves stochastic complexity to O(1 /ε 3)(Reisizadeh et al., 2023). For ℓ-smooth objectives, Li et al. (2023a) show that GD and SGD retain the same complexities as under classical Lipschitz smoothness. Despite these advances, all existing theories can only guarantee convergence to station-ary points, and cannot explain the empirically observed implicit preference for globally optimal or well-generalizing solutions in deep learning. Establishing a framework that fully characterizes DNN optimization dynamics therefore remains a critical open problem. 
+
+> 50 Generalized Convexity and Smoothness
+
+9.3 Non-Convex Optimization Mechanisms in Deep Learning 
+
+SGD is the workhorse of deep network training. Its effectiveness stems from two synergistic mechanisms: (i) stochastic noise, which enables saddle-point escape and helps avoid poor local optima; and (ii) over-parameterization, which reshapes the loss-landscape geometry. 
+
+9.3.1 Stochastic Noise 
+
+The stochastic noise in SGD drives dynamics along negative curvature directions to escape saddle points (Ge et al., 2015). Large-step SGD with momentum or adaptive variants further exploits noise-driven exploration to bypass inferior local minima (Li and Lin, 2023), and analogous effects hold for compressed SGD in federated learning (Chen et al., 2024). In contrast, deterministic GD, lacking stochastic perturbations, is more prone to stagnation at suboptimal stationary points (Jentzen et al., 2021). However, this conventional view has been revised by empirical findings. Keskar et al. (2017) showed that even with very large batch sizes (5000–6000) that greatly reduce stochas-ticity, networks can still perfectly fit training data on standard benchmarks (Keskar et al., 2017; Keskar and Socher, 2017). In highly over-parameterized networks, near-full-batch training can still achieve zero training error via interpolation (Lee et al., 2023), suggesting that over-parameterization, rather than SGD noise alone, may play the more critical role in DNN trainability (Do et al., 2024). 
+
+9.3.2 Role of Over-Parameterization 
+
+Over-parameterization, having far more parameters than training samples, improves both trainability and generalization by reshaping the loss landscape. Two idealized infinite-width frameworks have been proposed to explain these dynamics. The Neural Tangent Kernel (NTK) theory (Jacot et al., 2018) shows that infinitely wide networks exhibit lazy training: the kernel remains constant, and non-convex optimization reduces to convex kernel learning with linear convergence. However, the frozen-kernel as-sumption contradicts the feature learning of real finite-width networks, and empirical NTK evolves significantly during training (Vyas et al., 2023). Mean Field Theory (MFT) 
+
+(Sirignano and Spiliopoulos, 2020) models parameters as a particle system and SGD dy-namics as a deterministic gradient flow over the parameter distribution. Convexity of the loss functional guarantees global convergence, and the theory extends to deep networks (Nguyen and Pham, 2023). Nevertheless, MFT is also limited to the infinite-width regime and poorly adapts to modern architectures such as residual connections and attention mech-anisms. Recent work on mildly over-parameterized regimes further shows that ReLU networks contain high-dimensional global minimum sets, and the full-rank Jacobian region expands with parameter redundancy (Karhadkar et al., 2024; Kohler, 2026; Duzgun et al., 2024), providing a finite-width geometric explanation for efficient optimization. NTK and Mean Field Theory still lack a unified quantitative characterization of the synergy between SGD and over-parameterization, especially for finite-width networks with feature learning (Oneto et al., 2023). Recently, Qi et al. (2025a) interpreted classification as conditional distribution estima-tion and showed that under a Fenchel–Young loss, the squared parameter gradient norm 
+
+> 51 Qi
+
+is tightly linked to the MSE between predicted and empirical conditional distributions, mediated by a structure matrix Az = ∇θfθ(x)∇θfθ(x)⊤. Their experiments suggest that DNN training implicitly minimizes the squared parameter-gradient norm while preserving the non-degeneracy of Az . Three critical limitations remain: 1. No monotonic decrease guarantee is provided for the Fenchel–Young loss itself, creat-ing a gap between the surrogate (squared gradient norm) and the true objective. 2. The analysis is restricted to supervised classification and does not extend to regression, generative modeling, or unsupervised learning. 3. The framework addresses only trainability, not generalization, leaving an end-to-end learning gap. 
+
+Acknowledgments 
+
+This work was supported in part by the National Natural Science Foundation of China under Grants 72171172 and 92367101. 
+
+Appendix A. Appendix 
+
+In this section, we prove the results stated in the paper and provide necessary technical details and discussions. 
+
+A.1 Proof of Proposition 3.1 Proposition A.1 1. If Ψ( μ) is an energy function, then Ψ∗(ν) is also an energy func-tion, and 
+
+Ψ∗(ν) = Ψ ∗◦(∥ν∥∗),
+
+Ψ(0) + Ψ ∗(0) = 0 ,μ⊤μ∗ 
+
+> Ψ
+
+≥ 0,
+
+(63) 
+
+where Ψ∗◦ is the one-dimensional convex conjugate of Ψ◦.2. If Ψ( μ) = ∥aΨμ∥rΨ 
+
+> 2
+
+/r Ψ + cΨ is an energy function with parameters aΨ ∈ R>0, rΨ > 1,and cΨ ∈ R, then its convex conjugate Ψ∗(ν) = ∥aΨ∗ ν∥rΨ∗ 
+
+> 2
+
+/r Ψ∗ + cΨ∗ is also an energy function, where 
+
+1/r Ψ + 1 /r Ψ∗ = 1 ,aΨaΨ∗ = 1 ,cΨ∗ + cΨ = 0 .
+
+(64) 
+
+3. Let Ψ( μ) be an energy function. For any μ ∈ Rm, F (a) = Ψ( aμ ) is monotonically non-decreasing on [0 , ∞); if μ̸ = 0 , then F is strictly increasing and convex. 
+
+Proof Proof of Conclusion 1. 
+
+According to Proposition 8.1, if Ψ is a Legendre function, then Ψ ∗ is also a Legendre function. By the definition of convex conjugate: 
+
+> 52
+
+Generalized Convexity and Smoothness 
+
+Ψ∗(0) = sup 
+
+> x
+
+{− Ψ( x)} = − inf  
+
+> x
+
+Ψ( x) = −Ψ( 0).
+
+Taking x = 0 as a test point in the supremum definition, we have: Ψ∗(y) = sup 
+
+> x
+
+{⟨ y, x ⟩ − Ψ( x)} ≥ ⟨ y, 0⟩ − Ψ( 0) = −Ψ( 0).
+
+Combining the above two steps, we obtain: Ψ∗(y) ≥ − Ψ( 0) = Ψ ∗(0),
+
+Therefore, Ψ ∗(0) is the global minimum of Ψ ∗. By the definition of energy functions, Ψ∗(·) is also an energy function. Since Ψ is a convex function and 0 is a global minimum, we have ∇Ψ( 0) = 0. For any 
+
+z ∈ Rm, by the first-order optimality condition of convex functions: Ψ( 0) ≥ Ψ( z) + ⟨∇ Ψ( z), 0 − z⟩ = Ψ( z) − ⟨∇ Ψ( z), z ⟩,
+
+Rearranging, we obtain 
+
+⟨z∗
+
+> Ψ
+
+, z ⟩ ≥ Ψ( z) − Ψ( 0) ≥ 0. (2) The last inequality follows because 0 is the global minimum. According to the sixth property of Lemma 8.4, Ψ ∗(ν) = Ψ ∗◦(∥ν∥∗). Conclusion 1 is proved. 
+
+Proof of Conclusion 2. By the definition of the Legendre–Fenchel transform, Ψ∗(ν) = sup 
+
+> μ∈Rm
+
+{⟨ μ, ν ⟩ − Ψ( μ)} .
+
+Applying the Cauchy–Schwarz inequality ⟨μ, ν ⟩ ≤ ∥ μ∥2∥ν∥2, with equality if and only if μ
+
+and ν are nonnegative multiples of each other (i.e., μ = λν for some λ ≥ 0), we obtain Ψ∗(ν) ≤ sup 
+
+> μ
+
+
+
+∥μ∥2∥ν∥2 − arΨ
+
+> Ψ
+
+rΨ
+
+∥μ∥rΨ
+
+> 2
+
+
+
+− cΨ.
+
+For ν = 0, the supremum is attained at μ = 0 and gives −cΨ; the following calculation also covers this case by taking the limit. Assume ν̸ = 0. Put t = ∥μ∥2 ≥ 0. Then the right-hand side becomes sup 
+
+> t≥0
+
+
+
+t∥ν∥2 − arΨ
+
+> Ψ
+
+rΨ
+
+trΨ
+
+
+
+− cΨ.
+
+Define g(t) = t∥ν∥2 − arΨΨ 
+
+> rΨ
+
+trΨ . Since rΨ > 1, g is strictly concave on [0 , ∞) and attains its unique maximum at the critical point: 
+
+g′(t) = ∥ν∥2 − arΨ 
+
+> Ψ
+
+trΨ−1 = 0 =⇒ t∗ =
+
+ ∥ν∥2
+
+arΨ
+
+> Ψ
+
+ 1
+
+> rΨ−1
+
+= ∥ν∥
+
+> 1
+> rΨ−1
+> 2
+
+a
+
+> rΨ
+> rΨ−1
+> Ψ
+
+.
+
+Substituting t∗ into g yields 
+
+g(t∗) = rΨ − 1
+
+rΨ
+
+ ∥ν∥2
+
+aΨ
+
+ rΨ
+
+> rΨ−1
+
+.
+
+53 Qi 
+
+Therefore, Ψ∗(ν) = rΨ − 1
+
+rΨ
+
+ ∥ν∥2
+
+aΨ
+
+ rΨ
+
+> rΨ−1
+
+− cΨ.
+
+Rewriting this in the standard form of a norm power function, Ψ∗(ν) = ∥aΨ∗ ν∥rΨ∗
+
+> 2
+
+rΨ∗
+
++ cΨ∗ ,
+
+we identify 
+
+rΨ∗ = rΨ
+
+rΨ − 1 , aΨ∗ = 1
+
+aΨ
+
+, cΨ∗ = −cΨ.
+
+Thus, Conclusion 2 is proved. 
+
+Proof of Conclusion 3. 
+
+By the chain rule, F is differentiable and 
+
+F ′(a) = ⟨∇ Ψ( aμ ), μ ⟩. (65) Let z = aμ . If a ≥ 0, by Conclusion 1, 
+
+⟨∇ Ψ( aμ ), aμ ⟩ ≥ 0. (66) When a > 0, dividing by a (a positive number) yields 
+
+⟨∇ Ψ( aμ ), μ ⟩ ≥ 0.
+
+Combining equation (65) with the above inequality, we have F ′(a) ≥ 0 for a > 0. Also, 
+
+F ′(0) = ⟨∇ Ψ(0) , μ ⟩ = 0. Therefore, F ′(a) ≥ 0 holds for all a ≥ 0, so F is monotonically non-decreasing on [0 , ∞). If μ̸ = 0, then for any a > 0, aμ ̸ = 0. Since 0 is the unique global minimum, Ψ( aμ ) >
+
+Ψ( 0). If equality holds in inequality (66), i.e., ⟨∇ Ψ( aμ ), aμ ⟩ = 0, then Ψ( 0) = Ψ( aμ ) − ⟨∇ Ψ( aμ ), aμ ⟩ = Ψ( aμ ),
+
+which contradicts Ψ( aμ ) > Ψ( 0). Therefore, the inequality (66) is strict for z̸ = 0:
+
+⟨∇ Ψ( z), z ⟩ > 0 (z̸ = 0).
+
+Thus, for a > 0, 
+
+a⟨∇ Ψ( aμ ), μ ⟩ > 0 ⇒ F ′(a) > 0.
+
+Therefore, F ′ is strictly positive on (0 , ∞), and F is strictly monotonically increasing on [0 , ∞). If μ = 0, then F (a) = Ψ( 0) is a constant, which is monotonically non-decreasing but not strictly increasing. When μ̸ = 0, since Ψ is a strictly convex function, its Hessian matrix is positive semidefinite. For any vector μ:
+
+μ⊤∇2Ψ( aμ )μ ≥ 0Thus F ′′ (a) = μ⊤∇2Ψ( aμ )μ ≥ 0, so F (a) is convex. When μ = 0, F (a) = Ψ( 0) is a constant. 
+
+> 54
+
+Generalized Convexity and Smoothness 
+
+A.2 Proof of Proposition 3.5 Proposition A.2 1. Suppose G is a continuously differentiable function defined on a closed convex set, twice differentiable on the interior of its domain, and with a positive definite Hessian matrix. Let λmin and λmax denote the smallest and largest eigenvalues of the Hessian matrix ∇2G(μ) for all μ in the domain of G. Then G is both H(λmax ∥ · ∥22/2) -smooth and H(λmin ∥ · ∥ 22/2) -convex. 2. The MSE loss 12 ∥fθ(x) − y∥22 is both H(∥ · ∥ 22/2) -convex and H(∥ · ∥ 22/2) -smooth with respect to fθ(x).3. The Softmax CrossEntropy loss CrossEntropy( q, Softmax( fθ(x))) is both H(min i pi∥ · ∥22)-convex and H(2 ln 2 ∥ · ∥ 22)-smooth with respect to fθ(x), where p = Softmax( fθ(x)) .
+
+Proof Proof of Conclusion 1. Since G is a twice-differentiable function defined on a closed set, with a positive definite Hessian matrix, by Taylor’s theorem, for any μ, ν in the domain of G, there exists ξ such that 
+
+SG(μ, ν ) = 12 (μ − ν)⊤∇2G(ξ)( μ − ν), (67) where ξ = tμ + (1 − t)ν.Since ∇2G(ξ) is symmetric and positive definite, we can apply the Courant–Fischer min-max theorem to obtain the eigenvalue bounds: 
+
+λmin ∥μ−ν∥22 ≤ λmin (∇2G(ξ)) ∥μ−ν∥22 ≤ (μ−ν)⊤∇2G(ξ)( μ−ν) ≤ λmax (∇2G(ξ)) ∥μ−ν∥22 ≤ λmax ∥μ−ν∥22.
+
+(68) By the definition of λmin and λmax as the global minimum and maximum eigenvalues of the Hessian over the domain, we have: 
+
+λmin 
+
+2 ∥μ − ν∥22 ≤ SG(μ, ν ) ≤ λmax 
+
+2 ∥μ − ν∥22. (69) This inequality shows that SG(μ, ν ) is bounded both below and above by quadratic functions. Specifically: - The upper bound implies that G is H(λmax ∥ · ∥ 22/2)-smooth. - The lower bound implies that G is H(λmin ∥ · ∥ 22/2)-convex. 
+
+Proof of Conclusion 2. By Conclusion 1, it follows directly that the MSE loss 12 ∥fθ(x) −
+
+y∥22 is both H(∥ · ∥ 22/2)-convex and H(∥ · ∥ 22/2)-smooth with respect to fθ(x). 
+
+Proof of Conclusion 3. 
+
+Let v be a vector of dimension k, where k ≥ 1. We have: 
+
+∥v∥21 =
+
+> k
+
+X
+
+> i=1
+> k
+
+X
+
+> j=1
+
+|vi|| vj | ≥ 
+
+> k
+
+X
+
+> i=1
+
+|vi|2 = ∥v∥22. (70) Thus, applying Lemma 8.10 and substituting the above norm inequality, we obtain: 
+
+DKL (y∥p) ≥ 12 ln 2 ∥y − p∥21,
+
+≥ 12 ln 2 ∥y − p∥22.
+
+55 Qi 
+
+Using Lemma 8.9, we further derive: 
+
+DKL (y∥p) ≤ 1min i pi
+
+∥y − p∥22.
+
+Combining the upper and lower bounds of DKL (y∥p), we have: 12 ln 2 ∥y − p∥22 ≤ DKL (y∥p) ≤ 1min i pi
+
+∥y − p∥22.
+
+Let p, q ∈ ∆n, where ∆ n denotes the n-dimensional probability simplex. When G(p) = Pni=1 pi log pi (negative Shannon Entropy), SG(q, p ) = DKL (q∥p). Therefore, 12 ln 2 ∥q − p∥22 ≤ SG(q, p ) ≤ 1min i pi
+
+∥q − p∥22.
+
+Thus, G is H(ψ)-convex and H(Ψ)-smooth with ψ(·) = 12 ln 2 ∥ · ∥ 22 and Ψ( ·) = 1min i pi ∥ · ∥22. By Propositions 2, 1, and 4, the Fenchel–Young loss dG(q, ·) is H(ψ∗)-smooth and 
+
+H(Ψ ∗)-convex, where ψ∗(·) = 2 ln 2 ∥ · ∥ 22 and Ψ ∗(·) = min i pi∥ · ∥ 22. Using dG(q, μ ) = 
+
+DKL (q∥Softmax( μ)) (Blondel et al., 2020) and Proposition 2, CrossEntropy( q, Softmax( μ)) is also H(ψ∗)-smooth and H(Ψ ∗)-convex. 
+
+A.3 Proof of Proposition 3.2 Proposition A.3 (Duality of Generalized Smoothness and Convexity) 1. Let G
+
+and its convex conjugate G∗ be differentiable on their domains. Then the following statements are equivalent: (i) G is H(Ψ) -smooth; (ii) G∗ is H(Ψ ∗)-convex. 2. For constants a > 0, b > 0, and c ∈ R, define F (x) := aG (bx ) + c on the domain 
+
+{x : bx ∈ dom G}. If G is H(Ψ) -smooth, then F is H(aΨ( b ·)) -smooth. If G is H(ψ)-convex, then F is H(aψ (b ·)) -convex. 3. Let the random variable Z take values in Z. If G(θ, z ) has the same generalized convexity and smoothness properties with respect to θ for all z ∈ Z , then G(θ, s ) also shares the same properties with respect to θ.4. Let s be a fixed constant vector. If G(·) is H(ψ)-convex, then dG(·, s ) has the same generalized convexity and smoothness properties as G(·), and dG(s, ·) has the same generalized convexity and smoothness properties as G∗(·).
+
+Proof Proof of Conclusion 1 .We prove the two implications separately. Part 1. Assume G is H(Ψ)-smooth. Then for all μ, ν ,
+
+G(μ) ≤ G(ν) + ⟨∇ G(ν), μ − ν⟩ + Ψ( μ − ν). (71) Fix ν and define an auxiliary function 
+
+H(μ) := G(ν) + ⟨∇ G(ν), μ − ν⟩ + Ψ( μ − ν).
+
+> 56 Generalized Convexity and Smoothness
+
+From inequality (71) we have G(μ) ≤ H(μ) for all μ. By Lemma 5, since the Fenchel conjugate is order-reversing, it follows that 
+
+G∗(θ) ≥ H∗(θ), ∀θ. (72) Now compute H∗. Let η = ∇G(ν); then by Legendre involution, ν = ∇G∗(η). We have 
+
+H∗(θ) = sup 
+
+> μ
+
+{⟨ θ, μ ⟩ − G(ν) − ⟨ η, μ − ν⟩ − Ψ( μ − ν)}
+
+= sup 
+
+> z
+
+{⟨ θ, z + ν⟩ − G(ν) − ⟨ η, z ⟩ − Ψ( z)} , (z := μ − ν)= ⟨θ, ν ⟩ − G(ν) + sup 
+
+> z
+
+{⟨ θ − η, z ⟩ − Ψ( z)}
+
+= ⟨θ, ν ⟩ − G(ν) + Ψ ∗(θ − η).
+
+Using G∗(η) = ⟨η, ν ⟩ − G(ν) and ν = ∇G∗(η), we get 
+
+⟨θ, ν ⟩ − G(ν) = G∗(η) + ⟨θ − η, ν ⟩ = G∗(η) + ⟨∇ G∗(η), θ − η⟩.
+
+Thus 
+
+H∗(θ) = G∗(η) + ⟨∇ G∗(η), θ − η⟩ + Ψ ∗(θ − η).
+
+Combining this with inequality (72) and rearranging terms yields 
+
+G∗(θ) − G∗(η) − ⟨∇ G∗(η), θ − η⟩ ≥ Ψ∗(θ − η),
+
+which is exactly the H(Ψ ∗)-convexity condition. 
+
+Part 2. Assume G∗ is H(Ψ ∗)-convex. Then for all θ, η ,
+
+G∗(θ) ≥ G∗(η) + ⟨∇ G∗(η), θ − η⟩ + Ψ ∗(θ − η). (73) Fix η and define 
+
+K(θ) := G∗(η) + ⟨∇ G∗(η), θ − η⟩ + Ψ ∗(θ − η).
+
+Then G∗ ≥ K. Taking conjugates (and reversing the inequality) gives 
+
+G∗∗ (μ) ≤ K∗(μ), ∀μ. 
+
+Since G is closed convex, G∗∗ = G, hence 
+
+G(μ) ≤ K∗(μ). (74) Now compute K∗. Let η = ∇G(ν) (equivalently, ν = ∇G∗(η)). Then 
+
+K∗(μ) = sup 
+
+> θ
+
+{⟨ μ, θ ⟩ − G∗(η) − ⟨∇ G∗(η), θ − η⟩ − Ψ∗(θ − η)}
+
+= sup 
+
+> z
+
+{⟨ μ, z + η⟩ − G∗(η) − ⟨ ν, z ⟩ − Ψ∗(z)} , (z := θ − η)= ⟨μ, η ⟩ − G∗(η) + sup 
+
+> z
+
+{⟨ μ − ν, z ⟩ − Ψ∗(z)}
+
+= ⟨μ, η ⟩ − G∗(η) + Ψ ∗∗ (μ − ν).
+
+> 57 Qi
+
+Since Ψ is closed convex, Ψ ∗∗ = Ψ. Also, ⟨μ, η ⟩ − G∗(η) = G(ν) + ⟨μ − ν, η ⟩ because 
+
+G∗(η) = ⟨η, ν ⟩ − G(ν) and η = ∇G(ν). Therefore 
+
+K∗(μ) = G(ν) + ⟨∇ G(ν), μ − ν⟩ + Ψ( μ − ν).
+
+Substituting into inequality (74) yields 
+
+G(μ) ≤ G(ν) + ⟨∇ G(ν), μ − ν⟩ + Ψ( μ − ν),
+
+which is precisely the H(Ψ)-smoothness condition for G.
+
+Proof of Conclusion 2 . We prove each part separately. 
+
+Smoothness scaling. Since ∇F (x) = ab ∇G(bx ), we have 
+
+SF (x, y ) = F (x) − F (y) − ⟨∇ F (y), x − y⟩
+
+= aG (bx ) − aG (by ) − ⟨ ab ∇G(by ), x − y⟩
+
+= a [G(bx ) − G(by ) − ⟨∇ G(by ), b (x − y)⟩]= a · SG(bx, by ).
+
+If G is H(Ψ)-smooth, then SG(bx, by ) ≤ Ψ( b(x − y)). Hence 
+
+SF (x, y ) ≤ aΨ( b(x − y)) ,
+
+which proves F is H(aΨ( b ·))-smooth. For 0 < b ≤ 1, since Ψ is an energy function (radial and non-decreasing), we have Ψ( bz ) ≤ Ψ( z), so SF (x, y ) ≤ aΨ( x − y), i.e., F is H(aΨ)-smooth. 
+
+Convexity scaling. If G is H(ψ)-convex, then SG(bx, by ) ≥ ψ(b(x − y)). Multiplying by a > 0 yields 
+
+SF (x, y ) ≥ aψ (b(x − y)) ,
+
+so F is H(aψ (b ·))-convex. The special case 0 < b ≤ 1 follows from ψ(bz ) ≤ ψ(z) and the same monotonicity argument. 
+
+Proof of Conclusion 3 . For convenience, define F (θ) = G(θ, s ). Then, 
+
+∇F (η) = EZ [∇ηG(η, Z )] = ∇ηG(η, s ),
+
+and 
+
+SF (θ, η ) = G(θ, s ) − G(η, s ) − ⟨∇ ηG(η, s ), θ − η⟩
+
+= EZ [G(θ, Z ) − G(η, Z ) − ⟨∇ ηG(η, Z ), θ − η⟩]= EZ SG(Z)(θ, η ).
+
+Since G(θ, z ) has the same generalized convexity and smoothness properties with respect to θ for all z ∈ Z , it follows that G(θ, s ) inherits these same properties. This completes the proof. 
+
+Proof of Conclusion 4 . Since F (μ) = dG(μ, s ), by the definition of the Fenchel–Young loss, we have: 
+
+dF (μ, ν ∗ 
+
+> F
+
+) = F (μ) + F ∗(ν∗ 
+
+> F
+
+) − ⟨ μ, ν ∗ 
+
+> F
+
+⟩. (75) 
+
+> 58 Generalized Convexity and Smoothness
+
+Since G is strictly convex, expanding this expression step by step: 
+
+dF (μ, ν ∗ 
+
+> F
+
+) = F (μ) + F ∗(ν∗ 
+
+> F
+
+) − ⟨ μ, ν ∗ 
+
+> F
+
+⟩
+
+= F (μ) + F ∗(ν∗ 
+
+> F
+
+) − ⟨ ν, ν ∗ 
+
+> F
+
+⟩ + ⟨ν, ν ∗ 
+
+> F
+
+⟩ − ⟨ μ, ν ∗ 
+
+> F
+
+⟩
+
+= F (μ) − F (ν) − ⟨ ν∗ 
+
+> F
+
+, μ − ν⟩.
+
+(76) Substituting F (μ) = dG(μ, s ), we get: 
+
+dF (μ, ν ∗ 
+
+> F
+
+) = dG(μ, s ) − dG(ν, s ) − ⟨∇ G(ν) − s, μ − ν⟩
+
+= G(μ) − ⟨ s, μ − ν⟩ − G(ν) − ⟨∇ G(ν) − s, μ − ν⟩
+
+= G(μ) − G(ν) − ⟨∇ G(ν), μ − ν⟩
+
+= dG(μ, ∇G(ν)) .
+
+(77) Since G is a strictly convex function, it follows that dG(s, μ ) = dG∗ (μ, s ). Given that 
+
+F (μ) = dG(s, μ ), we obtain F (μ) = dG∗ (μ, s ) and dF (μ, ν ∗ 
+
+> F
+
+) = dG∗ (μ, ν ∗ 
+
+> G∗
+
+). Therefore, dG(μ, s ) has the same generalized convexity and smoothness properties as 
+
+G(μ), and dG(s, μ ) has the same generalized convexity and smoothness properties as G∗(μ). 
+
+A.4 Proof of Theorem 3.1 Theorem A.1 Let G∗ = min μ G(μ), G∗ = {μ|G(μ) = G∗}, and μ∗ ∈ G ∗. The following results hold: 1. If G(μ) is H(Ψ) -smooth, then: 
+
+Ψ∗(∇G(μ)) ≤ G(μ) − G∗ ≤ Ψ( μ − μ∗). (78) 
+
+2. If G(μ) is H(ψ)-convex, then: 
+
+ψ(μ − μ∗) ≤ G(μ) − G∗ ≤ ψ∗(∇G(μ)) . (79) 
+
+3. If G(μ) is both H(Ψ) -smooth and H(ψ)-convex, then: 
+
+Ψ∗(∇G(μ)) ≤ G(μ) − G∗ ≤ ψ∗(∇G(μ)) . (80) 
+
+Proof Proof of Conclusion 1 .According to the definition of SG(ν, μ ), we have 
+
+G∗ = min  
+
+> ν
+
+G(ν)= min  
+
+> ν
+
+{G(μ) + ( ∇G(μ)) ⊤(ν − μ) + SG(ν, μ )}
+
+= min  
+
+> z
+
+{G(μ) + ( ∇G(μ)) ⊤z + SG(ν, μ )},
+
+(81) where z = ν − μ.
+
+> 59 Qi
+
+Since μ∗ ∈ G ∗ is a global minimum, it must also be a stationary point; hence ∇G(μ∗) = 0. Since G is H(Ψ)-smooth, we have 
+
+G(μ) = G(μ∗) + ∇G(μ∗)⊤(μ − μ∗) + SG(μ, μ ∗)
+
+≤ G∗ + Ψ( μ − μ∗). (82) Thus, the upper bound of the first conclusion is proved. Since G is H(Ψ)-smooth, we have 
+
+SG(μ∗, μ ) ≤ Ψ( z), (83) where z = μ∗ − μ.By substituting the above inequality into equation (81), it follows that 
+
+G∗ ≤ min  
+
+> z
+
+{G(μ) + ( ∇G(μ)) ⊤z + Ψ( z)}
+
+= G(μ) + min  
+
+> z
+
+dΨ(z, −∇ G(μ)) − Ψ∗(−∇ G(μ)) = G(μ) − Ψ∗(−∇ G(μ)) = G(μ) − Ψ∗(∇G(μ)) ,
+
+(84) The lower bound of the first conclusion is thus proved. 
+
+Proof of Conclusion 2 . Since μ∗ ∈ G ∗ represents a global minimum, which must also be a stationary point, it follows that ∇G(μ∗) = 0. Since G is H(ψ)-convex, we have 
+
+G(μ) = G(μ∗) + ∇G(μ∗)⊤(μ − μ∗) + SG(μ, μ ∗)
+
+≥ G∗ + ψ(μ − μ∗). (85) Thus, the lower bound of the second conclusion is proved. Since G is H(ψ)-convex, we have 
+
+G(μ∗) = G(μ) + ∇G(μ)⊤(μ∗ − μ) + SG(μ∗, μ )
+
+≥ G(μ) + ( ∇G(μ)) ⊤z + ψ(z)= G(μ) + dψ(z, −∇ G(μ)) − ψ∗(−∇ G(μ)) 
+
+≥ G(μ) − ψ∗(∇G(μ)) ,
+
+(86) where z = μ∗ − μ. Since dψ(z, −∇ G(μ)) ≥ 0, we have 
+
+G(μ) ≤ G∗ + ψ∗(∇G(μ)) . (87) 
+
+Proof of Conclusion 3 . Given that G(μ) is H(ψ)-convex and H(Ψ)-smooth, by combining equation (84) and equation (87), we obtain Ψ∗(∇G(μ)) ≤ G(μ) − G∗ ≤ ψ∗(∇G(μ)) .
+
+Therefore, the proof of the theorem is complete. 
+
+> 60 Generalized Convexity and Smoothness
+
+A.5 Proof of Proposition 4.1 Proposition A.4 If for any nonzero vector x, the gradient ∇∥ x∥ is collinear with the original vector x, i.e., there exists a scalar-valued function λ(x) such that 
+
+∇∥ x∥ = λ(x) · x, (88) 
+
+then there exists a positive constant c > 0 such that for all x ∈ Rn,
+
+∥x∥ = c · ∥ x∥2,
+
+i.e., the norm must be a positive scalar multiple of the Euclidean ( L2) norm. Conversely, all positive multiples of the Euclidean norm satisfy the property that the gradient is collinear with the original vector. 
+
+Proof We prove the necessity and sufficiency in four steps. 
+
+Step 1: Preliminary Step — Euler’s Identity for Homogeneous Functions of Degree 1 By the positive homogeneity of norms, for any t > 0 and any x̸ = 0, we have 
+
+∥tx ∥ = t∥x∥, i.e., the norm is a positively homogeneous function of degree 1. We first prove Euler’s Homogeneous Function Theorem: for any positively homogeneous function f
+
+of degree 1 that is differentiable on Rn \ { 0}, we have 
+
+∇f (x)⊤x = f (x). (89) Fix any x̸ = 0 and construct the univariate function g(t) = f (tx ), where t > 0. By homogeneity, we directly obtain g(t) = tf (x). Differentiating both sides with respect to t:
+
+g′(t) = f (x).
+
+On the other hand, by the chain rule for multivariate functions: 
+
+g′(t) = ∇f (tx )⊤ · d(tx )
+
+dt = ∇f (tx )⊤x. 
+
+Setting t = 1 and equating the two expressions yields ∇f (x)⊤x = f (x). Applying Euler’s theorem to the norm ∥x∥, we directly obtain the key identity: 
+
+∇∥ x∥⊤x = ∥x∥. (90) 
+
+Step 2: Substituting the Collinearity Condition to Determine the Unique Form of λ(x) Substituting the collinearity assumption (88) into Euler’s identity (90): 
+
+ λ(x) x⊤x = ∥x∥.
+
+Expanding the inner product x⊤x = ∥x∥22 and rearranging: 
+
+λ(x) · ∥ x∥22 = ∥x∥ =⇒ λ(x) = ∥x∥∥x∥22
+
+.
+
+> 61 Qi
+
+Therefore, the assumption that the gradient is collinear with the original vector is equiv-alent to the following first-order partial differential equation: 
+
+∇∥ x∥ = ∥x∥∥x∥22
+
+· x, ∀x̸ = 0 . (91) 
+
+Step 3: Constructing an Auxiliary Function to Prove the Norm is Propor-tional to the L2 Norm We construct the auxiliary function: 
+
+φ(x) = ∥x∥∥x∥2
+
+, x̸ = 0 . (92) We show by computing partial derivatives that φ(x) has identically zero gradient on Rn \{ 0},and is therefore constant. Taking the partial derivative of φ(x) with respect to the i-th component, by the quotient rule: 
+
+∂φ ∂x i
+
+=
+
+∂∥x∥
+
+∂x i
+
+· ∥ x∥2 − ∥ x∥ · ∂∥x∥2
+
+∂x i
+
+∥x∥22
+
+.
+
+Substituting the two known partial derivative results: 1. Partial derivative of the L2
+
+norm: ∂∥x∥2
+
+∂x i
+
+= xi
+
+∥x∥2
+
+; 2. From the collinearity condition (91): ∂∥x∥
+
+∂x i
+
+= ∥x∥∥x∥22
+
+xi.Substituting both into the partial derivative expression and simplifying term by term: 
+
+∂φ ∂x i
+
+=
+
+ ∥x∥∥x∥22
+
+xi
+
+
+
+· ∥ x∥2 − ∥ x∥ · xi
+
+∥x∥2
+
+∥x∥22
+
+=
+
+∥x∥ · xi
+
+∥x∥2
+
+− ∥x∥ · xi
+
+∥x∥2
+
+∥x∥22
+
+= 0 .
+
+The above holds for all components i = 1 , 2, . . . , n , hence ∇φ(x) = 0 for all x̸ = 0. Since 
+
+Rn \ { 0} is connected for n ≥ 2, any differentiable function with identically zero gradient on it is constant. That is, there exists a positive constant c > 0 such that 
+
+φ(x) ≡ c, ∀x̸ = 0 .
+
+Substituting back into the definition (92): 
+
+∥x∥ = c · ∥ x∥2.
+
+When x = 0, the equality holds trivially, so the formula holds for all x ∈ Rn.
+
+Step 4: Sufficiency — Reverse Verification Conversely, if ∥x∥ = c∥x∥2 (c > 0), we directly compute the gradient: 
+
+∇∥ x∥ = c · ∇∥ x∥2 = c · x
+
+∥x∥2
+
+= c
+
+∥x∥2
+
+x. 
+
+> 62 Generalized Convexity and Smoothness
+
+Clearly, the gradient is a scalar multiple of the original vector x, satisfying the collinearity condition. In summary, among everywhere-differentiable norms, those whose gradient is everywhere collinear with the argument are exactly the positive scalar multiples of the Euclidean norm. 
+
+A.6 Proof of Theorem 4.1 Theorem A.2 Consider the deterministic optimization problem in Definition 4.1. Suppose 
+
+G(θ) is H(Ψ) -smooth. Then the generalized GD algorithm satisfies the following properties: 1. The optimal learning rate is given by α = 1 . Substituting this value into the update rule yields 
+
+G(θk+1 ) ≤ G(θk) − Ψ∗(∇G(θk)) . (93) 
+
+2. The number of iterations required to satisfy the convergence criterion 
+
+Ψ∗(0) ≤ Ψ∗ ∇G(θk) ≤ Ψ∗(ε),
+
+is bounded by T = O 1/Ψ∗(ε).3. If G(θ) is both H(ψ)-convex and H(Ψ) -smooth, the number of iterations required for the generalized GD algorithm to achieve the error bound 
+
+G(θk) − G∗ ≤ ψ∗(ε)
+
+is bounded by T = O(1 /Ψ∗(ε)) .4. Assume that G(θ) is both H(ψ)-convex and H(Ψ) -smooth, where Ψ and ψ satisfy 
+
+Ψ∗(μ) ≥ tψ ∗(μ) + b for some 0 < t < 1 and b ∈ R. The number of iterations for the generalized GD algorithm to reach 
+
+G(θk) − G∗ ≤ ψ∗(ε) − ψ∗(0) − bt (94) 
+
+is bounded by T = O
+
+
+
+κ log 1
+
+> ψ∗(ε)−ψ∗(0)
+
+
+
+, where the condition number is defined as 
+
+κ = −1/log(1 − t).
+
+Proof Proof of Conclusion 1. 
+
+By Theorem 3.1, the function G satisfies 
+
+G(η) = G(θ) + ( ∇G(θ)) ⊤(η − θ) + SG(η, θ )
+
+≤ G(θ) + ( ∇G(θ)) ⊤(η − θ) + Ψ( θ − η). (95) We analyze the range of learning rates that ensure descent along the direction −(∇G(θ)) ∗ 
+
+> Ψ∗
+
+.Let the update be given by η = θ − α(∇G(θ)) ∗ 
+
+> Ψ∗
+
+with α ≥ 0. Substituting the update rule and applying Lemma 3, we obtain 
+
+> 63
+
+Qi 
+
+G(θ − α(∇G(θ)) ∗ 
+
+> Ψ∗
+
+) ≤ G(θ) − α(∇G(θ)) ⊤(∇G(θ)) ∗ 
+
+> Ψ∗
+
++ Ψ( α(∇G(θ)) ∗ 
+
+> Ψ∗
+
+)Let 
+
+F (α) = G(θ) − α(∇G(θ)) ⊤(∇G(θ)) ∗ 
+
+> Ψ∗
+
++ Ψ( α(∇G(θ)) ∗ 
+
+> Ψ∗
+
+)By Proposition 3.1, F (α) is strictly convex and 
+
+F ′(α) = 
+
+
+
+∇Ψ α∇Ψ∗(∇G(θ)) ⊤
+
+∇Ψ∗(∇G(θ)) 
+
+
+
+− ∇ G(θ)⊤(∇G(θ)) ∗
+
+> Ψ∗
+
+∇G(θ)⊤(∇G(θ)) ∗ 
+
+> Ψ∗
+
+≥ 0.
+
+Observe that when α = 1, F ′(α) = 0, so F (α) attains its minimum. Substituting α = 1 and using the Fenchel–Young identity (∇G(θ)) ⊤(∇G(θ)) ∗ 
+
+> Ψ∗
+
+= Ψ ∗(∇G(θ)) + Ψ(( ∇G(θ)) ∗ 
+
+> Ψ∗
+
+),
+
+we obtain 
+
+G(θk+1 ) ≤ G(θk) − Ψ∗(∇G(θk)) . (96) 
+
+Proof of Conclusion 2. We now use the descent inequality established above to bound the iteration complexity. From Conclusion 1, 
+
+G(θk+1 ) ≤ G(θk) − Ψ∗(∇G(θk)) . (97) Summing over T iterations leads to 
+
+G(θT ) ≤ G(θ0) − 
+
+> T−1
+
+X
+
+> k=0
+
+Ψ∗(∇G(θk)) . (98) Since G∗ = inf θ G(θ), rearranging gives 
+
+G(θ0) − G∗ ≥ G(θ0) − G(θT )
+
+≥ 
+
+> T−1
+
+X
+
+> k=0
+
+Ψ∗(∇G(θk)) 
+
+≥ T min   
+
+> 0≤k≤T−1
+
+Ψ∗(∇G(θk)) .
+
+(99) Since Ψ ∗(μ) is strictly increasing in ∥μ∥2, the condition ∥∇ G(θk)∥2 ≤ ∥ ε∥2 is equivalent to Ψ ∗(∇G(θk)) ≤ Ψ∗(ε). Therefore, to guarantee min k Ψ∗(∇G(θk)) ≤ Ψ∗(ε), it suffices to require 
+
+G(θ0) − G∗
+
+T ≤ Ψ∗(ε).
+
+Thus the iteration complexity is bounded by T = O(1 /Ψ∗(ε)). 
+
+Proof of Conclusion 3. 
+
+Since G(θ) is H(ψ)-convex, Theorem 3.1 implies 
+
+G(θ) − G∗ ≤ ψ∗(∇G(θ)) , (100) 
+
+64 Generalized Convexity and Smoothness 
+
+where G∗ = G(θ∗) is the global minimum. Since both ψ∗ and Ψ ∗ are increasing in the norm of their arguments, the condition G(θ) − G∗ ≤ ψ∗(ε) is implied by ψ∗(∇G(θk)) ≤ ψ∗(ε). Moreover, the latter is implied by ∥∇ G(θk)∥2 ≤ ∥ ε∥2, which is equivalent to Ψ ∗(∇G(θk)) ≤
+
+Ψ∗(ε). From Conclusion 2, the number of iterations is T = O(1 /Ψ∗(ε)). 
+
+Proof of Conclusion 4. Since G(θ) is H(ψ)-convex, Theorem 3.1 implies 
+
+G(θk) − G∗ ≤ ψ∗(∇G(θk)) .
+
+Since G(θ) is H(Ψ)-smooth, the descent guarantee gives G(θk) − G(θk+1 ) ≥ Ψ∗(∇G(θk)). Combining this with Ψ ∗(μ) ≥ tψ ∗(μ)+ b and the convexity bound ψ∗(∇G(θk)) ≥ G(θk)−G∗,we obtain 
+
+G(θk) − G(θk+1 ) ≥ t G(θk) − G∗
+
+ + b. (101) Rearranging, 
+
+G(θk+1 ) ≤ (1 − t)G(θk) + tG ∗ − b. (102) Define the auxiliary variable 
+
+H(θk) = G(θk) − G∗ + bt
+
+Substituting H(θk) into (102) yields 
+
+H(θk+1 ) ≤ (1 − t) H(θk).
+
+Since 0 < t < 1, iterating the recursion over T steps gives 
+
+H(θT ) ≤ H(θT −1) (1 − t)...
+
+≤ H(θ0) (1 − t)⊤ .
+
+(103) To ensure min k H(θk) ≤ ψ∗(ε) − ψ∗(0), it suffices to require 
+
+H(θ0) (1 − t)⊤ ≤ ψ∗(ε) − ψ∗(0) . (104) Taking the natural logarithm on both sides, we obtain log H(θ0)
+
+ψ∗(ε) − ψ∗(0) ≤ T · log 
+
+ 11 − t
+
+
+
+.
+
+Rearranging yields the iteration complexity 
+
+T = O
+
+
+
+κ log 1
+
+ψ∗(ε) − ψ∗(0) 
+
+
+
+,
+
+where the condition number is defined as 
+
+κ = − 1log(1 − t) .
+
+By the definition of H(θ), the condition min k H(θk) ≤ ψ∗(ε) − ψ∗(0) is equivalent to the existence of some θk such that 
+
+G(θk) − G∗ ≤ ψ∗(ε) − ψ∗(0) − bt .
+
+This confirms the logarithmic convergence rate under the stated assumptions. 
+
+> 65
+
+Qi 
+
+A.7 Proof of Proposition 4.2 Proposition A.5 Given that G(θ) is H(Ψ) -smooth but not Lipschitz smooth, classical GD as described in Equation (16) is adopted to optimize G(θ). It follows that: 1. There exists no constant step size that is universally optimal for this optimization process. 2. If a time-varying learning rate is employed, the classical GD is equivalent to the Gen-eralized GD. 
+
+Proof Let Ψ 0(·) = Ψ( ·) − Ψ(0). Given that SG(θk+1 , θ k) ≤ Ψ( θk+1 − θk), it follows that 
+
+G(θk+1 ) ≤ G(θk) + ( ∇G(θk)) ⊤(θk+1 − θk) + Ψ( θk+1 − θk). (105) According to the definition of GD, θk+1 = θk − α∇G(θk) with α ≥ 0. Subsequently, we obtain 
+
+G(θk+1 ) ≤ G(θk) − α∥∇ G(θk)∥22 + Ψ 0(α∇G(θk)) + cΨ
+
+= G(θk) − α∥∇ G(θk)∥22 + αrΨ Ψ0(∇G(θk)) + cΨ
+
+= G(θk) + K(α) + cΨ,
+
+(106) where K(α) = αrΨ Ψ0(∇G(θk)) − α∥∇ G(θk)∥22.Minimizing K(α) with respect to α, we find that the minimum of K(α) is attained at 
+
+α =
+
+ ∥∇ G(θk )∥22 
+
+> rΨΨ0(∇G(θk))
+
+1/(rΨ−1) 
+
+, and the corresponding minimum value is given by min  
+
+> α
+
+K(α) = − rΨ − 1
+
+rΨ
+
+ ∥∇ G(θk)∥22
+
+rΨ/(rΨ−1) (rΨΨ0(∇G(θk))) −1/(rΨ−1) . (107) For 0 < α < 
+
+ ∥∇ G(θk )∥22 
+
+> Ψ0(∇G(θk))
+
+1/(rΨ−1) 
+
+, it also holds that K(α) ≤ 0. Since G(θ) is not Lipschitz smooth (i.e., rΨ̸ = 2), no constant learning rate can achieve optimal convergence. When a time-varying learning rate is used and set to its optimal value, i.e., α =
+
+ ∥∇ G(θk )∥22 
+
+> rΨΨ0(∇G(θk))
+
+1/(rΨ−1) 
+
+, we have 
+
+α · ∇ G(θk) = 
+
+ ∥∇ G(θk)∥22
+
+rΨΨ0(∇G(θk)) 
+
+1/(rΨ−1) 
+
+∇G(θk)=
+
+ ∥∇ G(θk)∥22
+
+arΨ 
+
+> Ψ
+
+∥∇ G(θk)∥rΨ
+
+> 2
+
+1/(rΨ−1) 
+
+∇G(θk)= arΨ∗ 
+
+> Ψ∗
+
+∥∇ G(θk)∥(2 −rΨ)/(rΨ−1) 2 ∇G(θk)= arΨ∗ 
+
+> Ψ∗
+
+∥∇ G(θk)∥1/(rΨ−1) −12 ∇G(θk)= arΨ∗ 
+
+> Ψ∗
+
+∥∇ G(θk)∥rΨ∗ −22 ∇G(θk)= ( ∇G(θk)) ∗ 
+
+> Ψ∗
+
+.
+
+66 Generalized Convexity and Smoothness 
+
+This indicates that classical GD is transformed into Generalized GD when a time-varying learning rate is adopted and set to its optimal value. 
+
+A.8 Proof of Proposition 4.3 Proposition A.6 For any fixed value a, define pa := 1
+
+> n
+
+Pni=1 1{G(θk, z i) = a}, which represents the true proportion of the population taking the value a. The empirical probability mass function (PMF) values at a for the two groups are 
+
+ˆpa,m := 1
+
+m
+
+X
+
+> zi∈sk
+
+1{G(θk, z i) = a}, ˆpa,n −m := 1
+
+n − m
+
+X
+
+> zi∈s\sk
+
+1{G(θk, z i) = a}.
+
+Then the variance of their difference is 
+
+Var (ˆ pa,m − ˆpa,n −m) = pa(1 − pa) · n2
+
+m(n − m)( n − 1) . (108) 
+
+Consequently, the variance is minimized when m(n − m) is maximized, i.e., at m = ⌊n/ 2⌋
+
+(or m = n/ 2 when n is even). 
+
+Proof Fix a and define the indicator variables 
+
+ui := 1{G(θk, z i) = a}, i = 1 , . . . , n. 
+
+The population mean and variance of {ui}ni=1 are 
+
+μu = 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+ui = pa, σ2 
+
+> u
+
+= 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+(ui − pa)2 = pa(1 − pa).
+
+Now ˆ pa,m and ˆ pa,n −m are precisely the sample means of the two groups from this binary population. Applying the general variance formula for the difference of two sample means under simple random sampling without replacement (derived earlier): Var( ¯Xm − ¯Yn−m) = σ2 · n2
+
+m(n − m)( n − 1) ,
+
+with σ2 = σ2 
+
+> u
+
+= pa(1 − pa), yields Var (ˆ pa,m − ˆpa,n −m) = pa(1 − pa) · n2
+
+m(n − m)( n − 1) .
+
+This proves (1). Since the factor pa(1 − pa) is independent of m, the variance is minimized exactly when m(n − m) is maximized, which occurs at m = ⌊n/ 2⌋.
+
+67 Qi 
+
+A.9 Proof of Proposition 4.4 Proposition A.7 RG(s, m ) is monotonically non-increasing in batch size m:
+
+RG(s, m + 1) ≤ RG(s, m ). (109) 
+
+Consequently, RG(s, m ) attains its maximum at m = 1 and minimum at m = |s|.
+
+Proof Let Z1, Z 2, . . . be i.i.d. random variables following distribution P . Denote: 
+
+sm = ( Z1, . . . , Z m),
+
+Given sm+1 = ( Z1, . . . , Z m+1 ), for any k = 1 , . . . , m + 1, denote: 
+
+sm 
+
+> (k)
+
+= sm+1 \ { Zk},
+
+i.e., the subset of size m obtained by removing the k-th sample. For any θ:
+
+G(θ, s m+1 ) = 1
+
+m + 1 
+
+> m+1
+
+X
+
+> i=1
+
+G(θ, Z i)= 1
+
+m + 1 
+
+> m+1
+
+X
+
+> k=1
+
+1
+
+m
+
+X
+
+> i̸=k
+
+G(θ, Z i)= 1
+
+m + 1 
+
+> m+1
+
+X
+
+> k=1
+
+G(θ, s m
+
+> (k)
+
+),
+
+where G(θ, s m
+
+> (k)
+
+) is the empirical loss on sm
+
+> (k)
+
+.For each k, denote: ˆθk = arg min  
+
+> θ
+
+G(θ, s m
+
+> (k)
+
+).
+
+Since the minimum of a function average is greater than or equal to the average of the function minima, we have min  
+
+> θ
+
+G(θ, s m+1 ) ≥ 1
+
+m + 1 
+
+> m+1
+
+X
+
+> k=1
+
+G(ˆθk, s m
+
+> (k)
+
+).
+
+Taking expectations on both sides with respect to sm+1 :
+
+E min  
+
+> θ
+
+G(θ, s m+1 ) ≥ 1
+
+m + 1 
+
+> m+1
+
+X
+
+> k=1
+
+E
+
+h
+
+min  
+
+> θ
+
+G(θ, s m
+
+> (k)
+
+)
+
+i
+
+.
+
+By symmetry, all E min θ G(θ, s m
+
+> (k)
+
+) are equal to E min θ G(θ, s m). Therefore, 
+
+E min  
+
+> θ
+
+G(θ, s m+1 ) ≥ E min  
+
+> θ
+
+G(θ, s m).
+
+Consequently, RG(s, m ) attains its maximum at m = 1 and minimum at m = |s|. The proposition is proved. 
+
+68 Generalized Convexity and Smoothness 
+
+A.10 Proof of Theorem 4.2 Theorem A.3 (Generalized SGD Convergence) Let n = |s|, m = |sk|, and M be the gradient correlation factor. Applying generalized SGD yields the following convergence properties: 1. With the learning rate set to 1, the number of iterations T required for generalized SGD to achieve 
+
+max   
+
+> sk⊆s
+
+Ψ∗(∇θG(θk, s k)) ≤ Ψ∗(ε) (110) 
+
+is O( nmΨ∗(ε)−(n−m)M ), provided mΨ∗(ε) > (n − m)M .2. Assume that G(θ, z ) is both H(ψ)-convex and H(Ψ) -smooth. With the learning rate set to 1, the number of iterations required to satisfy 
+
+G(θ, s ) − G(s)∗ ≤ ψ∗(ε) − RG(s, m )
+
+is O( nmΨ∗(ε)−(n−m)M ), provided mΨ∗(ε) > (n − m)M .3. Assume that G(θ, s k) is both H(ψ)-convex and H(Ψ) -smooth, where Ψ and ψ satisfy 
+
+Ψ∗(μ) ≥ tψ ∗(μ) + b, 0 < t < 1, and b ∈ R. With the learning rate set to 1, the number of iterations for the generalized SGD algorithm to reach 
+
+Esk G(θk, s ) − G(s)∗ ≤ ψ∗(ε) − RG(s, m ) − bt − n − mtm M (111) 
+
+is bounded by T = O
+
+
+
+κ log 1
+
+> ψ∗(ε)−ψ∗(0)
+
+
+
+, where the condition number is defined as 
+
+κ = −1/ log(1 − mt/n ), which is well defined since 0 < mt/n < 1. For small t,
+
+κ ≈ 1/t , analogous to the classical condition number L/σ .
+
+Proof Proof of Conclusion 1. 
+
+Since G(θ, z ) is H(Ψ)-smooth in θ for all z ∈ sk, by Proposition 3, G(θ, s k) is also 
+
+H(Ψ)-smooth. Applying Theorem 4.1, the minimum is attained at α = 1, which gives min 
+
+> α
+
+ G(θk+1 , s k) − G(θk, s k) = −Ψ∗(∇θG(θk, s k)) . (112) Thus, 
+
+G(θk+1 , s k) − G(θk, s k) ≤ − Ψ∗(∇θG(θk, s k)) . (113) For any batch sk, after updating with the gradient ∇θG(θk, s k), we have 
+
+G(θk+1 , s \ sk) − G(θk, s \ sk) ≤ M. (114) For the full-set loss G(θk+1 , s ), we have 
+
+G(θk+1 , s ) − G(θk, s ) = n − mn
+
+ G(θk+1 , s \ sk) − G(θk, s \ sk)
+
++ mn
+
+ G(θk+1 , s k) − G(θk, s k)
+
+≤ n − mn M + mn
+
+ G(θk+1 , s k) − G(θk, s k).
+
+(115) 
+
+69 Qi 
+
+Substituting Equation (113) into the preceding inequality, we obtain 
+
+G(θk+1 , s ) − G(θk, s ) ≤ n − mn M − mn Ψ∗(∇θG(θk, s k)) .
+
+Rearranging yields Ψ∗(∇θG(θk, s k)) ≤ n − mm M + nm [G(θk, s ) − G(θk+1 , s )] .
+
+Summing over k = 0 to T − 1:  
+
+> T−1
+
+X
+
+> k=0
+
+max   
+
+> sk⊆s
+
+Ψ∗(∇θG(θk, s k)) ≤ n − mm M T + nm 
+
+> T−1
+
+X
+
+> k=0
+
+[G(θk, s ) − G(θk+1 , s )] = n − mm M T + nm [G(θ0, s ) − G(s)∗].
+
+Note that G(θk+1 , s \ sk) − G(θk, s \ sk) varies with sk across batches, preventing tele-scoping cancellation. The gradient correlation factor M is introduced to control this term. Dividing both sides by T and applying the definition of model capacity risk, min   
+
+> k=0 ,...,T −1
+
+max   
+
+> sk⊆s
+
+Ψ∗(∇θG(θk, s k)) ≤ 1
+
+T 
+
+> T−1
+
+X
+
+> k=0
+
+Ψ∗(∇θG(θk, s k)) 
+
+≤ n − mm M + nmG(θ0, s ) − G(s)∗
+
+T .
+
+To ensure max   
+
+> sk⊆s
+
+Ψ∗(∇θG(θk, s k)) ≤ Ψ∗(ε),
+
+it suffices to set n − mm M + nmG(θ0, s ) − G(s)∗
+
+T ≤ Ψ∗(ε),
+
+which implies 
+
+T ≥ nmG(θ0, s ) − G(s)∗
+
+Ψ∗(ε) − n−mm M = O( nmΨ∗(ε) − (n − m)M ).
+
+Proof of Conclusion 2. 
+
+Since G(sk)∗ = min θ G(θ, s k) is the global minimum of G(θ, s k), by Theorem 3.1 we have 
+
+G(θ, s k) − G(sk)∗ ≤ ψ∗(∇θG(θ, s k)) .
+
+Taking expectations over sk and using the definition of model capacity risk, 
+
+G(θ, s ) − G(s)∗ = EG(θ, s k) − G(sk)∗
+
+ − RG(s, m ) ≤ E ψ∗(∇θG(θ, s k)) − RG(s, m ).
+
+Since G(θ, s ) − G(s)∗ ≥ 0, it follows that E ψ∗(∇θG(θ, s k)) ≥ RG(s, m ). Thus, the condition G(θ, s ) − G(s)∗ ≤ ψ∗(ε) − RG(s, m ) is equivalent to max 
+
+> sk
+
+ψ∗(∇θG(θ, s k)) ≤ ψ∗(ε).
+
+70 Generalized Convexity and Smoothness 
+
+By Conclusion 1, this is achieved within 
+
+T = O
+
+ nmΨ∗(ε) − (n − m)M
+
+
+
+iterations, completing the proof. 
+
+Proof of Conclusion 3. 
+
+Since G(θ, s k) is H(ψ)-convex, Theorem 3.1 implies 
+
+G(θ, s k) − G(sk)∗ ≤ ψ∗(∇θG(θk, s k)) .
+
+Since G(θ, s k) is H(Ψ)-smooth, the descent guarantee gives G(θk, s k) − G(θk+1 , s k) ≥
+
+Ψ∗(∇θG(θk, s k)). Combining this with Ψ ∗(μ) ≥ tψ ∗(μ) + b and the convexity bound 
+
+ψ∗(∇θG(θk, s k)) ≥ G(θk, s k) − G(sk)∗ from above, we obtain 
+
+G(θk, s k) − G(θk+1 , s k) ≥ t G(θk, s k) − G(sk)∗
+
+ + b. (116) Rearranging, 
+
+G(θk+1 , s k) ≤ (1 − t)G(θk, s k) + tG (sk)∗ − b, (117) taking expectations with respect to sk on both sides, 
+
+Esk [G(θk, s k) − G(θk+1 , s k)] ≥ t Esk G(θk, s k) − Esk G(sk)∗
+
+ + b. (118) Since 
+
+G(θk+1 , s ) − G(θk, s ) ≤ n − mn M + mn
+
+ G(θk+1 , s k) − G(θk, s k), (119) taking expectations with respect to sk on both sides of the preceding inequality, 
+
+Esk G(θk+1 , s ) − G(θk, s ) ≤ n − mn M + mn
+
+ Esk G(θk+1 , s k) − Esk G(θk, s k), (120) i.e., 
+
+nm
+
+ Esk G(θk, s ) − Esk G(θk+1 , s ) − n − mm M ≥  Esk G(θk, s k) − Esk G(θk+1 , s k). (121) Substituting into (118), we obtain 
+
+nm
+
+ Esk G(θk, s ) − Esk G(θk+1 , s ) − n − mm M ≥ t Esk G(θk, s k) − Esk G(sk)∗
+
+ + b. (122) Rearranging, we obtain 
+
+Esk G(θk, s ) − Esk G(θk+1 , s ) − n − mn M ≥ mt n
+
+ Esk G(θk, s k) − Esk G(sk)∗
+
+ + mb n , (123) which gives 
+
+Esk G(θk+1 , s ) ≤ (1 − mt n )Esk G(θk, s ) − n − mn M + mt n Esk G(sk)∗ − mb n
+
+= (1 − mt n )Esk G(θk, s ) − n − mn M + mt n (G(s)∗ − RG(s, m )) − mb n .
+
+(124) 
+
+71 Qi 
+
+Let t′ = mt n and b′ = t′(G(s)∗ − RG(s, m )) − mb n − n−mn M . Then 
+
+Esk G(θk+1 , s ) ≤ (1 − t′)Esk G(θk, s ) + b′. (125) Define the auxiliary variable 
+
+H(k) = Esk G(θk, s ) − b′
+
+t′ .
+
+Substituting H(k) into (125) yields 
+
+H(k + 1) ≤  1 − t′ H(k).
+
+Since 0 < t < 1, iterating the recursion over T steps gives 
+
+H(T ) ≤ H(T − 1)  1 − t′
+
+...
+
+≤ H(0)  1 − t′⊤ .
+
+(126) To ensure min k H(k) ≤ ψ∗(ε) − ψ∗(0), it suffices to require 
+
+H(0)  1 − t′⊤ ≤ ψ∗(ε) − ψ∗(0) . (127) Taking the natural logarithm on both sides, we obtain log H(0) 
+
+ψ∗(ε) − ψ∗(0) ≤ T · log 
+
+ 11 − t′
+
+
+
+.
+
+Rearranging yields the iteration complexity 
+
+T = O
+
+
+
+κ log 1
+
+ψ∗(ε) − ψ∗(0) 
+
+
+
+,
+
+where the condition number is defined as 
+
+κ = − 1log(1 − mt/n ) .
+
+By the definition of H(k), the condition min k H(k) ≤ ψ∗(ε) − ψ∗(0) is equivalent to the existence of some θk such that 
+
+Esk G(θk, s ) − b′
+
+t′ ≤ ψ∗(ε) − ψ∗(0) ,
+
+i.e., 
+
+Esk G(θk, s ) ≤ ψ∗(ε) − ψ∗(0) + G(s)∗ − RG(s, m ) − bt − n − mtm M. 
+
+Therefore, 
+
+Esk G(θk, s ) − G(s)∗ ≤ ψ∗(ε) − RG(s, m ) − bt − n − mtm M − ψ∗(0) .
+
+72 Generalized Convexity and Smoothness 
+
+The required iteration complexity is 
+
+T = O
+
+
+
+κ log 1
+
+ψ∗(ε) − ψ∗(0) 
+
+
+
+,
+
+with κ = −1/ log(1 − mt/n ). This confirms the logarithmic convergence rate under the stated assumptions. 
+
+A.11 Proof of Theorem 5.1 Theorem A.4 For the stochastic composite optimization problem G(θ, s ) (Definition 5.1), the following statements hold: 1. For any sample z:
+
+Φ∗( ∇θG(θ, z )
+
+∥Jθhθ(z)∥ ) ≤ G(θ, z ) − G(z)∗ ≤ ϕ∗(∇θG(θ, z )∥Jθhθ(z)+∥).
+
+2. For the dataset s:
+
+EΦ∗( ∇θG(θ, Z )
+
+∥Jθhθ(Z)∥ ) ≤ G(θ, s ) − G(s)∗ + RG(s, 1) ≤ Eϕ∗(∇θG(θ, Z )∥Jθhθ(Z)+∥).
+
+Proof By applying the chain rule for differentiation, we have 
+
+∇θG(θ, z ) = ∂h θ(z)
+
+∂θ ∇hG(θ, z )= Jθhθ(z)∇hG(θ, z ).
+
+According to the definitions of the induced norm and the lower induced norm, we have 1
+
+∥Jθhθ(z)+∥ ∥∇ hG(θ, z )∥ ≤ ∥∇ θG(θ, z )∥ ≤ ∥ Jθhθ(z)∥∥∇ hG(θ, z )∥.
+
+It follows that 
+
+∥∇ θG(θ, z )∥∥Jθhθ(z)∥ ≤ ∥∇ hG(θ, z )∥ ≤ ∥∇ θG(θ, z )∥∥ Jθhθ(z)+∥.
+
+According to the definition of energy functions and the fourth conclusion of Proposi-tion 3.1, we have 
+
+ϕ∗(∇hF (hθ(z))) ≤ ϕ∗(∇θG(θ, z )∥Jθhθ(z)+∥),
+
+Φ∗( ∇θG(θ, z )
+
+∥Jθhθ(z)∥ ) ≤ Φ∗(∇hF (hθ(z))) . (128) According to Theorem 3, we have Φ∗(∇hF (hθ(z))) ≤ G(θ, z ) − G(z)∗ ≤ ϕ∗(∇hF (hθ(z))) . (129) 
+
+> 73
+
+Qi 
+
+Therefore, we have 
+
+G(θ, z ) − G(z)∗ ≤ ϕ∗(∇hF (hθ(z))) ≤ ϕ∗(∇θG(θ, z )∥Jθhθ(z)+∥),G(θ, z ) − G(z)∗ ≥ Φ∗(∇hF (hθ(z))) ≥ Φ∗( ∇θG(θ, z )
+
+∥Jθhθ(z)∥ ).
+
+Combining the above two inequalities, we obtain Φ∗( ∇θG(θ, z )
+
+∥Jθhθ(z)∥ ) ≤ G(θ, z ) − G(z)∗ ≤ ϕ∗(∇θG(θ, z )∥Jθhθ(z)+∥). (130) Taking expectations with respect to Z in the above inequality, we obtain 
+
+EΦ∗( ∇θG(θ, Z )
+
+∥Jθhθ(Z)∥ ) ≤ G(θ, s ) − EG(Z)∗ ≤ Eϕ∗(∇θG(θ, Z )∥Jθhθ(Z)+∥).
+
+By the definition of model capacity risk, RG(s, 1) = G(s)∗ − EG(Z)∗, so we have 
+
+EΦ∗( ∇θG(θ, Z )
+
+∥Jθhθ(Z)∥ ) ≤ G(θ, s ) − G(s)∗ + RG(s, 1) ≤ Eϕ∗(∇θG(θ, Z )∥Jθhθ(Z)+∥).
+
+A.12 Proof of Corollary 5.3 Corollary A.1 Assume that the model fθ(x) can fit any single sample, i.e., L(z)∗ = 0 for all z ∈ Z . Then the following conclusions hold: 1. For the MSE loss L(θ, z ) = 12 ∥y − fθ(x)∥22, we have 
+
+∥∇ θL(θ, z )∥22
+
+2σ2max (Jθfθ(z)) ≤ L (θ, z ) ≤ ∥∇ θL(θ, z )∥22
+
+2σ2min (Jθfθ(z)) ,
+
+E∥∇ θL(θ, Z )∥22
+
+2σ2max (Jθfθ(s)) ≤ L (θ, s ) ≤ E∥∇ θL(θ, Z )∥22
+
+2σ2min (Jθfθ(s)) .
+
+2. For the Softmax CrossEntropy loss L(θ, z ) = CrossEntropy( y, Softmax( fθ(x))) , where 
+
+y is a one-hot label, we have 
+
+∥∇ θL(θ, z )∥22
+
+8 ln 2 σ2max (Jθfθ(z)) ≤ L (θ, z ) ≤ ∥∇ θL(θ, z )∥22
+
+4 min i pi(x)σ2min (Jθfθ(z)) ,
+
+E∥∇ θL(θ, Z )∥22
+
+8 ln 2 σ2max (Jθfθ(s)) ≤ L (θ, s ) ≤ E∥∇ θL(θ, Z )∥22
+
+4 min i pi(s)σ2min (Jθfθ(s)) ,
+
+where p(x) = Softmax( fθ(x)) is the Softmax output and min i pi(s) = min x∈s min i pi(x)
+
+is the minimum value of p.
+
+74 Generalized Convexity and Smoothness 
+
+3. Fenchel Loss Bound: Suppose Ω is a function whose domain is a closed convex domain, which is continuously differentiable, twice differentiable on its domain, and whose Hessian matrix is positive definite. Let λmin and λmax denote the smallest and largest eigenvalues of the Hessian matrix ∇2Ω( μ) for all μ in the domain of Ω. Then we have 
+
+∥∇ θL(θ, z )∥22
+
+2λmin σ2max (Jθfθ(z)) ≤ L (θ, z ) ≤ ∥∇ θL(θ, z )∥22
+
+2λmax σ2min (Jθfθ(z)) ,
+
+E∥∇ θL(θ, Z )∥22
+
+2λmin σ2max (Jθfθ(s)) ≤ L (θ, s ) ≤ E∥∇ θL(θ, Z )∥22
+
+2λmax σ2min (Jθfθ(s)) .
+
+Proof Part 1 (MSE). By Proposition 2, the MSE loss 12 ∥fθ(x) − y∥22 is both H(ϕ)-convex and H(Φ)-smooth with respect to fθ(x), where ϕ(·) = Φ( ·) = ∥ · ∥ 22/2. By Proposition 2, 
+
+ϕ∗(·) = Φ ∗(·) = ∥ · ∥ 22/2. According to Corollary 5.2, we obtain the stated bounds: 
+
+∥∇ θL(θ, z )∥22
+
+2σ2max (Jθfθ(z)) ≤ L (θ, z ) − L (z)∗ ≤ ∥∇ θL(θ, z )∥22
+
+2σ2min (Jθfθ(z)) ,
+
+E ∥∇ θL(θ, Z )∥22
+
+2σ2max (Jθfθ(Z)) ≤ L (θ, s ) − L (s)∗ + RL(s, 1) ≤ E ∥∇ θL(θ, Z )∥22
+
+2σ2min (Jθfθ(Z)) .
+
+By Definition 5.2, σmax (Jθfθ(s)) = max z∈s σmax (Jθfθ(z)) and σmin (Jθfθ(s)) = min z∈s σmin (Jθfθ(z)). Since L(z)∗ = 0 for all z ∈ Z , we have 
+
+∥∇ θL(θ, z )∥22
+
+2σ2max (Jθfθ(z)) ≤ L (θ, z ) ≤ ∥∇ θL(θ, z )∥22
+
+2σ2min (Jθfθ(z)) ,
+
+E∥∇ θL(θ, Z )∥22
+
+2σ2max (Jθfθ(s)) ≤ L (θ, s ) ≤ E∥∇ θL(θ, Z )∥22
+
+2σ2min (Jθfθ(s)) .
+
+Part 2 (Softmax CrossEntropy). By Proposition 3, the loss CrossEntropy( y, Softmax( fθ(x))) is both H(ϕ)-convex and H(Φ)-smooth with respect to fθ(x), where ϕ(·) = min i pi(x)∥ · ∥ 22,Φ( ·) = 2 ln 2 ∥ · ∥ 22, and p(x) = Softmax( fθ(x)). By Proposition 2, ϕ∗(·) = ∥·∥ 22  
+
+> 4 min ipi(x)
+
+and Φ∗(·) = ∥·∥ 22 
+
+> 8 ln 2
+
+. According to Corollary 5.2 and Definition 5.2, and since L(z)∗ = 0 for all 
+
+z ∈ Z , we obtain the stated bounds: 
+
+∥∇ θL(θ, z )∥22
+
+8 ln 2 σ2max (Jθfθ(z)) ≤ L (θ, z ) ≤ ∥∇ θL(θ, z )∥22
+
+4 min i pi(x)σ2min (Jθfθ(z)) ,
+
+E∥∇ θL(θ, Z )∥22
+
+8 ln 2 σ2max (Jθfθ(s)) ≤ L (θ, s ) ≤ E∥∇ θL(θ, Z )∥22
+
+4 min i pi(s)σ2min (Jθfθ(s)) ,
+
+where p(x) = Softmax( fθ(x)) and min i pi(s) = min x∈s min i pi(x). 
+
+Part 3 (Fenchel Loss Bound). According to Proposition 1, Ω is H(Φ)-smooth and 
+
+H(ϕ)-convex, where Φ( ·) = λmax ∥ · ∥ 22/2 and ϕ(·) = λmin ∥ · ∥ 22/2. By Proposition 1 and Proposition 2, G∗ is H(ϕ∗)-smooth and H(Φ ∗)-convex, where Φ ∗(·) = ∥·∥ 22 
+
+> 2λmax
+
+and ϕ∗(·) =  
+
+> ∥·∥ 22
+> 2λmin
+
+.
+
+75 Qi 
+
+By Proposition 4, dΩ(y, f θ(x)) is H(ϕ∗)-smooth and H(Φ ∗)-convex, where Φ ∗(·) = ∥·∥ 22
+
+> 2λmax
+
+and ϕ∗(·) = ∥·∥ 22 
+
+> 2λmin
+
+. According to Corollary 5.2 and Definition 5.2, and since L(z)∗ = 0 for all z ∈ Z , we obtain the stated bounds: 
+
+∥∇ θL(θ, z )∥22
+
+2λmin σ2max (Jθfθ(z)) ≤ L (θ, z ) ≤ ∥∇ θL(θ, z )∥22
+
+2λmax σ2min (Jθfθ(z)) ,
+
+E∥∇ θL(θ, Z )∥22
+
+2λmin σ2max (Jθfθ(s)) ≤ L (θ, s ) ≤ E∥∇ θL(θ, Z )∥22
+
+2λmax σ2min (Jθfθ(s)) .
+
+A.13 Proof of Proposition 5.1 Proposition A.8 Let d denote the dimension of the model output and m denote the number of model parameters, with d ≤ m−1. If each column of the Jacobian matrix Jθf (x) is drawn uniformly from the ball Bmϵ = {v ∈ Rm : ∥v∥2 ≤ ϵ}, then with probability at least 1 − O(1 /d ),it follows that: 
+
+σmin (Jθf (x)) ≥ (1 − 2 log dm )ϵ, σ2max (Jθf (x)) 
+
+σ2min (Jθf (x)) ≤ ζ(m, d ) + 1 ,
+
+(131) 
+
+where ζ(m, d ) = 2d√6 log d√m−1
+
+
+
+1 − 2 log dm
+
+−2
+
+. For fixed d and sufficiently large m, ζ(m, d ) is decreasing in m; for fixed m, it is increasing in d.
+
+Proof Define A = Jθf (x)⊤Jθf (x). Then A is a symmetric positive semidefinite matrix, and we have λmin (A) ≤ Aii ≤ λmax (A). Since each column of Jθf (x) is drawn independently and uniformly from the ball Bmϵ = {v ∈ Rm : ∥v∥2 ≤ ϵ}, by Lemma 8.7, with probability at least 1 − O(1 /d ) the following holds: 
+
+Aii = ∥Jθf (x)i∥22 ≥
+
+
+
+1 − 2 log dm
+
+2
+
+ϵ2, for i = 1 , . . . , d, 
+
+|Aij | = |⟨ Jθf (x)i, Jθf (x)j ⟩| ≤ √6 log d
+
+√m − 1 ϵ2 for all i, j = 1 , . . . , d, i ̸ = j. 
+
+(132) Then the following holds with probability at least 1 − O(1 /d ): 
+
+σmin (Jθf (x)) ≥ (1 − 2 log dm )ϵ, σmax (Jθf (x)) ≥ (1 − 2 log dm )ϵ. 
+
+(133) According to Lemma 8.8, there exist k, k ′ ∈ { 1, · · · , d } such that 
+
+λmax (A) − Akk ≤ Rk,Ak′k′ − λmin (A) ≤ Rk′ , (134) 
+
+76 Generalized Convexity and Smoothness 
+
+where Rk = P  
+
+> 1≤j≤d,j ̸=k
+
+|Akj |, Rk′ = P  
+
+> 1≤j≤d,j ̸=k′
+
+|Ak′j |. Based on the inequalities (132), we obtain 
+
+Rk + Rk′ ≤ 2( d − 1) 
+
+√6 log d
+
+√m − 1 ϵ2. (135) Since Akk ≤ ϵ2 and d ≤ m − 1, we have 
+
+λmax (A) − λmin (A) ≤ Rk + Rk′ + Akk − Ak′k′
+
+≤ Rk + Rk′ + ϵ2 − Ak′k′
+
+≤ 2( d − 1) 
+
+√6 log d
+
+√m − 1 ϵ2 + ϵ2 −
+
+
+
+1 − 2 log dm
+
+2
+
+ϵ2
+
+≤ 2( d − 1) ϵ2
+
+√6 log d
+
+√m − 1 + 4 log dm ϵ2
+
+≤ 2dϵ 2√6 log d
+
+√m − 1 .
+
+(136) By dividing both sides of the aforementioned inequality by the corresponding sides of in-equalities (133), we obtain: 
+
+σ2max (Jθf (x)) 
+
+σ2min (Jθf (x)) ≤ ζ(m, d ) + 1 , (137) where ζ(m, d ) = 2d√6 log d√m−1 (1 − 2 log dm )−2.
+
+A.14 Proof of Lemma 6.1 Lemma A.1 Let F (x) = ∥x∥r 
+
+> 2
+
+with 1 < r < 2. Then F satisfies H(Φ) -smoothness but is not globally Lipschitz smooth, where Φ( ·) = 2 2−r∥ · ∥ r
+
+> 2
+
+. Moreover, Φ( y − x) provides a tight upper bound for the first-order Taylor remainder SF (y, x ).
+
+Proof 
+
+We first show that F is not Lipschitz smooth. For x̸ = 0, the Hessian of F (x) = ∥x∥r 
+
+> 2
+
+is given by 
+
+∇2F (x) = r∥x∥r−4 h
+
+(r − 2) xx ⊤ + ∥x∥2I
+
+i
+
+.
+
+Letting v = x/ ∥x∥ be the unit vector aligned with x, the corresponding quadratic form satisfies 
+
+v⊤∇2F (x)v = r∥x∥r−4 (r − 2) ∥x∥2 + ∥x∥2 = r(r − 1) ∥x∥r−2.
+
+As x → 0 and 1 < r < 2, we have r − 2 < 0, so ∥x∥r−2 → +∞, implying unbounded eigenvalues of the Hessian. For a C2 function, gradient Lipschitz continuity is equivalent to a uniformly bounded Hessian. Thus, the gradient of F is not Lipschitz continuous, and F
+
+is not Lipschitz smooth. 
+
+77 Qi 
+
+We now prove that F satisfies H(Φ)-smoothness. By the fundamental theorem of cal-culus, 
+
+F (y) − F (x) = 
+
+Z 10
+
+ddt F (x + t(y − x)) dt 
+
+=
+
+Z 10
+
+⟨∇ F (x + t(y − x)) , y − x⟩ dt. 
+
+Since ⟨∇ F (x), y − x⟩ = R 10 ⟨∇ F (x), y − x⟩ dt , the remainder term 
+
+SF (y, x ) = F (y) − F (x) − ⟨∇ F (x), y − x⟩
+
+can be written as 
+
+SF (y, x ) = 
+
+Z 10
+
+⟨∇ F (x + t(y − x)) − ∇ F (x), y − x⟩ dt. 
+
+Taking absolute values and applying the Cauchy–Schwarz inequality and the triangle in-equality for integrals yields 
+
+|SF (y, x )| ≤ 
+
+Z 10
+
+|⟨∇ F (x + t(y − x)) − ∇ F (x), y − x⟩| dt 
+
+≤
+
+Z 10
+
+∥∇ F (x + t(y − x)) − ∇ F (x)∥2∥y − x∥2dt. (138) For 1 < r < 2, the gradient satisfies a H¨ older continuity condition (Rodomanov and Nesterov, 2020, Theorem 6.3): for all x, y ∈ Rd,
+
+∥∇ F (x) − ∇ F (y)∥2 ≤ 22−rr∥x − y∥r−12 .
+
+Substituting x + t(y − x) for y in this bound, we obtain 
+
+∥∇ F (x + t(y − x)) − ∇ F (x)∥2 ≤ 22−rr t r−1∥y − x∥r−12 .
+
+Inserting this expression back into (138) gives 
+
+|SF (y, x )| ≤ 
+
+Z 10
+
+22−rr t r−1∥y − x∥r 
+
+> 2
+
+dt 
+
+= 2 2−rr∥y − x∥r
+
+> 2
+
+Z 10
+
+tr−1dt. 
+
+Using R 10 tr−1dt = 1 /r , we arrive at 
+
+|SF (y, x )| ≤ 22−r∥y − x∥r
+
+> 2
+
+.
+
+With Φ( ·) = 2 2−r∥ · ∥ r
+
+> 2
+
+, the function F satisfies H(Φ)-smoothness, which completes the proof. 
+
+78 Generalized Convexity and Smoothness 
+
+References 
+
+H. Abbaszadehpeivasti, E. de Klerk, and M. Zamani. Conditions for linear convergence of the gradient method for non-convex optimization. Optimization Letters , 17(5):1105–1125, 2023. O. Alabdali, A. Guessab, and G. Schmeisser. Characterizations of uniform convexity for differentiable functions. Applicable Analysis and Discrete Mathematics , 13(3):721–732, 2019. Y. Arjevani, Y. Carmon, J. C. Duchi, D. J. Foster, N. Srebro, and B. E. Woodworth. Lower bounds for non-convex stochastic optimization. Math. Program. , 199(1):165–214, 2023. doi: 10.1007/S10107-022-01822-7. J. L. Ba, J. R. Kiros, and G. E. Hinton. Layer normalization. arXiv preprint , 2016. M. Blondel, A. F. Martins, and V. Niculae. Learning with fenchel-young losses. J. Mach. Learn. Res. , 21(35):1–69, 2020. A. Blum, J. Hopcroft, and R. Kannan. Foundations of data science . Cambridge University Press, UK, 2020. L. Bottou, F. E. Curtis, and J. Nocedal. Optimization methods for large-scale machine learning. SIAM Rev. , 60(2):223–311, 2018. doi: 10.1137/16M1080173. S. P. Boyd and L. Vandenberghe. Convex Optimization . Cambridge University Press, 2014. ISBN 978-0-521-83378-3. doi: 10.1017/CBO9780511804441. Y. Carmon, J. C. Duchi, O. Hinder, and A. Sidford. Lower bounds for finding stationary points I. Math. Program. , 184(1):71–120, 2020. doi: 10.1007/S10107-019-01406-Y. S. Chen, Z. Li, and Y. Chi. Escaping saddle points in heterogeneous federated learning via distributed SGD with communication compression. In S. Dasgupta, S. Mandt, and Y. Li, editors, Proc. Mach. Learn. Res. (AISTATS) , Proceedings of Machine Learning Research, pages 2701–2709. PMLR, 2024. Z. Chen, Y. Zhou, Y. Liang, and Z. Lu. Generalized-smooth nonconvex optimization is as efficient as smooth nonconvex optimization. In Proc. Int. Conf. Mach. Learn. (ICML) ,volume 202 of Proceedings of Machine Learning Research , pages 5396–5427, Honolulu, Hawaii, USA, 2023. T. M. Cover. Elements of Information Theory (Wiley Series in Telecommunications and Signal Processing) . Elements of Information Theory (Wiley Series in Telecommunications and Signal Processing), New York, NY, United States, 2017. M. Crawshaw, M. Liu, F. Orabona, W. Zhang, and Z. Zhuang. Robustness to unbounded smoothness of generalized signsgd. In Proc. Adv. Neural Inf. Process. Syst. (NeurIPS) ,page 0, 2022. 
+
+> 79 Qi
+
+I. Csiszar and Z. Talata. Context tree estimation for not necessarily finite memory processes, via bic and mdl. IEEE Transactions on Information Theory , 52(3):1007–1016, 2006. doi: 10.1109/TIT.2005.864431. A. Cutkosky and F. Orabona. Momentum-based variance reduction in non-convex SGD. In Proc. Adv. Neural Inf. Process. Syst. (NeurIPS) , pages 15210–15219, Vancouver, BC, Canada, 2019. Nips. K. Do, D. Nguyen, H. Nguyen, L. Tran-Thanh, N.-H. Tran, and Q.-V. Pham. Revisiting lars for large batch training generalization of neural networks, 2024. A. Dosovitskiy, L. Beyer, A. Kolesnikov, D. Weissenborn, X. Zhai, T. Unterthiner, M. De-hghani, M. Minderer, G. Heigold, S. Gelly, et al. An image is worth 16x16 words: Trans-formers for image recognition at scale. arXiv preprint , 2020. arXiv:2010.11929 .A. C. Duzgun, S. Jelassi, and Y. Li. How does overparameterization affect features?, 2024. C. Fang, C. J. Li, Z. Lin, and T. Zhang. SPIDER: near-optimal non-convex optimization via stochastic path-integrated differential estimator. In Proc. Adv. Neural Inf. Process. Syst. (NeurIPS) , pages 687–697, Montr´ eal, Canada, 2018. Nips. R. Ge, F. Huang, C. Jin, and Y. Yuan. Escaping from saddle points - online stochastic gra-dient for tensor decomposition. In Proc. Mach. Learn. Res. (COLT) , volume 40 of JMLR Workshop and Conference Proceedings , pages 797–842, Paris, France, 2015. JMLR.org. S. Ghadimi and G. Lan. Stochastic first- and zeroth-order methods for nonconvex stochastic programming. SIAM J. Optim. , 23(4):2341–2368, 2013. E. Gorbunov, N. Tupitsa, S. Choudhury, A. Aliev, P. Richt´ arik, S. Horv´ ath, and M. Tak´ aˇ c. Methods for convex ( l0, l 1)-smooth optimization: Clipping, acceleration, and adaptivity, 2024. B. Grimmer. General h¨ older smooth convergence rates follow from specialized rates assum-ing growth bounds. J. Optimiz. Theory. App , 197:51–70, 2021. S. Haykin and B. Kosko. GradientBased Learning Applied to Document Recognition , pages 306–351. 2001. doi: 10.1109/9780470544976.ch9. K. He, X. Zhang, S. Ren, and J. Sun. Deep residual learning for image recognition. In 
+
+Proc. IEEE Conf. Comput. Vis. Pattern Recognit. (CVPR) , pages 770–778, Las Vegas, NV, USA, 2016. IEEE Computer Society. doi: 10.1109/CVPR.2016.90. H. Hu. Chinese-text-classification-pytorch. GitHub Repository, https://github.com/ kentaroy47/vision-transformers-cifar10 , Mar. 2025. Accessed: 2025. A. Jacot, C. Hongler, and F. Gabriel. Neural tangent kernel: Convergence and generalization in neural networks. In Proc. Adv. Neural Inf. Process. Syst. (NeurIPS) , volume 31, pages 8580–8589, 2018. 
+
+> 80 Generalized Convexity and Smoothness
+
+A. Jentzen, B. Kuckuck, A. Neufeld, and P. von Wurstemberger. Strong error analysis for stochastic gradient descent optimization algorithms. IMA Journal of Numerical Analysis ,41(1):455–492, 2021. doi: 10.1093/imanum/drz055. S. Kakade, S. Shalev-Shwartz, A. Tewari, et al. On the duality of strong convexity and strong smoothness: Learning applications and matrix regularization. Unpublished Manuscript, http://ttic. uchicago. edu/shai/papers/KakadeShalevTewari09. pdf , 2(1):35, 2009. K. Karhadkar, M. Murray, H. Tseran, and G. Mont´ ufar. Mildly overparameterized relu networks have a favorable loss landscape. Trans. Mach. Learn. Res. , 2024, 2024. N. S. Keskar and R. Socher. Improving generalization performance by switching from adam to SGD. CoRR , abs/1712.07628, 2017. N. S. Keskar, D. Mudigere, J. Nocedal, M. Smelyanskiy, and P. T. P. Tang. On large-batch training for deep learning: Generalization gap and sharp minima. In Proc. Int. Conf. Learn. Represent. (ICLR) , 2017. Y. Kim. Convolutional neural networks for sentence classification. In Proc. Conf. Empirical Methods Nat. Lang. Process. (EMNLP) , pages 1746–1751. ACL, 2014. doi: 10.3115/V1/ D14-1181. M. Kohler. On the rate of convergence of an over-parametrized deep neural network regres-sion estimate learned by gradient descent. IEEE Trans. Inf. Theory , 72(3):1777–1797, 2026. A. Krizhevsky. Learning multiple layers of features from tiny images. Handbook of Systemic Autoimmune Diseases , 1(4), 2009. A. Krizhevsky, G. Hinton, et al. Learning multiple layers of features from tiny images. 
+
+Handbook of Systemic Autoimmune Diseases , 1(4), 2009. Y. Lecun, L. Bottou, Y. Bengio, and P. Haffner. Gradient-based learning applied to doc-ument recognition. Proceedings of the IEEE , 86(11):2278–2324, 1998. doi: 10.1109/5. 726791. S. Lee, C. He, and S. Avestimehr. Achieving small-batch accuracy with large-batch scala-bility via hessian-aware learning rate adjustment. Neural Networks , 158:1–14, 2023. H. Li and Z. Lin. Restarted nonconvex accelerated gradient descent: No more polyloga-rithmic factor in the in the o( ϵ−7/4) complexity. J. Mach. Learn. Res. , 24:157:1–157:37, 2023. H. Li, J. Qian, Y. Tian, A. Rakhlin, and A. Jadbabaie. Convex and non-convex optimization under generalized smoothness. In Proc. Adv. Neural Inf. Process. Syst. (NeurIPS) , New Orleans, LA, USA, 2023a. Nips. H. Li, J. Qian, Y. Tian, A. Rakhlin, and A. Jadbabaie. Convex and non-convex optimization under generalized smoothness. In NeurIPS , 2023b. 
+
+> 81 Qi
+
+X. Li and D. Roth. Learning question classifiers. In Proc. 19th Int. Conf. Comput. Lin-guistics (COLING 2002) , 2002. G.-H. Lin and M. Fukushima. Some exact penalty results for nonlinear programs and mathematical programs with equilibrium constraints. J. Optimiz. Theory. App , 118: 67–80, 2003. H.-T. D. Liu, F. Williams, A. Jacobson, S. Fidler, and O. Litany. Learning smooth neural functions via lipschitz regularization. In ACM SIGGRAPH , pages 1–13, 2022. B. B. Mohsen, M. A. Noor, K. I. Noor, and M. Postolache. Strongly convex functions of higher order involving bifunction. Mathematics , 7(11):1028, 2019. Y. Nesterov. How to advance in structural convex optimization. OPTIMA , 78:2–5, 2008. Y. Nesterov. Introductory lectures on convex optimization: A basic course , volume 87. Springer Science & Business Media, 2013. L. M. Nguyen, J. Liu, K. Scheinberg, and M. Tak´ ac. SARAH: A novel method for machine learning problems using stochastic recursive gradient. In Proc. Int. Conf. Mach. Learn. (ICML) , volume 70 of Proceedings of Machine Learning Research , pages 2613–2621, Syd-ney, NSW, Australia, 2017. P.-M. Nguyen and H. T. Pham. A rigorous framework for the mean field limit of multilayer neural networks. Mathematical Statistics and Learning , 6(3):201–357, 2023. M. A. Noor and K. I. Noor. Higher order strongly general convex functions and variational inequalities. AIMS Math , 5(4):3646–3663, 2020. M. A. Noor and K. I. Noor. Properties of higher order preinvex functions. Numerical Algebra, Control & Optimization , 2021. L. Oneto, S. Ridella, and D. Anguita. Do we really need a new theory to understand over-parameterization? Neurocomputing , 543:126227, 2023. B. Qi, W. Gong, and L. Li. Towards understanding the optimization mechanisms in deep learning. Appl. Intell. , 55(15):976, 2025a. B. Qi, W. Gong, and L. Li. Extended convexity and smoothness and their applications in deep learning, 2025b. J. Qian, Y. Wu, B. Zhuang, S. Wang, and J. Xiao. Understanding gradient clipping in incremental gradient methods. In Proc. Mach. Learn. Res. (AISTATS) , volume 130 of 
+
+Proceedings of Machine Learning Research , pages 1504–1512, Virtual Event, 2021. A. Reisizadeh, H. Li, S. Das, and A. Jadbabaie. Variance-reduced clipping for non-convex optimization. arXiv preprint , abs/2303.00883, 2023. R. T. Rockafellar. Convex Analysis (Princeton Mathematical Series) . Convex Analysis (Princeton Mathematical Series), USA, 1970. 
+
+> 82 Generalized Convexity and Smoothness
+
+A. Rodomanov and Y. E. Nesterov. Smoothness parameter of power of euclidean norm. J. Optim. Theory Appl. , 185(2):303–326, 2020. J. Sirignano and K. Spiliopoulos. Mean field analysis of neural networks: A central limit theorem. Stoch.Proc.Appl , 130(3):1820–1852, Mar. 2020. ISSN 0304-4149. doi: 10.1016/ j.spa.2019.06.003. R. Socher, A. Perelygin, J. Wu, J. Chuang, C. D. Manning, A. Y. Ng, and C. Potts. Recursive deep models for semantic compositionality over a sentiment treebank. In Proc. Conf. Empirical Methods Nat. Lang. Process. (EMNLP) , pages 1631–1642. ACL, 2013. doi: 10.18653/V1/D13-1170. T. Str¨ omberg. A note on the differentiability of conjugate functions. Archiv der Mathematik ,93:481–485, 2009. M. J. Todd. Convex Analysis and Nonlinear Optimization: Theory and Examples . Wiley Online Library, 2003. A. Vaswani, N. M. Shazeer, N. Parmar, J. Uszkoreit, L. Jones, A. N. Gomez, L. Kaiser, and I. Polosukhin. Attention is all you need. In Proc. Adv. Neural Inf. Process. Syst. (NeurIPS) , 2017. A. Virmaux and K. Scaman. Lipschitz regularity of deep neural networks: analysis and efficient estimation. In Proc. Adv. Neural Inf. Process. Syst. (NeurIPS) , volume 31, pages 3839–3848, 2018. N. Vyas, Y. Bansal, and P. Nakkiran. Empirical limitations of the NTK for understanding scaling laws in deep learning. Trans. Mach. Learn. Res. , 2023, 2023. Z. Wang, K. Ji, Y. Zhou, Y. Liang, and V. Tarokh. Spiderboost and momentum: Faster variance reduction algorithms. In Proc. Adv. Neural Inf. Process. Syst. (NeurIPS) , pages 2403–2413, Vancouver, BC, Canada, 2019. nips. H. Xiao, K. Rasul, and R. Vollgraf. Fashion-mnist: a novel image dataset for benchmarking machine learning algorithms. CoRR , abs/1708.07747, 2017. K. Yoshioka. Vision-transformers-cifar10: Training vision transformers (vit) and related models on cifar-10. https://github.com/kentaroy47/ vision-transformers-cifar10 , 2024. Accessed: 2024. B. Zhang, J. Jin, C. Fang, and L. Wang. Improved analysis of clipping algorithms for non-convex optimization. In Proc. Adv. Neural Inf. Process. Syst. (NeurIPS) , 2020a. C. Zhang, S. Bengio, M. Hardt, et al. Understanding deep learning (still) requires rethinking generalization. Commun. ACM , 64(3):107–115, 2021. J. Zhang, T. He, S. Sra, and A. Jadbabaie. Why gradient clipping accelerates training: A theoretical justification for adaptivity, 2020b. S.-Y. Zhao, Y.-P. Xie, and W.-J. Li. On the convergence and improvement of stochastic normalized gradient descent. Science China Information Sciences , 64, 2021. 
+
+> 83 Qi
+
+D. Zhou, P. Xu, and Q. Gu. Stochastic nested variance reduction for nonconvex optimiza-tion. J. Mach. Learn. Res. , 21:103:1–103:63, 2020. X. Zhou. On the fenchel duality between strong convexity and lipschitz continuous gradient. 
+
+arXiv preprint , 2018.
