@@ -6,79 +6,71 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-08-28
-- 运行时间：2026-08-28 03:07:35 UTC
+- 最新运行日期：2026-08-29
+- 运行时间：2026-08-29 02:28:17 UTC
 - 运行状态：成功
-- 本次总论文数：19
-- 精读区：7
+- 本次总论文数：17
+- 精读区：5
 - 速读区：12
 
 ### 今日简报（AI）
-今日精读7篇、速读12篇，聚焦AI压缩与高效计算前沿。
-人脸压缩与机器视觉压缩两篇9分论文最值得看，均探索定制化codec与空间/跨层优化。
-建议优先精读这两篇高分解码研究；普通读者可从“压缩如何兼顾身份保留与公平鲁棒”切入理解。
-- 详情：[/202608/28/README](/202608/28/README)
+今日共读17篇论文，精读5篇、速读12篇，重点聚焦高效模型与优化方法。最值得关注的是两篇8分工作：自适应对数空间量化实现内存高效优化器，以及无标签软最大转线性适配ViT用于目标检测。建议优先跟进视觉Transformer轻量化与训练显存优化方向，兼顾生成视频压缩和图神经网络分布式训练。
+- 详情：[/202608/29/README](/202608/29/README)
 
 ### 精读区论文标签
-1. [Toward Sub-1 kB Identity-Preserving Face Compression: A Benchmark of Codecs, a Custom Learned Codec, and Studies of Resolution, Demographic Fairness, Recompression, and Adversarial Robustness](/202608/28/2608.22866v1-toward-sub-1-kb-identity-preserving-face-compression-a-benchmark-of-codecs-a-custom-learned-codec-and-studies-of-resolution-demographic-fairness-recompression-and-adversarial-robustness)  
-   标签：评分：9.0/10、query:compress
-   evidence：面向身份保持的亚千字节人脸压缩，提出自定义学习编解码器并进行系统基准评测。
-2. [CrossMambaTuning: Synergistic Spatial and Cross-Layer Adaptation for Machine Vision Compression](/202608/28/2608.25568v1-crossmambatuning-synergistic-spatial-and-cross-layer-adaptation-for-machine-vision-compression)  
-   标签：评分：9.0/10、query:compress
-   evidence：基于Mamba的跨层微调框架，将预训练学习图像压缩模型适配到机器视觉任务
-3. [When Simplicity Wins: Bottleneck-Aware Context Modeling for Lightweight Semantic Segmentation](/202608/28/2608.18979v1-when-simplicity-wins-bottleneck-aware-context-modeling-for-lightweight-semantic-segmentation)  
+1. [Beyond Dense Adam States: Adaptive Log-Space Quantization for Memory-Efficient Optimizers](/202608/29/2608.22322v2-beyond-dense-adam-states-adaptive-log-space-quantization-for-memory-efficient-optimizers)  
    标签：评分：8.0/10、query:neural-arch
-   evidence：提出轻量级语义分割架构，通过瓶颈感知上下文建模回应高效视觉架构设计
-4. [Core-KAN: Continuous Vision Kernels with Kolmogorov-Arnold Networks](/202608/28/2608.19817v1-core-kan-continuous-vision-kernels-with-kolmogorov-arnold-networks)  
+   evidence：自适应对数空间量化用于优化器状态，属于深度学习模型优化策略，也可启发量化设计。
+2. [DiD It in 87 Minutes: A Label-Free Softmax-to-Linear Adaptation of Vision Transformers for Object Detection](/202608/29/2608.22368v1-did-it-in-87-minutes-a-label-free-softmax-to-linear-adaptation-of-vision-transformers-for-object-detection)  
    标签：评分：8.0/10、query:neural-arch
-   evidence：提出Core-KAN连续卷积算子，以相对尺度为条件，直接改进视觉卷积核设计。
-5. [Unified and Efficient Point-Line Local Features](/202608/28/2608.19894v1-unified-and-efficient-point-line-local-features)  
+   evidence：将ViT骨干从Softmax注意力无标签转换为线性注意力以适配目标检测
+3. [RS$^3$-Prune: Read-Sparse, Store-Sparse Token Pruning for Video Object Segmentation](/202608/29/2608.22526v1-rs3-prune-read-sparse-store-sparse-token-pruning-for-video-object-segmentation)  
    标签：评分：8.0/10、query:neural-arch
-   evidence：统一轻量级架构联合提取点线特征，是面向视觉任务的高效神经网络架构
-6. [Exploring the Performance Frontier of Compact Unified Image Generation Models](/202608/28/2608.20334v2-exploring-the-performance-frontier-of-compact-unified-image-generation-models)  
+   evidence：面向视频目标分割的无训练token剪枝，降低视觉模型延迟和内存，属于高效架构技术
+4. [MoTE: Mixture of Task Experts for Multi-Task Video Understanding](/202608/29/2608.24763v1-mote-mixture-of-task-experts-for-multi-task-video-understanding)  
    标签：评分：8.0/10、query:neural-arch
-   evidence：面向紧凑统一图像生成模型，采用渐进训练、并行专家强化学习与多教师蒸馏等系统化训练优化策略。
-7. [Single-Model Adaptive Wireless Image Transmission via Feature Sparsity Regularization](/202608/28/2608.21743v2-single-model-adaptive-wireless-image-transmission-via-feature-sparsity-regularization)  
-   标签：评分：8.0/10、query:compress
-   evidence：基于特征稀疏正则化的单模型自适应联合信源信道编码，实现率自适应的学习图像传输与压缩。
+   evidence：面向多任务视频理解的任务专家路由解码器架构，属于架构改进技术
+5. [Successive Capacity Growth: Task-Complexity-Driven Width and Depth Expansion for Vision Transformer Encoders in JEPA World Models](/202608/29/2608.27367v1-successive-capacity-growth-task-complexity-driven-width-and-depth-expansion-for-vision-transformer-encoders-in-jepa-world-models)  
+   标签：评分：8.0/10、query:neural-arch
+   evidence：任务复杂度驱动的宽度与深度扩展方法，用于高效视觉Transformer编码器
 
 ### 速读区论文标签
-1. [Mixture of Channel Experts: Static Sparse Supports with Input-Adaptive Mixing for Pointwise Projections](/202608/28/2608.23794v1-mixture-of-channel-experts-static-sparse-supports-with-input-adaptive-mixing-for-pointwise-projections)  
-   标签：评分：8.0/10、query:neural-arch
-   evidence：提出结构化稀疏通道混合层替代逐点卷积，提升视觉架构效率
-2. [Group-Shared Low-Rank Approximation for Mobile-Efficient Pointwise Convolutions in Large-Kernel CNNs](/202608/28/2608.26069v1-group-shared-low-rank-approximation-for-mobile-efficient-pointwise-convolutions-in-large-kernel-cnns)  
-   标签：评分：8.0/10、query:neural-arch
-   evidence：提出分组共享低秩近似压缩逐点卷积，解决大核CNN参数效率问题
-3. [FlashAttention for Scalable Vector Architectures](/202608/28/2608.18656v1-flashattention-for-scalable-vector-architectures)  
-   标签：评分：7.0/10、query:neural-arch
-   evidence：针对可扩展向量架构优化注意力计算，提升Transformer推理效率
-4. [Quantization Beyond Uniform Bit Allocation](/202608/28/2608.19388v1-quantization-beyond-uniform-bit-allocation)  
+1. [DiffVC-ONE: Diffusion-based Generative Video Compression with One-Step Video Diffusion Transformer](/202608/29/2608.20515v1-diffvc-one-diffusion-based-generative-video-compression-with-one-step-video-diffusion-transformer)  
    标签：评分：7.0/10、query:compress
-   evidence：提出可变比特分配的产品量化与标量量化，可应用于嵌入向量压缩
-5. [Energy-Efficient Visual Inspection with FFT-Based CNNs and Adaptive Floating-Point Quantization](/202608/28/2608.19837v1-energy-efficient-visual-inspection-with-fft-based-cnns-and-adaptive-floating-point-quantization)  
+   evidence：基于潜在压缩器和一步视频扩散Transformer的神经视频压缩，可迁移至学习图像压缩
+2. [Two-level domain-decomposition AdaGrad method for scalable training of graph neural networks](/202608/29/2608.22575v1-two-level-domain-decomposition-adagrad-method-for-scalable-training-of-graph-neural-networks)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：自适应浮点量化提升CNN推理效率
-6. [DiffVC-ONE: Diffusion-based Generative Video Compression with One-Step Video Diffusion Transformer](/202608/28/2608.20515v1-diffvc-one-diffusion-based-generative-video-compression-with-one-step-video-diffusion-transformer)  
+   evidence：面向GNN训练的可扩展AdaGrad优化与区域分解
+3. [Keep-or-Drop? Adaptive Tokenizer for Compact Video Representation](/202608/29/2608.24293v1-keep-or-drop-adaptive-tokenizer-for-compact-video-representation)  
    标签：评分：7.0/10、query:compress
-   evidence：基于扩散Transformer的一步生成式视频压缩框架，属于可迁移到图像压缩的端到端学习压缩架构。
-7. [Semantic Slots for Video Object-Centric Learning](/202608/28/2608.21636v1-semantic-slots-for-video-object-centric-learning)  
+   evidence：基于Transformer变分自编码器的自适应令牌选择紧凑视频表示，与自编码器图像压缩方法高度相关
+4. [Pruning Binarized Neural Networks: A Dedicated Framework and Globally Weighted Algorithms](/202608/29/2608.26233v1-pruning-binarized-neural-networks-a-dedicated-framework-and-globally-weighted-algorithms)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：面向视频对象中心学习的Transformer解码器架构
-8. [C$^2$Path: Class-Conditional Pathway Decoupling for Vision-Language Incremental Object Detection](/202608/28/2608.21937v1-c2path-class-conditional-pathway-decoupling-for-vision-language-incremental-object-detection)  
+   evidence：面向二值神经网络的剪枝框架与全局加权算法，是深度学习模型优化的直接策略。
+5. [FAN-LoRA: A Fourier-Adaptive Nonlinear Low-Rank Adaptor for Medical Foundation Model Domain Adaptation](/202608/29/2608.26531v1-fan-lora-a-fourier-adaptive-nonlinear-low-rank-adaptor-for-medical-foundation-model-domain-adaptation)  
    标签：评分：7.0/10、query:neural-arch
-   evidence：面向增量目标检测的类条件通路解耦
-9. [DPC-Net: Dual-Prior Collaborative Network for All-in-One Image Restoration](/202608/28/2608.20141v1-dpc-net-dual-prior-collaborative-network-for-all-in-one-image-restoration)  
+   evidence：面向医学基础模型域自适应的参数高效微调适配器
+6. [LeVJEPA: Efficient & Scalable Video Pretraining without the Heuristics](/202608/29/2608.27395v1-levjepa-efficient--scalable-video-pretraining-without-the-heuristics)  
+   标签：评分：7.0/10、query:neural-arch
+   evidence：高效自监督视频预训练架构与免坍塌正则化，属于通用CV深度学习方法
+7. [Learning how to Forget: Fine-tuning for Long-Context Sparse Attention](/202608/29/2608.19920v1-learning-how-to-forget-fine-tuning-for-long-context-sparse-attention)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：面向图像恢复的新型计算机视觉架构，采用双先验
-10. [Enabling Memory-efficient Im2win Convolution with Multi-precision Support on GPU CUDA and Tensor Cores](/202608/28/2608.20725v1-enabling-memory-efficient-im2win-convolution-with-multi-precision-support-on-gpu-cuda-and-tensor-cores)  
+   evidence：面向长上下文稀疏注意力的微调方法以压缩KV缓存
+8. [Bern2Edge: A Neurosymbolic Compiler for Edge Deployment via Bernstein Polynomial Networks](/202608/29/2608.20497v1-bern2edge-a-neurosymbolic-compiler-for-edge-deployment-via-bernstein-polynomial-networks)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：高内存效率的im2win卷积与多精度GPU支持，提升视觉架构计算效率
-11. [Semantically Compatible Knowledge Distillation for Cross-Domain Object Detection with Vision Foundation Models](/202608/28/2608.20916v1-semantically-compatible-knowledge-distillation-for-cross-domain-object-detection-with-vision-foundation-models)  
+   evidence：面向边缘部署的端到端神经网络压缩与编译框架
+9. [LHMCF-Net: A Learned Hyperbolic Mean Curvature Flow Network for Medical Images Segmentation](/202608/29/2608.20942v1-lhmcf-net-a-learned-hyperbolic-mean-curvature-flow-network-for-medical-images-segmentation)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：利用视觉基础模型进行跨域目标检测的知识蒸馏，强调语义兼容对齐
-12. [TASSO: TAsk-Specific Subspace Optimization for Continual Learning of Vision-Language Models](/202608/28/2608.21487v1-tasso-task-specific-subspace-optimization-for-continual-learning-of-vision-language-models)  
+   evidence：基于双曲平均曲率流提出新型医学图像分割网络架构
+10. [Jacobian-guided Noise Injection for Quantization Robustness in Large Language Models](/202608/29/2608.20988v1-jacobian-guided-noise-injection-for-quantization-robustness-in-large-language-models)  
    标签：评分：6.0/10、query:neural-arch
-   evidence：将子空间学习与几何感知知识蒸馏用于持续学习，是一种保持潜在空间几何的模型优化策略
+   evidence：提出训练时噪声注入策略以增强量化神经网络的鲁棒性
+11. [μNet: Ultra-Low-Memory and Low-Complexity Speech Enhancement for Embedded Digital Signal Processors](/202608/29/2608.21155v1-net-ultra-low-memory-and-low-complexity-speech-enhancement-for-embedded-digital-signal-processors)  
+   标签：评分：6.0/10、query:neural-arch
+   evidence：面向嵌入式DSP的超低内存低复杂度DNN设计，可迁移至高效模型优化
+12. [Benchmarking Composable Compression Techniques in Mixture-of-Experts LLMs](/202608/29/2608.21693v1-benchmarking-composable-compression-techniques-in-mixture-of-experts-llms)  
+   标签：评分：6.0/10、query:neural-arch
+   evidence：混合专家大语言模型中量化与剪枝等可组合压缩技术的基准评测
 
 
 <div class="dpr-home-promo-card">
