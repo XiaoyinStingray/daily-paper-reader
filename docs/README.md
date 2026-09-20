@@ -48,17 +48,17 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-09-19</span>
+      <span class="dpr-home-dashboard-kicker">2026-09-20</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 16 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 14 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
     <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>4</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>2</dd></div>
     <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>12</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-09-19 21:40:03 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-09-20 21:49:37 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -69,10 +69,7 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日共生成 16 篇推荐（精读 4 篇，速读 12 篇）</p>
-<p>精读：《tcnerv:dual-domain temporal context modeling for implicit neural video compression》（9.0/10）, 《PULSE: Unlocking Practical Image Compression on Single-Thread CPU》（9.0/10）</p>
-<p>速读：《RiPPLE: Cross-Space Performance Prediction from Early Training for Neural Architecture Search》（7.0/10）, 《ZAPS: Zero-Cost Active Proxy Search for Neural Architecture Search》（7.0/10）, 《OASIS: Online Adaptive Video Compression via Closed-loop Feedback Control》（7.0/10）</p>
-<p>这些结果覆盖了当下较热的方向，建议先看精读区论文的关键问题与方法。</p>
+<p>今日精读14篇中的2篇高分论文，聚焦硬件感知的传感器内视觉压缩与Transformer嵌套新结构。最值得看的是8.0分的《A Smaller Transformer in Your Transformer》和《Hardware-Aware Learned Representation Compression》，前者思路新颖，后者贴近边缘部署。普通读者可先速览这两篇摘要，再按兴趣跟进视频压缩与令牌合并等速读方向。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -81,12 +78,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">精读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">4 篇</strong>
+    <strong class="dpr-home-dashboard-count">2 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="tcnerv:dual-domain temporal context modeling for implicit neural video compression">tcnerv:dual-domain temporal context modeling for implicit neural video compression</span></li><li><span class="dpr-home-dashboard-paper-title" title="PULSE: Unlocking Practical Image Compression on Single-Thread CPU">PULSE: Unlocking Practical Image Compression on Single-Thread CPU</span></li><li><span class="dpr-home-dashboard-paper-title" title="Hardware-Aware Learned Representation Compression for Distributed In-Sensor Vision">Hardware-Aware Learned Representation Compression for Distributed In-Sensor Vision</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Hardware-Aware Learned Representation Compression for Distributed In-Sensor Vision">Hardware-Aware Learned Representation Compression for Distributed In-Sensor Vision</span></li><li><span class="dpr-home-dashboard-paper-title" title="A Smaller Transformer in Your Transformer">A Smaller Transformer in Your Transformer</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">compress <strong>4</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">compress <strong>1</strong></span><span class="dpr-home-dashboard-tag">neural-arch <strong>1</strong></span></div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -97,9 +94,9 @@
     <strong class="dpr-home-dashboard-count">12 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="RiPPLE: Cross-Space Performance Prediction from Early Training for Neural Architecture Search">RiPPLE: Cross-Space Performance Prediction from Early Training for Neural Architecture Search</span></li><li><span class="dpr-home-dashboard-paper-title" title="ZAPS: Zero-Cost Active Proxy Search for Neural Architecture Search">ZAPS: Zero-Cost Active Proxy Search for Neural Architecture Search</span></li><li><span class="dpr-home-dashboard-paper-title" title="OASIS: Online Adaptive Video Compression via Closed-loop Feedback Control">OASIS: Online Adaptive Video Compression via Closed-loop Feedback Control</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Deformable 2D Gaussian Splatting for Efficient 4K Video Compression">Deformable 2D Gaussian Splatting for Efficient 4K Video Compression</span></li><li><span class="dpr-home-dashboard-paper-title" title="Decoder-Agnostic Token Merging for Vision Transformers: A Systematic Study of G2TM">Decoder-Agnostic Token Merging for Vision Transformers: A Systematic Study of G2TM</span></li><li><span class="dpr-home-dashboard-paper-title" title="Perceptual Refinement of an End-to-End Video Streaming Pipeline via Generative AI Layers">Perceptual Refinement of an End-to-End Video Streaming Pipeline via Generative AI Layers</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">neural-arch <strong>9</strong></span><span class="dpr-home-dashboard-tag">compress <strong>3</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">compress <strong>7</strong></span><span class="dpr-home-dashboard-tag">neural-arch <strong>5</strong></span></div>
 </section>
 </div>
 
