@@ -48,17 +48,17 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-09-20</span>
+      <span class="dpr-home-dashboard-kicker">2026-09-21</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 14 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 13 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
     <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>2</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>1</dd></div>
     <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>12</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-09-20 21:49:37 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-09-21 22:50:20 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -69,7 +69,7 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日精读14篇中的2篇高分论文，聚焦硬件感知的传感器内视觉压缩与Transformer嵌套新结构。最值得看的是8.0分的《A Smaller Transformer in Your Transformer》和《Hardware-Aware Learned Representation Compression》，前者思路新颖，后者贴近边缘部署。普通读者可先速览这两篇摘要，再按兴趣跟进视频压缩与令牌合并等速读方向。</p>
+<p>2026-09-21 日报精选 13 篇，1 篇精读、12 篇速读，聚焦条件熵编码与多任务视觉表示。最值得看的是 9.0 分的《Opportunistic Conditional Entropy Coding with Frozen Analysis and Synthesis Transforms》，它用冻结分析/合成变换做机会式条件熵编码，另可顺带关注 TAPe+ML 的紧凑结构化多任务视觉表示。普通读者可先读精读篇的摘要与实验结论，再按需浏览速读篇。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -78,12 +78,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">精读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">2 篇</strong>
+    <strong class="dpr-home-dashboard-count">1 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Hardware-Aware Learned Representation Compression for Distributed In-Sensor Vision">Hardware-Aware Learned Representation Compression for Distributed In-Sensor Vision</span></li><li><span class="dpr-home-dashboard-paper-title" title="A Smaller Transformer in Your Transformer">A Smaller Transformer in Your Transformer</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Opportunistic Conditional Entropy Coding with Frozen Analysis and Synthesis Transforms">Opportunistic Conditional Entropy Coding with Frozen Analysis and Synthesis Transforms</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">compress <strong>1</strong></span><span class="dpr-home-dashboard-tag">neural-arch <strong>1</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">compress <strong>1</strong></span></div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -94,9 +94,9 @@
     <strong class="dpr-home-dashboard-count">12 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Deformable 2D Gaussian Splatting for Efficient 4K Video Compression">Deformable 2D Gaussian Splatting for Efficient 4K Video Compression</span></li><li><span class="dpr-home-dashboard-paper-title" title="Decoder-Agnostic Token Merging for Vision Transformers: A Systematic Study of G2TM">Decoder-Agnostic Token Merging for Vision Transformers: A Systematic Study of G2TM</span></li><li><span class="dpr-home-dashboard-paper-title" title="Perceptual Refinement of an End-to-End Video Streaming Pipeline via Generative AI Layers">Perceptual Refinement of an End-to-End Video Streaming Pipeline via Generative AI Layers</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="TAPe+ML: A Compact Structured Representation for Multi-Task Computer Vision">TAPe+ML: A Compact Structured Representation for Multi-Task Computer Vision</span></li><li><span class="dpr-home-dashboard-paper-title" title="Channel-Adaptive Region Adjacency Graph Carriers for Semantic Image Communication">Channel-Adaptive Region Adjacency Graph Carriers for Semantic Image Communication</span></li><li><span class="dpr-home-dashboard-paper-title" title="OASIS: Online Adaptive Video Compression via Closed-loop Feedback Control">OASIS: Online Adaptive Video Compression via Closed-loop Feedback Control</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">compress <strong>7</strong></span><span class="dpr-home-dashboard-tag">neural-arch <strong>5</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">neural-arch <strong>9</strong></span><span class="dpr-home-dashboard-tag">compress <strong>3</strong></span></div>
 </section>
 </div>
 

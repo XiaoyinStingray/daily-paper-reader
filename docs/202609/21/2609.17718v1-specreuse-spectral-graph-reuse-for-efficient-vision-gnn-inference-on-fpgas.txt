@@ -1,0 +1,319 @@
+Title: SpecReuse: Spectral Graph Reuse for Efficient Vision GNN Inference on FPGAs
+
+URL Source: https://arxiv.org/pdf/2609.17718v1
+
+Published Time: Thu, 17 Sep 2026 00:07:54 GMT
+
+Number of Pages: 7
+
+Markdown Content:
+# SpecReuse: Spectral Graph Reuse for Efficient Vision GNN Inference on FPGAs 
+
+Isabella Bernhardt Eiliya, Anvitha Ramachandran, Dhruv Parikh, Viktor Prasanna 
+
+University of Southern California, Los Angeles, California, USA 
+
+{ibernhar, alramach, dhruvash, prasanna }@usc.edu 
+
+Abstract —Dynamic Image Graph Construction (DIGC) is the primary performance bottleneck in FPGA acceleration of Vision Graph Neural Networks (ViGs), reconstructing graph connectivity at every layer through irregular, memory-intensive computation. Existing FPGA accelerators optimize DIGC but still execute it unconditionally, making repeated graph reconstruction a persistent source of latency and energy consumption. We pro-pose the SpecReuse algorithm, which computes compact spectral descriptors of intermediate features and reuses previously con-structed graphs when descriptor drift remains below a calibrated threshold. We further present the SpecReuse accelerator, an FPGA architecture that realizes graph reuse through lightweight hardware for spectral descriptor extraction and reuse control while remaining compatible with existing graph-construction accelerators. Experimental results demonstrate up to a 2.69 ×
+
+speedup in end-to-end inference and approximately 58–65% lower energy per inference with negligible FPGA resource over-head and minimal loss in classification accuracy. 
+
+Index Terms —Vision Graph Neural Networks, Graph Neu-ral Networks, FPGA Accelerators, Reconfigurable Computing, Graph Reuse, Spectral Graph Methods, Hardware/Software Co-Design 
+
+I. I NTRODUCTION 
+
+Dynamic Image Graph Construction (DIGC) is the domi-nant performance bottleneck in FPGA acceleration of Vision Graph Neural Networks (ViGs). At each graph layer, the DIGC stage reconstructs graph connectivity from intermediate features through pairwise similarity computation, neighbor selection, and graph materialization, resulting in irregular com-putation, substantial memory traffic, and repeated execution throughout inference [1]–[8]. Recent FPGA accelerators re-duce the cost of DIGC through specialized dataflows, memory hierarchies, and pipeline optimizations [9]–[13]. However, these architectures continue to invoke the DIGC stage at every graph layer, making repeated graph construction a persistent source of latency and energy consumption despite increasingly efficient implementations. This exposes an architectural opportunity that existing ac-celerators do not exploit: the DIGC stage executes uncondi-tionally even when graph connectivity changes little between adjacent layers. Neighboring ViG layers frequently preserve similar graph connectivity, indicating that many DIGC execu-tions perform redundant work. Rather than further accelerating DIGC, these observations motivate graph reuse as a comple-mentary architectural optimization that reduces the frequency with which the DIGC stage executes. SpecReuse realizes graph reuse as a lightweight prediction front-end that augments the graph construction pipeline ahead of the DIGC stage. The front-end computes compact spectral descriptors of intermediate features and uses spectral similarity to determine whether the previously constructed graph can be safely reused, leveraging spectral representations that effec-tively capture graph structure [14], [15]. When graph reuse is selected, the DIGC stage is bypassed, eliminating unneces-sary distance computation, sorting, and top-k neighbor selec-tion while remaining compatible with existing FPGA graph-construction accelerators [9]–[13]. Consequently, SpecReuse changes when the DIGC stage executes rather than how it is implemented, enabling lower inference latency and energy consumption with negligible additional hardware resources. The primary contributions of this work are:  
+
+> •
+
+We identify repeated DIGC execution as an architectural inefficiency in Vision GNN accelerators and characterize graph reuse opportunities across adjacent Vision GNN lay-ers.  
+
+> •
+
+We propose SpecReuse, a lightweight spectral prediction front-end that augments the graph construction pipeline and enables graph reuse through spectral similarity estimation while remaining compatible with existing FPGA graph-construction accelerators.  
+
+> •
+
+We implement and evaluate SpecReuse on an AMD Alveo U280 FPGA across multiple Vision GNN backbones, achieving up to a 2.69 × end-to-end inference speedup and approximately 58 –65% lower energy per inference with only 
+
+1.07% LUT, 0.56% FF, 0.12% DSP, and 0.88% BRAM overhead. Offline threshold calibration enables up to 30 .1% 
+
+graph reuse while limiting Top-1 accuracy degradation to at most 0.54 percentage points. II. R ELATED WORK 
+
+Vision Graph Neural Networks (ViGs) reconstruct graph connectivity dynamically throughout inference to adapt neigh-borhood structure as feature representations evolve [1]–[4]. Recent ViG architectures improve graph quality and efficiency through progressive graph construction, sparse neighborhood selection, hierarchical graph representations, and structured graph formation [5], [6], [16]. WiGNet instead partitions the image into local windows and restricts graph construction to each window, reducing the cost of graph construction by shrinking the candidate neighborhood rather than changing how often the graph is rebuilt [17]. The repeated reconstruction of graph connectivity is also central to dynamic graph learning architectures such as Dynamic Graph CNNs and DeepGCNs, where graph topology evolves with the underlying feature rep-resentation [7], [8], [18]. Collectively, these approaches reduce arXiv:2609.17718v1 [cs.DC] 15 Sep 2026 graph-construction cost or improve graph quality, yet continue to reconstruct graph connectivity throughout inference. FPGA graph accelerators improve graph processing through customized dataflows, specialized memory hierarchies, hard-ware pipelines, workload balancing, and automated acceler-ator generation [9]–[11], [19]–[21]. Other accelerators target adaptability and latency directly: FP-GNN adjusts precision and layer execution at runtime to accommodate diverse GNN workloads [22], while LL-GNN targets low-latency inference for high-energy-physics triggers through a streaming FPGA pipeline [23]. These designs improve how graph convolution is executed on FPGA but, like the accelerators above, operate on a graph that is assumed to already be available. A separate line of work accelerates the construction of the graph itself. FNNG builds a dedicated FPGA pipeline for k-nearest-neighbor graph construction [24], and L-FNNG extends this design to large-scale graphs on a CPU-FPGA heterogeneous platform [25]. Outside the vision domain, real-time graph-building pipelines have also been proposed for particle-physics trigger applications, where graph connectivity must likewise be rebuilt from streaming input data [26]. These accelerators reduce the latency of a single graph-construction pass, an optimization that is complementary to and could be combined with the SpecReuse algorithm, which instead re-duces how often a graph-construction pass is issued in the first place. More recent architectures extend graph-construction acceleration to Vision GNN inference specifically, accelerating the Dynamic Image Graph Construction (DIGC) stage and overlapping graph construction with graph convolution [12], [13]. Although these accelerators substantially reduce the cost of DIGC, they continue to execute the DIGC stage uncondi-tionally at every graph layer. Existing work therefore focuses on reducing the cost of a single graph construction or graph convolution pass—whether through window partitioning [17], dedicated k-NN graph-construction pipelines [24]–[26], or adaptive FPGA graph convolution [22], [23]—whereas the SpecReuse algorithm targets the complementary architectural problem of reducing the frequency with which the DIGC stage executes, realizing graph reuse through a lightweight prediction front-end that uses spectral similarity to determine whether the graph pro-duced by a previous DIGC execution can be safely reused [14], [15], [27]–[29]. Because the DIGC implementation re-mains unchanged, the SpecReuse accelerator is orthogonal to existing FPGA graph-construction accelerators and, through algorithm–architecture co-design, introduces graph reuse as a new architectural optimization dimension for FPGA Vision GNN accelerators. III. P RELIMINARIES 
+
+Vision Graph Neural Networks (ViGs) represent an image as a graph whose vertices correspond to image patches and whose edges encode feature-space relationships between patches [1]– [3]. Unlike conventional convolutional networks with fixed receptive fields, ViGs dynamically update graph connectivity throughout inference to reflect the evolving semantic repre-sentation of the input. As node features become increasingly discriminative across successive graph layers, the underlying graph topology is repeatedly reconstructed, enabling message passing to adapt to the current feature space. At graph layer l, message passing is expressed as 
+
+x(l) 
+
+> i
+
+= Ψ (l)
+
+x(l−1)  
+
+> i
+
+, M 
+
+> j∈N (i)
+
+Φ(l) 
+
+x(l−1)  
+
+> i
+
+, x(l−1) 
+
+> j
+
+ , (1) where Φ(l)(·) and Ψ(l)(·) denote the learnable message and update functions, respectively, ⊕ represents neighborhood aggregation, and N (i) denotes the dynamically constructed neighborhood of node i. Consequently, the quality of the graph constructed before each message message-passing layer directly influences the effectiveness of information propagation throughout the network. 
+
+A. Dynamic Image Graph Construction 
+
+Before every graph convolution layer, Vision GNNs execute the Dynamic Image Graph Construction (DIGC) stage to regenerate graph connectivity from the current node feature representations [1], [7]. Given the updated feature embeddings, DIGC computes feature-space distances between nodes, in-corporates positional information, identifies the top-k nearest neighbors, and materializes the resulting graph adjacency used by the subsequent message passing layer. Pyramid ViG architectures further reduce the computational complexity of this process by constructing graphs from a reduced set of co-node features during early network stages [3]. Although DIGC is fundamental to the adaptive behavior of Vision GNNs, it is executed before every graph layer because node representations continuously evolve throughout inference. Repeated pairwise distance computation, neighbor ranking, and graph materialization introduce irregular mem-ory accesses and comparison-intensive computation, making graph construction a recurring source of computational cost in Vision GNN inference [7], [8]. Rather than modifying the DIGC procedure itself, the SpecReuse algorithm addresses the complementary problem of reducing how often graph construction must be performed. The following section intro-duces the SpecReuse algorithm, which exploits the observation that graph connectivity often changes only gradually between adjacent graph layers. IV. S PEC REUSE ARCHITECTURE 
+
+SpecReuse augments the baseline Vision GNN accelera-tor with a lightweight prediction front-end that determines whether the Dynamic Image Graph Construction (DIGC) stage needs to execute. Rather than reconstructing the graph uncon-ditionally at every graph convolution layer, the SpecReuse al-gorithm estimates the structural similarity between the current feature representation and the previously reconstructed graph using compact spectral descriptors extracted by a lightweight sparse affinity operator. This operator is purpose-built for de-scriptor extraction and is resource-efficient relative to DIGC’s dynamic k-NN construction—it performs no pairwise dis-tance ranking, sorting, or neighbor selection—so it serves only as a low-overhead proxy signal rather than a partial re-implementation of dynamic graph reconstruction. If the measured spectral drift remains below a model-specific reuse threshold, the previously reconstructed graph is reused and the entire DIGC stage is bypassed; otherwise, the baseline DIGC pipeline executes to reconstruct a new graph. By modifying only the graph reconstruction policy rather than the graph-construction algorithm itself, the SpecReuse algorithm can be integrated with existing FPGA graph-construction accelerators without altering their underlying implementation or graph convolution pipeline. The reuse threshold τ and descriptor dimension K are both determined offline during model characterization and remain fixed throughout inference. For each trained ViG backbone, the SpecReuse algorithm evaluates the distribution of spectral descriptor drift on a validation set and selects the largest τ ,at a fixed K, that preserves the target prediction accuracy while maximizing graph reuse; K is set via the same of-fline sweep to the smallest value at which further increases yield no measurable improvement in reuse-decision accuracy. Since both parameters are computed once during deployment, the runtime reuse decision reduces to a simple comparison between the measured descriptor drift and the precomputed threshold, eliminating the need for adaptive threshold tuning or runtime calibration. 
+
+A. Accelerator Design Motivation 
+
+The SpecReuse algorithm reduces DIGC activity only if the reuse decision itself remains cheap relative to the DIGC execution it replaces. The affinity operator underlying de-scriptor extraction is lightweight relative to DIGC’s dynamic 
+
+k-NN construction, but this algorithmic advantage is not automatically preserved by a software or general-purpose implementation of Algorithm 1. Extracting the spectral de-scriptor still requires applying Lanczos iteration to obtain the affinity graph’s dominant eigenvalues; on a general-purpose core or a naive RTL datapath, the repeated sparse matrix-vector products, irregular memory accesses, and vector reduction operations inherent to Lanczos iteration can erode a significant fraction of the algorithmic savings, even though the underlying affinity operator itself is lightweight. A conventional imple-mentation therefore risks leaving substantial performance on the table: the prediction front-end that determines whether to skip DIGC would not realize its full algorithmic advantage. The SpecReuse accelerator eliminates this residual overhead by mapping Lanczos-based descriptor extraction and drift comparison onto specialized, fixed-latency hardware, preserv-ing the exact reuse decisions of Algorithm 1 while ensuring the front-end’s hardware cost tracks its algorithmic cost. The remainder of this section describes this accelerator. 
+
+B. Architecture Overview 
+
+Figure 1 illustrates the overall SpecReuse architecture. The prediction front-end is inserted immediately before the DIGC stage, allowing the graph reuse decision to be made before graph reconstruction begins. Incoming feature representations are processed by the Spectral Descriptor Extractor (SDE), which applies a lightweight sparse affinity operator—distinct from, and resource-efficient relative to, DIGC’s dynamic k-NN construction—and computes a compact spectral descriptor from it using the Lanczos algorithm. The current descriptor is forwarded to the Spectral Reuse Estimator (SRE), while the Spectral Descriptor Buffer (SDB) supplies the descriptor of the most recently reconstructed graph. The SRE computes the drift between these descriptors according to Eq. (4). The Graph Reuse Controller (GRC) then compares the measured drift against the offline-calibrated reuse threshold τ to determine whether graph reconstruction is required. When graph reuse is selected, the controller bypasses the DIGC stage entirely and retrieves the cached graph adjacency from the graph buffer, implemented by the Adjacency Register File (ARF). The cached graph adjacency is then forwarded directly to the graph convolution engine. Otherwise, the base-line DIGC pipeline executes to reconstruct a new graph from the current feature representation. Upon completion, the newly reconstructed graph adjacency is written back to the graph buffer, while its corresponding spectral descriptor is written to the descriptor buffer. These updated values become the reference for subsequent graph reuse decisions. A key property of the SpecReuse accelerator is that graph convolution observes an identical interface regardless of the se-lected execution path. Every graph convolution layer receives a valid graph adjacency through the same input interface, whether it originates from the graph buffer or from a new DIGC execution. Consequently, the SpecReuse accelerator requires no modifications to the downstream graph convolu-tion pipeline and preserves compatibility with existing DIGC implementations. The prediction front-end consists of five hardware modules: the Spectral Descriptor Extractor (SDE), Spectral Descriptor Buffer (SDB), Spectral Reuse Estimator (SRE), Graph Reuse Controller (GRC), and Adjacency Register File (ARF). Each module maps directly to a step of Algorithm 1: the SDE realizes affinity construction and descriptor extraction (lines 1– 3), the SRE realizes drift computation (line 4), and the GRC realizes the reuse decision (lines 5–10), with the SDB and ARF providing the persistent state s(p) and A(p) the decision depends on. Together, these modules implement graph reuse entirely ahead of the DIGC stage while preserving the baseline graph construction and graph convolution datapaths. The fol-lowing subsections describe the design and operation of each module in detail. 
+
+C. Spectral Descriptor-Based Graph Reuse 
+
+Dynamic graph construction is one of the primary compu-tational bottlenecks in Vision Graph Neural Networks (ViGs), as each graph convolution layer reconstructs a dynamic k-nearest-neighbor (k-NN) graph from the current node features. Although node embeddings evolve throughout the network, the induced graph structure often changes gradually between consecutive layers, particularly in deeper stages where the feature representations have largely converged. Consequently, reconstructing the graph at every layer frequently performs redundant computation while producing highly similar graphs. The SpecReuse algorithm exploits this observation by pre-dicting whether the graph that would be constructed from the current feature representation differs sufficiently from the pre-viously reconstructed graph to justify reconstruction. Rather Inputs 
+
+> Current layer
+> feature matrix
+> Prev. spectral
+> descriptor
+> Prev. layer
+> adjacency matrix
+> Reuse
+> threshold
+
+Spectral 
+
+Descriptor 
+
+Extractor (SDE) 
+
+> Feature Matrix
+> Spectral Analysis
+> Extracts spectral
+> components K=16
+> Spectral descriptor
+
+Spectral Descriptor 
+
+Buffer (SDB) 
+
+> Stores descriptors for consecutive layers
+> Previous layer
+> Current layer
+
+Spectral Reuse 
+
+Estimator (SRE) 
+
+Graph Reuse 
+
+Controller (GRC) 
+
+> Reuse
+> Graph
+> Use
+> previous
+> adjacency
+> matrix
+> as
+> Reconstruct
+> Graph
+> Run DIGC,
+> construct new
+> graph with
+> adjacency
+> matrix
+> No Yes
+
+Fig. 1: SpecReuse augments the baseline Dynamic Image Graph Construction (DIGC) execution with a lightweight prediction front-end positioned ahead of the DIGC stage. The front-end predicts whether the graph generated by the previous DIGC execution can be reused before the DIGC stage begins. When graph reuse is selected, the stored adjacency bypasses the DIGC stage and is forwarded directly to graph convolution; otherwise, the baseline DIGC pipeline executes unchanged. 
+
+than constructing successive graphs for direct comparison, it compares compact spectral descriptors extracted from a lightweight sparse affinity graph computed specifically for this purpose, independent of DIGC’s dynamic k-NN construction. Spectral graph representations have been widely used for graph comparison, graph matching, and structure-preserving embedding because they capture global structural properties in a compact representation while remaining invariant to node ordering [14], [15], [27]–[29]. The algorithm leverages these spectral representations as a proxy for structural similarity, allowing dynamic graph reconstruction to be avoided entirely whenever the graph remains sufficiently stable. Let X(l) ∈ RN ×d denote the node feature matrix at graph convolution layer l, where N is the number of graph nodes and d is the feature dimension. SpecReuse first computes a lightweight sparse affinity graph, dedicated to descriptor extraction and independent of DIGC’s own dynamic k-NN construction, G(l) = SViG 
+
+ X(l), where SViG (·) denotes this lightweight affinity operator, purpose-built for spectral descrip-tor extraction and used exclusively to inform the graph reuse decision. Unlike DIGC’s pairwise distance evaluation, top-k
+
+ranking, and adjacency materialization, SViG (·) produces only a sparse structural summary sufficient for spectral descriptor extraction, at lower resource cost than full dynamic graph reconstruction. Rather than constructing the complete eigenspectrum of 
+
+G(l), the SpecReuse algorithm computes only its K dominant eigenvalues, where K ≪ N is a fixed descriptor dimension chosen offline, using the Lanczos algorithm, 
+
+n
+
+λ(l)1 , λ (l)2 , . . . , λ (l)
+
+> K
+
+o
+
+= Lanczos 
+
+
+
+G(l), K 
+
+
+
+, (2) where the eigenvalues are ordered in descending order, 
+
+λ(l)1 ≥ λ(l)2 ≥ · · · ≥ λ(l) 
+
+> K
+
+.
+
+The spectral descriptor associated with layer l is defined as 
+
+s(l) =
+
+h
+
+λ(l)1 , λ (l)2 , . . . , λ (l)
+
+> K
+
+iT
+
+. (3) Retaining only the largest K eigenvalues produces a com-pact structural signature that summarizes the dominant con-nectivity characteristics of the affinity graph while requiring substantially less computation and storage than the complete graph representation. Let s(p) denote the spectral descriptor associated with the most recently reconstructed graph and let A(p) denote the corresponding adjacency matrix. Structural change between consecutive layers is quantified by the descriptor drift 
+
+∆(l) = s(l) − s(p) 22
+
+, (4) which measures the distance between the current and pre-viously reconstructed spectral descriptors. The squared Eu-clidean distance preserves the same ordering as the Euclidean norm while eliminating the square-root operation. Graph reconstruction is performed only when the descriptor drift exceeds a programmable threshold, 
+
+A(l) =
+
+
+
+A(p), ∆(l) ≤ τ 2,
+
+kNN( X(l), k ), ∆(l) > τ 2,
+
+(5) where τ controls the trade-off between graph reuse and graph reconstruction. When the descriptor drift remains below the threshold, the current graph is considered spectrally similar to the previously reconstructed graph, and the existing graph is reused. Otherwise, a new graph is reconstructed from the current feature representation and its spectral descriptor replaces the previously stored descriptor. Algorithm 1 summarizes the complete graph reuse proce-dure. Beginning with the current feature representation, the SpecReuse algorithm constructs a lightweight affinity graph using an operator dedicated to descriptor extraction, extracts a compact spectral descriptor using the Lanczos algorithm, mea-sures descriptor drift relative to the previously reconstructed Algorithm 1 SpecReuse Algorithm: Spectral Descriptor-Based Graph Reuse                                                   
+
+> Require: Current feature matrix X(l), previous spectral descriptor s(p),previous graph adjacency A(p), graph degree k, descriptor dimension
+> K, reuse threshold τ
+> Ensure: Graph adjacency A(l)
+> 1: Construct the sparse ViG affinity graph: G(l)← S ViG (X(l))
+> 2: Compute the largest Keigenvalues using Lanczos: {λ(l)1, . . . , λ (l)
+> K} ←
+> Lanczos( G(l), K )
+> 3: Form the spectral descriptor: s(l)←[λ(l)1, . . . , λ (l)
+> K]T
+> 4: Compute descriptor drift: ∆(l)← ∥ s(l)−s(p)∥22
+> 5: if ∆(l)≤τ2then
+> 6: Reuse the previous graph: A(l)←A(p)
+> 7: else
+> 8: Reconstruct the graph: A(l)←kNN( X(l), k )
+> 9: Update stored descriptor: s(p)←s(l)
+> 10: Update stored graph: A(p)←A(l)
+> 11: end if
+> 12: return A(l)
+
+graph, and determines whether dynamic graph reconstruction is necessary. Because this decision is made before dynamic graph construction and relies only on this lightweight proxy, the full DIGC pipeline—pairwise distance computation, top-
+
+k selection, and adjacency materialization—can be eliminated entirely whenever the graph remains spectrally stable. 
+
+D. FPGA Integration 
+
+The SpecReuse accelerator is integrated as a lightweight prediction front-end that precedes the DIGC pipeline in its entirety, using its own dedicated affinity operator—distinct from, and resource-efficient relative to, DIGC’s dynamic k-NN construction—to decide whether DIGC executes. This organization preserves compatibility with the baseline ViG pipeline and requires no modification to the graph convolution datapath, which receives a valid adjacency through the same interface whether it originates from the graph buffer or a new DIGC execution (§IV-B). The hardware overhead of this integration is modest because the SDE, SRE, and GRC operate on a lightweight affinity graph and a K-dimensional descriptor rather than on the dense candidate neighborhoods DIGC evaluates. The Spectral Reuse Estimator computes Eq. (4) through fixed-length element-wise subtraction, squaring, and accumulation over the retained eigenvalues, while the Graph Reuse Controller implements a single threshold comparison to select between the reuse and reconstruction paths. On-chip storage is limited to the graph buffer (ARF) and descriptor buffer (SDB), which hold one cached adjacency and one K-element descriptor between reconstruction events. Because K is fixed and independent of graph connectivity, and the affinity operator performs no pairwise ranking, sorting, or neighbor selection, the front-end’s cost does not scale with DIGC’s dominant cost drivers, so its overhead remains small relative to a DIGC invocation and is fully amortized whenever that invocation is eliminated. V. E VALUATION 
+
+We evaluate SpecReuse on a set of ViG backbones to answer four questions: (1) what FPGA overhead does SpecReuse introduce, (2) how much graph reconstruction does it elim-inate, (3) how much end-to-end latency reduction does graph                                 
+
+> TABLE I: Experimental Platform
+> Hardware Configuration
+> FPGA AMD Alveo U280 @ 300 MHz Toolchain AMD Vivado/Vitis 2024.1 CPU AMD EPYC 7313 (16-core) GPU NVIDIA RTX 6000 Ada Dataset ImageNet-1K Precision FP16 Batch Size 128 (accuracy), 1 (latency)
+> TABLE II: FPGA resource utilization. The SpecReuse row reports only the additional hardware introduced by the spectral reuse components (SDE, SDB, SRE, GRC, and ARF). Both the baseline accelerator and SpecReuse operate at 300 MHz.
+> Design LUT FF DSP BRAM URAM
+> Baseline 650,232 1,173,312 5,866 1,250 768 SpecReuse 6,925 6,512 711 0Incremental 1.07% 0.56% 0.12% 0.88% 0.00%
+
+reuse provide, and (4) how does the graph reuse threshold affect the trade-off between prediction accuracy and graph reconstruction reduction. 
+
+A. Experimental Methodology 
+
+All experiments compare the baseline Dynamic Image Graph Construction (DIGC) accelerator against the same ac-celerator augmented with SpecReuse. CPU and GPU imple-mentations are included as software reference platforms, while FPGA results characterize the architectural impact of graph reuse and are implemented using High-Level Synthesis (HLS). All Vision GNN models are evaluated on the ImageNet-1K validation set using the standard single-crop evaluation protocol [1], [5], [6], [30]. Classification accuracy is measured using a batch size of 128, while latency measurements use a batch size of one to reflect deployment-oriented inference performance. For each Vision GNN backbone, the graph reuse threshold τ is calibrated offline prior to deployment. Threshold calibration sweeps τ across the validation set while measuring both classification accuracy and graph reuse. The selected operating point corresponds to the threshold that provides the highest graph reuse while maintaining the desired prediction accuracy. Once selected, τ remains fixed throughout inference and is applied uniformly to all graph reuse decisions. Table I summarizes the experimental platform. 
+
+B. FPGA Implementation Overhead 
+
+We first evaluate the hardware cost of integrating SpecReuse into the baseline accelerator. Table II reports the incremental FPGA resources required by the spectral descriptor generation, similarity evaluation, reuse control, and graph selection logic. SpecReuse introduces only modest additional logic and on-chip memory while preserving the baseline operating fre-quency of 300 MHz, demonstrating that graph reuse can be incorporated with minimal hardware overhead. The additional hardware increases LUT, flip-flop, DSP, and BRAM utilization by only 1.07% , 0.56% , 0.12% , and 0.88% , respectively, rela-tive to the baseline accelerator, indicating that the graph reuse mechanism scales efficiently with the existing accelerator datapath. TABLE III: End-to-end inference latency comparison across CPU, GPU, the baseline FPGA accelerator, and the proposed SpecReuse-enhanced FPGA accelerator. SpecReuse achieves up to 2.69 × speedup over the baseline FPGA implementation. 
+
+Model CPU GPU Baseline SpecReuse Speedup 
+
+(ms) (ms) (ms) (ms) (×)ViG-Ti 67.8 13.4 2.88 1.07 2.69 ×
+
+ViG-S 109.4 16.2 2.94 1.13 2.60 ×
+
+ViG-B 224.4 16.7 4.16 1.72 2.42 ×
+
+PViG-Ti 89.8 6.41 2.88 1.16 2.48 ×
+
+PViG-S 118.8 4.79 4.68 1.93 2.42 ×
+
+PViG-M 177.3 6.33 5.85 2.48 2.36 ×
+
+PViG-B 168.2 5.22 6.66 2.96 2.25 ×
+
+TABLE IV: Average energy per inference across GPU and FPGA implemen-tations. FPGA energy is computed as E = P × t using post-place-and-route Vivado power estimates and measured inference latency.                            
+
+> ViG-Ti ViG-S ViG-B PViG-Ti PViG-S PViG-M PViG-B GPU (mJ) 3733.7 4399.0 4772.4 876.8 737.8 948.5 939.9
+> Baseline FPGA (mJ) 60.5 61.8 87.4 60.5 98.3 122.9 139.9
+> SpecReuse FPGA (mJ) 21.2 22.4 34.1 23.0 38.3 49.2 58.7
+
+C. End-to-End Performance 
+
+Table III shows that SpecReuse achieves 2.25 ×–2.69 ×
+
+speedup over the baseline FPGA accelerator and outperforms the CPU and GPU implementations. As shown in Fig. 2, these gains primarily result from eliminating redundant Dynamic Image Graph Construction (DIGC), while the remaining net-work latency is largely unchanged. Table IV reports average energy per inference, with FPGA energy computed as E =
+
+P × t from post-place-and-route power estimates and mea-sured latency. By shortening inference with modest hardware overhead, SpecReuse reduces FPGA energy by approximately 
+
+58% –65% across the evaluated Vision GNN backbones. 
+
+D. Reuse Threshold Sensitivity 
+
+The graph reuse threshold τ controls the trade-off between graph reuse and classification accuracy. Larger thresholds increase graph reuse by eliminating more Dynamic Image Graph Construction (DIGC) invocations, but eventually intro-duce prediction error as outdated graph connectivity is reused. For each Vision GNN backbone, τ is calibrated offline by sweeping candidate thresholds on the ImageNet validation set and measuring both Top-1 accuracy and graph reuse. Table V summarizes the selected threshold, graph reuse, and corresponding classification accuracy for each model. The calibrated thresholds demonstrate that substantial graph reuse can be achieved with only minor reductions in prediction accuracy. Across all evaluated Vision GNN backbones, the selected operating points enable 18 .1% –30 .1% graph reuse while limiting Top-1 accuracy degradation to at most 0.54 per-centage points. Larger Pyramid ViG variants generally tolerate higher reuse rates than standard ViG models, indicating greater structural similarity between successive graph layers. These calibrated thresholds are used for all reported performance and energy evaluations. 
+
+E. Evaluation Summary 
+
+Across all evaluated ViG backbones, SpecReuse consis-tently reduces Dynamic Image Graph Construction activity with minimal FPGA implementation overhead. The resulting ViG-Ti ViG-S ViG-B PViG-Ti PViG-S PViG-M PViG-B  
+
+> Models
+> 012345678
+> Latency (ms)
+> 2.69× 2.59× 2.42× 2.47× 2.42× 2.36× 2.25×
+> Latency Breakdown of Baseline FPGA Accelerator and SpecReuse
+> Graph Construction (Baseline) Remaining ViG (Baseline) Spectral Reuse Reduced Graph Construction (SpecReuse) Remaining ViG (SpecReuse)
+
+Fig. 2: Inference latency breakdown of baseline accelerator vs. SpecReuse. 
+
+TABLE V: Offline threshold calibration. For each Vision GNN backbone, the graph reuse threshold τ is calibrated offline by selecting the operating point that maximizes graph reuse while limiting accuracy degradation.                                          
+
+> Model Selected τReuse (%) Baseline Top-1 (%) Calibrated Top-1 (%) Accuracy Loss (pp)
+> ViG-Ti 2.1549 18.1 73.90 73.68 0.22 ViG-S 2.4344 22.4 80.40 80.13 0.27 ViG-B 1.9827 28.8 82.30 81.79 0.51 PViG-Ti 2.5183 26.9 78.50 78.17 0.33 PViG-S 2.5464 29.1 82.10 81.85 0.25 PViG-M 2.5695 25.4 83.10 82.82 0.28 PViG-B 2.9217 30.1 83.70 83.16 0.54
+
+reduction in graph construction translates directly into lower end-to-end inference latency and lower energy per inference while preserving classification accuracy. Overall, these results demonstrate that graph reuse is an effective architectural optimization for FPGA Vision GNN accelerators, enabling substantial performance and energy improvements without modifying the underlying ViG architecture. VI. C ONCLUSION 
+
+This paper presented SpecReuse, an FPGA accelerator that uses compact spectral descriptors to selectively reuse graphs and reduce Dynamic Image Graph Construction (DIGC) over-head in ViGs. Across seven ViG and Pyramid ViG backbones, SpecReuse adds only 1.07% LUT, 0.56% FF, 0.12% DSP, and 
+
+0.88% BRAM overhead while achieving up to a 2.69 × end-to-end inference speedup and approximately 58 –65% lower energy per inference. Offline threshold calibration enables 
+
+18 .1–30 .1% graph reuse while limiting Top-1 accuracy degra-dation to at most 0.54 percentage points. Future works will in-clude exploring the impact of expanding the spectral descriptor buffer and comparing other types of threshold similarity with spectral similarity. VII. A CKNOWLEDGEMENTS 
+
+This work was supported in part by the ARO grants W911NF-242-0194 and and by the National Science Foun-dation grants OAC-2411446 and OAC-2505107. REFERENCES [1] K. Han, Y. Wang, J. Guo, Y. Tang, and E. Wu, “Vision GNN: An image is worth graph of nodes,” Advances in Neural Information Processing Systems (NeurIPS) , vol. 35, pp. 8291–8303, 2022. [2] Y. Han, P. Wang, S. Kundu, Y. Ding, and Z. Wang, “Vision HGNN: An image is more than a graph of nodes,” in Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV) , 2023, pp. 19 878– 19 888. [3] J. Wu, J. Li, J. Zhang, B. Zhang, M. Chi, Y. Wang, and C. Wang, “PVG: Progressive vision graph for vision recognition,” in Proceedings of the 31st ACM International Conference on Multimedia , 2023, pp. 2477–2486. [4] M. Munir, W. Avery, and R. Marculescu, “MobileViG: Graph-based sparse attention for mobile vision applications,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) Workshops , 2023, pp. 2211–2219. [5] M. Munir, W. Avery, M. M. Rahman, and R. Marculescu, “GreedyViG: Dynamic axial graph construction for efficient vision GNNs,” in Pro-ceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , 2024, pp. 6118–6127. [6] D. Parikh, J. Fein-Ashley, T. Ye, R. Kannan, and V. Prasanna, “Clus-terViG: Efficient globally aware vision GNNs via image partitioning,” 
+
+arXiv preprint arXiv:2501.10640 , 2025. [7] Y. Wang, Y. Sun, Z. Liu, S. E. Sarma, M. M. Bronstein, and J. M. Solomon, “Dynamic graph cnn for learning on point clouds,” ACM Transactions on Graphics , vol. 38, no. 5, pp. 146:1–146:12, 2019. [8] G. Li, M. Muller, A. K. Thabet, and B. Ghanem, “DeepGCNs: Can GCNs go as deep as CNNs?” in Proceedings of the IEEE/CVF Interna-tional Conference on Computer Vision (ICCV) , 2019, pp. 9267–9276. [9] M. Yan, L. Deng, X. Hu, L. Liang, Y. Feng, X. Ye, Z. Zhang, D. Fan, and Y. Xie, “HyGCN: A GCN accelerator with hybrid architecture,” in IEEE International Symposium on High Performance Computer Architecture (HPCA) , 2020, pp. 15–29. [10] Y. Hu, Y. Du, E. Ustun, and Z. Zhang, “GraphLily: Accelerating graph linear algebra on HBM-equipped FPGAs,” in IEEE/ACM International Conference on Computer-Aided Design (ICCAD) , 2021, pp. 1–9. [11] B. Zhang, H. Zeng, and V. K. Prasanna, “GraphAGILE: An FPGA-based overlay accelerator for low-latency GNN inference,” IEEE Transactions on Parallel and Distributed Systems , vol. 34, no. 9, pp. 2580–2597, 2023. [12] A. Ramachandran, D. Parikh, and V. Prasanna, “Accelerating dynamic image graph construction on FPGA for vision GNNs,” in 2025 IEEE High Performance Extreme Computing Conference (HPEC) , 2025. [13] A. Ramachandran, D. Parikh, and V. K. Prasanna, “GraphLeap: Decou-pling graph construction and convolution for vision GNN acceleration on FPGA,” in 2026 IEEE 34th Annual International Symposium on Field-Programmable Custom Computing Machines (FCCM) . IEEE, 2026, pp. 38–47. [14] F. R. K. Chung, Spectral Graph Theory , ser. CBMS Regional Conference Series in Mathematics. American Mathematical Society, 1997, vol. 92. [15] M. Munir, M. M. Rahman, X. Wei, Y. Yang, and R. Marculescu, “SearchViG: Optimal vision GNNs via ramanujan spectral optimiza-tion,” in The Fourth Learning on Graphs Conference (LoG) , 2025. [16] C. Li, T. Li, X. Hu, D. Luo, and T. Jin, “DVHGNN: Multi-scale dilated vision HGNN for efficient vision recognition,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , 2025, pp. 20 158–20 168. [17] G. Spadaro, M. Grangetto, A. Fiandrotti, E. Tartaglione, and J. H. Giraldo, “WiGNet: Windowed vision graph neural network,” in Pro-ceedings of the Winter Conference on Applications of Computer Vision (WACV) , February 2025, pp. 859–868. [18] J. Gilmer, S. S. Schoenholz, P. F. Riley, O. Vinyals, and G. E. Dahl, “Neural message passing for quantum chemistry,” CoRR , 2017. [19] T. Geng, A. Li, R. Shi, C. Wu, T. Wang, Y. Li, P. Haghi, A. Tumeo, S. Che, S. K. Reinhardt, and M. C. Herbordt, “AWB-GCN: A graph convolutional network accelerator with runtime workload rebalancing,” in Proceedings of the 53rd IEEE/ACM International Symposium on Microarchitecture (MICRO) , 2020, pp. 922–936. [20] B. Zhang, R. Kannan, and V. K. Prasanna, “BoostGCN: A framework for optimizing graph convolutional network inference on FPGA,” in Pro-ceedings of the IEEE International Symposium on Field-Programmable Custom Computing Machines (FCCM) , 2021, pp. 29–39. [21] S. Abi-Karam and C. Hao, “GNNBuilder: An automated framework for generic graph neural network accelerator generation, simulation, and optimization,” in 2023 33rd International Conference on Field-Programmable Logic and Applications (FPL) , 2023, pp. 212–218. [22] T. Tian, L. Zhao, X. Wang, Q. Wu, W. Yuan, and X. Jin, “FP-GNN: Adaptive FPGA accelerator for graph neural networks,” Future Generation Computer Systems , vol. 136, pp. 294–310, 2022. [23] Z. Que, H. Fan, M. Loo, H. Li, M. Blott, M. Pierini, A. Tapper, and W. Luk, “LL-GNN: Low latency graph neural networks on FPGAs for high energy physics,” ACM Trans. Embedded Comput. Syst. , vol. 23, no. 2, pp. 17:1–17:28, 2024. [24] C. Liu, H. Liu, L. Zheng, Y. Huang, X. Ye, X. Liao, and H. Jin, “FNNG: A high-performance FPGA-based accelerator for k-nearest neighbor graph construction,” in Proceedings of the ACM/SIGDA International Symposium on Field-Programmable Gate Arrays (FPGA) , 2023, pp. 67– 77. [25] H. He, Y. Zhang, L. He, D. He, Q. Li, J. Zhao, X. Liao, and H. Jin, “L-FNNG: Accelerating large-scale KNN graph construction on CPU-FPGA heterogeneous platform,” ACM Trans. Reconfigurable Technol. Syst. , vol. 17, no. 3, pp. 46:1–46:29, 2024. [26] M. Neu, J. Becker, P. Dorwarth, T. Ferber, L. Reuter, S. Stefkova, and K. Unger, “Real-time graph building on FPGAs for machine learning trigger applications in particle physics,” Computing and Software for Big Science , vol. 8, p. 8, 2024. [27] M. Belkin and P. Niyogi, “Laplacian eigenmaps for dimensionality reduction and data representation,” Neural Computation , vol. 15, no. 6, pp. 1373–1396, 2003. [28] U. von Luxburg, “A tutorial on spectral clustering,” Statistics and Computing , vol. 17, no. 4, pp. 395–416, 2007. [29] R. C. Wilson and P. Zhu, “A study of graph spectra for comparing graphs and trees,” Pattern Recognition , vol. 41, no. 9, pp. 2833–2841, 2008. [30] O. Russakovsky, J. Deng, H. Su, J. Krause, S. Satheesh, S. Ma, Z. Huang, A. Karpathy, A. Khosla, M. Bernstein, A. C. Berg, and L. Fei-Fei, “ImageNet large scale visual recognition challenge,” International Journal of Computer Vision (IJCV) , vol. 115, no. 3, pp. 211–252, 2015.
