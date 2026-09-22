@@ -1,0 +1,334 @@
+Title: C^2-INR: Customized Convolutional Implicit Neural Representation
+
+URL Source: https://arxiv.org/pdf/2609.22807v1
+
+Published Time: Tue, 22 Sep 2026 00:50:58 GMT
+
+Number of Pages: 9
+
+Markdown Content:
+# C2-INR: Customized Convolutional Implicit Neural Representation 
+
+## Jinglei Shi 1∗† , Xinran Chang 1∗, Jiaqi Cui 1, Yingjie Xia 1, Zhaolin Xiao 2, Chongyi Li 1
+
+> 1
+
+VCIP & TMCC & DISSec, College of Computer Science, Nankai University 
+
+> 2
+
+College of Computer Science and Engineering, Xi’an University of Technology 
+
+Abstract 
+
+Implicit Neural Representation (INR) leverages neural net-works to represent discrete signals such as images as contin-uous ones, where the network weights serve as a compact form of the signal itself. Most existing INR methods adopt Multi-Layer Perceptrons (MLPs) as their backbone. Since these models render each pixel independently, they inherently fail to exploit the spatial correlations that exist between neigh-boring pixels. In contrast, convolutional INRs can process pixels in parallel while inherently accounting for inter-pixel dependencies, making them a more natural fit for representing images. Nevertheless, convolutional INRs remain relatively underexplored, and the majority of them rely on fixed architec-tural settings, leaving little room for image-specific adaptation. In this paper, we investigate network customization for convo-lutional INRs. We replace conventional filters with irregular directional kernels, whose allocation is guided by the direc-tional energy in the image spectrum, i.e., directions exhibiting stronger energy are assigned a larger number of kernels, en-abling content-tailored convolution settings. These kernels are further reformulated via an orthogonal basis to achieve a supe-rior sparse representation. Moreover, we introduce an annealed Gumbel-Softmax-based mechanism for kernel-level activation function selection, which gives the most suitable activation function for each convolution kernel. Extensive experiments demonstrate that our method, namely C 2-INR, achieves su-perior performance against state-of-the-art approaches under comparable parameter budgets across a wide range of image processing tasks, including representation, inpainting, and super-resolution. 
+
+## Introduction 
+
+INR methods achieve continuous representation of discrete signals by mapping input coordinates to target values such as pixels (Mildenhall et al. 2021; Sitzmann et al. 2020), depth (Park et al. 2019), or other attributes (Srinivasan et al. 2021) via an MLP. Their advantages include compact repre-sentation through network parameter fitting and greater flexi-bility in solving inverse problems like super-resolution and inpainting. The performance of MLP-based INRs (M-INRs) largely depends on network architecture. To further boost their representation capability, recent work has explored various 
+
+> ∗
+
+These authors contributed equally. 
+
+> †
+
+Corresponding author. 
+
+design strategies. For instance, (Shi et al. 2025) proposed an inductive gradient adjustment method that generalizes eNTK-based gradient transformation to mitigate spectral bias. Inspired by iterative refinement, (Haider et al. 2026) intro-duced an iterative INR to strengthen high-frequency detail representation. (Zhao et al. 2025) designed a high-frequency perception approach that uses the locations of high-frequency components as centers for wavelet positional encoding, bal-ancing convergence across frequency bands. To address lim-ited generalization, (Li, Wang, and Meng 2023) presented a Dirichlet-energy-based regularization that improves INR performance on non-uniform signals. Meanwhile, (Zhang et al. 2026) explored the role of bias terms and suggested initializing input-layer biases with pre-trained features to improve fitting quality. On activation functions, (Heidari et al. 2025; Han et al. 2026) and (Jayasundara et al. 2025) respec-tively proposed learnable single-layer activations, multi-scale sine activations, and layer-wise optimal activation matching, enhancing expressiveness from the activation perspective. However, most existing INR research has centered on MLP-based backbones, which map coordinates to outputs (e.g., pixels) independently. In contrast, convolution-based INRs (C-INRs) can better leverage spatial correlations via paral-lel convolution operations. Early C-INRs were introduced by (Heckel and Hand 2019), which used uniform noise as input and cascaded convolutions as backbone. (Chen et al. 2021) extended this paradigm to video data, inspiring sub-sequent works (Chen et al. 2023; Zhang et al. 2024; Kwan et al. 2024). For light field compression, (Shi, Xu, and Guille-mot 2024) proposed a C-INR that splits kernels into spatial descriptors and angular modulators. Despite these applica-tions, most existing C-INR methods rely on fixed network configurations (e.g., activation functions, kernel shapes, and channel numbers) across all scenes, which severely limits their representational capacity. As shown in Fig. 1, images with different content exhibit distinct characteristics (like spectrum distribution), suggesting that the optimal network architecture should also vary ac-cordingly. This observation motivates our concept of network customization for C-INR, leading to the proposed C 2-INR method. Specifically, we target two core components of the network: convolution kernels and activation functions. To this end, we introduce a Spectral Guided Directional Con-volution Block (SGDCB) for the backbone, which leverages arXiv:2609.22807v1 [cs.CV] 19 Sep 2026 Figure 1: Illustration of example images and their directional spectral magnitude distributions. The top image exhibits predominantly vertical variations, with its large-magnitude spectral components concentrated around π/ 2, while the bottom image contains mostly horizontal variations, with its energy peaking around 0. This implies that different images should have different optimal INR architectures. the statistical energy distribution of the target image across directional frequency ranges to allocate kernel numbers, and further applies an orthogonal basis reformulation to boost representation performance. Complementarily, we propose an Annealed Gumbel-Softmax-based Activation Function Selection (AGS-AFS) mechanism that evaluates each candi-date function from a preset dictionary via annealed scores, and assigns the most suitable one to each convolution kernel. Together, SGDCB and AGS-AFS yield a C-INR customized in terms of the target image. Experimental results demonstrate that our dual customization strategy achieves superior per-formance against State-Of-The-Art (SOTA) methods across multiple image processing tasks. Our contributions can be summarized as follows: 
+
+• We pioneer the concept of C-INR customization, wherein the network architecture specifically tailored to the content of the target image. Such convolutional network design greatly enriches the available architectural choices for INR-based tasks. 
+
+• We develop a frequency energy-guided directional kernel allocation method to enhance network adaptivity, coupled with an orthogonal-basis-based kernel reformulation that enhances network compactness. 
+
+• We design an annealed Gumbel-Softmax-based activation function selection mechanism, which estimates scores to assign the optimal function to each kernel, overcoming the expressiveness bottleneck of a single function. 
+
+## Related Work 
+
+Implicit Neural Representation 
+
+INR techniques parameterize target signals using neural net-works. Based on the underlying network architecture, they fall into two categories: MLP-based (M-INR) and convolution-based (C-INR) approaches. M-INRs typically employ MLPs to learn a continuous mapping from coordinates to signal values (Mildenhall et al. 2021), enabling arbitrary-resolution signal representation. In contrast, C-INRs adopt cascaded convolutional architectures to learn mappings from coordi-nates (Chen et al. 2021) or uniform noise (Heckel and Hand 2019) to target signals, supporting multi-point parallel render-ing. Recent advances have extended INR techniques to a broad spectrum of signal representation tasks, including audio (Su, Chen, and Shlizerman 2022), images (Saragadam et al. 2023; Ramasinghe and Lucey 2022; Jayasundara Mudiyanselage et al. 2025), video (Yan et al. 2024; Gao et al. 2025; Guo et al. 2025), light fields (Shi, Xu, and Guillemot 2024), and immersive video (Wu et al. 2024; Zhu et al. 2025a). To further boost representational capacity, especially for high-frequency signal components, extensive efforts have been devoted to improving various aspects of INR architectures. On activation functions, periodic (Sitzmann et al. 2020; Liu et al. 2024; Han et al. 2026), Gaussian (Ramasinghe and Lucey 2022), wavelet-based (Saragadam et al. 2023), and other forms (Jaya-sundara Mudiyanselage et al. 2025) have been proposed. On network architectures, multi-scale processing (Liu, Cai, and Xu 2020; Zhao, Asif, and Ma 2024) as well as multi-scale feature fusion and hierarchical encoding (Zhu et al. 2025b; Jiang et al. 2025) have been introduced. On the convergence front, iterative refinement strategies (Haider et al. 2026) have also been explored. Collectively, these approaches have sig-nificantly elevated the performance ceiling of MLP-based INRs, effectively alleviating the spectral bias problem. 
+
+Implicit Neural Network Customization 
+
+As discussed above, extensive efforts have been devoted to overcoming spectral bias and improving representational capacity through novel activation functions, network archi-tectures, or training strategies. However, due to the diversity of target signals, a fixed network setting often fails to adapt to individual signals, resulting in inherent performance limi-tations. Therefore, an important line of research focuses on customizing INRs to different targets. For example, some methods adjust activation function parameters via backpropa-gation during training (Goyal, Goyal, and Lall 2019; Bingham and Miikkulainen 2022; Fakhoury, Fakhoury, and Speleers 2022), or select optimal activations from a layer-wise dic-tionary (Jayasundara et al. 2025), to better capture complex patterns. (Tang et al. 2025) designs an INR as an intelligent representation system that dynamically adapts its architecture to input content. (Ashkenazi and Treister 2024) introduces the concept of editable INR and proposes a novel architecture that supports cropping operations. (Kazerouni et al. 2024) presents a harmonizer-composer framework for adaptively op-timizing task-specific parameters in INR. Nevertheless, most existing customization efforts remain centered on MLP-based INRs, while customization for C-INR architectures remains largely underexplored. 
+
+## Preliminary Knowledge 
+
+Typical INRs use neural networks to construct a mapping 
+
+Fθ (·) from a low-dimensional input, such as coordinates 
+
+x ∈ Rm, to the sampled values of the target signal (e.g., pixel intensity of an image) y ∈ Rn, thereby achieving continuous Input Noise 
+
+𝐀 𝐀 × 𝐀 𝐀 × 𝐀 𝐀 
+
+> SGDCB AGS-AFS BN UP SGDCB AGS-AFS BN UP SGDCB AGS-AFS BN UP 1x1 Conv
+
+# ...   
+
+> Stage 1 Stage 2 Stage 5
+
+Output Image Ground Truth L2 Loss    
+
+> SGDCB AGS-AFS BN UP
+
+Spectral Guided Directional Conv. Block Batch Normalization Bicubic Interpolation 
+
+SGDCB (Prior to Training) AGS-AFS (During Training) 
+
+> v
+
+FFT 
+
+𝐀 °
+
+𝐀􄠀 °𝐀𝐀 °
+
+𝐀􃰀􄠀 °   
+
+> vvv
+> Four Types of Directional Kernel 𝐀 𝐀
+
+𝐀 ° 𝐀􄠀 ° 𝐀𝐀 ° 𝐀􃰀􄠀 °
+
+> Allocation Proportion
+> Trainable Parameters ɑ Orthogonal Basis Ψ
+
+⨂
+
+⨀   
+
+> 𝐀 𝐀𴀀𝐀 𝐀 °
+> 𝐀 𝐀𴀀𝐀 𝐀􄠀 °
+> 𝐀 𝐀𴀀𝐀 𝐀𝐀 °
+> 𝐀 𝐀𴀀𝐀 𝐀􃰀􄠀 °
+> Concat 1x1 Conv
+> Input Features 𝐀 𝐀
+> Activation Function Dictionary 𝐀 × 𝐀 𝐀 × 𝐀 𝐀 /𝐀 × 𝐀 𝐀 /𝐀 SGDCB BN UP
+
+# ...    
+
+> Sinc Gaussian Gabor Sinosoid
+
+𝐀       
+
+> 𝐀 × 𝐀 𝐀 × 𝐀 𝐀 × 𝐀 𝐀 × 𝐀
+> Middle Features
+> 𝐀 𝐀+𝐀
+> Avg & Std Linear LN Linear Gumbel-Softmax
+> 𝐀 𝐀+𝐀
+> ∑
+> Output Features
+> 𝐀’ 𝐀+𝐀
+> 𝐀 × 𝐀 𝐀 × 𝐀 𝐀 × 𝐀 𝐀
+> 𝐀
+
+𝐀   
+
+> Selecting The Best Function Annealing Temperature τ （ 0.8 →0.2 ）
+
+Annealing Gumbel-Softmax based Act. Func. Selection Figure 2: Overview of the proposed C 2-INR. The upper part illustrates the overall network backbone, which consists of five stages, each comprising SGDCB, BN, UP, and AGS-AFS modules, followed by a final 1 × 1 convolutional decoding layer. The structure of SGDCB (bottom left) is determined prior to training: it focuses on analyzing the frequency energy in each direction and uses this information to allocate directional kernel numbers. These kernels are then reformulated via orthogonal basis decomposition with learnable parameters. Meanwhile, AGS-AFS (bottom right) operates during training, where it estimates scores for each candidate activation function using the Gumbel-Softmax function and adopts an annealing mechanism to gradually select the best-fitting activation function for each kernel. modeling of discrete signals: 
+
+y = Fθ (x), x ∈ Rm, y ∈ Rn, (1) where θ denotes the network parameters. A MLP is commonly employed as the backbone, with each layer consisting of a linear mapping fθi (·) followed by an activation function σi(·):
+
+Fθ (·) = σL ◦ fθL ◦ σL−1 ◦ fθL−1 ◦ · · · ◦ σ1 ◦ fθ1 (·). (2) The network weights θ are optimized by minimizing the mean squared error between the predicted output y = Fθ (x) and the ground truth ygt :
+
+θ∗ = arg min  
+
+> θ
+
+∥ygt − Fθ (x)∥22 . (3) Besides MLP, A CNN can also serve as the backbone for INR, giving rise to C-INRs. In this setting, uniform noise 
+
+x = ϵ ∼ U (0 , 1) is taken as input and multiple sampling points are rendered in parallel as the output y. Accordingly, the parameters {θi} in Eq. 2 correspond to convolutional kernel weights rather than those of fully connected layers. 
+
+## Methodology 
+
+Network Backbone 
+
+The goal of our work is to obtain a compact INR that not only enables image representation and other tasks but also maintains high rendering quality. As illustrated in Fig. 2, we adopt a five-layer cascaded convolutional network as our backbone to construct a C-INR. It takes a uniform noise tensor 
+
+ϵ ∼ U (0 , 1) as input, with each layer sequentially performing convolution, batch normalization (BN), bicubic upsampling (UP), and activation function. The final output features are decoded via a 1 × 1 convolutional layer and supervised by the target image Igt . However, employing predefined convolutions and activation functions leads to limited representational capacity when handling diverse target images. We thus focus on customizing these two components in terms of different images to improve the representation quality. 
+
+Spectral Guided Directional Convolution Block 
+
+Existing C-INRs (Heckel and Hand 2019; Chen et al. 2021; Shi, Xu, and Guillemot 2024) rely on fixed, predefined con-volutional blocks (typically with 3 × 3 kernels). However, images of varying content often exhibit distinct characteris-tics: some scenes may be dominated by horizontal textures, while others contain predominantly diagonal ones. Applying identical kernel setting across such diverse scenes inevitably limits network performance. Although early works (Zhou et al. 2017; Weiler, Hamprecht, and Storath 2018) have ex-plored directional enhancements for convolutions, adapting such ideas to the INR setting is challenging. On one hand, image representation tasks demand high compactness, which complex kernel designs would compromise. On the other hand, it remains an open question how to extract effective cues from the input to guide kernel customization. Motivated by these considerations, we propose a customized building block for C-INRs, termed the Spectral Guided Directional Convolution Block (SGDCB), with the following key designs: 
+
+Directional Kernel Allocation Instead of the standard 3×3
+
+convolution that covers all nine local pixels, we adopt slimmer directional convolutions that cover only three pixels along specific orientations. Specifically, these kernels operate in four directions: horizontal ( 0◦), vertical ( 90 ◦), main diagonal (45 ◦), and secondary diagonal ( 135 ◦). They can be efficiently implemented by applying shifting and rotation operations to 
+
+3 × 1 kernels. These four directional kernels are not only lightweight in terms of parameters but also offer stronger representational capacity along their orientations. Images that exhibit stronger textural variations along a particular direction demand greater representational capacity in that direction. Accordingly, given the desired number of output channels Cout for each layer, the number of kernels allocated to each direction should be reasonably determined based on the image content. To this end, we measure the energy of the target image Igt across different directional ranges in the frequency domain, using it as a cue for allocation: 
+
+Cdout = round (
+
+P 
+
+> p∈Igt
+
+|M d−22 .5◦ 
+
+> d+22 .5◦
+
+· F (Igt )|
+
+P 
+
+> p∈Igt
+
+|F (Igt )| · γC out ), (4) where F(·) denotes the Fourier Transform, p denotes each pixel in the target image Igt , d ∈ { 0◦, 45 ◦, 90 ◦, 135 ◦} rep-resents the orientation of the convolutional kernel, and 
+
+M d+22 .5◦ 
+
+> d−22 .5◦
+
+is a binary mask that covers elements within a 
+
+45 ◦ range centered at d (like shown in bottom left of Fig. 2). 
+
+round (·) is a rounding function, and γ is a hyperparameter to adjust the number of parameter. Given the constraint that P 
+
+> d
+
+= γC out , Eq. 4 implies that a larger proportion of con-volutional channels will be allocated to directions exhibiting stronger frequency energy, thereby enhancing the represen-tational capacity. Finally, the four directional branches are concatenated and fused with ×1 × 1 convolution kernels. 
+
+Kernel Reformulation with Orthogonal Basis We also employ the closed-form solution of the discrete Chebyshev transform with a window length of Lw = 3 to construct orthogonal basis Ψ = [ ψ0, ψ 1, ψ 2] ∈ R3×3×1, and then use them to reformulate the directional kernels. These three bases of Ψ respectively captures smooth regions (DC component), edges (first-order differential) and texture patterns (second-order differential) characteristics. The directional convolution kernel Kd ∈ RCin ×Cdout ×3×1 can be represented with the trainable coefficients α and the global orthogonal basis Ψ as follows: 
+
+Kd = α ⊗ Ψ, α ∈ RCin ×Cdout ×3, Ψ ∈ R3×3×1, (5) where ⊗ denotes matrix cross product along the last dimension of α and the first dimension of Ψ. We will show in the section of ablation study that such reformulation improves performance with barely no increase in parametric cost. It is worth noting that both directional kernel allocation and reformulation are carried out prior to the training, and thus incur no extra overhead to the training procedure. 
+
+Kernel-Level Activation Function Selection 
+
+As another core component of INR, different activation func-tions exhibit distinct properties in gradient flow, numerical stability, and nonlinear expressiveness. While recent works have explored complex or learnable activation functions for M-INRs (Jayasundara Mudiyanselage et al. 2025; Han et al. 2026), the optimization in C-INRs remains largely unexplored. A naive solution is to adopt the layer-wise selection strategy from MIRE (Jayasundara et al. 2025), which picks the best function for each layer from a candidate set. However, this treats the layer as the smallest selection unit. In CNNs, kernels (each corresponding to a feature map) offer a finer granularity than layers, and different kernels often capture distinct feature characteristics. Motivated by this, we propose an Annealed Gumbel-Softmax-based Activation Function Selection (AGS-AFS) mechanism that selects the optimal activation function for each individual kernel: 
+
+Annealed Activation Function Selection As shown in bottom right of Fig. 2, given a set of q activation functions 
+
+A = {Gaussian (·), Sinusoid (·), . . . }, we sequentially pass the input feature hi through the convolution operation fKi ,BN, UP and each activation function in A:
+
+hi+1 = A ◦ UP ◦ BN ◦ fKi (hi), (6) where hi ∈ RB×Ci×Hi/2×Wi/2, and hi+1 ∈
+
+RB×Ci×Hi×Wi×q denote the input and middle features of the i-th layer. We then compute the mean and variance of each feature map, yielding a statistical vector v ∈ RB×Ci×2q
+
+from hi+1 . Subsequently, linear layers Linear (·) and layer normalization LN (·) expand the statistical vector from 2q to 
+
+64 dimensions, and then projected it back to q dimensions. An annealed Gumbel-Softmax function is then used to pre-dict a score distribution s ∈ RB×Ci×q over the q activation candidates for each feature map: 
+
+s = Gumbel-Softmax  
+
+> τ
+
+(Linear  
+
+> 64 →q
+
+(LN (Linear  
+
+> 2q→64
+
+(v)))) , (7) where τ is the temperature hyperparameter of the Gumbel-Softmax. The final output features h′ 
+
+> i+1
+
+∈ RB×Ci×Hi×Wi is then computed as a weighted sum over hi+1:
+
+h′ 
+
+> i+1
+
+= X
+
+> q
+
+s′ · hi+1, (8) where s′ is s expanded along the Hi and Wi dimensions. As τ is gradually annealed during training, s progressively becomes a one-hot distribution. In this case, the weighted sum in Eq. 8 effectively reduces to selecting a single activation function per feature map, which corresponds to selecting the optimal function for each convolution kernel. #Param ∼108k #Param ∼215k #Param ∼437k Methods PSNR ↑ SSIM ↑ PSNR ↑ SSIM ↑ PSNR ↑ SSIM ↑                                    
+
+> DD 32.58 0.8796 33.99 0.9081 35.48 0.9305 INCODE 25.97 0.6423 30.95 0.8159 35.59 0.9025 SL 2A-INR 32.27 0.8348 36.23 0.9104 42.51 0.9698 MIRE 31.77 0.8750 33.11 0.9018 35.52 0.9305 MSA 31.90 0.8523 34.62 0.9085 39.03 0.9626 Ours 39.38 0.9571 44.51 0.9846 51.17 0.9966
+
+Table 1: Quantitative results for the image representation task using C 2-INR (Ours) and other SOTA methods. The best and second-best results are highlighted in bold and underlined. 
+
+Progressive Layer Fitting Strategy Although the above activation selection mechanism is applicable to all layers simultaneously, we adopt a progressive layer-by-layer fitting strategy to ensure training stability. Specifically, we begin with the first layer: the selection mechanism is applied to this layer, and an auxiliary decoding layer is used to decode its output features, with a downsampled version of Igt providing supervision. After a few iterations, the optimal activation functions for the kernels in this layer are determined and fixed. We then move to the next layer and repeat the process until all layers are processed. Finally, the entire network is fine-tuned to full convergence. Note that, although AGS-AFS employs learnable linear layers during selection, these layers are detached and discarded after the selection process, retaining only the chosen activation functions. Hence, no extra parameters are introduced to the final network. Moreover, unlike SGDCB, which is determined prior to training, AGS-AFS operates during training. The two mechanisms are thus independent of each other and can jointly contribute to the representation capability of C 2-INR. 
+
+## Experiments 
+
+Implementation and Metrics 
+
+Our C 2-INR is implemented with PyTorch framework and op-timized using the Adam optimizer. We initialize temperature hyperparameter τ to 0.8 and gradually anneal it to 0.2 after 600 iterations for each layer. We compare C 2-INR against recent SOTA methods, including M-INR approaches such as INCODE (Kazerouni et al. 2024), SL 2A-INR (Heidari et al. 2025), MIRE (Jayasundara et al. 2025), MSA (Han et al. 2026), as well as the C-INR baseline Deep Decoder (DD) (Heckel and Hand 2019). We adopt both distortion-based metrics PSNR, SSIM (Wang et al. 2004) and a perceptual metric LPIPS (Zhang et al. 2018) to evaluate performance. 
+
+Experimental Results 
+
+Image Representation For the image representation task, we evaluate each method under three parameter budgets: low (∼108k params), medium ( ∼215k params), and high ( ∼437k params). Specifically, we configure C 2-INR with Cout =
+
+{32 , 64 , 128 } and γ = 2 .6 (the configuration details of other methods can be found in supplementary materials). All models are fitted to the 24 full-resolution images from the Kodak                                            
+
+> ×2 SR ×4 SR Methods PSNR ↑SSIM ↑LPIPS ↓PSNR ↑SSIM ↑LPIPS ↓
+> DD 26.45 0.7488 0.3181 24.25 0.6650 0.4241 INCODE 26.06 0.6764 0.2413 20.90 0.4047 0.5324 SL 2A-INR 25.68 0.7215 0.2540 22.15 0.5478 0.5415 MIRE 24.72 0.6308 0.3108 19.57 0.3240 0.6117 MSA 25.50 0.7274 0.2541 22.42 0.5558 0.4416 Ours 28.60 0.8410 0.1720 24.48 0.6772 0.3984
+
+Table 2: Quantitative results for the image ×2 and ×4 SR tasks using C 2-INR (Ours) and other SOTA methods. The best and second-best results are highlighted in bold and underlined. 30% Pixels Masked 50% Pixels Masked Methods PSNR ↑ SSIM ↑ LPIPS ↓ PSNR ↑ SSIM ↑ LPIPS ↓                                    
+
+> DD 35.83 0.9437 0.0369 33.63 0.9276 0.0423 INCODE 34.35 0.8340 0.0453 32.15 0.7981 0.0720 SL 2A-INR 34.85 0.8477 0.0467 32.44 0.8039 0.2813 MIRE 35.53 0.9398 0.0359 31.49 0.8850 0.0903 MSA 34.16 0.9354 0.0293 31.02 0.8870 0.0797 Ours 37.09 0.9610 0.0098 34.10 0.9327 0.0257
+
+Table 3: Quantitative results for the image inpainting tasks using C 2-INR (Ours) and other SOTA methods, with 30% and 50% pixels being randomly masked. The best and second-best results are highlighted in bold and underlined. dataset (Kodak 2018) following their official training settings. Table 1 summarizes the averaged results across the three budget levels, where we observe that C 2-INR consistently outperforms other SOTA methods under all settings. It not only surpasses MLP-based alternatives, but also achieves substantially larger improvements over existing convolution-based counterpart DD. We also visualize the reconstructed images in the first two rows of Fig. 3, readers are encouraged to zoom in for more details. Under the same parameter budget, C2-INR is able to preserve subtle textures and details, which implies stronger representation capability and also suggests a promising application in compression tasks. 
+
+Image Super-resolution We further evaluate C 2-INR against other SOTA frameworks on the image super-resolution task. Using all 14 images from the Set14 dataset (Zeyde, Elad, and Protter 2010) as our test set, which provides both full-resolution and ×2 downsampled versions, we apply bicubic interpolation to further downsample them for ×4
+
+super-resolution evaluation. All methods are compared under a parameter budget of 215k to ensure fairness. Table 2 reports the averaged PSNR and SSIM for both ×2 and ×4 tasks, along with the LPIPS metric to assess perceptual quality. The third and fourth rows of Fig. 3 visualize the super-resolved outputs from each method. Both DD and C 2-INR outperform the MLP-based INR methods, confirming that convolution-based architectures better exploit local pixel correlations to produce sharper details with fewer artifacts. Moreover, thanks to its image-specific customized design, C 2-INR achieves superior Kodak-08 40.15dB 28.41dB 26.74dB 29.73dB 29.21dB 28.39dB                         
+
+> Kodak-20 47.75dB 35.74dB 32.58dB 39.00dB 33.89dB 37.06dB
+> Set14-11 32.47dB 29.64dB 29.52dB 29.83dB 27.09dB 28.33dB
+> Set14-14 29.48dB 26.35dB 26.17dB 27.49dB 25.51dB 25.10dB
+> GT C2-INR (Ours) DD INCODE SL 2A-INR MIRE MSA
+
+Figure 3: Qualitative comparisons on the Kodak (Kodak 2018) and Set14 (Zeyde, Elad, and Protter 2010) datasets. The first two rows present results for the image representation task, while the 3rd and 4th rows show results for the image ×2 SR task. Under identical parameter budget, our C 2-INR consistently produces cleaner images, with noticeable reductions in distortions and artifacts, e.g., the horizontal window mullions and aircraft fuselage paintings in the figures.     
+
+> GT -Set5-03 Ours -39.06dB DD -36.46dB
+> SL 2A-INR -36.28dB MIRE -36.93dB MSA -36.30dB
+
+Figure 4: Qualitative comparison on the Set5 (Bevilacqua et al. 2012) dataset for the task of image inpainting (masking 30% pixels). Our C 2-INR more effectively leverages inter-pixel correlations to fill missing pixels, preserving the sharpness of the hat’s woven texture and achieving superior visual quality. performance over DD. 
+
+Image Inpainting Following SL 2A-INR (Heidari et al. 2025), we further evaluate each method on the more chal-lenging task of image inpainting. Specifically, all methods are tested under the same parameter budget (215k parame-ters) using all 5 images from the Set5 dataset (Bevilacqua et al. 2012). We generate two random masks covering 30% and 50% of the image pixels, respectively, and adopt each method to recover the masked regions from the known pixels. Table 3 reports the averaged PSNR, SSIM, and LPIPS for each method, and Fig. 4 visualizes the inpainted results. As shown, C 2-INR produces images with more realistic details and finer textures than the other methods, demonstrating its clear superiority over existing SOTA approaches. 
+
+Ablation Studies 
+
+Module Design Effectiveness To systematically investigate the contribution of each module design to the overall perfor-mance of C 2-INR, we conduct a step-by-step ablation study on four key modules, i.e. Directional Kernel Allocation (DKA), Kernel Reformulation with Basis (KRB), Activation Function Selection (AFS), and Progressive Layer Fitting (PLF). Using a cascaded convolutional network as the backbone, we keep the total number of parameters fixed at 215k and incrementally integrate each module into the backbone. All variants are evaluated on the Kodak dataset (Kodak 2018) in terms of aver-aged performance for image representation tasks. As reported in Table 4, the progressive integration of these modules leads to consistent improvements in the performance of C 2-INR. Specifically, the introduction of DKA and KRB jointly boosts the PSNR from 39.60dB to 42.60dB, yielding a gain of 3dB. Subsequently, adopting AFS and PLF improves the PSNR by 1.9dB, finally reaching 44.51dB. These results demonstrate that tailoring the two core components, the convolutional ker-Variants DKA KRB AFS PLF PSNR ↑ SSIM ↑
+
+C2-INR* % % % % 39.60 0.9634 C2-INR † ! % % % 41.39 0.9736 C2-INR ‡ ! ! % % 42.60 0.9789 C2-INR ⋆ ! ! ! % 44.03 0.9831 C2-INR ! ! ! ! 44.51 0.9846 
+
+Table 4: Ablation study on different modules. The baseline ( ∗)denotes the vanilla C 2-INR without any of our enhancements. The variants †, ‡, and ⋆ correspond to progressive integra-tions of DKA, KRB, and AFS, respectively, with C 2-INR representing the full model. 
+
+Figure 5: Image and error map visualizations for a horizontally dominated example (108k params), comparing horizontal-only, vertical-only, and four-direction kernel settings, suggest-ing that kernel allocation should adapt to image content. nels and the activation functions, can significantly enhance the representation capacity of convolutional INR, thereby validating the effectiveness and rationality of our proposed module designs. 
+
+Directional Kernel Allocation Besides the modular abla-tion, we further evaluate several allocation strategies: standard 
+
+3 × 3 kernels, two-direction sets ( 0◦&90 ◦ and 45 ◦&135 ◦), and our four-direction set, all with equal proportions. We also compare two content-adaptive criteria: gradient-based (local dominant direction) and spectral-energy-based (FT). Experiments on Kodak (Kodak 2018) for image representa-tion are summarized in Table 5. Results show that directional kernels consistently outperform standard 3 × 3 under the same parameter budget, with the four-direction set surpass-ing two-direction ones. Gradient-based allocation, relying only on local first-order statistics, performs even worse than uniform allocation. In contrast, our spectral criterion accu-rately measures directional parameter demands, enabling content-adaptive customization and achieving the best per-formance. This advantage is further visualized in Fig. 5 on a horizontally dominated image (spectrum in Fig. 1, bottom). Compared with horizontal-only and vertical-only kernels, our four-direction setting yields noticeably fewer artifacts (partic-                        
+
+> Kernel Types Proportions PSNR ↑SSIM ↑
+> 3×3Equal Prop. 42.76 0.9788
+> 0◦+90 ◦Equal Prop. 43.79 0.9835
+> 45 ◦+135 ◦Equal Prop. 44.03 0.9840
+> 0◦+90 ◦+45 ◦+135 ◦Equal Prop. 44.30 0.9843
+> 0◦+90 ◦+45 ◦+135 ◦w.r.t. Grad. 44.20 0.9841
+> 0◦+90 ◦+45 ◦+135 ◦w.r.t. FT 44.51 0.9846
+
+Table 5: Ablation on different kernel allocation strategies. 
+
+Figure 6: Representation quality evolution curves for each activation function selection strategies, implying that our joint AFS and PLF stategies gives the best efficiency. ularly along the horizontal scarf textures), demonstrating the effectiveness of our allocation strategy. 
+
+Activation Function Selection Strategy To evaluate the effectiveness of our activation function selection strategy, we compare three different schemes: (1) MIRE-type, which fits each activation function layer by layer and selects the single best one for each layer based on reconstruction quality; (2) AFS-only, which adopts the annealed activation function selection mechanism without progressive layer fitting, i.e., simultaneously selecting the optimal activation function for all channels across all layers; and (3) AFS&PLF, our proposed strategy that combines annealed activation function selection with progressive layer fitting. We compare the network repre-sentation performance under different selection strategies at various training time points, with results shown in Fig. 6. As observed, the MIRE-type strategy selects the best function per layer, but its granularity is at the layer level rather than the ker-nel level, leading to lower training efficiency and performance. The AFS-only strategy achieves kernel-level granularity, yet optimizing all layers simultaneously makes it more prone to falling into local minima. In contrast, our AFS&PLF strikes a favorable balance between granularity and convergence effi-ciency, thereby achieving the best representation performance within a given training time. 
+
+## Conclusion 
+
+We propose C 2-INR, a customized C-INR that adapts both its convolution kernels and activation functions to the target image. For kernels, we introduce directional filters with pro-portions adaptively allocated according to spectral energy, assigning more capacity to dominant directions. For activa-tions functions, we select the most suitable function per kernel via response-based scoring with an annealing mechanism, and adopt progressive layer-wise training for stable convergence. Extensive experiments on representation, SR, and inpainting show that C 2-INR consistently outperforms SOTA methods. While currently 2D-specific and memory-intensive for high resolution, future work will extend it to higher dimensions and incorporate partition strategies to reduce memory footprint. 
+
+## References 
+
+Ashkenazi, M.; and Treister, E. 2024. Towards croppable implicit neural representations. Adv. Neural Inform. Process. Syst. (NeurIPS) , 37: 31473–31503. Bevilacqua, M.; Roumy, A.; Guillemot, C.; and Morel, M.-L. A. 2012. Low-complexity single-image super-resolution based on nonnegative neighbor embedding. In Brit. Mach. Vis. Conf. (BMVC) .Bingham, G.; and Miikkulainen, R. 2022. Discovering para-metric activation functions. Neural Networks (NN) , 148: 48–65. Chen, H.; Gwilliam, M.; Lim, S.-N.; and Shrivastava, A. 2023. Hnerv: A hybrid neural representation for videos. In IEEE Conf. Comput. Vis. Pattern Recog. (CVPR) , 10270–10279. Chen, H.; He, B.; Wang, H.; Ren, Y.; Lim, S. N.; and Shrivas-tava, A. 2021. Nerv: Neural representations for videos. Adv. Neural Inform. Process. Syst. (NeurIPS) , 21557–21568. Fakhoury, D.; Fakhoury, E.; and Speleers, H. 2022. ExSpliNet: An interpretable and expressive spline-based neural network. 
+
+Neural Networks (NN) , 152: 332–346. Gao, G.; Teng, S.; Peng, T.; Zhang, F.; and Bull, D. 2025. GIViC: Generative implicit video compression. In IEEE Int. Conf. Comput. Vis. (ICCV) , 17356–17367. Goyal, M.; Goyal, R.; and Lall, B. 2019. Learning activation functions: A new paradigm for understanding neural networks. 
+
+arXiv preprint arXiv:1906.09529 .Guo, J.; Liu, K.; Yao, J.; Wang, Z.; Bu, J.; and Wang, H. 2025. Metanerv: Meta neural representations for videos with spatial-temporal guidance. In AAAI Conf. Artif. Intell. (AAAI) ,volume 39, 3257–3265. Haider, A.; Ali, M. S.; Qamar, M.; Khalil, T.; Kim, S. Y.; Oh, J.; Tartaglione, E.; and Bae, S.-H. 2026. I-INR: iterative implicit neural representations. In AAAI Conf. Artif. Intell. (AAAI) , 4520–4528. Han, J.; Wei, S.; Wu, M.; Yu, L.; Li, W.; Sun, L.; Qin, H.; and Pang, Y. 2026. Implicit Neural Representation with Multi-Scale Sine Activation. In AAAI Conf. Artif. Intell. (AAAI) ,21567–21575. Heckel, R.; and Hand, P. 2019. Deep decoder: Concise image representations from untrained non-convolutional networks. In Int. Conf. Learn. Represent. (ICLR) .Heidari, M.; Rezaeian, R.; Azad, R.; Merhof, D.; Soltanian-Zadeh, H.; and Hacihaliloglu, I. 2025. SL 2A-INR: Single-Layer Learnable Activation for Implicit Neural Representation. In IEEE Int. Conf. Comput. Vis. (ICCV) .Jayasundara, D.; Zhao, H.; Labate, D.; and Patel, V. M. 2025. Mire: Matched implicit neural representations. In IEEE Conf. Comput. Vis. Pattern Recog. (CVPR) , 8279–8288. Jayasundara Mudiyanselage, V. D. B. J.; Zhao, H.; Labate, D.; and Patel, V. 2025. PIN: Prolate spheroidal wave function-based implicit neural representations. In Int. Conf. Learn. Represent. (ICLR) , 17832–17853. Jiang, Y.; Kwan, H. M.; Peng, T.; Gao, G.; Zhang, F.; Zhu, X.; Sole, J.; and Bull, D. 2025. HIIF: Hierarchical encoding based implicit image function for continuous super-resolution. In 
+
+IEEE Conf. Comput. Vis. Pattern Recog. (CVPR) , 2289–2299. Kazerouni, A.; Azad, R.; Hosseini, A.; Merhof, D.; and Bagci, U. 2024. Incode: Implicit neural conditioning with prior knowledge embeddings. In IEEE Winter Conf. Appl. Comput. Vis. (WACV) , 1298–1307. Kodak. 2018. Kodak lossless true color image suite. Kwan, H. M.; Zhang, F.; Gower, A.; and Bull, D. 2024. Immer-sive video compression using implicit neural representations. 
+
+Picture Coding Symposium (PCS) .Li, Z.; Wang, H.; and Meng, D. 2023. Regularize implicit neural representation by itself. In IEEE Conf. Comput. Vis. Pattern Recog. (CVPR) , 10280–10288. Liu, Z.; Cai, W.; and Xu, Z.-Q. J. 2020. Multi-scale deep neural network (MscaleDNN) for solving Poisson-Boltzmann equation in complex domains. Commun. Comput. Phys. (CCP) .Liu, Z.; Zhu, H.; Zhang, Q.; Fu, J.; Deng, W.; Ma, Z.; Guo, Y.; and Cao, X. 2024. Finer: Flexible spectral-bias tuning in implicit neural representation by variable-periodic activation functions. In IEEE Conf. Comput. Vis. Pattern Recog. (CVPR) ,2713–2722. Mildenhall, B.; Srinivasan, P. P.; Tancik, M.; Barron, J. T.; Ra-mamoorthi, R.; and Ng, R. 2021. NeRF: Representing scenes as neural radiance fields for view synthesis. Communications of the ACM , 65(1): 99–106. Park, J. J.; Florence, P.; Straub, J.; Newcombe, R.; and Love-grove, S. 2019. Deepsdf: Learning continuous signed distance functions for shape representation. In IEEE Conf. Comput. Vis. Pattern Recog. (CVPR) , 165–174. Ramasinghe, S.; and Lucey, S. 2022. Beyond periodicity: Towards a unifying framework for activations in coordinate-mlps. In Eur. Conf. Comput. Vis. (ECCV) , 142–158. Saragadam, V.; LeJeune, D.; Tan, J.; Balakrishnan, G.; Veer-araghavan, A.; and Baraniuk, R. G. 2023. Wire: Wavelet implicit neural representations. In IEEE Conf. Comput. Vis. Pattern Recog. (CVPR) , 18507–18516. Shi, J.; Xu, Y.; and Guillemot, C. 2024. Learning kernel-modulated neural representation for efficient light field com-pression. IEEE Trans. Image Process. (TIP) , 33: 4060–4074. Shi, K.; Chen, H.; Zhang, L.; and Gu, S. 2025. Inductive Gradient Adjustment For Spectral Bias In Implicit Neural Representations. In Int. Conf. on Mach. Learn. (ICML) .Sitzmann, V.; Martel, J.; Bergman, A.; Lindell, D.; and Wetzstein, G. 2020. Implicit neural representations with periodic activation functions. Adv. Neural Inform. Process. Syst. (NeurIPS) , 33: 7462–7473. Srinivasan, P. P.; Deng, B.; Zhang, X.; Tancik, M.; Mildenhall, B.; and Barron, J. T. 2021. Nerv: Neural reflectance and visibility fields for relighting and view synthesis. In IEEE Conf. Comput. Vis. Pattern Recog. (CVPR) .Su, K.; Chen, M.; and Shlizerman, E. 2022. Inras: Implicit neural representation for audio scenes. Adv. Neural Inform. Process. Syst. (NeurIPS) , 8144–8158. Tang, L.; Zhu, J.; Zhang, X.; Zhang, L.; Ma, S.; and Huang, Q. 2025. Canerv: Content adaptive neural representation for video compression. arXiv preprint arXiv:2502.06181 .Wang, Z.; Bovik, A. C.; Sheikh, H. R.; and Simoncelli, E. P. 2004. Image quality assessment: from error visibility to structural similarity. IEEE Trans. Image Process. (TIP) ,13(4): 600–612. Weiler, M.; Hamprecht, F. A.; and Storath, M. 2018. Learning steerable filters for rotation equivariant cnns. In IEEE Conf. Comput. Vis. Pattern Recog. (CVPR) , 849–858. Wu, M.; Wang, Z.; Kouros, G.; and Tuytelaars, T. 2024. Tetrirf: Temporal tri-plane radiance fields for efficient free-viewpoint video. In IEEE Conf. Comput. Vis. Pattern Recog. (CVPR) , 6487–6496. Yan, H.; Ke, Z.; Zhou, X.; Qiu, T.; Shi, X.; and Jiang, D. 2024. Ds-nerv: Implicit neural video representation with decomposed static and dynamic codes. In IEEE Conf. Comput. Vis. Pattern Recog. (CVPR) , 23019–23029. Zeyde, R.; Elad, M.; and Protter, M. 2010. On single image scale-up using sparse-representations. In Int. Conf. on Curves and Surfaces (ICCS) , 711–730. Zhang, R.; Isola, P.; Efros, A. A.; Shechtman, E.; and Wang, O. 2018. The unreasonable effectiveness of deep features as a perceptual metric. In IEEE Conf. Comput. Vis. Pattern Recog. (CVPR) , 586–595. Zhang, W.; Li, B.; Xie, S.; Ren, C.; Xue, Y.; and Wang, Z. 2026. Understanding bias terms in neural representations. Adv. Neural Inform. Process. Syst. (NeurIPS) , 103682–103705. Zhang, X.; Yang, R.; He, D.; Ge, X.; Xu, T.; Wang, Y.; Qin, H.; and Zhang, J. 2024. Boosting neural representations for videos with a conditional decoder. In IEEE Conf. Comput. Vis. Pattern Recog. (CVPR) , 2556–2566. Zhao, H.; Gao, Z.; Wang, Y.; Xiong, R.; and Zhang, Y. 2025. Adaptive wavelet-positional encoding for high-frequency information learning in implicit neural representation. In 
+
+AAAI Conf. Artif. Intell. (AAAI) , 10430–10438. Zhao, Q.; Asif, M. S.; and Ma, Z. 2024. Pnerv: Enhancing spatial consistency via pyramidal neural representation for videos. In IEEE Conf. Comput. Vis. Pattern Recog. (CVPR) ,19103–19112. Zhou, Y.; Ye, Q.; Qiu, Q.; and Jiao, J. 2017. Oriented response networks. In IEEE Conf. Comput. Vis. Pattern Recog. (CVPR) ,519–528. Zhu, C.; Lu, G.; He, B.; Xie, R.; and Song, L. 2025a. Implicit-explicit integrated representations for multi-view video com-pression. IEEE Trans. Image Process. (TIP) , 34: 1106–1118. Zhu, J.; Zhang, X.; Tang, L.; and Jiang, J. 2025b. MSNeRV: neural video representation with multi-scale feature fusion. 
+
+arXiv preprint arXiv:2506.15276 .

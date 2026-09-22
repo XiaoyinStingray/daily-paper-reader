@@ -1,0 +1,2054 @@
+IEEE TRANSACTIONS ON IMAGE PROCESSING
+1
+Compressing 3D Gaussian Splatting via
+Cross-Representation Priors
+Yezheng Zhang , Huanxiong Liang , Chuqin Zhou , Guo Lu , Member, IEEE, Wenjun Zhang , Fellow, IEEE,
+CRP-GS (Ours)
+HAC
+Anchor
+Feature
+(b) Global Shared Prior (SFA)
+Hash Grid 𝓗𝓼
+Shared
+Feature
+(1) Method Overview of CRP-GS
+(2) RD Performance of CRP-GS
+Independent
+anchors
+Bitstreams
+Anchors
+Encoding
+(a) Correspondence Prior (COHS)
+◉
+◉
+Root
+Prior
+Leaf
+Corr.
+Bitstreams
+Low
+bitrate
+Encoding
+Fig. 1: (1) Compared with HAC’s independent anchor coding, CRP-GS exploits cross-representation priors: COHS builds a
+correspondence-based root-leaf hierarchy to conditionally encode leaf anchors using decoded roots as priors, and SFA aggregates
+global shared features from a contextual hash grid to reduce anchor entropy. (2) RD curves on Tanks&Temples show CRP-GS
+achieves higher PSNR at the same size (or smaller size at the same PSNR) than prior 3DGS compression baselines.
+Abstract—3D Gaussian Splatting (3DGS) enables high-quality
+novel view synthesis but incurs high storage and transmission
+costs due to dense Gaussian primitives. Recent anchor-based
+compression reduces per-primitive redundancy, yet redundancy
+across anchors remains largely unexploited. We propose CRP-
+GS (Cross-Representation Priors for Gaussian Splatting), a rate-
+distortion optimized compression framework that leverages cross-
+representation priors to improve anchor-level entropy model-
+ing. First, a Correspondence-Oriented Hierarchical Structure
+(COHS) organizes anchors by feature correspondence rather
+than spatial proximity, constructing root-leaf dependencies so
+that selected anchors can act as informative priors to condi-
+tionally encode others, yielding more accurate likelihood pre-
+diction and lower conditional entropy. Second, Shared Feature
+Aggregation (SFA) extracts globally shared features from a
+contextual hash grid and injects them into anchor representa-
+tions, factoring out scene-consistent low-frequency information
+that would otherwise be redundantly embedded in individual
+anchors. Both modules are trained under a unified rate-distortion
+objective to balance bitrate reduction and rendering fidelity.
+Experiments across multiple benchmarks show that CRP-GS
+achieves a favorable overall rate-distortion trade-off, yielding
+around 30% average bitrate reduction compared to anchor-based
+baselines while maintaining comparable rendering quality.
+This work was supported in part by the National Key Research and
+Development Program of China under Grant 2024YFF0509700, the National
+Natural Science Foundation of China under Grants 62471290, 62431015, and
+62331014, and the Fundamental Research Funds for the Central Universities.
+(Corresponding author: Guo Lu.)
+Yezheng
+Zhang,
+Huanxiong
+Liang,
+Chuqin
+Zhou,
+Guo
+Lu,
+and
+Wenjun
+Zhang
+are
+with
+the
+Institute
+of
+Image
+Communication
+and
+Network
+Engineering,
+Shanghai
+Jiao
+Tong
+University,
+Shanghai
+200240,
+China
+(e-mail:
+yezheng zhang@sjtu.edu.cn;
+huanxiong@sjtu.edu.cn;
+zhouchuqin@sjtu.edu.cn;
+luguo2014@sjtu.edu.cn;
+zhangwenjun@sjtu.edu.cn).
+© 2026 IEEE. Personal use of this material is permitted. Permission from
+IEEE must be obtained for all other uses, in any current or future media,
+including reprinting/republishing this material for advertising or promotional
+purposes, creating new collective works, for resale or redistribution to servers
+or lists, or reuse of any copyrighted component of this work in other works.
+Index Terms—3D Gaussian Splatting, Novel View Synthesis,
+Compression, Context Model, Entropy Coding.
+I. INTRODUCTION
+Over the past few decades, novel view synthesis has become
+a pivotal research topic in computer vision and graphics [1]–
+[3]. Neural Radiance Fields (NeRF) [4] pioneered this field
+by modeling 3D scenes as continuous volumetric functions
+using implicit Multilayer Perceptrons (MLPs), achieving high-
+fidelity view synthesis. Nevertheless, NeRF’s reliance on
+computationally intensive sampling of ray points hinders its
+practical adoption. To overcome these challenges, 3D Gaussian
+Splatting (3DGS) [5] has recently emerged as a competitive
+alternative. By representing scenes with adaptive 3D Gaussian
+primitives, 3DGS achieves real-time rendering while surpass-
+ing previous methods in visual quality. However, moving from
+implicit volumetric functions to an explicit set of Gaussian
+primitives shifts the primary bottleneck from computation to
+representation: the scene must now be stored and transmitted
+as millions of Gaussian attributes, where redundancy across
+primitives can quickly dominate the overall cost.
+Prior efforts to address this issue, such as pruning [6]–
+[8] and vector quantization [6], [9]–[11], reduce parameters
+by retaining only the most representative values, yet their
+compression efficiency remains suboptimal because they di-
+rectly operate on the original (largely unstructured) Gaussian
+primitives and overlook the structural relationships among
+Gaussians. From this perspective, existing 3DGS compression
+methods can be broadly categorized into primitive-based and
+anchor-based schemes: the former compacts the raw Gaussian
+set at the primitive level (e.g., via pruning or quantization),
+whereas the latter introduces higher-level structures to orga-
+nize Gaussians and exploit their correlations. In particular,
+arXiv:2609.23005v1  [cs.CV]  19 Sep 2026
+
+
+IEEE TRANSACTIONS ON IMAGE PROCESSING
+2
+Scaffold-GS [12] adopts an anchor-based mechanism that or-
+ganizes Gaussian primitives into a sparse set of anchor points,
+and employs MLPs to dynamically predict the associated
+Gaussians’ attributes, substantially reducing the model’s stor-
+age requirements by leveraging structural information among
+Gaussians. These efforts primarily focus on per-primitive
+redundancy or local structural patterns. However, once Gaus-
+sians are grouped into higher-level anchors, a distinct form of
+redundancy emerges across anchors themselves [13].
+To address anchor-level redundancy, subsequent methods
+extend this line of work with rate-distortion optimization
+[13]–[17]. Building upon Scaffold-GS, HAC [14] employs
+a binary multi-resolution hash grid, which is used to es-
+timate the probability distribution of each anchor attribute,
+thus facilitating effective entropy coding and rate-distortion
+optimization. Nevertheless, HAC lacks the use of cross-anchor
+priors, thereby neglecting the underlying correlations and
+redundancies among anchor features that could enhance the
+quality of neural Gaussian generation. In contrast, ContextGS
+[13] constructs a hierarchical anchor structure to model con-
+textual dependencies. However, its partition mechanism is
+determined solely by spatial proximity, ignoring the feature-
+level relationships among anchors. As a result, it cannot lever-
+age cross-anchor priors derived from feature correspondence,
+thereby limiting its ability to capture semantically meaningful
+interactions across hierarchical levels. More recent extensions
+[15]–[17] pursue stronger context modeling or improved an-
+chor expressiveness, but these frameworks still rely on local
+spatial priors or hand-crafted hierarchies, inherently modeling
+each anchor as an independent entity. The constraints in
+these frameworks result in suboptimal utilization of cross-
+representation correspondence among the anchor structure,
+suggesting substantial opportunities for optimization.
+Motivated by these limitations, we propose to reduce inter-
+anchor redundancy by introducing cross-representation pri-
+ors for entropy encoding, as shown in Fig. 1. Here, cross-
+representation priors refer to reusable dependencies among
+anchor representations that can help predict or simplify the
+coding of a target anchor. Instead of relying only on local
+spatial context or a fixed spatial hierarchy, we consider two
+complementary forms of such priors. At a fine-grained level,
+pairwise correspondence priors arise when certain anchors
+exhibit strong geometric or appearance similarity. Such corre-
+spondence allows one anchor to serve as an informative prior
+for conditionally encoding another, even if they are spatially
+distant. At a coarse-grained level, global shared priors capture
+scene-wide background patterns or repeated structures that
+appear consistently across many anchors. By factoring out this
+shared information, the individual anchor feature can avoid re-
+dundantly carrying all common components, thereby reducing
+its entropy. Concretely, we establish a correspondence-oriented
+hierarchy in which highly correlated anchors act as priors
+during entropy encoding, and extract information shared across
+anchors into a unified global component. This formulation
+motivates the design of COHS and SFA, which respectively
+exploit pairwise correspondence priors and global shared pri-
+ors to more effectively reduce inter-anchor redundancy.
+In this paper, we present CRP-GS, a 3DGS compres-
+sion framework that explicitly models cross-representation
+priors. CRP-GS introduces two complementary modules: a
+Correspondence-Oriented Hierarchical Structure (COHS) that
+organizes anchors based on feature correspondence rather than
+spatial proximity, and a Shared Feature Aggregation (SFA)
+module that extracts global shared priors from a contextual
+hash grid to reduce the entropy of individual anchors. Exten-
+sive evaluations across multiple benchmarks demonstrate that
+CRP-GS achieves over 30% average storage savings compared
+to the baseline HAC while maintaining competitive rendering
+fidelity in most cases.
+The main contributions of this paper are as follows:
+1) We
+propose
+a
+correspondence-oriented
+hierarchical
+structure that leverages cross-anchor correspondence to
+construct accurate contextual references. This enables a
+subset of decompressed anchors to serve as priors for
+decoding others, significantly improving rate-distortion
+performance.
+2) We propose a shared feature aggregation approach that
+introduces global shared priors to suppress redundant
+information in individual anchor features, thereby en-
+hancing structural compactness and coding efficiency.
+3) Comprehensive evaluations across multiple 3DGS com-
+pression benchmarks demonstrate that the proposed
+CRP-GS framework provides a favorable overall rate-
+distortion trade-off, offering an average of over 30%
+storage reduction compared to the baseline HAC while
+achieving competitive visual quality across datasets.
+II. RELATED WORK
+In this section, we review related work on 3DGS, including
+neural rendering, the fundamentals of 3DGS, and 3DGS’s
+practical applications. We also review prior 3DGS compres-
+sion techniques for comparison with our proposed framework.
+A. Neural Radiance Fields and 3DGS
+Over the past few decades, novel view synthesis has
+emerged as a fundamental task in computer vision and com-
+puter graphics. Neural Radiance Fields (NeRF) [4], [18], [19]
+pioneered this field by representing 3D scenes as continuous
+volumetric functions parameterized by large-scale multilayer
+perceptrons (MLPs). However, the reliance of NeRF on dense
+ray sampling through large MLPs leads to extremely slow
+rendering speeds, severely limiting its practicality. To over-
+come this limitation, numerous methods [20], [21] have ex-
+plored auxiliary representations to reduce the dependence on
+large MLPs. For instance, K-Planes [22] and TensoRF [23]
+introduce explicit multi-plane structures to parameterize 3D
+scenes, and further extend these representations with addi-
+tional temporal planes to model dynamic scenes. Instant-
+NGP [24] leverages multi-resolution hash grids and integrates
+them with tiny fully-fused MLPs provided by the tiny-cuda-
+nn framework, enabling ultra-fast feature querying. Although
+these approaches substantially accelerate rendering by adopt-
+ing compact scene representations and lightweight MLPs, their
+reliance on intensive ray sampling remains a key bottleneck
+that hinders practical deployment.
+
+
+IEEE TRANSACTIONS ON IMAGE PROCESSING
+3
+Gaussian Anchors
+Contextual
+Hash Grid
+Individual Feature
+Output Image
+Render
+COHS Construction
+Aggregated
+Gaussian Anchors
+Shared Feature
+Aggregated
+Feature
+Corresponding Anchors
+Root
+Leaf
+Free Anchors
+Encode
+Bitstream
+Encode
+decoded root as prior
+Encode
+COHS Entropy Encoding
+Construction
+Joint
+Rate-Distortion
+Optimization
+Rate Loss
+Distortion Loss
+Distortion Path
+Rate Path
+Link
+Clustering
+Representation Construction (SFA)
+Fig. 2: CRP-GS employs cross-representation priors to jointly optimize rendering quality and bitrate. The rate path organizes
+anchors into a Correspondence-Oriented Hierarchical Structure (COHS) for conditional entropy coding, while the distortion
+path constructs enriched anchors via Shared Feature Aggregation (SFA) for high-fidelity rendering. Both paths are optimized
+under a unified rate-distortion training scheme.
+Recently, 3DGS [5] has attracted considerable attention for
+its ability to achieve real-time rendering while preserving high-
+fidelity scene details. Specifically, 3DGS models a 3D scene
+as a collection of anisotropic 3D Gaussian primitives, each
+endowed with learnable geometry and appearance attributes.
+These 3D Gaussian primitives are projected and rasterized onto
+target viewpoints via differentiable splatting and tile-based
+rasterization [25].
+Beyond its impressive rendering efficiency and visual fi-
+delity, 3DGS has demonstrated strong practicality across a
+wide range of real-world applications. In human body re-
+construction, recent works leverage 3DGS to recover de-
+formable human avatars from multiview or even monocular
+videos while supporting real-time rendering performance [26]–
+[28]. Beyond human modeling, 3DGS has also become a
+promising direction for text-to-3D object generation, where
+the expressive generative power of 2D diffusion models is
+lifted into 3D to create coherent and richly detailed shapes
+[29]. In addition, autonomous driving scene reconstruction
+[30]–[32] has become an emerging application area, involving
+large-scale background recovery, dynamic object modeling,
+and Gaussian mixture reconstruction. More recently, 3DGS
+has also been explored for sparse-input novel view synthesis
+and panoptic scene understanding, highlighting its robustness
+under limited views or noisy 2D supervision [33], [34].
+Despite its impressive performance and various practical
+applications, 3DGS suffers from a critical limitation in that
+representing complex scenes often requires millions of Gaus-
+sian primitives, leading to substantial memory consumption
+and storage overhead [35], [36]. We adopt 3DGS as our back-
+bone representation due to its exceptional rendering efficiency
+and high-fidelity reconstruction. Motivated by this excessive
+storage and memory overhead caused by the dense Gaussian
+set, this paper introduces a series of targeted improvements to
+reduce representation redundancy and enhance compression
+efficiency without compromising reconstruction quality.
+B. 3DGS Compression
+Recent studies have focused on reducing the storage over-
+head of 3DGS through two primary strategies. The first ap-
+proach prunes redundant or insignificant Gaussians to reduce
+the number of primitives [6], [7], [37]. The second leverages
+vector quantization to compress Gaussian attributes (e.g.,
+position, scale, and rotation) into compact representations
+[9]–[11]. Beyond 3DGS, Gaussian-based representations have
+also been explored for image compression; GaussianImage
+represents images with compact 2D Gaussian primitives and
+combines them with vector quantization for efficient cod-
+ing [38]. Beyond these techniques, a growing body of research
+explores structural and relational priors to further enhance
+efficiency [12], [39], [40]. Notably, anchor-based formulations
+organize Gaussian primitives using sparse anchors and predict
+associated attributes with lightweight networks, substantially
+reducing storage by exploiting local structure [12].
+While recent advances in 3DGS compression have improved
+performance, fundamental limitations in redundancy reduction
+and coding efficiency persist. Addressing these challenges
+necessitates entropy encoding and rate-distortion optimization.
+Related rate-distortion optimization has also been studied for
+NeRF-based volumetric video, where compact neural repre-
+sentations are jointly optimized with their coding costs [41],
+[42]. Prior works [13]–[15] integrate entropy coding with
+learned distribution models to encode neural Gaussian at-
+tributes into compact bitstreams. For instance, building on
+Scaffold-GS, HAC leverages a hash-grid-based spatial context
+module to predict anchor probability distributions, enabling
+arithmetic encoding (AE) [43]. ContextGS [13] adopts autore-
+gressive encoding inspired by image and video compression
+techniques [44]–[46] to sequentially predict anchor features
+across hierarchical levels. However, these inherent constraints
+in both methodologies result in suboptimal utilization of inter-
+anchor redundancy, suggesting substantial opportunities for
+improvement.
+Our framework follows the structural anchor design [12] and
+
+
+IEEE TRANSACTIONS ON IMAGE PROCESSING
+4
+incorporates rate-distortion optimization. Unlike ContextGS
+[13] and HEMGS [15], which prioritize local spatial rela-
+tionships, we explicitly model inter-anchor coherence across
+arbitrary distances, which is critical for structurally related but
+spatially distant primitives. We further introduce the Shared
+Feature Aggregation (SFA) mechanism to exploit reusable
+scene-level information. This approach improves compression
+efficiency while preserving rendering fidelity.
+III. PRELIMINARIES
+3DGS [5] represents a 3D scene using a collection of
+anisotropic Gaussian primitives, which are initialized from a
+point cloud extracted via Structure-from-Motion (SfM). Each
+Gaussian is defined by a mean position µ and a 3D covariance
+matrix P:
+G(x) = e−1
+2 (x−µ)T P−1(x−µ).
+(1)
+where x ∈R3 denotes a 3D coordinate. The covariance matrix
+is factorized into rotation R and scaling S components as P =
+RSST RT . Additionally, each Gaussian stores opacity α and
+view-dependent color c ∈R3, with the latter modeled using
+Spherical Harmonics (SH) to capture directional appearance
+variations. For rendering, 3D Gaussians are projected onto the
+2D image plane via splatting, forming splatted 2D Gaussians
+G′(x), and pixel colors are composited using α-blending based
+on c and α.
+C(x′) =
+X
+i∈N
+ciσi
+i−1
+Y
+j=1
+(1 −σj),
+σi = αiG′
+i(x′).
+(2)
+where x′ ∈R2 represents a pixel position to be rendered,
+N denotes the total number of Gaussians contributing to the
+pixel.
+Scaffold-GS [12] follows the 3DGS formulation and pro-
+poses an anchor-based representation that is more storage-
+efficient while preserving reconstruction fidelity. Instead of
+explicitly storing all Gaussian attributes, it clusters Gaussians
+around anchors and uses lightweight MLPs to predict Gaussian
+attributes from the associated anchor attributes. In Scaffold,
+each Gaussian anchor consists of the following components:
+• Position x ∈R3 (referring to the 3D coordinate of the
+anchor),
+• Feature f ∈RDa (encoding scene properties),
+• Scale l ∈R6 (regularizing Gaussian sizes and locations),
+• Offset {oi}K
+i=1 ∈R3K (representing the relative distances
+between K Gaussians and the anchor xa).
+During rendering, f is fed into MLPs to generate attributes
+for Gaussian primitives. Although Scaffold-GS is effective
+with the anchor design, it largely treats anchors as inde-
+pendent units, leaving substantial cross-anchor redundancy
+unexploited. This motivates our use of cross-representation
+priors for more compact coding.
+IV. METHODOLOGY
+The overall framework of CRP-GS is illustrated in Fig. 2
+and summarized in Sec. IV-A. Sec. IV-B describes the
+Correspondence-Oriented Hierarchical Structure (COHS), de-
+signed to establish anchor dependencies based on correspon-
+dence. Subsequently, Sec. IV-C introduces the Shared Feature
+Aggregation (SFA) module, which extracts global shared pri-
+ors to reduce redundancy across representations. The training
+strategy and loss design are detailed in Sec. IV-D.
+A. Overview
+Fig. 2 illustrates the overall architecture of the proposed
+CRP-GS framework, which jointly optimizes rendering quality
+and bitrate through two complementary paths.
+The rate path illustrates the construction and utilization of
+the Correspondence-Oriented Hierarchical Structure (COHS)
+for entropy coding. Anchors are first grouped according to fea-
+ture correspondence, rather than spatial proximity, to identify
+semantically related candidates. Based on this correspondence
+analysis, anchors are assigned as root, leaf, or free anchors in
+a single-layer hierarchy. We adopt this one-hop dependency
+design to balance contextual modeling and decoding robust-
+ness. In this structure, root and free anchor features share the
+base entropy model, whose Gaussian parameters are predicted
+from the hash-grid context f h. Root anchors are encoded first,
+and their quantized decoded features are cached as priors.
+Free anchors have no COHS dependency and are encoded
+independently with the same base model. Each leaf anchor
+feature is then encoded by the conditional leaf entropy model,
+conditioned on the cached quantized feature of its linked root
+anchor. The resulting conditional likelihoods are accumulated
+to compute the rate loss for rate-distortion optimization.
+The distortion path depicts the anchor-based 3DGS render-
+ing pipeline enhanced by Shared Feature Aggregation (SFA).
+Given a set of input images, SfM is first applied to initialize
+Gaussian anchors. For each anchor, its spatial position queries
+a contextual hash grid Hs to obtain a shared feature fs,
+which captures scene-level patterns that are common across
+anchors. This shared feature is then fused with the anchor-
+specific individual feature fi to form an aggregated feature
+fa. The aggregated anchors are subsequently decoded into
+Gaussian primitives and rendered via the standard 3DGS
+pipeline, producing output images supervised by the distortion
+loss.
+Both paths are optimized under the unified rate-distortion
+framework, where the distortion loss supervises rendering
+fidelity and the rate loss penalizes the estimated bit con-
+sumption. The proposed design models cross-representation
+priors at two complementary levels. COHS captures pairwise
+correspondence across anchor representations by linking an-
+chors with similar features and using decoded root anchors
+as conditional priors for their leaves. This dependency is not
+restricted to local spatial neighborhoods, allowing spatially
+distant but semantically related anchors to provide useful
+coding context. SFA captures shared scene-level priors by
+moving reusable low-frequency information from individual
+anchor features into a shared hash-grid representation. Unlike
+hash-grid context used only to predict entropy-model param-
+eters, the shared feature in SFA is concatenated with the
+individual anchor feature and directly participates in Gaussian
+
+
+IEEE TRANSACTIONS ON IMAGE PROCESSING
+5
+generation. In this way, CRP-GS extends spatial and hierarchi-
+cal context modeling from geometry-defined dependencies to
+representation-level reuse, combining correspondence-aware
+conditional coding with shared feature aggregation.
+This distinction can be summarized directly in terms of
+the source and use of each prior. Spatial context and spa-
+tial hierarchies derive their dependencies mainly from local
+geometry, while hash-grid entropy context is used to pre-
+dict probability-model parameters. In contrast, COHS derives
+a non-local conditional prior from feature correspondence
+between anchors and uses it for entropy coding, whereas
+SFA moves shared scene-level information into a reusable
+hash-grid representation that directly participates in Gaussian
+generation. Thus, the term cross-representation priors refers
+to dependencies between anchor representations or between
+an anchor and a shared representation, rather than only spatial
+proximity.
+B. Correspondence-Oriented Hierarchical Structure
+Entropy models underpin neural image and video com-
+pression (NIC/NVC) [44]–[49] by predicting probability dis-
+tributions for entropy coding. In addition to autoregressive
+schemes, context-based models that leverage hyperpriors and
+local spatial context have become a standard way to im-
+prove distribution prediction [50]–[54]. Context modeling has
+also been explored for structured 3D data; VoxelContext-
+Net leverages local voxel context to improve entropy mod-
+eling for octree-based point cloud compression [55]. More
+recently, learned image compression has explored content-
+adaptive dependencies beyond fixed spatial neighborhoods, al-
+lowing spatially distant but content-correlated representations
+to interact more directly [56]. Inspired by these principles, we
+propose COHS for 3DGS to introduce correspondence-driven
+conditioning among anchors. COHS explicitly models inter-
+anchor dependencies based on feature correspondence, ad-
+dressing structural redundancies in anchor representation and
+improving entropy coding efficiency. From an information-
+theoretic perspective, COHS aims to identify anchor pairs that
+minimize conditional entropy during coding. Specifically, a
+subset of semantically related anchors is selected to serve as
+cross-representation priors for others, enabling more accurate
+and compact probability modeling.
+We begin with an exploratory experiment to investigate
+anchor correspondence using cosine similarity as a quantitative
+metric. Fig. 3 analyzes the relationship between feature cor-
+respondence and spatial distance. Specifically, we randomly
+sample 10,000 query anchors from the trained anchor set
+of the Bicycle scene in Mip-NeRF360 [57] and compute
+their cosine similarities to other anchors in the same scene.
+For each cosine-similarity threshold shown in the legend,
+anchors whose similarity to the query anchor exceeds the
+threshold are regarded as correspondence anchors. We then
+compute the Euclidean distance between each query anchor
+and its correspondence anchors, and normalize it by the scene
+diagonal length, defined as the diagonal of the axis-aligned
+bounding box covering all active anchors in the scene. The
+y-axis reports the cumulative distribution function (CDF) of
+0.0
+0.1
+0.2
+0.3
+0.4
+0.5
+0.6
+Normalized Distance
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0
+Correspondence Anchor CDF
+Threshold 0.7
+Threshold 0.9
+Threshold 0.95
+Fig. 3: CDF plot of the number of correspondence anchors
+under different distances and thresholds. Distances are nor-
+malized by the scene diagonal length, defined as the diagonal
+of the anchor-set axis-aligned bounding box. The curves are
+computed from 10,000 uniformly sampled query anchors from
+the Bicycle scene of Mip-NeRF360 [57], and the legend values
+denote cosine-similarity thresholds.
+these normalized distances. While many correspondences oc-
+cur locally, the distribution continues to grow until nearly 50%
+of the scene’s spatial extent, indicating the presence of long-
+range semantic dependencies. Such non-local correspondences
+may reflect higher-level regularities across the scene, and may
+also arise from repeated local appearance patterns. Although
+ContextGS also adopts hierarchical encoding, its dependency
+structure is strictly constrained by spatial proximity, implicitly
+assuming that spatial closeness correlates with feature similar-
+ity. This finding motivates the design of the proposed COHS,
+which explicitly models such non-local relationships for more
+efficient entropy coding.
+1) COHS Construction: COHS construction aims to iden-
+tify semantically corresponding anchors that serve as contex-
+tual priors for entropy modeling. The workflow is illustrated
+in Fig. 2. The process begins after an initial training stage,
+as anchor features are typically unstable in early iterations. To
+establish anchor correspondences, the model assumes that each
+anchor has at least one semantically corresponding counterpart
+and performs an unconditional search for candidates. For each
+anchor, M candidate anchors are selected based on cosine
+similarity. Intuitively, the proposed COHS can be viewed
+as a form of feature-based anchor grouping: anchors with
+similar semantic features are likely to be linked as potential
+correspondences. Unlike conventional clustering, COHS does
+not enforce transitivity or global group consistency. Instead,
+it ultimately forms one-to-one conditional priors for entropy
+coding. Consequently, COHS leverages feature similarity to
+expose cross-anchor redundancy in a lightweight manner with-
+out imposing a rigid partition of anchors.
+To establish candidate correspondences, we first perform an
+unconditional feature-based retrieval. Given the anchor feature
+matrix F ∈RN×K, for each anchor i we compute cosine
+similarities to all anchors j ∈{1, . . . , N}, and select the top-
+M indices with the largest similarity scores. The resulting
+candidate set is stored as C ∈ZN×M, where C[i, :] contains
+
+
+IEEE TRANSACTIONS ON IMAGE PROCESSING
+6
+Algorithm 1 Anchor Dependency Renewal
+1: Input: Feature matrix F ∈RN×K , Candidate indices
+C ∈ZN×M , Anchor mask M ∈{0, 1}N , Minimum
+similarity threshold τmin , Similarity decay step ∆τ
+2: Output: Link indices L ∈ZN
+3: Initialize L ←[−1]N
+4: Initialize selected-root set R ←∅
+5: for τ = 1 down to τmin step ∆τ do
+6:
+for each anchor i ∈[1, N] do
+7:
+if M[i] = 0 or L[i]̸ = −1 or i ∈R then
+8:
+continue
+9:
+end if
+10:
+Initialize smax ←−∞, j∗←−1
+11:
+for each candidate m ∈[1, M] do
+12:
+j ←C[i, m]
+13:
+s ←
+F[i]·F[j]
+∥F[i]∥∥F[j]∥
+14:
+if j̸ = i and M[j] = 1 and L[j] = −1 and
+j /∈R and s ≥τ then
+15:
+if s > smax then
+16:
+smax ←s, j∗←j
+17:
+end if
+18:
+end if
+19:
+end for
+20:
+if j∗̸ = −1 then
+21:
+L[i] ←j∗
+22:
+R ←R ∪{j∗}
+23:
+end if
+24:
+end for
+25: end for
+26: return L
+the indices of the M most similar anchors for anchor i.
+In the proposed hierarchical structure, anchors are classified
+into three types based on correspondence: leaf anchor, root an-
+chor, and free anchor. Anchor pairs with the highest correspon-
+dence are primarily designated as root-leaf pairs. However, as
+the HAC anchor masking strategy [14] prunes low-importance
+anchors, the removal of certain root anchors may leave their
+associated leaves disconnected and reclassified as free anchors,
+ultimately degrading encoding efficiency. To address this, the
+structure-building algorithm includes periodic anchor depen-
+dency renewal phases. Root-leaf assignments are dynamically
+updated based on the latest correspondence among anchor
+candidates. In practice, the candidate set C is retrieved online
+during training after the stabilization stage, because anchor
+features continue to evolve under rate-distortion optimization.
+Specifically, at each renewal phase, we recompute feature
+similarities using the current anchor features and update the
+top-M candidate pool before rebuilding the root-leaf links.
+This online retrieval introduces additional training cost, but
+it is performed only a few times and is amortized over the
+remaining training iterations. The full procedure is described
+in Algorithm 1.
+We restrict COHS to a single-layer root-leaf design to
+balance contextual gain, decoding robustness, and access flex-
+ibility. A deeper hierarchy may introduce additional context,
+but it would also create multi-hop dependencies during entropy
+decoding. Under such dependencies, quantization noise, an-
+chor masking, or an inaccurate decoded prior at an upper level
+could affect the probability prediction of downstream anchors.
+It would also force the decoder to follow a longer dependency
+order and make partial or random access less flexible. We
+therefore treat the one-hop design as a complexity and robust-
+ness trade-off: it exposes direct correspondence priors while
+avoiding multi-hop dependency chains. The proposed single-
+layer design uses decoded root anchors only as direct priors for
+leaf anchors, which preserves useful cross-anchor conditioning
+while keeping the decoding process simple. This choice does
+not imply that deeper hierarchies are universally inferior; a
+systematic evaluation of deeper variants under matched rate
+points, decoding latency, and memory consumption is left
+for future work. During each renewal phase, masked anchors
+are excluded from selection, and root-leaf connections are
+reassigned to maintain effective and up-to-date contextual
+priors.
+Bitstream format. After the last renewal phase, COHS
+introduces lightweight structural side information into the
+final bitstream. The bitstream stores an active-anchor mask
+m ∈{0, 1}N0 over the pre-masking anchor-index range and a
+final link vector L ∈({1, . . . , Na} ∪{∅})Na over the active-
+anchor index range, where N0 is the number of anchors before
+masking and Na is the number of retained active anchors. The
+mask is stored as a binary vector in anchor-index order. The
+link vector is stored as a compact integer vector in active-
+anchor order; a non-empty entry stores the active index of the
+selected root, and ∅is stored by a sentinel value, implemented
+as −1. For an active anchor i, L[i]̸ = ∅denotes a leaf anchor
+and L[i] identifies its root. An active anchor r is a root anchor
+iff there exists an active anchor i such that L[i] = r. An active
+anchor is free iff L[i] = ∅and it is not referenced by any active
+anchor. Given m and L, the decoder can deterministically
+recover the root, leaf, and free-anchor partition. The candidate
+set C and the intermediate dependency assignments generated
+during renewal are used only for training-time structure con-
+struction and are not stored in the final bitstream. Therefore,
+deployment does not require online candidate retrieval, all-pair
+feature search, or dependency renewal.
+2) COHS Entropy Coding: Following the design of HAC,
+a Gaussian distribution is adopted to model the probability
+of each entropy-coded anchor attribute, enabling differentiable
+estimation of bit consumption. For the i-th anchor, let zi de-
+note an entropy-coded attribute, where zi ∈{f i, li, oi}. Here,
+f i ∈RDi denotes the entropy-coded anchor feature, while
+li ∈R6 and oi ∈R3K denote the scale and offset attributes,
+respectively. With the predicted Gaussian parameters µi and
+σi, the probability of zi is modeled as:
+p(ˆzi) =
+Z ˆzi+ 1
+2 qi
+ˆzi−1
+2 qi
+ϕµi,σi(x) dx
+= Φµi,σi
+
+ˆzi + 1
+2qi
+
+−Φµi,σi
+
+ˆzi −1
+2qi
+
+.
+(3)
+where ϕ and Φ denote the probability density function and the
+
+
+IEEE TRANSACTIONS ON IMAGE PROCESSING
+7
+cumulative distribution function, respectively.
+Once anchor context dependencies are established, each root
+anchor provides a contextual prior for encoding its correspond-
+ing leaf anchor, as illustrated in Fig. 2. Suppose the i-th and
+j-th anchors form a root-leaf pair, with their entropy-coded
+anchor features denoted as f (r)
+i
+and f (l)
+j , respectively. Since
+the root anchor is decoded before its dependent leaf anchor,
+the conditional entropy model uses the quantized root feature
+ˆf (r)
+i
+, which is the root representation available at both the
+encoder and decoder. The context modeling of the leaf anchor
+feature f (l)
+j
+can then be formulated as:
+µ(l)
+j
+= MLP([ ˆf (r)
+i
+; xi; xj]),
+σ(l)
+j
+= MLP(f h),
+(4)
+where µ(l)
+j
+and σ(l)
+j
+denote the mean and standard deviation
+of the predicted Gaussian distribution for the leaf anchor
+feature f (l)
+j , respectively. The decoded root feature ˆf (r)
+i
+serves
+as a learned correspondence prior and introduces semantic
+guidance that improves the accuracy and stability of this
+prediction. Equation (5) defines the base entropy model. It
+is shared by root and free anchor features and by non-feature
+attributes such as scale and offset:
+µ(b)
+k , σ(b)
+k
+= MLP(f h).
+(5)
+Here, f h denotes the spatial contextual feature queried from
+the hash grid, which provides the fundamental scene-level
+prior for probability estimation. During entropy decoding,
+anchors are processed in a fixed order. The decoder first recon-
+structs the COHS partition from the active-anchor mask m and
+the link vector L defined in the bitstream-format paragraph.
+Within each group, anchors follow their stored anchor-index
+order. The decoder first decodes root anchors with the base
+entropy model and caches their quantized decoded features,
+then decodes free anchors with the same base model, and
+finally decodes leaf anchor features with the conditional leaf
+entropy model in Eq. (4). Since both encoder and decoder
+condition on the same quantized decoded root feature ˆf (r)
+i
+,
+the conditioning information is strictly identical on both sides
+and is available before decoding the dependent leaf anchor.
+The proposed COHS fundamentally differs from existing
+frameworks. In HAC [14], the Gaussian distribution parame-
+ters are predicted independently for each anchor using a hash
+grid and an MLP, which fails to exploit inter-representation re-
+dundancy and limits entropy coding efficiency. ContextGS [13]
+introduces a hierarchical structure where distribution parame-
+ters are predicted conditioned on previously decoded anchors;
+however, its context dependencies are determined purely by
+spatial proximity. In contrast, COHS dynamically establishes
+anchor dependencies based on feature correspondence rather
+than position. This enables the selection of semantically rele-
+vant anchors as cross-representation priors, allowing the model
+to adaptively weight inter-anchor relationships and achieve
+more accurate and compact probability modeling.
+C. Shared Feature Aggregation
+Scaffold-GS [12] alleviates the storage overhead of 3DGS
+by introducing an anchor-based representation, where Gaus-
+sians are grouped around learnable anchor points and recon-
+structed through MLPs. However, its design processes each
+anchor independently, without leveraging potential interactions
+during Gaussian generation. In practice, anchors often share
+globally consistent scene information, which remains underuti-
+lized. To address this limitation, we propose a Shared Feature
+Aggregation (SFA) mechanism that introduces a shared fea-
+ture as a global prior, capturing information common across
+anchors to suppress redundancy and improve representation
+efficiency.
+The proposed SFA decomposes the original anchor feature
+budget into a shared component and an anchor-specific com-
+ponent, thereby reducing the dimensionality of the entropy-
+coded anchor feature fi introduced above. Let D0 denote the
+original anchor feature dimensionality used in the baseline
+representation. Given a shared feature ratio ρ, the shared
+feature dimension is Ds = ⌊ρD0⌉, and the entropy-coded
+individual feature dimension is Di = D0 −Ds. For each
+anchor, CRP-GS quantizes its position xa and queries the
+binary hash grid Hs to obtain a shared feature fs ∈RDs.
+The anchor-specific entropy-coded feature fi ∈RDi therefore
+constitutes the individual component. The two components are
+concatenated to form the aggregated feature:
+fs = Interp(xa, Hs),
+fa = fs ⊕fi,
+fa ∈RD0.
+(6)
+Thus, SFA keeps the dimensionality of the aggregated feature
+fa the same as the original anchor feature, while reducing the
+per-anchor entropy-coded feature from D0 to Di. Enriched
+with the global prior learned from the binary hash grid Hs,
+fa replaces f of Scaffold-GS and is subsequently fed into the
+neural Gaussian generation module to produce optimized 3D
+Gaussian primitives:
+{ci, ri, si, αi}K
+i=1 = Fs(fa, δc,⃗dc),
+(7)
+where δc = ||x −xc||2 represents the Euclidean distance
+between the point x and the center xc, and⃗dc = (x−xc)/||x−
+xc||2 is the normalized direction vector from the center xc
+to the point x. Fs is a lightweight MLP, and the decoding
+process also requires the relative distance δc and the viewing
+direction⃗dc. The Gaussians’ 3D positions are computed as
+{µi}K
+i=1 = xa + {oi}K
+i=1 · l, where l is used to regulate the
+positioning and shape of the Gaussians.
+Fig. 4 illustrates the effect of the proposed SFA. All
+renderings in Fig. 4 are generated using the same trained
+CRP-GS model. For the individual-feature-only rendering, the
+shared feature fs is set to zero before Gaussian generation;
+conversely, the individual feature fi is set to zero for the
+shared-feature-only rendering. No separate models are trained
+for these visualizations. Rendering with only the individual
+anchor feature fi (left) produces sharp but locally inconsistent
+structures and visible artifacts. The shared feature fs queried
+from the hash grid (middle-left) captures coarse yet globally
+consistent low-frequency layout and appearance tendencies
+shared across anchors. By aggregating fs with fi, we obtain
+the aggregated feature fa (middle-right), which yields a more
+coherent and visually faithful reconstruction that aligns better
+with the ground truth (right). These results indicate that fs
+
+
+IEEE TRANSACTIONS ON IMAGE PROCESSING
+8
+Aggregated feature
+Shared feature
+Individual feature
+Ground Truth
+Shared
+Feature
+Aggregated
+Fig. 4: Effect of SFA. Rendering with only the individual anchor feature (fi, left) exhibits missing structures and local
+inconsistencies. The shared feature queried from the hash grid (fs, middle-left) captures coarse but globally consistent scene
+information. Aggregating fs with fi yields the aggregated feature (fa, middle-right), producing a more coherent reconstruction
+that better matches the ground truth (right).
+mainly conveys scene-wide, low-frequency appearance cues
+that can be reused across anchors, while high-frequency details
+remain encoded in individual anchor features.
+Unlike HAC, where the hash feature is used as auxiliary
+context to predict distribution parameters for entropy coding,
+SFA uses the hash grid at the representation level by explicitly
+injecting the hash-grid feature into the anchor representation
+for rendering, thereby factoring out shared components that
+would otherwise be redundantly embedded in each anchor.
+Notably, the shared feature is not directly entropy-coded but
+instead serves as a global prior for anchor representation. By
+extracting the shared feature fs from a global hash grid, SFA
+factors out low-frequency components that would otherwise
+be redundantly encoded in each anchor, thereby reducing the
+conditional entropy H(fi | fs). This design enables more
+efficient feature-level entropy modeling beyond purely local
+context prediction.
+D. Loss Settings and Training Progress
+The training objective of the proposed method is to jointly
+optimize the bitrate of coded anchor features and rendering
+loss measured by SSIM and L1 loss. The final training loss is
+L = LScaffold + λmLm + λe
+Lentropy + Lhash
+N(Di + 6 + 3K)
+(8)
+Here, the distortion term is given by the rendering-related
+losses, i.e., LScaffold (SSIM/L1 fidelity terms with a scaling
+regularizer following Scaffold-GS [12]) together with the mask
+regularization Lm, which controls the mass of Gaussian an-
+chors. The rate term is the estimated coding cost, represented
+by the normalized bit-consumption proxy Lentropy + Lhash,
+scaled by λe and normalized by the number of per-anchor
+coded elements N(Di + 6 + 3K). Here, Di denotes the
+dimensionality of the entropy-coded individual feature. The
+shared feature fs is generated from the global hash grid and
+is not stored as an additional per-anchor feature.
+The entropy loss Lentropy quantifies the storage cost of
+quantized anchor properties and is defined as the sum of the
+negative log-likelihoods over all coded elements:
+Lentropy =
+N
+X
+i=1
+X
+zi∈{f i,li,oi}
+Dz
+X
+j=1
+(−log2 p(ˆzi,j)) ,
+(9)
+where ˆzi,j denotes the j-th quantized element of the coded
+attribute ˆzi, and Dz denotes its corresponding dimensionality,
+i.e., Di, 6, or 3K for the individual feature, scale, and offset,
+respectively. The entropy loss encourages accurate probability
+prediction for the coded anchor attributes, thereby reducing
+the encoded bitstream size. Lhash denotes the loss associated
+with the binary hash grid, and Lm denotes the anchor-mask
+regularization loss.
+V. EXPERIMENTS
+A. Experiment Setup
+Implementation Details. Our CRP-GS framework is im-
+plemented in PyTorch and trained on an NVIDIA RTX 3090
+GPU. COHS is introduced after the Gaussian model has
+undergone an initial stabilization stage. In our implementation,
+it is enabled at the 30,000th iteration. We then continue train-
+ing for an additional 10,000 iterations with COHS activated.
+For anchor dependency renewal, we use a candidate pool
+of M = 10 per query anchor, a minimum cosine-similarity
+threshold of τmin = 0.8, and a similarity decay step of ∆τ =
+0.05. Thus, the reported cosine threshold of 0.8 corresponds
+to the minimum accepted similarity in Algorithm 1. During
+this stage, anchor dependencies are refreshed twice to update
+the root-leaf links according to the latest correspondences.
+These hyperparameters are fixed for all experiments unless
+otherwise specified. In practice, COHS candidate retrieval and
+dependency renewal are executed online during training. At
+each renewal phase, we compute cosine-similarity candidates
+from the current anchor features and then rebuild the root-leaf
+links. Therefore, the retrieval step contributes to the training
+cost. However, it is invoked only during the scheduled renewal
+phases rather than at every iteration, making the overhead
+manageable under our training budget. At deployment, COHS
+candidate retrieval is not executed. The final bitstream only
+stores the active-anchor mask and the compact link vector
+needed to reconstruct the root-leaf partition, so inference
+decoding does not require online feature retrieval or all-pair
+candidate search. For SFA, the shared feature ratio is set
+to 40%, and the binary hash-grid parameters are configured
+following [14]. Since HAC adopts a 50-D anchor feature,
+the ratio gives a 20-D shared feature and a 30-D entropy-
+coded individual feature. Their concatenation forms a 50-D
+aggregated feature for Gaussian generation. Loss weights are
+set to λm = 5×10−4 and λe = 1×10−4–4×10−3. Different
+
+
+IEEE TRANSACTIONS ON IMAGE PROCESSING
+9
+λe values within this range are used to obtain different
+compression ratios and construct the RD curves in Fig. 5.
+In Table I, we report two representative operating points:
+Ours-lowrate corresponds to λe = 4 × 10−3, which places
+a stronger penalty on bitrate, while Ours-highrate corresponds
+to λe = 1×10−4, which prioritizes reconstruction fidelity. The
+initial quantization steps are configured as 1.0 for fi, 0.001 for
+l, and 0.2 for o.
+Datasets. We evaluate our method across several widely
+used real-world datasets, including BungeeNeRF [58], Deep-
+Blending [59], Mip-NeRF360 [57], and Tanks&Temples [60].
+These benchmarks span indoor environments, unbounded out-
+door scenes, and complex heritage sites, collectively enabling
+a rigorous assessment of our approach’s robustness across
+diverse scales and complexities.
+Evaluation Metric. The performance evaluation employs
+PSNR (Peak Signal-to-Noise Ratio) calculated in the RGB
+space as the primary quality assessment metric. For compres-
+sion efficiency measurement, we consider the total file size
+of the entropy-encoded bitstream as the bitrate representation.
+In our dataset-level rate-distortion analysis, we calculate the
+mean values across all test sequences for three visual quality
+metrics (PSNR, SSIM [61], and LPIPS [62]) along with the
+corresponding compressed file sizes expressed in megabytes.
+To provide a more standardized rate-distortion summary be-
+yond representative operating points, we additionally report
+BD-rate and BD-PSNR. Before integration, dominated RD
+points are removed and the remaining curves are fitted with
+shape-preserving PCHIP interpolation using log file size as
+the rate axis. BD-rate integrates log file size over the common
+PSNR interval, whereas BD-PSNR integrates PSNR over the
+common log-size interval between CRP-GS and each com-
+pared method. If no valid common interval or insufficient
+comparable RD points are available for a metric, we mark
+the entry as “–” and do not interpret it in the average.
+B. Baselines
+We evaluate our method against foundational 3DGS [5],
+its structural extension Scaffold-GS [12], and other prominent
+3DGS compression techniques. These include pruning-based
+parameter reduction methods such as Compact3DGS [9] and
+LightGaussian [6]; codebook-optimization approaches includ-
+ing Compressed3D [63] and Navaneet et al. [10]; entropy-
+coding methods such as EAGLES [8], HAC [14], HAC++
+[16], HEMGS [15], and Morgenstern et al. [39]; autoregressive
+approaches represented by ContextGS [13]; and progressive
+compression represented by PCGS [64]. Unreported metrics
+or datasets are not inferred, and all training budgets fol-
+low the corresponding source papers. Our comparison spans
+mainstream compression families to provide a comprehensive
+benchmark of efficiency–performance trade-offs.
+C. Performance Evaluation
+As demonstrated in Table I, CRP-GS achieves a favor-
+able storage-quality trade-off compared with recent 3DGS
+compression approaches, including HAC++ [16], ContextGS
+[13], HEMGS [15], and PCGS [64]. Specifically, CRP-GS
+reduces storage requirements by 98.39% over the original
+3DGS framework and by 95.31% relative to the anchor
+structure Scaffold-GS implementation. Ours-highrate improves
+PSNR over HAC++ across the evaluated datasets and yields
+competitive LPIPS values. At the low-bitrate regime, the
+trade-off becomes dataset-dependent: on Tanks&Temples and
+DeepBlending, Ours-lowrate produces substantially smaller
+bitstreams with only minor PSNR reductions, whereas HAC++
+attains a better extreme low-bitrate point on Mip-NeRF360 and
+BungeeNeRF. CRP-GS is expected to be most beneficial when
+reliable cross-anchor correspondences and reusable scene-
+level priors exist; the improvement may be less pronounced
+otherwise. We do not claim a causal scene-category effect
+beyond the reported per-scene results. Nevertheless, the rate-
+distortion curves in Fig. 5 further support the favorable overall
+trade-off achieved by CRP-GS, showing that it often reaches
+comparable visual quality with reduced storage cost across a
+broad bitrate range. These results demonstrate the effectiveness
+of our approach in balancing compression efficiency and
+rendering fidelity, while also suggesting that the magnitude
+of the gain may depend on the redundancy structure of the
+target scene and the selected bitrate regime.
+To further complement the point-wise comparison in Ta-
+ble I, we report the BD-rate and BD-PSNR results in Table
+II over their respective common PSNR and rate intervals for
+each pair of methods. The results provide a more complete
+view of the RD trade-off across datasets and baselines, rather
+than relying only on selected bitrate operating points.
+Fig. 6 shows qualitative comparisons of Scaffold-GS, HAC,
+and CRP-GS on two representative scenes. Compared with
+HAC, CRP-GS reduces the model size by approximately
+16.4% on “counter” (from 8.98 MB to 7.51 MB) and 29.3% on
+“truck” (from 8.80 MB to 6.22 MB), while maintaining similar
+visual quality. These results demonstrate that CRP-GS can
+substantially reduce storage costs while preserving rendering
+fidelity. Moreover, CRP-GS achieves competitive performance
+against HAC++ [16] across most datasets.
+D. Ablation Study
+Ablation of each component. To address the generality of
+each component, we conduct ablation experiments on multiple
+representative scenes. Train from Tanks&Temples, Room from
+Mip-NeRF360, and DrJohnson from DeepBlending are se-
+lected to cover outdoor, indoor, and DeepBlending-style scenes
+under the same training protocol as the corresponding full-
+model runs. As shown in Table III, removing the SFA module
+(“Ours w/o SFA”) worsens the overall storage-quality trade-
+off: it increases model size on all evaluated scenes by 5.4%–
+22.7% and reduces PSNR by 0.02–0.10 dB. When COHS is
+further removed (“Ours w/o SFA and COHS”), the PSNR drop
+becomes 0.11–0.37 dB and the size increase becomes 6.0%–
+22.9%. Finally, removing anchor position coding (“Ours w/o
+SFA, COHS, and AC”) further increases storage by 21.7%–
+41.1%. These results show that SFA, COHS, and anchor po-
+sition coding provide complementary contributions under the
+tested matched settings. They also suggest that the magnitude
+of each gain can vary by scene, so we interpret the ablation
+
+
+IEEE TRANSACTIONS ON IMAGE PROCESSING
+10
+TABLE I: 3DGS Compression Benchmark Comparison
+Methods
+Mip-NeRF360
+Tanks&Temples
+DeepBlending
+BungeeNeRF
+PSNR↑SSIM↑LPIPS↓SIZE↓PSNR↑SSIM↑LPIPS↓SIZE↓PSNR↑SSIM↑LPIPS↓SIZE↓PSNR↑SSIM↑LPIPS↓SIZE↓
+3DGS
+27.49
+0.813
+0.222
+744.7
+23.69
+0.844
+0.178
+431.0
+29.42
+0.899
+0.247
+663.9
+24.87
+0.841
+0.205
+1616
+Scaffold-GS
+27.50
+0.806
+0.252
+253.9
+23.96
+0.853
+0.177
+86.50
+30.21
+0.906
+0.254
+66.00
+26.62
+0.865
+0.241
+183.0
+EAGLES
+27.15
+0.808
+0.238
+68.89
+23.41
+0.840
+0.200
+34.00
+29.72
+0.906
+0.249
+52.34
+25.89
+0.865
+0.197
+115.2
+LightGaussian
+27.00
+0.799
+0.249
+44.54
+22.83
+0.822
+0.220
+22.43
+27.01
+0.872
+0.308
+33.94
+24.52
+0.825
+0.255
+87.28
+Compressed3D
+26.98
+0.801
+0.238
+28.80
+23.32
+0.832
+0.194
+17.28
+29.38
+0.898
+0.253
+25.30
+24.13
+0.802
+0.245
+55.79
+Morgen. et al.
+26.01
+0.772
+0.259
+23.90
+22.78
+0.817
+0.211
+13.05
+28.92
+0.891
+0.276
+8.40
+–
+–
+–
+–
+Navaneet et al.
+27.16
+0.808
+0.228
+50.30
+23.47
+0.840
+0.188
+27.97
+29.90
+0.907
+0.251
+13.50
+24.70
+0.815
+0.266
+33.39
+HAC
+27.53
+0.807
+0.238
+15.26
+24.04
+0.846
+0.187
+8.10
+29.98
+0.902
+0.269
+4.35
+26.48
+0.845
+0.250
+18.49
+ContextGS
+27.62
+0.808
+0.237
+12.68
+24.20
+0.852
+0.184
+7.05
+30.11
+0.907
+0.265
+3.45
+26.90
+0.866
+0.222
+14.00
+HAC++
+27.60
+0.803
+0.253
+8.34
+24.22
+0.849
+0.190
+5.18
+30.16
+0.907
+0.266
+2.91
+26.78
+0.858
+0.235
+11.75
+HEMGS
+27.68
+0.809
+0.239
+12.52
+24.41
+0.854
+0.183
+6.13
+30.24
+0.909
+0.258
+3.67
+–
+–
+–
+–
+PCGS
+27.69
+0.808
+0.237
+12.64
+24.27
+0.850
+0.184
+6.31
+30.14
+0.906
+0.264
+3.71
+27.01
+0.873
+0.206
+14.07
+Ours-lowrate
+27.73
+0.836
+0.210
+11.98
+24.07
+0.836
+0.210
+3.96
+29.87
+0.898
+0.287
+1.95
+26.44
+0.846
+0.252
+13.75
+Ours-highrate
+27.94
+0.812
+0.232
+18.36
+24.55
+0.850
+0.188
+7.00
+30.41
+0.906
+0.260
+5.53
+27.05
+0.873
+0.210
+21.84
+Note: Best and second-best values are highlighted in red and yellow, respectively.
+HEMGS and PCGS use their respective reported training budgets; unavailable metrics or datasets are not inferred. “–” indicates an unreported metric.
+TABLE II: BD-rate and BD-PSNR comparison over the overlapping rate-distortion range.
+Datasets
+vs. HAC
+vs. ContextGS
+vs. HAC++
+vs. HEMGS
+vs. PCGS
+BD-rate
+(%)↓
+BD-PSNR
+(dB)↑
+BD-rate
+(%)↓
+BD-PSNR
+(dB)↑
+BD-rate
+(%)↓
+BD-PSNR
+(dB)↑
+BD-rate
+(%)↓
+BD-PSNR
+(dB)↑
+BD-rate
+(%)↓
+BD-PSNR
+(dB)↑
+Mip-NeRF360
+-39.28
++0.334
+–
++0.204
+-1.97
++0.047
+-8.99
++0.050
+-14.32
++0.083
+Tanks&Temples
+-56.90
++0.586
+-52.41
++0.420
+-24.31
++0.208
+-6.82
++0.035
+-36.02
++0.277
+DeepBlending
+-44.25
++0.591
+-30.78
++0.208
+-2.30
++0.045
+-8.02
++0.054
+-23.76
++0.171
+BungeeNeRF
+-27.06
++0.595
++15.24
+-0.147
++32.56
+-0.282
+–
+–
++41.96
+-0.287
+Average
+-41.87
++0.526
+-22.65
++0.171
++0.99
++0.005
+-7.94
++0.046
+-8.04
++0.061
+Note: Values report CRP-GS relative to the indicated baseline, using shape-preserving PCHIP interpolation after removing dominated RD
+points. BD-rate and BD-PSNR use the common PSNR and log-size intervals, respectively. Negative BD-rate and positive BD-PSNR favor
+CRP-GS. “–” denotes no valid common interval or insufficient comparable RD points for that metric; such entries are not interpreted and
+are excluded from the average.
+TABLE III: Ablation study on representative scenes from different datasets.
+Method
+Train [60]
+Room [57]
+DrJohnson [59]
+PSNR ↑
+Model Size ↓
+PSNR ↑
+Model Size ↓
+PSNR ↑
+Model Size ↓
+Our full model
+22.87
+4.67
+32.01
+3.43
+29.72
+3.71
+Our w/o SFA
+22.84 (-0.03 dB) 5.73 (+22.7%) 31.91 (-0.10 dB) 3.80 (+11.0%) 29.70 (-0.02 dB) 3.91 (+5.4%)
+Our w/o COHS and SFA
+22.55 (-0.32 dB) 5.74 (+22.9%) 31.64 (-0.37 dB) 3.94 (+15.0%) 29.60 (-0.11 dB) 3.93 (+6.0%)
+Our w/o COHS, SFA, and AC 22.55 (-0.32 dB) 6.59 (+41.1%) 31.64 (-0.37 dB) 4.70 (+37.2%) 29.60 (-0.11 dB) 4.51 (+21.7%)
+Note: COHS = Correspondence-Oriented Hierarchical Structure, SFA = Shared Feature Aggregation, AC = Anchor Position Coding. The
+values in parentheses indicate the change relative to the full model on the same scene. Model size is measured in MB.
+TABLE IV: Comparison of COHS with alternative linking
+strategies
+Method
+PSNR (dB)
+Model Size (MB)
+Full Method (Ours)
+22.41
+5.89
+Random Link
+22.35
+6.41
+Distance Link
+22.28
+6.22
+No Link
+22.30
+6.13
+as per-scene evidence rather than a causal claim about scene
+categories.
+Ablation of COHS. To further validate the design of
+COHS, the cosine-similarity-based linking is replaced with
+three alternative strategies: (1) Random Link (random anchor
+selection), (2) Distance Link (nearest-anchor prioritization),
+and (3) No Link (removal of connections). As shown in
+Table IV, all alternatives yield lower PSNR values and larger
+model sizes compared with the complete model. These find-
+ings demonstrate that the correspondence-oriented design of
+COHS effectively balances reconstruction quality and storage
+efficiency, outperforming both heuristic and non-learned ap-
+proaches.
+Analysis of SFA module. The design choices of the SFA
+module are further examined. The impact of the shared feature
+ratio is first analyzed (Fig. 7a) by testing values from 80%
+to 0%. A ratio of 40% provides the best rate-distortion
+(RD) trade-off. Medium ratios outperform both extremes: high
+ratios overshare features and reduce distinctiveness, whereas
+low ratios restrict the advantages of shared representation.
+Consequently, a balanced ratio of 40% is adopted in the final
+framework. We then ablate the hash-grid component within
+SFA (Fig. 7b). Using the chair scene from the SyntheticNeRF
+dataset, each anchor feature’s storage size is visualized through
+a heat map. As shown in Fig. 7b, removing the hash grid
+leads to a marked increase in storage, indicating its crucial
+
+
+IEEE TRANSACTIONS ON IMAGE PROCESSING
+11
+101
+101.2
+101.4
+Size (MB)
+26.00
+26.25
+26.50
+26.75
+27.00
+27.25
+27.50
+27.75
+28.00
+PSNR (dB)
+MipNeRF360
+100.6
+100.8
+101
+Size (MB)
+23.0
+23.5
+24.0
+24.5
+PSNR (dB)
+Tanks&Temples
+100.4
+100.6
+100.8
+Size (MB)
+28.50
+28.75
+29.00
+29.25
+29.50
+29.75
+30.00
+30.25
+30.50
+PSNR (dB)
+DeepBlending
+Ours
+HAC++
+HEMGS
+PCGS
+HAC
+ContextGS
+Morgenstern et al.
+Fig. 5: The rate-distortion curves comparing our CRP-GS with baseline methods. Note that file size directly reflects the entropy-
+coded bitstream and is proportional to the effective bitrate under identical rendering settings.
+(a) Ground truth image (scene counter from dataset Mip-NeRF360)
+(a) Ground truth image (scene truck from dataset Tanks&Temples )
+(b) Scaffold-GS 
+(PSNR: 31.16 dB / Size: 84.94 MB)
+(c) HAC 
+(PSNR: 30.81 dB / Size: 8.98 MB)
+(d) Ours 
+(PSNR: 31.16 dB / Size: 7.51 MB)
+(b) Scaffold-GS 
+(PSNR: 26.12 dB / Size: 93.68 MB)
+(c) HAC 
+(PSNR: 26.13 dB / Size: 8.80 MB)
+(d) Ours 
+(PSNR: 26.23 dB / Size: 6.22 MB)
+Fig. 6: Qualitative comparisons of “counter” from Mip-NeRF360 [57] and “truck” from Tanks&Temples [60].
+4
+6
+8
+Total Size (MB)
+24.2
+24.4
+24.6
+24.8
+25.0
+25.2
+25.4
+25.6
+25.8
+PSNR
+High Ratio(80%)
+Medium Ratio(40%)
+No Shared Feature(0%)
+(a)
+Without SFA
+With SFA
+Anchor Feature Size(bit)
+(b)
+Fig. 7: (a) Ablation study of the SFA mechanism; (b) Com-
+pression heatmap analysis with and without SFA.
+role in efficient spatial context encoding. This degradation
+suggests that the hash grid is fundamental for effective spatial
+context aggregation. Overall, these results validate the SFA’s
+parameterization and architecture as key contributors to its
+effectiveness.
+Discussion on compression performance. The composi-
+9.0%
+31.2%
+13.1% 8.5%
+31.1%
+CRP-GS
+31.25 dB/4.99 MB
+19.5%
+41.4%
+13.7%
+18.6%
+HAC
+31.16 dB/7.25 MB
+Anchor
+Feat
+Scaling
+Offsets
+Hash
+Masks
+MLPs
+Saving
+Fig. 8: Bitstream breakdown comparison between CRP-GS
+and HAC.
+tion of the CRP-GS output bitstream is analyzed and compared
+with that of HAC. As shown in Fig. 8, CRP-GS exhibits a sub-
+stantial reduction in the anchor feature portion of the bitstream.
+This improvement mainly stems from the proposed COHS
+and SFA modules, which effectively suppress redundancy
+across anchor features through shared and correspondence-
+based priors. Since COHS introduces root-leaf dependencies
+for conditional entropy coding, we further report its structural
+
+
+IEEE TRANSACTIONS ON IMAGE PROCESSING
+12
+TABLE V: COHS side information overhead in the final
+bitstream
+Item
+Size (MB)
+Ratio (%)
+Active-anchor Mask
+0.03
+0.60
+Link Vector L
+0.16
+3.14
+Total COHS Side Information
+0.19
+3.74
+Note: Ratios are computed relative to the 4.99 MB final bitstream.
+side information in Table V. The decoder only needs the
+active-anchor mask and the final link vector L to recover
+the root, leaf, and free anchors, while the candidate set and
+intermediate dependency assignments used during renewal are
+not stored. As shown in Table V, this side information occupies
+only 0.19 MB, accounting for 3.74% of the final 4.99 MB
+bitstream, and this cost is included in the Anchor component in
+Fig. 8 as well as in the reported total bitstream size and all RD
+results. The anchor geometry is compressed using a standard
+point cloud codec to preserve geometric precision. Overall,
+CRP-GS achieves favorable rate-distortion performance with
+reduced storage cost compared with the baseline.
+Runtime Performance in Deployment. We evaluate run-
+time performance of our method and HAC on a representative
+Mip-NeRF360 scene using an NVIDIA RTX 3090 GPU at
+the native test-image resolution, rendering one view at a time.
+We separately measure bitstream decoding and per-view ren-
+dering latency. The decoding time includes entropy decoding
+and Gaussian-attribute reconstruction before rendering, while
+the per-view rendering latency is measured after the model
+has been decoded and therefore does not include bitstream
+decoding. On the deployment side, our method achieves a
+decoding time of 30.257 s, comparable to HAC (29.186 s).
+The small decoding overhead mainly comes from COHS,
+which introduces root-conditioned processing for leaf anchors.
+For rendering, CRP-GS takes 15.4 ms per view, whereas
+HAC takes 11.0 ms per view under the same protocol. This
+corresponds to an additional 4.4 ms per view, representing
+an approximately 40% increase in rendering latency. The
+increased rendering latency is mainly caused by SFA, which
+queries the hash grid, aggregates shared features, and concate-
+nates them with individual anchor features during rendering.
+Thus, the improved compression efficiency of CRP-GS comes
+with a rendering-latency trade-off. Under the stated GPU,
+resolution, and batch-size-one evaluation setting, the latency
+remains interactive, but the extra cost should be considered in
+latency-sensitive applications.
+VI. CONCLUSION
+In this paper, we introduce CRP-GS, a novel framework
+for efficient 3DGS compression. Unlike existing methods
+that rely primarily on spatial proximity, CRP-GS leverages
+anchor coherence to establish context-aware correspondences
+between Gaussian anchors, together with shared feature ag-
+gregation for compact feature representation. This approach
+reduces redundancy in both entropy modeling and anchor rep-
+resentation, enabling enhanced compression efficiency without
+sacrificing rendering fidelity. Extensive experiments indicate
+the effectiveness of our approach across various datasets and
+benchmarks. We believe CRP-GS reveals a new design axis
+for 3DGS compression beyond spatial locality, highlighting
+cross-representation priors as a promising direction for future
+neural rendering systems.
+REFERENCES
+[1] C. Buehler, M. Bosse, L. McMillan, S. Gortler, and M. Cohen, “Un-
+structured lumigraph rendering,” in Proceedings of the 28th annual
+conference on Computer graphics and interactive techniques, 2001, pp.
+425–432.
+[2] P. E. Debevec, C. J. Taylor, and J. Malik, “Modeling and rendering
+architecture from photographs: A hybrid geometry-and image-based ap-
+proach,” in Seminal Graphics Papers: Pushing the Boundaries, Volume
+2, 2023, pp. 465–474.
+[3] D. N. Wood, D. I. Azuma, K. Aldinger, B. Curless, T. Duchamp, D. H.
+Salesin, and W. Stuetzle, “Surface light fields for 3d photography,” in
+Seminal Graphics Papers: Pushing the Boundaries, Volume 2, 2023, pp.
+487–496.
+[4] B. Mildenhall, P. P. Srinivasan, M. Tancik, J. T. Barron, R. Ramamoorthi,
+and R. Ng, “Nerf: Representing scenes as neural radiance fields for view
+synthesis,” Communications of the ACM, vol. 65, no. 1, pp. 99–106,
+2021.
+[5] B. Kerbl, G. Kopanas, T. Leimk¨uhler, and G. Drettakis, “3d gaussian
+splatting for real-time radiance field rendering.” ACM Trans. Graph.,
+vol. 42, no. 4, pp. 139–1, 2023.
+[6] Z. Fan, K. Wang, K. Wen, Z. Zhu, D. Xu, Z. Wang et al., “Lightgaussian:
+Unbounded 3d gaussian compression with 15x reduction and 200+
+fps,” Advances in neural information processing systems, vol. 37, pp.
+140 138–140 158, 2024.
+[7] M. S. Ali, S.-H. Bae, and E. Tartaglione, “Elmgs: Enhancing mem-
+ory and computation scalability through compression for 3d gaussian
+splatting,” in 2025 IEEE/CVF Winter Conference on Applications of
+Computer Vision (WACV), 2025, pp. 2591–2600.
+[8] S. Girish, K. Gupta, and A. Shrivastava, “Eagles: Efficient accelerated
+3d gaussians with lightweight encodings,” in European Conference on
+Computer Vision.
+Springer, 2024, pp. 54–71.
+[9] J. C. Lee, D. Rho, X. Sun, J. H. Ko, and E. Park, “Compact 3d gaussian
+representation for radiance field,” in Proceedings of the IEEE/CVF
+Conference on Computer Vision and Pattern Recognition, 2024, pp.
+21 719–21 728.
+[10] K. Navaneet, K. P. Meibodi, S. A. Koohpayegani, and H. Pirsiavash,
+“Compact3d: Compressing gaussian splat radiance field models with
+vector quantization,” arXiv preprint arXiv:2311.18159, vol. 4, 2023.
+[11] S. Niedermayr, J. Stumpfegger, and R. Westermann, “Compressed 3d
+gaussian splatting for accelerated novel view synthesis,” in Proceedings
+of the IEEE/CVF Conference on Computer Vision and Pattern Recogni-
+tion, 2024, pp. 10 349–10 358.
+[12] T. Lu, M. Yu, L. Xu, Y. Xiangli, L. Wang, D. Lin, and B. Dai,
+“Scaffold-gs: Structured 3d gaussians for view-adaptive rendering,” in
+Proceedings of the IEEE/CVF Conference on Computer Vision and
+Pattern Recognition, 2024, pp. 20 654–20 664.
+[13] Y. Wang, Z. Li, L. Guo, W. Yang, A. Kot, and B. Wen, “Contextgs: Com-
+pact 3d gaussian splatting with anchor level context model,” Advances
+in neural information processing systems, vol. 37, pp. 51 532–51 551,
+2024.
+[14] Y. Chen, Q. Wu, W. Lin, M. Harandi, and J. Cai, “Hac: Hash-grid
+assisted context for 3d gaussian splatting compression,” in European
+Conference on Computer Vision.
+Springer, 2024, pp. 422–438.
+[15] L. Liu, Z. Chen, W. Jiang, W. Wang, and D. Xu, “Hemgs: A hybrid
+entropy model for 3d gaussian splatting data compression,” arXiv
+preprint arXiv:2411.18473, 2024.
+[16] Y. Chen, Q. Wu, W. Lin, M. Harandi, and J. Cai, “Hac++: Towards 100x
+compression of 3d gaussian splatting,” IEEE Transactions on Pattern
+Analysis and Machine Intelligence, vol. 47, no. 11, pp. 10 210–10 226,
+2025.
+[17] Y.-T. Zhan, C.-Y. Ho, H. Yang, Y.-H. Chen, J. C. Chiang, Y.-L. Liu,
+and W.-H. Peng, “CAT-3DGS: A context-adaptive triplane approach
+to rate-distortion-optimized 3DGS compression,” in Proceedings of
+the Thirteenth International Conference on Learning Representations
+(ICLR), 2025.
+[18] R. Huang, H. Tao, B. Jiang, Q. Zhao, L. Wan, and Q. Guo, “C-nerf:
+Representing scene changes as directional consistency difference-based
+nerf,” IEEE Transactions on Image Processing, vol. 34, pp. 7502–7513,
+2025.
+
+
+IEEE TRANSACTIONS ON IMAGE PROCESSING
+13
+[19] C. Huang, Y. Hou, W. Ye, D. Huang, X. Huang, B. Lin, and D. Cai,
+“Nerf-det++: Incorporating semantic cues and perspective-aware depth
+supervision for indoor multi-view 3d detection,” IEEE Transactions on
+Image Processing, vol. 34, pp. 2575–2587, 2025.
+[20] S. Fridovich-Keil, A. Yu, M. Tancik, Q. Chen, B. Recht, and
+A. Kanazawa, “Plenoxels: Radiance fields without neural networks,”
+in Proceedings of the IEEE/CVF conference on computer vision and
+pattern recognition, 2022, pp. 5501–5510.
+[21] C. Sun, M. Sun, and H.-T. Chen, “Direct voxel grid optimization: Super-
+fast convergence for radiance fields reconstruction,” in Proceedings of
+the IEEE/CVF conference on computer vision and pattern recognition,
+2022, pp. 5459–5469.
+[22] S. Fridovich-Keil, G. Meanti, F. R. Warburg, B. Recht, and A. Kanazawa,
+“K-planes: Explicit radiance fields in space, time, and appearance,”
+in Proceedings of the IEEE/CVF Conference on Computer Vision and
+Pattern Recognition, 2023, pp. 12 479–12 488.
+[23] A. Chen, Z. Xu, A. Geiger, J. Yu, and H. Su, “Tensorf: Tensorial radiance
+fields,” in European conference on computer vision.
+Springer, 2022,
+pp. 333–350.
+[24] T. M¨uller, A. Evans, C. Schied, and A. Keller, “Instant neural graphics
+primitives with a multiresolution hash encoding,” ACM transactions on
+graphics (TOG), vol. 41, no. 4, pp. 1–15, 2022.
+[25] C. Lassner and M. Zollhofer, “Pulsar: Efficient sphere-based neural
+rendering,” in Proceedings of the IEEE/CVF Conference on Computer
+Vision and Pattern Recognition, 2021, pp. 1440–1449.
+[26] Z. Sheng, F. Liu, M. Liu, F. Zheng, and L. Nie, “Open-set synthesis
+for free-viewpoint human body reenactment of novel poses,” IEEE
+Transactions on Circuits and Systems for Video Technology, 2024.
+[27] Z. Qian, S. Wang, M. Mihajlovic, A. Geiger, and S. Tang, “3dgs-
+avatar: Animatable avatars via deformable 3d gaussian splatting,” in
+Proceedings of the IEEE/CVF conference on computer vision and
+pattern recognition, 2024, pp. 5020–5030.
+[28] G. Moon, T. Shiratori, and S. Saito, “Expressive whole-body 3d gaussian
+avatar,” in European Conference on Computer Vision.
+Springer, 2024,
+pp. 19–35.
+[29] J. Tang, J. Ren, H. Zhou, Z. Liu, and G. Zeng, “Dreamgaussian:
+Generative gaussian splatting for efficient 3d content creation,” in The
+Twelfth International Conference on Learning Representations, ICLR
+2024, Vienna, Austria, May 7-11, 2024.
+OpenReview.net, 2024.
+[30] M. Khan, H. Fazlali, D. Sharma, T. Cao, D. Bai, Y. Ren, and B. Liu,
+“Autosplat: Constrained gaussian splatting for autonomous driving scene
+reconstruction,” in 2025 IEEE International Conference on Robotics and
+Automation (ICRA).
+IEEE, 2025, pp. 8315–8321.
+[31] Y. Chen, J. Zhang, Z. Xie, W. Li, F. Zhang, J. Lu, and L. Zhang,
+“S-nerf++: Autonomous driving simulation via neural reconstruction
+and generation,” IEEE Transactions on Pattern Analysis and Machine
+Intelligence, 2025.
+[32] X. Zhou, Z. Lin, X. Shan, Y. Wang, D. Sun, and M.-H. Yang, “Driv-
+inggaussian: Composite gaussian splatting for surrounding dynamic au-
+tonomous driving scenes,” in Proceedings of the IEEE/CVF Conference
+on Computer Vision and Pattern Recognition, 2024, pp. 21 634–21 643.
+[33] Z. Bao, G. Liao, K. Zhou, K. Liu, Q. Li, and G. Qiu, “Loopsparsegs:
+Loop-based sparse-view friendly gaussian splatting,” IEEE Transactions
+on Image Processing, vol. 34, pp. 3889–3902, 2025.
+[34] Y. Wang, X. Wei, M. Lu, and G. Kang, “Plgs: Robust panoptic lifting
+with 3d gaussian splatting,” IEEE Transactions on Image Processing,
+vol. 34, pp. 3377–3388, 2025.
+[35] G. Chen and W. Wang, “A survey on 3d gaussian splatting,” arXiv
+preprint arXiv:2401.03890, 2024.
+[36] B. Fei, J. Xu, R. Zhang, Q. Zhou, W. Yang, and Y. He, “3d gaussian
+splatting as new era: A survey,” IEEE Transactions on Visualization and
+Computer Graphics, 2024.
+[37] W. Liu, T. Guan, B. Zhu, L. Xu, Z. Song, D. Li, Y. Wang, and
+W. Yang, “Efficientgs: Streamlining gaussian splatting for large-scale
+high-resolution scene representation,” IEEE MultiMedia, 2025.
+[38] X. Zhang, X. Ge, T. Xu, D. He, Y. Wang, H. Qin, G. Lu, J. Geng,
+and J. Zhang, “GaussianImage: 1000 FPS image representation and
+compression by 2D gaussian splatting,” in Proceedings of the European
+Conference on Computer Vision (ECCV), 2024, pp. 327–345.
+[39] W. Morgenstern, F. Barthel, A. Hilsmann, and P. Eisert, “Compact 3d
+scene representation via self-organizing gaussian grids,” in European
+Conference on Computer Vision.
+Springer, 2024, pp. 18–34.
+[40] K. Ren, L. Jiang, T. Lu, M. Yu, L. Xu, Z. Ni, and B. Dai, “Octree-gs: To-
+wards consistent real-time rendering with lod-structured 3d gaussians,”
+IEEE Transactions on Pattern Analysis and Machine Intelligence, pp.
+1–15, 2025.
+[41] Z. Zhang, G. Lu, H. Liang, A. Tang, Q. Hu, and L. Song, “Efficient
+dynamic-NeRF based volumetric video coding with rate distortion
+optimization,” in 2024 IEEE International Conference on Multimedia
+and Expo (ICME), 2024, pp. 1–6.
+[42] Z. Zhang, G. Lu, H. Liang, Z. Cheng, A. Tang, and L. Song, “Rate-
+aware compression for NeRF-based volumetric video,” in Proceedings
+of the 32nd ACM International Conference on Multimedia, 2024, pp.
+3974–3983.
+[43] I. H. Witten, R. M. Neal, and J. G. Cleary, “Arithmetic coding for data
+compression,” Communications of the ACM, vol. 30, no. 6, pp. 520–540,
+1987.
+[44] D. Minnen, J. Ball´e, and G. D. Toderici, “Joint autoregressive and
+hierarchical priors for learned image compression,” Advances in neural
+information processing systems, vol. 31, 2018.
+[45] J. Li, B. Li, and Y. Lu, “Deep contextual video compression,” Advances
+in Neural Information Processing Systems, vol. 34, pp. 18 114–18 125,
+2021.
+[46] G. Lu, W. Ouyang, D. Xu, X. Zhang, C. Cai, and Z. Gao, “Dvc: An
+end-to-end deep video compression framework,” in Proceedings of the
+IEEE/CVF conference on computer vision and pattern recognition, 2019,
+pp. 11 006–11 015.
+[47] J. Ball´e, D. Minnen, S. Singh, S. J. Hwang, and N. Johnston, “Variational
+image
+compression
+with
+a
+scale
+hyperprior,”
+in
+International
+Conference on Learning Representations, 2018. [Online]. Available:
+https://openreview.net/forum?id=rkcQFMZRb
+[48] Z. Cheng, H. Sun, M. Takeuchi, and J. Katto, “Learned image com-
+pression with discretized gaussian mixture likelihoods and attention
+modules,” in Proceedings of the IEEE/CVF conference on computer
+vision and pattern recognition, 2020, pp. 7939–7948.
+[49] Z. Hu, G. Lu, and D. Xu, “Fvc: A new framework towards deep
+video compression in feature space,” in Proceedings of the IEEE/CVF
+conference on computer vision and pattern recognition, 2021, pp. 1502–
+1511.
+[50] M. Li, K. Ma, J. You, D. Zhang, and W. Zuo, “Efficient and effective
+context-based convolutional entropy modeling for image compression,”
+IEEE Transactions on Image Processing, vol. 29, pp. 5900–5911, 2020.
+[51] T. Chen, H. Liu, Z. Ma, Q. Shen, X. Cao, and Y. Wang, “End-to-
+end learnt image compression via non-local attention optimization and
+improved context modeling,” IEEE Transactions on Image Processing,
+vol. 30, pp. 3179–3191, 2021.
+[52] X. Wu and P. Bao, “L/sub/spl infin//constrained high-fidelity image
+compression via adaptive context modeling,” IEEE Transactions on
+Image Processing, vol. 9, no. 4, pp. 536–542, 2000.
+[53] T. Celik, “Spatial entropy-based global and local image contrast en-
+hancement,” IEEE Transactions on Image Processing, vol. 23, no. 12,
+pp. 5298–5308, 2014.
+[54] C. Tu and T. D. Tran, “Context-based entropy coding of block trans-
+form coefficients for image compression,” IEEE Transactions on Image
+Processing, vol. 11, no. 11, pp. 1271–1283, 2002.
+[55] Z. Que, G. Lu, and D. Xu, “VoxelContext-Net: An octree based frame-
+work for point cloud compression,” in Proceedings of the IEEE/CVF
+Conference on Computer Vision and Pattern Recognition (CVPR), 2021,
+pp. 6042–6051.
+[56] Y. Chen, Z. Lyu, B. He, H. Hu, Q. Wang, Y. Tian, L. Song,
+W. Zhang, and G. Lu, “Content-Aware Mamba for learned image
+compression,” in The Fourteenth International Conference on Learning
+Representations,
+2026.
+[Online].
+Available:
+https://openreview.net/
+forum?id=WwDNiisZQm
+[57] J. T. Barron, B. Mildenhall, D. Verbin, P. P. Srinivasan, and P. Hedman,
+“Mip-nerf 360: Unbounded anti-aliased neural radiance fields,” in Pro-
+ceedings of the IEEE/CVF conference on computer vision and pattern
+recognition, 2022, pp. 5470–5479.
+[58] Y. Xiangli, L. Xu, X. Pan, N. Zhao, A. Rao, C. Theobalt, B. Dai, and
+D. Lin, “Bungeenerf: Progressive neural radiance field for extreme multi-
+scale scene rendering,” in European conference on computer vision.
+Springer, 2022, pp. 106–122.
+[59] P. Hedman, J. Philip, T. Price, J.-M. Frahm, G. Drettakis, and G. Bros-
+tow, “Deep blending for free-viewpoint image-based rendering,” ACM
+Transactions on Graphics (ToG), vol. 37, no. 6, pp. 1–15, 2018.
+[60] A. Knapitsch, J. Park, Q.-Y. Zhou, and V. Koltun, “Tanks and temples:
+Benchmarking large-scale scene reconstruction,” ACM Transactions on
+Graphics (ToG), vol. 36, no. 4, pp. 1–13, 2017.
+[61] Z. Wang, A. C. Bovik, H. R. Sheikh, and E. P. Simoncelli, “Image
+quality assessment: from error visibility to structural similarity,” IEEE
+transactions on image processing, vol. 13, no. 4, pp. 600–612, 2004.
+[62] R. Zhang, P. Isola, A. A. Efros, E. Shechtman, and O. Wang, “The
+unreasonable effectiveness of deep features as a perceptual metric,” in
+
+
+IEEE TRANSACTIONS ON IMAGE PROCESSING
+14
+Proceedings of the IEEE conference on computer vision and pattern
+recognition, 2018, pp. 586–595.
+[63] K. Navaneet, K. Pourahmadi Meibodi, S. Abbasi Koohpayegani, and
+H. Pirsiavash, “Compgs: Smaller and faster gaussian splatting with
+vector quantization,” in European Conference on Computer Vision.
+Springer, 2024, pp. 330–349.
+[64] Y. Chen, M. Li, Q. Wu, W. Lin, M. Harandi, and J. Cai, “Pcgs:
+Progressive compression of 3d gaussian splatting,” in Proceedings of
+the AAAI Conference on Artificial Intelligence, vol. 40, no. 4, 2026, pp.
+3111–3119.
+Yezheng Zhang received the B.E. degree from
+Huazhong University of Science and Technology,
+Wuhan, China, in 2025. He is currently working to-
+ward the Ph.D. degree in information and communi-
+cation engineering at Shanghai Jiao Tong University,
+Shanghai, China. His research interests include 3D
+Gaussian Splatting, neural scene representation, and
+learned compression.
+Huanxiong Liang received the B.E. degree from
+Sichuan University, Chengdu, China, in 2024. He is
+currently pursuing the Ph.D. degree in information
+and communication engineering at Shanghai Jiao
+Tong University, Shanghai, China. His research in-
+terests include 3D Gaussian Splatting, neural scene
+representation, and learned compression.
+Chuqin Zhou received the B.S. degree in electronic
+and information engineering from Huazhong Uni-
+versity of Science and Technology (HUST), Wuhan,
+Hubei, China, in 2024. He is currently pursuing
+the M.S. degree with the Department of Computer
+Science and Engineering in Shanghai Jiao Tong Uni-
+versity (SJTU), Shanghai, China, supervised by Prof.
+Guo Lu. His research interests include image and
+video processing, video compression, and computer
+vision.
+Guo Lu (Member, IEEE) received his B.S. degree
+in Electronic Engineering from Ocean University
+of China, China, in 2014, and his Ph.D. degree
+in Electronic Engineering from Shanghai Jiao Tong
+University (SJTU), China, in 2020. He is currently
+an Associate Professor at SJTU. His research inter-
+ests focus on learned video coding and processing.
+Dr. Lu has published over 40 papers in prestigious
+journals and conferences, including T-IP, T-CSVT,
+CVPR, and T-PAMI. He is a recipient of the 2023
+IEEE CASS Visual Signal Processing and Commu-
+nications (VSPC) Rising Star Award, the China Society of Image and Graphics
+(CSIG) Excellent Doctoral Dissertation Award (Top 10 Nationwide), and the
+SJTU Excellent Doctoral Dissertation Award. He has served as a Guest Editor
+for IJCV and IEEE T-CSVT, is a member of the IEEE VSPC Technical
+Committee, and has organized several tutorials on learned video compression
+at CVPR, ACMMM, and VCIP. Additionally, he served as Publication Chair
+for MLSP and as a Senior Program Committee member for AAAI.
+Wenjun Zhang (Fellow, IEEE) received the B.S.,
+M.S., and Ph.D. degrees in electronic engineer-
+ing from Shanghai Jiao Tong University, Shanghai,
+China, in 1984, 1987, and 1989, respectively. From
+1990 to 1993, he worked as a postdoctoral fellow at
+Philips Kommunikation Industrie AG in Nuremberg,
+Germany, where he was actively involved in the
+development of the HD-MAC system. He joined the
+faculty of Shanghai Jiao Tong University in 1993
+and became a full professor with the Department of
+Electronic Engineering in 1995. He was elevated to
+IEEE Fellow in 2011 for his contributions to HDTV system research and
+standardization, as well as digital terrestrial television broadcasting technol-
+ogy. His main research interests include video coding, video transmission,
+and broadcast/broadband networks.

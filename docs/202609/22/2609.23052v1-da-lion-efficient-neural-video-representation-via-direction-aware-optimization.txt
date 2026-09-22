@@ -1,0 +1,1542 @@
+DA-Lion: Efficient Neural Video Representation
+via Direction-Aware Optimization
+Qingyu Mao1, Jiacong Chen2,3, Shuai Liu2,3, Yongsheng Liang1,3, and
+Youneng Bao1,( )
+1 College of Electronics and Information Engineering, Shenzhen University
+2 College of Applied Technology, Shenzhen University
+3 School of Artificial Intelligence, Shenzhen Technology University
+baoyn@szu.edu.cn
+Abstract. Implicit neural video representation (NVR) encodes a video
+as the parameters of an overfitted neural network, where training and
+testing data are identical and the objective is instance-specific signal
+fitting. In this deterministic regime, optimization dynamics directly de-
+termine reconstruction quality under a fixed budget, yet existing meth-
+ods universally adopt general-purpose optimizers designed for stochastic
+gradient training. Adam-family optimizers descend steadily but converge
+slowly, while Lion achieves faster early progress but oscillates markedly
+in later stages when gradient directions become unstable. We trace this
+instability to the insensitivity of the sign-based update to gradient–
+momentum alignment. To address this, we propose Direction-Aware Lion
+(DA-Lion), a task-driven optimizer tailored for NVR. DA-Lion intro-
+duces (i) a direction-consistency criterion that switches between sign up-
+date and momentum update based on gradient–momentum alignment,
+and (ii) a learning-rate-aware magnitude modulation that stabilizes ef-
+fective step sizes across training phases. DA-Lion modifies only the pa-
+rameter update rule, preserving model architecture, parameter count,
+FLOPs, and decoding throughput. Experiments on three datasets with
+four NeRV-family backbones show that DA-Lion improves convergence
+stability and boosts PSNR/MS-SSIM across all backbones. The source
+code will be made available at https://github.com/maoqingyu1996/
+DA-Lion.
+Keywords: Implicit neural representation · Neural video compression ·
+Optimization.
+1
+Introduction
+Implicit neural representations (INRs) [1,2] have emerged as an effective alter-
+native for visual data compression [3], representing a target signal by the param-
+eters of a neural network that maps coordinates (e.g., pixel positions) to signal
+values (e.g., RGB colors). For compression, this network is overfitted to a single
+instance—the learned parameters serve as a compact code for reconstruction via
+a forward pass.
+arXiv:2609.23052v1  [eess.IV]  19 Sep 2026
+
+
+2
+Q. Mao et al.
+0
+0.05
+0.1
+0.15
+0.2
+0.25
+0.3
+0.35
+0
+100
+200
+300
+Loss
+Epoch
+Adam-32.13 dB
+AdamP-32.17 dB
+AdamW-32.13 dB
+SOAP-30.04 dB
+Lion-33.67 dB
+0.065
+0.07
+0.075
+0.08
+0.085
+0.09
+0.095
+0.1
+0
+100
+200
+300
+Loss
+Epoch
+Adam-34.06 dB
+AdamP-34.09 dB
+AdamW-34.09 dB
+SOAP-33.73 dB
+Lion-33.37 dB
+0.035
+0.045
+0.055
+0.065
+0.075
+0.085
+0
+100
+200
+300
+Loss
+Epoch
+Adam-34.38 dB
+AdamP-34.45 dB
+AdamW-34.44 dB
+SOAP-34.51 dB
+Lion-34.64 dB
+Bunny
+Beauty
+Shakendry
+Fig. 1: Training loss curves of five general-purpose optimizers on three video
+sequences. Adam-family optimizers (Adam, AdamW and AdamP) and SOAP
+descend steadily but converge slowly with a higher final loss, while Lion con-
+verges rapidly at early stages but tends to oscillate, leading to suboptimal final
+performance.
+In neural video compression, NeRV [4] and its variants [5,6,7,8] represent a
+video as a compact network fθ that maps a temporal embedding et to its cor-
+responding RGB frame It. Despite their architectural diversity, all NeRV-family
+methods share the same encoding pipeline: (i) define a network architecture A,
+(ii) set the initial parameters θ0
+A and temporal embeddings e0
+t, and (iii) train with
+loss L and optimizer O to obtain the optimized parameters θ∗
+A and embeddings
+e∗
+t :
+θ0
+A, e0
+t −−→
+set L, O −−−→
+train θ∗
+A, e∗
+t ,
+(1)
+where O drives the search from θ0
+A to θ∗
+A by iteratively minimizing L. The trained
+parameters θ∗
+A (with e∗
+t ) are stored as the compressed bitstream, and decoding
+evaluates fθ∗
+A(e∗
+t ) for each frame.
+Existing efforts on NeRV-family methods focus on architectural [9,10,11] or
+objective function [12,13] innovations, while universally adopting Adam [14] or
+AdamW [15] as the default optimizer. The choice of optimizer, however, has
+received surprisingly little scrutiny. Standard optimizers are designed for mini-
+batch training with inherent gradient noise. In NVR, training is deterministic and
+instance-specific: gradients reflect the evolving fitting state rather than sampling
+noise, and the objective is to minimize distortion on the identical coordinate set
+used for evaluation. Late-stage refinement requires stable, high-precision updates
+robust to directional fluctuations—not mechanisms compensating for stochas-
+tic gradient noise. In the absence of gradient noise, Adam’s adaptive rates be-
+come unnecessarily conservative; conversely, Lion’s sign-based updates discard
+magnitude information, making the update vulnerable to directional instability
+where small gradient fluctuations can trigger full-magnitude sign reversals. Fig. 1
+confirms these patterns: Adam-family optimizers descend steadily but converge
+slowly; Lion accelerates early progress but oscillates in later stages.
+In this work, we propose Direction-Aware Lion (DA-Lion), a task-driven op-
+timizer tailored for NVR. Building on our analysis of Lion’s instability—where
+sign-based updates amplify directional fluctuations when the gradient opposes
+historical momentum (see Sec. 3)—DA-Lion introduces two complementary com-
+ponents: a direction-consistency criterion that switches between sign up-
+
+
+Efficient NVR via Direction-Aware Optimization
+3
+date and momentum update based on gradient–momentum alignment, and a
+learning-rate-aware magnitude modulation that stabilizes effective step
+sizes across training phases. DA-Lion modifies only the parameter update rule,
+preserving model architecture, parameter count, FLOPs, and decoding through-
+put. Experiments across four NeRV-family backbones and three video bench-
+marks show that DA-Lion improves convergence stability and reconstruction
+quality.
+2
+Related Work
+Implicit neural video representation. NVR represents a video as a compact
+network optimized per video. NeRV [4] maps frame indices to RGB frames; sub-
+sequent work improves reconstruction via architectural refinements (E-NeRV [5],
+HNeRV [6], D-NeRV [16], HiNeRV [10], DNeRV [9], PNeRV [7]), meta-learned
+initialization (MetaNeRV [17]), or temporally coherent modulation (NVTM [18]).
+Practical codecs study end-to-end compression pipelines [19,20]. These directions
+are complementary: we improve performance by adapting the optimizer without
+modifying the backbone.
+Optimization for deep networks. Adam [14] and AdamW [15] stabilize train-
+ing under stochastic gradients; Lion [21] uses sign-based updates on a momen-
+tum direction, speeding up early convergence by discarding gradient magnitudes.
+A related line of work conditions the update on gradient–momentum discrep-
+ancy. AdaBelief [22] replaces Adam’s second moment with the centered variance
+(gt−mt)2, shrinking step sizes when gradient and momentum disagree. Cautious
+Optimizers [23] mask out coordinates where sign(gt) disagrees with momentum,
+leaving them unchanged. DA-Lion differs in two ways: (i) instead of masking
+disagreeing coordinates to zero, it switches them to a momentum-form update,
+preserving descent rather than freezing; (ii) it pairs the direction-consistency
+criterion with a learning-rate-aware magnitude modulation that further stabi-
+lizes step sizes during late refinement. In NVR, gradients reflect the evolving
+fitting state rather than mini-batch noise, making late-stage refinement sensi-
+tive to directional fluctuations—motivating update rules that explicitly respond
+to direction instability.
+3
+Method
+3.1
+Revisiting Lion for NVR
+We first review Lion [21]. Let θt denote parameters and gt = ∇θL(θt−1) the
+gradient at iteration t. Lion maintains an exponential moving average (EMA) of
+historical gradients, updated by
+mt = β2mt−1 + (1 −β2)gt.
+(2)
+At each step, Lion computes a momentum-like direction
+ut = sign(β1mt−1 + (1 −β1)gt) ,
+(3)
+
+
+4
+Q. Mao et al.
+then updates θt = θt−1 −ηt ut with learning rate ηt. This sign-based accel-
+eration, however, introduces a structural failure mode in deterministic NVR.
+Because sign(·) is discontinuous at zero, an arbitrarily small fluctuation of ˜mt,i
+across zero is amplified into a full ±ηt step in coordinate i, yielding |∆θt,i| = ηt
+irrespective of the gradient magnitude. Near a local minimum, gradients are
+dominated by inter-coordinate residual error rather than a coherent descent di-
+rection; the per-parameter trajectory is driven by a “noise-floor” jitter of magni-
+tude ηt. Cosine annealing shrinks ηt but cannot eliminate this jitter, and unlike
+stochastic training, NVR provides no mini-batch averaging to suppress it. Fig. 2
+provides direct quantitative evidence: at the late training stage, Lion’s mean
+per-parameter update magnitude is 7.4× that of Adam, confirming the noise
+floor maintains elevated update amplitudes throughout refinement.
+Adam
+Lion
+DA-Lion
+0.0
+0.5
+1.0
+1.5
+2.0
+2.5
+3.0
+Mean |
+|
+1e 5
+1.0×
+7.4×
+2.0×
+Late-Stage (epoch 250 300)
+33000
+34000
+35000
+36000
+37000
+38000
+39000
+Training Step
+0
+2
+4
+6
+8
+Mean |
+|
+1e 5
+Last 50 Epochs (250 300)
+Adam
+Lion
+DA-Lion
+Fig. 2: Quantitative noise-floor comparison. Left: mean |∆θ| over the final 50
+epochs. Right: per-step trajectory during the last 50 epochs. Lion’s update mag-
+nitude is structurally decoupled from the gradient, tracking the cosine LR sched-
+ule with negligible variation (0.4%); Adam (7%) and DA-Lion (1.9%) exhibit
+content-driven fluctuations.
+To address this, we propose Direction-Aware Lion (DA-Lion), which selec-
+tively suspends sign-based updates on coordinates exhibiting noise-driven jitter
+while preserving Lion’s fast progress on coordinates in stable descent.
+3.2
+Direction-aware update
+DA-Lion retains the momentum construction of Eq. (2) but uses a direction-
+aware update rule. We define a per-parameter direction-consistency score be-
+tween the current gradient and the historical momentum as the element-wise
+product:
+∆t = gt ⊙mt−1,
+(4)
+where each entry ∆t,i = gt,i mt−1,i independently judges the alignment of co-
+ordinate i. Using mt−1 rather than mt or ˜mt is intentional: mt−1 reflects the
+accumulated direction before observing gt, so ∆t,i > 0 means the new gradient
+agrees with the historical trend. In contrast, both mt and ˜mt already contain gt,
+
+
+Efficient NVR via Direction-Aware Optimization
+5
+which would make the indicator self-referential and systematically overestimate
+alignment near convergence. The threshold at zero requires no task-specific cal-
+ibration: ∆t,i > 0 is equivalent to sign(gt,i) = sign(mt−1,i), a minimal geometric
+condition for directional agreement.
+For each coordinate, DA-Lion applies a per-element switching rule. Let ˜mt =
+β1mt−1 + (1 −β1)gt denote the mixed direction. When ∆t,i > 0, the gradient
+agrees with historical momentum—the coordinate receives a sign-based update
+for fast progress. When ∆t,i ≤0, the gradient opposes the historical direction—
+the coordinate receives a momentum-form update that preserves gradient magni-
+tude, preventing the noise-floor amplification analyzed in Sec. 3. Formally, with
+the per-element mask st = 1[∆t > 0], DA-Lion computes
+∆θt = −αt · sign( ˜mt) ⊙st −˜mt ⊙(1 −st),
+(5)
+where αt is a magnitude modulation factor defined in Sec. 3.3 and the parameter
+update is θt = θt−1 + ηt∆θt.
+The two branches operate at different numerical scales: the sign branch pro-
+duces updates of magnitude αtηt, while the momentum branch produces updates
+scaled by | ˜mt,i|. The per-coordinate switching resolves this naturally—each co-
+ordinate selects the branch dictated by its local alignment, and the emergent pt
+decline (Sec. 3.4) ensures a smooth global transition between the two regimes
+without explicit scale matching.
+A key property of the per-coordinate criterion is that it induces an implicit,
+data-driven phase transition. Define the agreement ratio pt =
+1
+N
+P
+i 1[∆t,i >
+0], measuring the fraction of parameters in stable descent. Fig. 3 reports pt
+throughout DA-Lion training. On Bunny, pt declines monotonically from ∼1.0
+to ∼0.48 with both NeRV and HNeRV backbones (Fig. 3a), confirming the tran-
+sition is governed by the optimizer’s internal state rather than architectural
+specifics. On the more challenging Beauty and Jockey sequences, pt reaches
+0.44–0.45 (Fig. 3b), indicating that harder content induces a faster, deeper
+shift toward momentum-form updates. All curves decay smoothly without ex-
+ternal scheduling—the transition emerges purely from the evolving gradient–
+momentum alignment, requiring no hand-crafted phase-switching heuristics.
+3.3
+Learning-rate-aware magnitude modulation
+Even with the direction-consistency criterion, the sign branch still applies ±ηt
+to all aligned coordinates, regardless of the refinement stage. We introduce a
+learning-rate-aware modulation factor αt to decouple the effective sign-step mag-
+nitude from ηt. Let rt = ηt/η0 denote the ratio of the current learning rate to
+its initial value, which decreases from 1 to 0 under standard cosine scheduling.
+We define
+αt = αmin + (αmax −αmin) ·
+1
+1 + exp(s (rt −c)),
+(6)
+with αmin = 0.1, αmax = 1.0, slope s = 0.2, and center c = 0.4. The sigmoid
+form has three deliberate properties. First, the center c = 0.4 positions the
+
+
+6
+Q. Mao et al.
+0
+50
+100
+150
+200
+250
+300
+0.45
+0.50
+0.55
+0.60
+pt
+final=0.476
+NeRV on Bunny
+0
+50
+100
+150
+200
+250
+300
+Epoch
+0.5
+0.6
+0.7
+0.8
+pt
+final=0.478
+HNeRV on Bunny
+(a) Backbone comparison (Bunny)
+0
+50
+100
+150
+200
+250
+300
+0.40
+0.45
+0.50
+0.55
+0.60
+0.65
+pt
+final=0.441
+NeRV on Beauty
+0
+50
+100
+150
+200
+250
+300
+Epoch
+0.4
+0.5
+0.6
+0.7
+pt
+final=0.449
+NeRV on Jockey
+(b) Video comparison (NeRV)
+Fig. 3: Emergent self-paced phase transition: agreement ratio pt during DA-
+Lion training (300 epochs). (a) Bunny: NeRV vs. HNeRV. (b) NeRV: Beauty
+vs. Jockey.
+transition in the mid-to-late training stage where sign-based updates begin to
+destabilize (cf. Fig. 3), ensuring modulation activates only when needed. Second,
+it is strictly bounded in [0.1, 1.0], guaranteeing ηtαt never exceeds ηt; in contrast,
+a pure exponential is unbounded and exceeds 1.0 when rt < 0.05, amplifying
+rather than suppressing the step size during late refinement. Third, the mild
+slope s = 0.2 keeps αt in a narrow band of [0.52, 0.57] across all 300 epochs,
+providing gentle stabilization rather than aggressive step-size reduction.
+Fig. 4 compares the sigmoid against three alternatives on Bunny. The sigmoid
+achieves 33.97 dB, outperforming the alternatives by +0.59–+0.82 dB. The expo-
+nential and linear variants perform similarly, confirming that late-stage overshoot
+cancels any benefit from steeper early decay.
+0
+50
+100
+150
+200
+250
+300
+Epoch
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0
+1.2
+t
+t >1 (overshoot)
+Modulation Curves
+Sigmoid (DA-Lion)
+Linear
+Pure Exp
+No modulation
+No-mod
+Linear
+Pure-Exp
+Sigmoid
+(DA-Lion)
+32.8
+33.0
+33.2
+33.4
+33.6
+33.8
+34.0
+34.2
+34.4
+PSNR (dB)
+33.15
+33.37
+33.38
+33.97
++0.22
++0.23
++0.82
+Ablation: NeRV-3M on Bunny
+Fig. 4: Modulation function ablation. Left: αt curves under a 300-epoch cosine
+schedule. Right: PSNR on Bunny (NeRV).
+
+
+Efficient NVR via Direction-Aware Optimization
+7
+3.4
+Discussion on Convergence
+We outline a component-wise argument for stability, deferring a rigorous non-
+convex convergence proof. When ∆t,i > 0, ˜mt,i is a convex combination of
+gt,i and mt−1,i sharing their sign; the sign-based update −αt · sign( ˜mt,i) is lo-
+cally anti-aligned with the gradient—a descent step of magnitude αtηt. When
+∆t,i ≤0, the momentum ˜mt,i carries gradient magnitude that sign updates dis-
+card, avoiding the noise-floor amplification identified in Sec. 3. The switching
+decision depends on mt−1, not mt, and is causal. The agreement ratio pt de-
+cays monotonically from ≈1.0 to ≈0.44–0.48 (Fig. 3) without external schedul-
+ing, smoothly interpolating from a sign-dominant early phase to momentum-
+dominant refinement with no abrupt mode switch. A spurious fixed point would
+require ˜mt,i=0 simultaneously for all disagreeing coordinates, which cannot per-
+sist under non-zero residual error. Per-coordinate step magnitude is bounded
+by ηt (αt ∈(0, 1] in the sign branch; | ˜mt,i| bounded by recent gradient norms
+otherwise), so ∥∆θt∥→0 as the cosine schedule drives ηt →0. DA-Lion thus
+interpolates between sign-based exploration and momentum-based refinement
+without instability, with eventual settling guaranteed by the decaying learning
+rate. A formal analysis under standard assumptions (L-smoothness, bounded
+gradients) is left to future work.
+4
+Experiments
+4.1
+Experimental detail
+We evaluated DA-Lion on Bunny, UVG [24], and DAVIS [25]. Bunny contains
+132 frames at 720×1280; UVG and DAVIS each comprise seven 1080×1920 se-
+quences. All inputs were center-cropped to 640×1280 or 960×1920 for consistent
+comparison.
+We adopted four NVR backbones (NeRV [4], E-NeRV [5], HNeRV [6], PN-
+eRV [7]). DA-Lion replaces only the parameter update rule, preserving architec-
+tures and compression pipelines. Baselines include Adam [14] with (β1, β2) =
+(0.9, 0.999) and Lion [21] with (0.9, 0.99); DA-Lion inherits Lion’s hyperparame-
+ters. All models were reproduced from official codebases, trained for 300 epochs
+at a fixed 3.0M parameter budget on an NVIDIA V100 GPU. We use batch
+size 1, the Fusion6 loss [4], and a cosine learning rate schedule decaying from
+10−3 to 10−4, following the standard configuration of each backbone. We report
+PSNR and MS-SSIM [26] for reconstruction quality, and model size, bits-per-
+pixel (bpp), per-iteration training time, encoding time, and GPU memory for
+complexity.
+4.2
+Convergence and Update Dynamics
+Fig. 5 compares training loss curves of Adam, Lion, and DA-Lion on Bunny,
+Jockey, and Shakendry across four backbones. DA-Lion produces smoother tra-
+jectories than Lion and converges faster than Adam while remaining stable in
+
+
+8
+Q. Mao et al.
+later stages. On Shakendry with NeRV, DA-Lion matches Adam’s final loss in
+roughly 2/3 the epochs.
+Bunny
+0.04
+0.05
+0.06
+0.07
+0.08
+0.09
+0.1
+0
+100
+200
+300
+Loss
+Epoch
+Adam
+Lion
+DA-Lion
+Jockey
+0.03
+0.04
+0.05
+0.06
+0.07
+0.08
+0.09
+0
+100
+200
+300
+Loss
+Epoch
+Adam
+Lion
+DA-Lion
+Shakendry
+NeRV
+0.025
+0.03
+0.035
+0.04
+0.045
+0.05
+0.055
+0.06
+0
+100
+200
+300
+Loss
+Epoch
+Adam
+Lion
+DA-Lion
+E-NeRV
+0
+0.0005
+0.001
+0.0015
+0.002
+0
+100
+200
+300
+Loss
+Epoch
+Adam
+Lion
+DA-Lion
+HNeRV
+0.035
+0.045
+0.055
+0.065
+0.075
+0.085
+0.095
+0
+100
+200
+300
+Loss
+Epoch
+Adam
+Lion
+DA-Lion
+0.03
+0.035
+0.04
+0.045
+0.05
+0.055
+0.06
+0.065
+0.07
+0
+100
+200
+300
+Loss
+Epoch
+Adam
+Lion
+DA-Lion
+0.01
+0.03
+0.05
+0.07
+0.09
+0
+100
+200
+300
+Loss
+Epoch
+Adam
+Lion
+DA-Lion
+PNeRV
+0
+0.0005
+0.001
+0.0015
+0.002
+0.0025
+0.003
+0.0035
+0.004
+0
+100
+200
+300
+Loss
+Epoch
+Adam
+Lion
+DA-Lion
+0
+0.0005
+0.001
+0.0015
+0.002
+0.0025
+0.003
+0.0035
+0.004
+0
+100
+200
+300
+Loss
+Epoch
+Adam
+Lion
+DA-Lion
+0
+0.0005
+0.001
+0.0015
+0.002
+0.0025
+0.003
+0.0035
+0.004
+0
+100
+200
+300
+Loss
+Epoch
+Adam
+Lion
+DA-Lion
+0
+0.05
+0.1
+0.15
+0.2
+0.25
+0.3
+0.35
+0
+100
+200
+300
+Loss
+Epoch
+Adam
+Lion
+DA-Lion
+0.02
+0.025
+0.03
+0.035
+0.04
+0.045
+0.05
+0
+100
+200
+300
+Loss
+Epoch
+Adam
+Lion
+DA-Lion
+Fig. 5: Training loss curves of Adam, Lion, and DA-Lion on Bunny, Jockey, and
+Shakendry across four backbones.
+To understand the mechanism, we recorded per-parameter update magni-
+tudes |∆θ| during NeRV training on Bunny. Fig. 6 reports the eCDF of |∆θ| at
+three training stages. Adam maintains a smooth distribution spanning orders of
+magnitude, reflecting gradient-dependent step sizes. Lion collapses to a degen-
+erate distribution: at the late stage, all parameters share only 3 distinct |∆θ|
+values clustered around ηt—the empirical signature of the noise floor predicted
+in Sec. 3. DA-Lion splits into two groups: coordinates where gradient and mo-
+mentum disagree (the 1 −pt fraction, ∼half at the late stage) receive near-zero
+updates from the momentum-form branch, while the remaining coordinates fol-
+low sign updates of magnitude αtηt, producing a steep but non-degenerate eCDF
+intermediate between Adam’s smooth spread and Lion’s single-value collapse.
+Fig. 7 shows 10,000 randomly sampled |∆θ| at the late stage (epoch∼280),
+sorted by value. Lion produces a flat line—every coordinate receives an identical
+update magnitude, confirming the noise floor operates uniformly. DA-Lion splits
+coordinates into two groups: disagreeing coordinates at near-zero (gray crosses)
+and stable-descent coordinates with uniformly scaled sign updates. Adam yields
+a smoothly varying curve, confirming that update magnitudes track the per-
+coordinate gradient scale absent sign discretization.
+
+
+Efficient NVR via Direction-Aware Optimization
+9
+10
+8
+10
+7
+10
+6
+10
+5
+10
+4
+10
+3
+|
+|
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0
+Cumulative Fraction
+Adam
+Early (~epoch 30)
+Mid (~epoch 150)
+Late (~epoch 280)
+10
+8
+10
+7
+10
+6
+10
+5
+10
+4
+10
+3
+|
+|
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0
+Lion
+Early (~epoch 30)
+Mid (~epoch 150)
+Late (~epoch 280)
+10
+8
+10
+7
+10
+6
+10
+5
+10
+4
+10
+3
+|
+|
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0
+DA-Lion
+Early (~epoch 30)
+Mid (~epoch 150)
+Late (~epoch 280)
+Fig. 6: Empirical cumulative distribution function (eCDF) of per-parameter |∆θ|.
+0
+2000
+4000
+6000
+8000
+10000
+Parameter index (sorted)
+10
+7
+0
+10
+7
+10
+6
+10
+5
+|
+|
+Adam
+Non-zero: 9990/10000 (766 unique)
+Zero: 10/10000
+0
+2000
+4000
+6000
+8000
+10000
+Parameter index (sorted)
+10
+7
+0
+10
+7
+10
+6
+10
+5
+Lion
+Non-zero: 9998/10000 (4 unique)
+Zero: 2/10000
+0
+2000
+4000
+6000
+8000
+10000
+Parameter index (sorted)
+10
+7
+0
+10
+7
+10
+6
+10
+5
+DA-Lion
+Non-zero: 4813/10000 (6 unique)
+Zero: 5187/10000
+Fig. 7: Random sample of 10,000 per-parameter |∆θ| at epoch∼280, sorted by
+value (NeRV on Bunny).
+4.3
+Quantitative results
+Table 1(a) reports PSNR on Bunny under four model sizes (3.0M–7.5M). DA-
+Lion achieves the highest average PSNR on all four backbones, with gains over
+Adam ranging from +0.39 dB (HNeRV) to +2.06 dB (PNeRV). The smaller mar-
+gin on HNeRV reflects its hybrid encoder-decoder design, which already provides
+a stronger inductive bias that partially compensates for optimizer-induced in-
+stability. Table 1(b) further reports results under varying training epochs (300e–
+1800e), where DA-Lion again achieves the best average PSNR across all four
+backbones.
+Table 2 extends the comparison to UVG and DAVIS datasets. On UVG, DA-
+Lion achieves the best average PSNR for all four backbones. On DAVIS, DA-Lion
+yields clear gains over both Adam and Lion on NeRV, E-NeRV, and HNeRV.
+On PNeRV, DA-Lion trails Lion by 0.37 dB on average, underperforming on
+four of seven DAVIS sequences. PNeRV’s pyramidal multi-scale features amplify
+sensitivity to the modulation scale sb (see Table 4(c)), suggesting that backbone-
+specific tuning of αt is warranted for such architectures. Overall, DA-Lion attains
+the best performance in most configurations across datasets and backbones.
+4.4
+Qualitative comparison
+Fig. 8 compares reconstructed frames across four backbones on Bunny, Shak-
+endry, and Boat. DA-Lion produces sharper reconstructions with fewer artifacts:
+Adam over-smooths (hand contours on Bunny, body-part boundaries on Shak-
+endry, text edges on Boat), Lion recovers edges but introduces high-frequency
+
+
+10
+Q. Mao et al.
+Table 1: Quantitative comparison on Bunny (640×1280) under different budgets
+(PSNR↑).
+(a) Different model size
+Backbone
+NeRV[4]
+E-NeRV[5]
+HNeRV[6]
+PNeRV[7]
+Size
+Adam Lion DA-Lion Adam Lion DA-Lion Adam Lion DA-Lion Adam Lion DA-Lion
+3.0M
+32.13 33.67
+34.01
+34.38 34.59
+35.65
+38.04 38.01
+38.56
+38.10 39.84
+39.95
+4.5M
+33.60 35.05
+35.46
+37.03 37.26
+38.11
+39.29 39.42
+39.88
+38.81 41.44
+41.44
+6.0M
+35.46 36.25
+37.08
+38.43 38.65
+39.80
+40.27 39.87
+40.65
+39.54 39.30
+41.31
+7.5M
+36.86 37.20
+38.29
+39.31 39.80
+40.47
+40.86 40.27
+40.96
+38.45 39.59
+40.45
+Avg.
+34.51 35.54
+36.21
+37.29 37.58
+38.51
+39.62 39.39
+40.01
+38.73 40.04
+40.79
+(b) Different train epoch
+Backbone
+NeRV[4]
+E-NeRV[5]
+HNeRV[6]
+PNeRV[7]
+Epoch
+Adam Lion DA-Lion Adam Lion DA-Lion Adam Lion DA-Lion Adam Lion DA-Lion
+300e
+32.13 33.67
+34.01
+34.38 34.59
+35.65
+38.04 38.01
+38.56
+38.10 39.84
+39.95
+600e
+33.29 34.14
+34.49
+35.71 35.82
+36.44
+39.37 38.99
+39.46
+40.26 39.89
+40.78
+1200e
+34.00 34.68
+34.94
+36.67 36.78
+37.19
+40.03 39.74
+40.04
+41.32 40.31
+41.34
+1800e
+34.30 35.25
+34.95
+37.15 37.18
+37.47
+40.28 40.01
+40.35
+41.71 40.66
+41.61
+Avg.
+33.43 34.44
+34.60
+35.98 36.09
+36.69
+39.43 39.19
+39.60
+40.35 40.18
+40.92
+Table 2: Quantitative comparison of video regression on the UVG and DAVIS
+2016 dataset (PSNR↑).
+(a) UVG
+Video
+NeRV[4]
+E-NeRV[5]
+HNeRV[6]
+PNeRV[7]
+Sequence
+Adam Lion DA-Lion Adam Lion DA-Lion Adam Lion DA-Lion Adam Lion DA-Lion
+Beauty
+34.06 33.37
+34.15
+35.10 35.06
+35.19
+34.84 34.67
+34.92
+34.94 34.94
+35.20
+Bosph
+33.52 33.58
+34.14
+34.96 34.94
+35.10
+35.37 35.56
+35.52
+36.47 36.24
+36.97
+Bee
+39.39 39.35
+39.64
+41.31 41.41
+41.32
+39.90 39.94
+40.11
+40.37 40.67
+40.79
+Jockey
+31.48 29.74
+31.53
+30.55 30.42
+30.72
+32.16 31.50
+32.60
+35.09 35.36
+36.09
+Ready
+24.93 23.95
+25.03
+25.57 25.35
+25.62
+25.30 25.84
+25.79
+29.14 29.14
+29.86
+Shakendry 34.36 34.64
+34.92
+36.26 36.30
+36.50
+35.74 35.91
+36.22
+36.16 36.87
+36.96
+Yacht
+27.70 27.53
+28.02
+28.81 28.79
+28.91
+29.33 29.55
+29.62
+31.22 30.99
+31.67
+Avg.
+32.21 31.74
+32.49
+33.22 33.18
+33.34
+33.23 33.28
+33.54
+34.77 34.89
+35.36
+(b) DAVIS
+Video
+NeRV[4]
+E-NeRV[5]
+HNeRV[6]
+PNeRV[7]
+Sequence
+Adam Lion DA-Lion Adam Lion DA-Lion Adam Lion DA-Lion Adam Lion DA-Lion
+Blackswan
+24.37 28.01
+28.14
+27.85 27.87
+29.41
+29.73 32.24
+32.39
+29.64 34.33
+34.54
+Bmx-trees
+24.50 26.56
+26.81
+25.91 26.34
+27.66
+29.09 30.38
+30.64
+29.18 32.40
+31.70
+Boat
+29.55 31.76
+31.82
+30.88 30.98
+31.95
+32.84 31.17
+34.25
+32.72 34.97
+35.24
+Breakdance 24.45 26.84
+27.17
+26.54 25.62
+27.97
+30.71 31.74
+31.85
+30.00 33.44
+32.82
+Surf
+28.45 32.78
+32.84
+31.79 31.63
+34.18
+32.40 32.68
+35.25
+32.75 37.42
+37.48
+Swing
+25.81 28.54
+28.68
+27.67 27.79
+29.52
+30.70 32.60
+33.42
+30.14 34.84
+34.10
+Goat
+21.77 23.87
+23.85
+23.83 23.72
+24.69
+27.41 27.66
+28.03
+27.19 29.36
+28.27
+Avg.
+25.56 28.34
+28.47
+27.78 27.71
+29.34
+30.41 31.21
+32.26
+30.23 33.82
+33.45
+
+
+Efficient NVR via Direction-Aware Optimization
+11
+artifacts, and DA-Lion preserves clean edges while suppressing instability across
+all three sequences.
+Adam
+Lion
+DA-Lion
+Bunny
+NeRV
+E-NeRV
+HNeRV
+PNeRV
+DA-Lion
+Lion
+Adam
+Shakendry
+Boat
+Adam
+Lion
+DA-Lion
+Fig. 8: Qualitative comparison on Bunny, Shakendry and Boat across four back-
+bones.
+4.5
+Compression performance
+Since DA-Lion modifies only the parameter update rule, we adopt each back-
+bone’s standard compression pipeline without any modification. Fig. 9 reports
+rate–distortion curves on UVG and DAVIS. On UVG, DA-Lion improves over
+Lion across all backbones, with clear gains on NeRV and PNeRV; Lion underper-
+forms Adam at several bitrates on NeRV, whereas DA-Lion surpasses both. On
+DAVIS, improvements are more modest but uniformly positive—the dataset’s
+challenging content (fast motion, occlusions, complex scene transitions) narrows
+optimizer performance differences.
+
+
+12
+Q. Mao et al.
+31.5
+32
+32.5
+33
+33.5
+34
+34.5
+35
+35.5
+36
+36.5
+0.08
+0.1
+0.12
+0.14
+0.16
+0.18
+0.2
+0.22
+PSNR (dB)
+BPP
+UVG
+0.9
+0.91
+0.92
+0.93
+0.94
+0.95
+0.96
+0.08
+0.13
+0.18
+0.23
+MS-SSIM
+BPP
+UVG
+NeRV+Lion
+NeRV+DA-Lion
+E-NeRV+Lion
+E-NeRV+DA-Lion
+HNeRV+Lion
+HNeRV+DA-Lion
+PNeRV+Lion
+PNeRV+DA-Lion
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+0.6
+0.8
+1
+1.2
+1.4
+1.6
+1.8
+PSNR (dB)
+BPP
+DAVIS
+0.87
+0.89
+0.91
+0.93
+0.95
+0.97
+0.99
+0.6
+1.1
+1.6
+MS-SSIM
+BPP
+DAVIS
+NeRV+Lion
+NeRV+DA-Lion
+E-NeRV+Lion
+E-NeRV+DA-Lion
+HNeRV+Lion
+HNeRV+DA-Lion
+PNeRV+Lion
+PNeRV+DA-Lion
+Fig. 9: Compression performance comparisons in UVG and DAVIS datasets.
+4.6
+Ablations and complexity
+Table 3 ablates the optimizer design on NeRV across two DAVIS sequences.
+Results are reported as mean±standard deviation over five random seeds (1,
+42, 123, 456, 789) with identical hyperparameters. Lion with a halved learning
+rate (Lion-LR, lr=0.0005) improves over the default Lion (lr=0.001) by +0.40–
++0.53 dB, confirming that effective step-size calibration contributes meaningfully
+to the gains observed in alignment-based variants. Mask-Lion and Consis-Lion
+both apply the direction-consistency criterion but differ in the treatment of dis-
+agreeing coordinates: Mask-Lion masks them to zero while Consis-Lion switches
+to a momentum-form update. Their performance is nearly identical across both
+sequences (∆<0.05 dB), suggesting that the gradient–momentum alignment sig-
+nal itself, rather than the specific disagreement strategy, is the primary source
+of improvement over vanilla Lion. DA-Lion further incorporates learning-rate-
+aware magnitude modulation and achieves the best overall PSNR and MS-SSIM
+on both videos.
+Table 4 examines DA-Lion’s robustness to key hyperparameters. β1 has negli-
+gible effect across {0.80, 0.85, 0.90, 0.95}; decreasing β2, however, degrades PSNR
+substantially, confirming that long-horizon momentum estimates are essential
+under deterministic NVR gradients. The modulation scale sb is nearly flat on
+NeRV for sb ∈[0.8, 1.5], but larger scales on HNeRV cause significant degra-
+dation due to amplified overshoot from content-conditioned features. We use
+sb=1.0 and inherit Lion’s (β1, β2)=(0.9, 0.99) as robust defaults.
+Table 5 confirms that DA-Lion preserves model size, FLOPs, and GPU mem-
+ory, with only a minor training-time overhead (+2.96% vs. Adam). We also re-
+port training stability (TS), measured as the standard deviation of the first-order
+difference of the training loss across the final 50 epochs; a lower TS indicates
+smoother convergence with less oscillation.
+
+
+Efficient NVR via Direction-Aware Optimization
+13
+Table 3: Ablation on optimizer design (NeRV on Bmx-trees and Breakdance).
+Video
+Optimizer
+Consistency Modulation
+PSNR↑
+MS-SSIM↑
+Bmx-trees
+Adam
+28.12±0.06 0.9124±0.0012
+Lion
+28.25±0.16 0.9143±0.0041
+Lion-LR
+28.78±0.12 0.9228±0.0015
+Mask-Lion
+!
+29.12±0.11 0.9288±0.0033
+Consis-Lion
+!
+29.16±0.14 0.9296±0.0034
+DA-Lion
+!
+!
+30.09±0.07 0.9438±0.0010
+Breakdance
+Adam
+26.58±0.07 0.9562±0.0005
+Lion
+26.74±0.05 0.9596±0.0005
+Lion-LR
+27.14±0.09 0.9630±0.0006
+Mask-Lion
+!
+27.48±0.04 0.9659±0.0005
+Consis-Lion
+!
+27.53±0.07 0.9664±0.0006
+DA-Lion
+!
+!
+28.00±0.04 0.9704±0.0003
+Table 4: Hyperparameter ablation of DA-Lion on Bunny (3.0 M, 300 epochs,
+PSNR/MS-SSIM). Red rows mark the default setting adopted in all other ex-
+periments.
+(a) (β1, β2) on NeRV
+β1
+β2
+PSNR/MS-SSIM
+0.80 0.99
+33.96/0.9742
+0.85 0.99
+33.98/0.9743
+0.95 0.99
+33.96/0.9742
+0.90 0.95
+33.40/0.9705
+0.90 0.97
+33.57/0.9718
+0.90 0.99
+34.01/0.9743
+(b) sb on NeRV
+sb PSNR/MS-SSIM
+0.5
+33.93/0.9739
+0.8
+34.00/0.9743
+1.0
+34.01/0.9744
+1.5
+34.02/0.9744
+(c) sb on HNeRV
+sb PSNR/MS-SSIM
+1.0
+38.56/0.9892
+1.5
+37.84/0.9873
+2.0
+36.98/0.9844
+3.0
+35.10/0.9760
+Table 5: Complexity and efficiency comparison (NeRV 3.0M on Bunny, mean±std
+over 5 seeds).
+Optimizer GPU Enc. Time (s)
+PSNR
+TS
+∆Enc. Time↓∆PSNR↑
+∆TS↓
+Adam
+2.47G
+1217
+32.13±0.08 3.4±0.3e-3
+—
+—
+—
+Lion
+2.47G
+1224
+33.67±0.15 4.4±0.5e-3
++0.58%
++1.54
++29.41%
+DA-Lion
+2.47G
+1253
+34.01±0.06 3.7±0.4e-3
++2.96%
++1.88
++8.82%
+5
+Conclusion
+This paper proposes Direction-Aware Lion (DA-Lion), an optimizer tailored for
+neural video representation (NVR), where training is instance-specific signal
+fitting and optimization dynamics directly affect reconstruction quality under a
+fixed budget. Building on Lion, DA-Lion introduces two lightweight mechanisms:
+(i) a direction-consistency criterion that switches between a sign update and a
+momentum-form update based on the alignment between the current gradient
+and historical momentum, and (ii) a learning-rate-aware magnitude modulation
+
+
+14
+Q. Mao et al.
+that stabilizes sign step sizes across training phases. Experiments show that DA-
+Lion improves convergence stability and boosts PSNR/MS-SSIM. Since DA-Lion
+changes only the update rule, it preserves model architecture, parameter count,
+and FLOPs, while achieving smoother convergence with only a minor training-
+time overhead. This work demonstrates that adapting optimizer design to the
+deterministic instance-fitting characteristics of INR can yield practical gains, and
+we hope it encourages further exploration of optimization algorithms tailored for
+neural representation learning.
+Acknowledgments. This work was supported by the National Natural Sci-
+ence Foundation of China (Grant No.62571160), Engineering Technology R&D
+Center of Guangdong Provincial Universities (2024GCZX004), and the Pengcheng
+Laboratory.
+References
+1. Sitzmann, V., Martel, J., Bergman, A., Lindell, D., Wetzstein, G.: Implicit neural
+representations with periodic activation functions. Advances in neural information
+processing systems 33, 7462–7473 (2020)
+2. Mildenhall, B., Srinivasan, P.P., Tancik, M., Barron, J.T., Ramamoorthi, R., Ng,
+R.: Nerf: Representing scenes as neural radiance fields for view synthesis. Commu-
+nications of the ACM 65(1), 99–106 (2021)
+3. Mao, Q., Wang, W., Liang, Y., Xiao, C., Meng, F., Jeon, G.: Lightweight width-
+depth scalable implicit neural representation for progressive image compression.
+IEEE Transactions on Consumer Electronics 71(2), 5666–5675 (2025)
+4. Chen, H., He, B., Wang, H., Ren, Y., Lim, S.N., Shrivastava, A.: Nerv: Neural
+representations for videos. Advances in Neural Information Processing Systems
+34, 21557–21568 (2021)
+5. Li, Z., Wang, M., Pi, H., Xu, K., Mei, J., Liu, Y.: E-nerv: Expedite neural video
+representation with disentangled spatial-temporal context. In: European Confer-
+ence on Computer Vision. pp. 267–284. Springer (2022)
+6. Chen, H., Gwilliam, M., Lim, S.N., Shrivastava, A.: Hnerv: A hybrid neural repre-
+sentation for videos. In: Proceedings of the IEEE/CVF Conference on Computer
+Vision and Pattern Recognition. pp. 10270–10279 (2023)
+7. Zhao, Q., Asif, M.S., Ma, Z.: Pnerv: Enhancing spatial consistency via pyramidal
+neural representation for videos. In: Proceedings of the IEEE/CVF Conference on
+Computer Vision and Pattern Recognition. pp. 19103–19112 (2024)
+8. Chen, J., Mao, Q., Liu, S., Meng, F., Yi, S., Liang, Y.: Exploring lottery ticket
+hypothesis in neural video representations. Displays 87, 102982 (2025)
+9. Zhao, Q., Asif, M.S., Ma, Z.: Dnerv: Modeling inherent dynamics via difference
+neural representation for videos. In: Proceedings of the IEEE/CVF Conference on
+Computer Vision and Pattern Recognition. pp. 2031–2040 (2023)
+10. Kwan, H.M., Gao, G., Zhang, F., Gower, A., Bull, D.: Hinerv: Video compres-
+sion with hierarchical encoding-based neural representation. Advances in Neural
+Information Processing Systems 36 (2024)
+11. Li, Z., Mao, Q., Liu, S., Li, Q., Meng, F., Liang, Y.: Boosting neural video rep-
+resentation via online structural reparameterization. In: Proceedings of the 8th
+Chinese Conference on Pattern Recognition and Computer Vision (PRCV) (2025)
+
+
+Efficient NVR via Direction-Aware Optimization
+15
+12. Kim, J., Lee, J., Kang, J.W.: Snerv: Spectra-preserving neural representation for
+video. In: European Conference on Computer Vision. pp. 332–348. Springer (2024)
+13. Tang, L., Zhang, X., Zhang, G., Ma, X.: Scene matters: Model-based deep video
+compression. In: Proceedings of the IEEE/CVF International Conference on Com-
+puter Vision (ICCV). pp. 12481–12491 (2023)
+14. Kingma, D.P., Ba, J.: Adam: A method for stochastic optimization. In: Interna-
+tional Conference on Learning Representations (ICLR) (2015)
+15. Loshchilov, I., Hutter, F.: Decoupled weight decay regularization. arXiv preprint
+arXiv:1711.05101 (2017)
+16. He, B., Yang, X., Wang, H., Wu, Z., Chen, H., Huang, S., Ren, Y., Lim, S.N., Shri-
+vastava, A.: Towards scalable neural representation for diverse videos. In: Proceed-
+ings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition.
+pp. 6132–6142 (2023)
+17. Guo, J., Liu, K., Yao, J., Wang, Z., Bu, J., Wang, H.: Metanerv: Meta neural
+representations for videos with spatial-temporal guidance. In: Proceedings of the
+AAAI Conference on Artificial Intelligence (2025), arXiv:2501.02427
+18. Shin, S., Kim, S., Oh, D.: Efficient neural video representation with tempo-
+rally coherent modulation. In: European Conference on Computer Vision (2024),
+arXiv:2505.00335
+19. Zhang, Y., van Rozendaal, T., Brehmer, J., Nagel, M., Cohen, T.: Implicit neural
+video compression. In: ICLR Workshop on Deep Generative Models for Highly
+Structured Data (2021)
+20. Gao, G., Kwan, H.M., Zhang, F., Bull, D.: Pnvc: Towards practical inr-based video
+compression. In: Proceedings of the AAAI Conference on Artificial Intelligence.
+vol. 39, pp. 3068–3076 (2025)
+21. Chen, X., Liang, C., Huang, D., Real, E., Wang, K., Pham, H., Dong, X., Lu, Y.,
+et al.: Symbolic discovery of optimization algorithms. Advances in Neural Infor-
+mation Processing Systems 36 (2023)
+22. Zhuang, J., Tang, T., Ding, Y., Tatikonda, S.C., Dvornek, N., Papademetris, X.,
+Duncan, J.S.: Adabelief optimizer: Adapting stepsizes by the belief in observed
+gradients. Advances in Neural Information Processing Systems 33, 18795–18806
+(2020)
+23. Liang, K., Chen, L., Liu, B., Liu, Q.: Cautious optimizers: Improving training with
+one line of code. arXiv preprint arXiv:2411.16085 (2024)
+24. Mercat, A., Viitanen, M., Vanne, J.: Uvg dataset: 50/120fps 4k sequences for video
+codec analysis and development. In: Proceedings of the 11th ACM Multimedia
+Systems Conference. pp. 297–302 (2020)
+25. Perazzi, F., Pont-Tuset, J., McWilliams, B., Van Gool, L., Gross, M., Sorkine-
+Hornung, A.: A benchmark dataset and evaluation methodology for video object
+segmentation. In: Proceedings of the IEEE Conference on Computer Vision and
+Pattern Recognition. pp. 724–732 (2016)
+26. Wang, Z., Simoncelli, E.P., Bovik, A.C.: Multiscale structural similarity for im-
+age quality assessment. In: The Thrity-Seventh Asilomar Conference on Signals,
+Systems & Computers, 2003. vol. 2, pp. 1398–1402. Ieee (2003)
