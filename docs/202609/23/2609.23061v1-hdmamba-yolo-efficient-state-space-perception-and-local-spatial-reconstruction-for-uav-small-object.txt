@@ -1,0 +1,2844 @@
+HDMamba-YOLO: Efficient State-Space Perception and Local Spatial Reconstruction for
+UAV Small Object Detection
+Linduo Weia, Junjie Fanb, Yijun Maic, Xiao Chenc, Guiyang Zhanga, Yong Qib,∗
+aSchool of Economics and Management, Nanjing University of Science and Technology, Nanjing, 210094, China
+bSchool of Intellectual Property, Nanjing University of Science and Technology, Nanjing, 210094, China
+cSchool of Computer Science and Engineering, Nanjing University of Science and Technology, Nanjing, 210094, China
+Abstract
+Small objects in UAV imagery provide limited appearance and boundary cues, making them difficult to distinguish from cluttered
+backgrounds and localize accurately. A central challenge is to incorporate long-range context efficiently while retaining the weak
+spatial evidence needed for precise localization throughout multi-scale feature aggregation. To address this challenge, we propose
+Hybrid Dual-domain Mamba-YOLO (HDMamba-YOLO), a heterogeneous state-space–convolutional detector that assigns com-
+plementary modeling roles to different detection stages. The backbone uses efficient state-space modeling to capture long-range
+contextual dependencies, while the neck performs local two-dimensional feature reconstruction through convolutional process-
+ing. At the core of this reconstruction, Adaptive Spatial-Semantic Attention Fusion (ASSAF) adaptively combines local-detail and
+broader neighborhood responses during feature aggregation. Content-adaptive resampling reduces spatial mismatch across scales,
+while macro–micro feature interaction provides task-specific modulation for classification and localization. On VisDrone2019,
+HDMamba-YOLO-B achieves 42.737% mAP50 and 25.713% mAP50:95 with 10.042M parameters and 29.879 corrected GFLOPs.
+Under the unified AI-TOD evaluation protocol, it achieves 21.621% AP and 47.881% AP50. Controlled ablations support the
+stage-wise allocation of contextual perception and local reconstruction and indicate complementary contributions from adaptive
+alignment and task-specific interaction in UAV small-object detection.
+Keywords: UAV small-object detection, Visual state-space models, Heterogeneous SSM–CNN architecture, Local spatial
+reconstruction, Cross-scale feature fusion
+1. Introduction
+UAV-based visual sensing has become an important tool
+for traffic monitoring, emergency response, and other large-
+area perception tasks (Obaid et al., 2025; Wang et al., 2025a).
+Its flexible aerial viewpoint enables rapid acquisition of high-
+resolution scenes, but also produces a detection setting domi-
+nated by small and densely distributed objects. In low-altitude
+UAV imagery, many targets occupy only 8–32 pixels and ex-
+hibit weak textures and boundaries against heterogeneous back-
+grounds (Du et al., 2019; Cao et al., 2021; Wang et al., 2021b;
+Nikouei et al., 2025). Their limited visual evidence increases
+the risk of missed detection and localization instability (Wang
+et al., 2025a; Nikouei et al., 2025). Consequently, UAV small-
+object detection depends on two complementary capabilities:
+exploiting wide-area context to distinguish targets from back-
+ground clutter and preserving fine-grained spatial structures for
+precise localization.
+Among deep-learning-based detectors, the YOLO family is
+widely used in real-time applications because of its compact
+∗Corresponding author: Yong Qi.
+Email addresses: weilinduo@njust.edu.cn (Linduo Wei),
+junjiefan@njust.edu.cn (Junjie Fan), maiyijun@njust.edu.cn (Yijun
+Mai), xiaochen25@njust.edu.cn (Xiao Chen), qyong@njust.edu.cn
+(Yong Qi)
+one-stage architecture and favorable accuracy–efficiency bal-
+ance (Wang et al., 2023b,a; Tian et al., 2025). UAV-oriented
+variants have mainly improved local feature extraction and
+multi-scale fusion. For example, Zhao et al. (2024b) introduced
+scene-context-guided fusion, while Wang et al. (2024c) devel-
+oped an adaptive receptive-field enhancement network. These
+CNN-based designs preserve local spatial inductive bias and are
+effective when target boundaries and neighborhood patterns re-
+main distinguishable. However, when sparse target responses
+are embedded in complex wide-area backgrounds, strengthen-
+ing local operators alone may not provide sufficient context for
+reliable target–background discrimination. Vision Transform-
+ers address this limitation through global self-attention (Doso-
+vitskiy et al., 2021; Liu et al., 2021), but their quadratic com-
+plexity O(N2) becomes costly for high-resolution aerial fea-
+tures. The resulting challenge is therefore not simply to im-
+prove local feature extraction, but to introduce affordable long-
+range perception without sacrificing the spatial structures re-
+quired for tiny-object localization.
+To achieve long-range dependency modeling without the
+quadratic complexity of self-attention, State Space Models
+(SSMs) have recently attracted increasing attention. Gu and
+Dao (2024) proposed Mamba with linear-time sequence mod-
+eling capability. Subsequently, Liu et al. (2024) adapted the
+SSM paradigm to visual representation learning through se-
+arXiv:2609.23061v1  [cs.CV]  19 Sep 2026
+
+
+lective scanning over two-dimensional image structures, while
+Zhu et al. (2024) further explored efficient visual representation
+with bidirectional state-space modeling. To reduce scanning
+redundancy and improve representation efficiency under high-
+resolution visual inputs, Pei et al. (2025) proposed EfficientV-
+Mamba with atrous-based selective scanning, and Shaker et al.
+(2025) introduced GroupMamba with group-based state-space
+modeling. These developments establish SSMs as a practical
+alternative for efficient long-range visual modeling.
+Building upon these advances, recent studies have extended
+state-space modeling from visual representation learning to
+YOLO-style detection and multi-scale feature aggregation.
+KSCNet introduces SSM/VSS modules into the neck for multi-
+scale semantic interaction (Li et al., 2025), while Mamba-
+YOLO employs detection-oriented state-space blocks across
+both backbone feature extraction and neck aggregation (Wang
+et al., 2025b). These studies demonstrate that state-space mod-
+eling can be effectively incorporated into different stages of
+modern detectors and provide an alternative mechanism for
+long-range contextual interaction.
+For UAV small-object detection, however, contextual propa-
+gation and local spatial reconstruction constitute different func-
+tional requirements. The backbone benefits from broad con-
+textual interaction for distinguishing weak targets from large-
+area background interference, whereas repeated FPN/PAN ag-
+gregation places greater emphasis on explicit local neighbor-
+hoods, boundary-sensitive responses, and two-dimensional spa-
+tial continuity. How state-space perception and convolutional
+reconstruction should be allocated according to these stage-
+specific requirements remains comparatively less explored.
+Cross-scale fusion introduces a further correspondence problem
+because fixed interpolation cannot adapt its sampling locations
+to the current feature content (Liu et al., 2023). The resulting
+multi-scale representations must finally support classification
+and localization, which exhibit different response preferences
+(Dai et al., 2021; Feng et al., 2021). These considerations mo-
+tivate a detector-level design that coordinates contextual per-
+ception, local reconstruction, cross-scale alignment, and task
+interaction as successive but complementary functions.
+To address these requirements, this paper proposes Hybrid
+Dual-domain Mamba-YOLO (HDMamba-YOLO), an efficient
+UAV small-object detector based on a stage-wise heteroge-
+neous SSM–CNN architecture.
+An EfficientVMamba-based
+EVSS backbone first establishes long-range contextual per-
+ception over high-resolution UAV features (Pei et al., 2025).
+At the perception–reconstruction interface, DST-Wrapper re-
+encodes the deepest backbone representation, after which Na-
+tive C3k2-ASSAF performs progressive local two-dimensional
+reconstruction throughout repeated FPN/PAN aggregation. As
+the reconstructed features are propagated and fused across pyra-
+mid levels, DySample performs content-adaptive resampling
+to improve cross-resolution spatial correspondence (Liu et al.,
+2023). The aligned multi-scale features are subsequently de-
+livered to OS-CVTIA, which coordinates the distinct contex-
+tual and boundary-sensitive information required by classifi-
+cation and localization.
+These successive stages constitute
+the perception–reconstruction–alignment–interaction pipeline
+of HDMamba-YOLO.
+The main contributions of this work are summarized as fol-
+lows:
+1. We formulate a stage-wise heterogeneous SSM–CNN ar-
+chitecture for UAV small-object detection. Rather than ex-
+tending a homogeneous operator family throughout the de-
+tector, HDMamba-YOLO concentrates EfficientVMamba-
+derived state-space processing in the relatively high-
+resolution backbone stages for efficient long-range contex-
+tual perception, while retaining convolutional FPN/PAN
+aggregation in the neck for explicit local two-dimensional
+reconstruction. PhasePatchMerging2D implements phase-
+aware hierarchical transitions between the state-space
+stages, thereby aligning the operator allocation with the
+distinct representational requirements of different detec-
+tion stages.
+2. We develop an ASSAF-centered reconstruction pathway
+to preserve boundary-sensitive local structures and in-
+corporate spatially bounded contextual information dur-
+ing repeated multi-scale aggregation. The proposed AS-
+SAF jointly models directionally factorized local details
+and fixed-grid neighborhood context, and adaptively cal-
+ibrates the two responses through independent sigmoid
+gates.
+Based on this operator, DST-Wrapper performs
+transition-oriented re-encoding at the backbone–neck in-
+terface, whereas Native C3k2-ASSAF embeds progressive
+reconstruction into the original C2f/C3k2 split–iterate–
+concatenate topology without discarding its feature-reuse
+structure.
+3. To
+complete
+the
+detector-level
+processing
+pipeline,
+we integrate DySample at the top-down resampling
+nodes for content-adaptive cross-scale alignment and de-
+velop OS-CVTIA for macro–micro receptive-field in-
+teraction and asymmetric task-specific modulation be-
+fore classification and localization.
+Together with
+the perception and reconstruction stages, these compo-
+nents instantiate the proposed perception–reconstruction–
+alignment–interaction pipeline.
+Extensive experiments
+on VisDrone2019 and AI-TOD, including progressive,
+architecture-level, transition-operator, branch-level, align-
+ment, detection-head, and localization-objective ablations,
+substantiate the stage-wise design rationale and clarify the
+contributions and limitations of its individual components.
+2. Related Work
+2.1. General Object Detectors
+Modern object detectors are commonly divided into two-
+stage and one-stage paradigms.
+Two-stage methods, repre-
+sented by Faster R-CNN (Ren et al., 2017) and Cascade R-CNN
+(Cai and Vasconcelos, 2018), refine region proposals before
+classification and box regression, generally providing strong
+localization accuracy at the cost of a more involved inference
+pipeline. One-stage methods, including SSD (Liu et al., 2016),
+RetinaNet (Lin et al., 2017b), and the YOLO family (Redmon
+2
+
+
+et al., 2016), formulate detection as dense prediction and pro-
+vide a favorable accuracy–efficiency trade-off for real-time ap-
+plications. Within the YOLO lineage, architectural progress has
+been closely associated with more efficient gradient propaga-
+tion and feature aggregation. YOLOv4 and YOLOv5 incorpo-
+rate CSP-style connectivity (Bochkovskiy et al., 2020; Jocher,
+2020; Wang et al., 2020), YOLOv8 adopts the C2f topology for
+richer feature reuse (Jocher et al., 2023), and YOLOv10 intro-
+duces end-to-end, NMS-free prediction (Wang et al., 2024a).
+YOLOv11 further employs lightweight C3k2-style blocks and
+deep spatial-semantic processing (Khanam and Hussain, 2024).
+Related designs such as Gold-YOLO (Wang et al., 2023a) and
+YOLOv12 (Tian et al., 2025) likewise emphasize efficient in-
+formation exchange and contextual modeling.
+The locality of convolution nevertheless limits direct interac-
+tion between spatially distant regions. Transformer-based de-
+tectors address this limitation through global token interaction.
+DETR reformulates detection as set prediction (Carion et al.,
+2020); Deformable DETR restricts attention to sparse samples
+around reference points (Zhu et al., 2021b); and RT-DETR de-
+couples intra-scale interaction from cross-scale fusion through
+a hybrid encoder (Zhao et al., 2024a). Although these designs
+improve global reasoning, the quadratic complexity of self-
+attention with respect to the token count remains unfavorable
+for high-resolution aerial features (Dosovitskiy et al., 2021; Liu
+et al., 2021). UAV small-object detection therefore requires an
+alternative that can enlarge the effective interaction range with-
+out discarding the local spatial structures on which precise lo-
+calization depends.
+2.2. Small-Object Detection in UAV Imagery
+Small-object detection depends strongly on preserving weak
+responses across feature scales. FPN transfers high-level se-
+mantics to shallow feature maps through a top-down path-
+way (Lin et al., 2017a), while PANet augments this design
+with bottom-up aggregation to shorten the information path
+from low-level localization cues (Liu et al., 2018).
+Subse-
+quent UAV-oriented methods have strengthened shallow fea-
+tures, high-frequency responses, and cross-level interaction.
+Feature-mining strategies recover informative responses that
+may otherwise be suppressed by background noise (Liu et al.,
+2022), and HS-FPN explicitly enhances high-frequency and
+spatial information for tiny-object representation (Shi et al.,
+2025). LSOD-YOLO pursues a lightweight balance between
+representation capacity and deployment efficiency (Wang et al.,
+2025a), whereas MFEL-YOLO combines backbone enhance-
+ment with efficient path aggregation for UAV aerial imagery
+(Hou et al., 2025). These studies improve multi-scale represen-
+tation, but repeated fusion can still weaken the local geometric
+evidence of targets occupying only a few feature locations.
+This limitation is especially pronounced in UAV imagery,
+where small targets are densely distributed, weakly textured,
+and embedded in heterogeneous backgrounds (Wang et al.,
+2021b; Nikouei et al., 2025). Reliable detection consequently
+requires both wide-area context for target–background dis-
+crimination and spatially explicit local evidence for localiza-
+tion. Scene-context-guided fusion strengthens contextual sup-
+port in dense aerial scenes (Zhao et al., 2024b), while adaptive
+receptive-field enhancement adjusts spatial aggregation to scale
+variation (Wang et al., 2024c). Deformable operators further
+provide content-dependent sampling for geometrically varying
+objects (Xiong et al., 2024). Such flexibility, however, can in-
+crease structural and computational overhead, leaving the coor-
+dination of contextual modeling, local detail preservation, and
+lightweight deployment unresolved.
+Convolutional studies have approached local structure and
+contextual aggregation through asymmetric, large-kernel, and
+selectively calibrated operators. ACNet shows that asymmetric
+convolutions can strengthen the horizontal and vertical skele-
+tons of convolutional kernels (Ding et al., 2019). RepLKNet
+demonstrates that large depthwise kernels can expand the ef-
+fective receptive field while retaining regular grid-based pro-
+cessing (Ding et al., 2022), and LSKNet adapts large selective
+kernels to the scale and contextual variation of remote-sensing
+objects (Li et al., 2023). LSKA further factorizes large-kernel
+spatial interaction into separable horizontal and vertical oper-
+ations to reduce computational and memory costs (Lau et al.,
+2024). Feature recalibration provides another form of adaptive
+fusion: SENet predicts channel-wise modulation from globally
+aggregated statistics (Hu et al., 2018), whereas SKNet performs
+competitive selection among receptive-field branches through
+normalized attention (Li et al., 2019). These works establish
+useful mechanisms for local–contextual representation, but they
+primarily operate within individual blocks or backbones and
+do not determine how local reconstruction should be organized
+throughout repeated FPN/PAN aggregation.
+Cross-scale fusion also depends on the resampling opera-
+tor. Nearest-neighbor and bilinear interpolation use fixed sam-
+pling patterns that cannot adapt to spatially varying object struc-
+tures.
+CARAFE addresses this issue through content-aware
+feature reassembly with dynamically generated kernels (Wang
+et al., 2019), whereas DySample formulates upsampling as
+lightweight point sampling with content-dependent offsets (Liu
+et al., 2023).
+For UAV targets whose boundaries may span
+only a few feature locations, content-adaptive resampling offers
+a practical means of improving correspondence between low-
+resolution semantic features and high-resolution spatial details.
+It nevertheless addresses cross-resolution alignment rather than
+the preceding reconstruction of local geometry.
+Classification and localization constitute a further source of
+representational mismatch. Double-Head R-CNN reports that
+fully connected and convolutional heads exhibit different pref-
+erences for classification and box regression (Wu et al., 2020),
+while task-aware spatial disentanglement shows that the two
+tasks may attend to different object regions (Song et al., 2020).
+Dynamic Head unifies scale-, spatial-, and task-aware atten-
+tion (Dai et al., 2021), and TOOD promotes alignment between
+classification and localization through task-interactive features
+and task-aligned learning (Feng et al., 2021).
+In UAV sce-
+narios, TPH-YOLOv5 additionally introduces a Transformer
+prediction head to strengthen contextual reasoning (Zhu et al.,
+2021a). These methods demonstrate the importance of task-
+specific adaptation, but a UAV detector must provide such in-
+teraction without obscuring weak local evidence or imposing
+3
+
+
+excessive head complexity.
+2.3. State Space Models for Visual Tasks
+State Space Models (SSMs) have emerged as an efficient al-
+ternative for long-sequence modeling. S4 introduces a struc-
+tured state-space formulation for capturing long-range depen-
+dencies (Gu et al., 2022), and Mamba makes the state transi-
+tion input-dependent while providing hardware-aware selective
+scanning (Gu and Dao, 2024). Its computational cost grows
+linearly with sequence length, making state-space modeling at-
+tractive when high-resolution visual inputs render dense self-
+attention expensive.
+Visual SSMs adapt sequence scanning to two-dimensional
+representations. Vision Mamba introduces bidirectional state-
+space modeling for visual recognition (Zhu et al., 2024),
+whereas VMamba employs cross-scan routes to propagate
+information over two-dimensional feature maps (Liu et al.,
+2024). EfficientVMamba reduces redundant traversal through
+atrous selective scanning (Pei et al., 2025), and GroupMamba
+improves efficiency through group-wise state-space modeling
+(Shaker et al., 2025). Other studies explicitly restore spatial in-
+ductive bias: Spatial-Mamba incorporates structure-aware state
+fusion and dilated convolution (Xiao et al., 2025), indicating
+that efficient sequence propagation and explicit spatial process-
+ing are complementary rather than interchangeable.
+Recent work has further explored heterogeneous visual back-
+bones that combine state-space modeling with other spatial
+operators. MobileMamba integrates Mamba-based long-range
+interaction, multi-kernel depthwise convolution, and wavelet-
+based high-frequency enhancement within a multi-receptive-
+field feature interaction block (He et al., 2025).
+MambaVi-
+sion instead constructs a hierarchical backbone that combines
+redesigned Mamba mixers with self-attention in later stages
+(Hatamizadeh and Kautz, 2025).
+MambaOut examines the
+necessity of the SSM component from a task-dependent per-
+spective:
+removing SSM improves its ImageNet classifica-
+tion baseline, whereas the resulting models remain behind the
+strongest visual Mamba backbones in several COCO detection
+and ADE20K segmentation comparisons (Yu and Wang, 2025).
+Its results therefore suggest that SSM utility is more likely to
+emerge in long-sequence dense prediction than in conventional
+short-sequence classification, while stopping short of prescrib-
+ing where SSMs should be placed within a detector.
+State-space modeling has also been incorporated into object
+detectors.
+KSCNet coordinates KAN- and VSS-based com-
+ponents for UAV small-object feature extraction and multi-
+scale aggregation (Li et al., 2025). Mamba-YOLO deploys its
+detection-oriented ODSSBlock in both the backbone and neck,
+thereby extending state-space processing across feature extrac-
+tion and pyramid aggregation (Wang et al., 2025b). HRMamba-
+YOLO combines EfficientVMamba-derived processing with a
+high-resolution feature pyramid for UAV small objects (Wu
+et al., 2024), while MambaNeXt-YOLO adopts block-level
+CNN–Mamba hybridization together with asymmetric multi-
+branch fusion (Lei et al., 2025). In remote-sensing dense pre-
+diction, LGMM-Net likewise coordinates convolutional detail
+extraction with Mamba-based global modeling (Fang et al.,
+2026).
+Existing visual and detection architectures differ substan-
+tially in where state-space operators are introduced: some con-
+struct SSM-dominant backbones, some extend SSM process-
+ing into pyramid aggregation, and others combine Mamba with
+convolution or attention within individual blocks.
+Mobile-
+Mamba and MambaVision demonstrate operator complemen-
+tarity at the block or backbone level, whereas MambaOut cau-
+tions against treating SSM as universally necessary.
+What
+remains insufficiently examined is detector-stage allocation:
+whether the same state-space operator should be extended
+through repeated FPN/PAN fusion, or whether contextual per-
+ception and local two-dimensional reconstruction should be as-
+signed to different stages according to their functional require-
+ments.
+2.4. Synthesis and Research Gap
+For UAV small-object detection, the preceding findings can
+be organized according to four stage-specific representational
+requirements. First, weak target responses require broad con-
+textual perception to distinguish objects from structurally sim-
+ilar background clutter, yet dense self-attention is costly on
+high-resolution aerial features. Second, multi-scale aggrega-
+tion must preserve or reconstruct explicit local neighborhoods,
+boundary-sensitive responses, and two-dimensional continuity
+after hierarchical feature extraction. Third, the reconstructed
+representations must be transferred across pyramid levels with-
+out introducing avoidable spatial mismatch. Finally, the aligned
+multi-scale features must be adapted to the different semantic
+and geometric preferences of classification and localization.
+Existing methods provide effective mechanisms for individ-
+ual requirements, including efficient state-space scanning, lo-
+cal and large-kernel spatial operators, adaptive resampling, and
+task-aware prediction. However, these mechanisms are com-
+monly studied as isolated module improvements, within-block
+hybrids, or homogeneous replacements across multiple detector
+stages. The central gap is therefore not the absence of another
+feature-enhancement operator, but the lack of a detector-level
+principle for coordinating complementary operators. In partic-
+ular, long-range state-space interaction is potentially valuable
+where high-resolution features still retain weak target evidence,
+whereas repeated FPN/PAN aggregation requires explicit local
+two-dimensional processing to reconstruct geometry across se-
+mantic levels. Cross-scale propagation then calls for adaptive
+alignment, and the prediction stage requires lightweight task-
+specific interaction. This analysis motivates the perception–
+reconstruction–alignment–interaction formulation developed in
+the following section, in which each operator is assigned ac-
+cording to the dominant representational requirement of its de-
+tector stage.
+3. Proposed Method
+This section presents the proposed Hybrid Dual-domain
+Mamba-YOLO (HDMamba-YOLO). Following the functional
+4
+
+
+requirements summarized in Section 2.4, the method is de-
+scribed through four successive stages: efficient state-space per-
+ception, ASSAF-centered local spatial reconstruction, content-
+adaptive cross-scale alignment, and lightweight classification–
+localization interaction.
+3.1. Overview
+HDMamba-YOLO is organized around four successive func-
+tions: perception, reconstruction, alignment, and interaction.
+These stages impose different representational requirements
+in UAV small-object detection. HDMamba-YOLO therefore
+adopts a stage-wise heterogeneous SSM–CNN design: state-
+space modeling is used to establish long-range contextual per-
+ception before substantial spatial compression, CNN-style op-
+erators perform explicit local two-dimensional reconstruction
+during pyramid aggregation, DySample refines cross-scale spa-
+tial correspondence, and OS-CVTIA introduces task-specific
+interaction before prediction.
+UAV tiny objects often provide limited local appearance and
+weak boundary evidence. At relatively high feature resolutions,
+broader scene context can therefore complement local cues be-
+fore repeated downsampling reduces spatial detail. HDMamba-
+YOLO uses EfficientVMamba-based EVSS stages for this con-
+textual perception and introduces PhasePatchMerging2D at the
+corresponding stage transitions so that the four spatial sampling
+phases are made explicit before channel projection.
+As the feature pyramid is constructed, the representational
+emphasis shifts from broad contextual interaction to repeated
+local aggregation. DST-Wrapper bridges this change of role
+at the backbone–neck interface, and Native C3k2-ASSAF per-
+forms local two-dimensional reconstruction while preserving
+the split–iterative–concatenate topology of C3k2. This stage-
+wise allocation couples the long-range dependency modeling
+of EVSS with explicit CNN-based local reconstruction in the
+neck, matching the operator type to the representational de-
+mand of each stage.
+Cross-scale fusion introduces a separate spatial correspon-
+dence problem. DySample is therefore used at the two top-
+down upsampling nodes to generate content-dependent sam-
+pling coordinates before lateral fusion. The reconstructed and
+aligned P3, P4, and P5 features are then processed by OS-
+CVTIA, which introduces lightweight macro–micro interac-
+tion for localization and classification before the native YOLO
+prediction branches.
+Together, these operations instantiate
+the perception–reconstruction–alignment–interaction (P–R–A–
+I) pipeline.
+HDMamba-YOLO-B is used as the canonical implementa-
+tion of the proposed architecture, containing 10.042M param-
+eters and requiring 29.879 GFLOPs at an input resolution of
+640 × 640. The compact HDMamba-YOLO-Lite variant con-
+tains 5.344M parameters and retains the same stage-wise func-
+tional allocation with reduced model capacity; its accuracy–
+complexity trade-off is examined in the experimental section.
+Figure 1 presents the layer-level architecture, while Fig. 2 iso-
+lates the functional rationale underlying the operator allocation.
+The architecture in Fig. 1 specifies the feature flow, whereas
+Fig. 2 summarizes why the principal operators are placed at
+different stages. In this functional view, EVSS and PhaseP-
+atchMerging2D provide contextual perception and hierarchi-
+cal transition, DST-Wrapper connects the backbone to the
+reconstruction-oriented neck, Native C3k2-ASSAF supplies
+explicit local two-dimensional reconstruction, DySample per-
+forms content-adaptive cross-scale resampling, and OS-CVTIA
+introduces task interaction at the prediction interface. The di-
+agram is not intended to reproduce every layer connection; it
+separates the design rationale from the detailed topology shown
+in Fig. 1.
+3.2. Efficient State-Space Perception
+The first functional requirement of HDMamba-YOLO is to
+establish sufficiently broad contextual perception before tiny-
+object evidence is progressively compressed by the hierarchi-
+cal backbone. Conventional convolutional operators provide
+strong local spatial inductive bias, but their direct feature inter-
+actions are inherently concentrated within bounded neighbor-
+hoods. This locality can become restrictive in UAV imagery,
+where tiny targets often contain only weak local appearance
+and boundary evidence and must be interpreted together with a
+wider scene context to distinguish them from structurally simi-
+lar background clutter.
+HDMamba-YOLO therefore places EfficientVMamba-based
+EVSS blocks in the relatively high-resolution stages of the
+YOLO11-S backbone while retaining lightweight convolutional
+processing in deeper stages. This allocation introduces long-
+range dependency modeling before substantial spatial compres-
+sion, where broader contextual information can complement
+weak local evidence, while the deeper convolutional stages con-
+tinue efficient local feature refinement. The EVSS structure is
+shown in Fig. 3, and the phase-aware transition used between
+high-resolution stages is detailed separately in Fig. 4.
+3.2.1. Selective State-Space Modeling with ES2D
+EVSS is built upon the selective state-space formulation of
+Mamba. Given a continuous input signal x(t), a linear state-
+space system maps it to the output y(t) through a latent state
+h(t):
+dh(t)
+dt
+= Ah(t) + Bx(t),
+(1)
+y(t) = Ch(t) + Dx(t),
+(2)
+where A denotes the state-transition matrix, B and C represent
+the input and observation mappings, respectively, and D de-
+notes the direct feedthrough mapping from the input to the out-
+put. After discretization, the state evolution can be expressed
+as
+ht = ¯Atht−1 + ¯Btxt,
+(3)
+yt = Ctht + Dxt.
+(4)
+Unlike conventional linear time-invariant SSMs, Mamba
+makes the discretization and input/output mappings content-
+dependent, enabling the state transition to selectively preserve
+or suppress information according to the current input. This
+selective recurrence provides long-range dependency modeling
+5
+
+
+Figure 1: Overall architecture and functional pipeline of HDMamba-YOLO-B. The detector follows a perception–reconstruction–alignment–interaction design:
+EVSS performs efficient contextual perception and PhasePatchMerging2D constructs phase-aware hierarchical transitions; DST-Wrapper and Native C3k2-ASSAF
+form an ASSAF-centered local reconstruction pathway; DySample provides content-adaptive cross-scale alignment; and OS-CVTIA performs classification–
+localization interaction before the native YOLO prediction branches.
+Figure 2: P–R–A–I functional rationale and stage-wise operator allocation in HDMamba-YOLO-B. State-space modeling is assigned primarily to long-range
+contextual perception, CNN-style processing is retained for local two-dimensional reconstruction, DySample provides content-adaptive cross-scale resampling, and
+OS-CVTIA performs macro–micro interaction for localization and classification. DST-Wrapper acts as the transition between perception and reconstruction. The
+reconstructed and aligned multi-scale features are P3 (80 × 80 × 64), P4 (40 × 40 × 128), and P5 (20 × 20 × 192). This figure is a functional abstraction rather than
+a complete layer-wise topology.
+6
+
+
+Figure 3: Detection-adapted EVSS block used in the contextual perception stage. The block combines ES2D-based selective state-space propagation with a
+lightweight local path composed of depthwise convolution, Batch Normalization, GELU, and pointwise projection, followed by shared BiAttn calibration, residual
+updating, and an MLP transformation.
+with computational complexity that grows linearly with the se-
+quence length, making it suitable for high-resolution visual rep-
+resentations.
+Applying dense selective scanning directly to high-resolution
+aerial features would partially offset the efficiency advantage
+sought in the perception stage. EVSS therefore adopts the Effi-
+cient 2D Scanning (ES2D) strategy of EfficientVMamba (Pei
+et al., 2025), which reorganizes the two-dimensional feature
+map into complementary sparse scanning groups and applies
+selective state-space propagation within these groups.
+Let X ∈RH×W×C denote a two-dimensional feature map. The
+ES2D transformation can be abstractly expressed as
+{Xk}K
+k=1 = SES2D(X),
+(5)
+where SES2D(·) denotes the sparse spatial decomposition. With
+the scanning step set to 2, K = 4, and Xk denotes the k-th com-
+plementary phase-aware sparse scanning group. Selective state-
+space modeling is then performed independently on each group:
+Zk = SSM(Xk),
+k = 1, . . . , K,
+(6)
+and the resulting responses are restored to the original spatial
+organization through
+Y = RES2D (Z1, . . . , ZK) ,
+(7)
+where RES2D(·) denotes spatial restoration. By reducing redun-
+dant dense traversal while maintaining complementary spatial
+coverage, ES2D enables EVSS to establish broad contextual
+interactions at relatively high feature resolutions with limited
+computational overhead.
+Importantly, EVSS does not rely on the state-space branch
+alone. After LayerNorm, the normalized input is processed in
+parallel by the ES2D state-space path and a lightweight local
+convolutional path. The latter applies a 3 × 3 depthwise convo-
+lution followed by Batch Normalization and GELU, and then
+uses a 1 × 1 pointwise projection for channel mixing. Let Fssm
+and Fconv denote the outputs of the state-space and local con-
+volutional paths, respectively. Their interaction can be summa-
+rized as
+Fmix = A(Fssm) + A(Fconv),
+(8)
+where A(·) denotes the BiAttn calibration used in the EVSS
+block. The mixed representation is then incorporated through
+residual updating, followed by a feed-forward transformation:
+X′ = X + Fmix,
+Y = X′ + MLP  LN(X′) .
+(9)
+Thus, EVSS couples efficient long-range state-space propa-
+gation with a lightweight local convolutional path, combin-
+ing broad contextual interaction with local spatial refinement
+within the same block.
+3.2.2. Phase-Aware Hierarchical Transition
+Object detection requires hierarchical representations at pro-
+gressively reduced spatial resolutions. Therefore, the contex-
+tual features produced by the high-resolution EVSS stages must
+be downsampled before being propagated to deeper semantic
+levels. A conventional stride-2 convolution couples spatial dec-
+imation and channel transformation in a single operation, which
+may discard part of the phase-specific local evidence before
+cross-channel fusion. This issue is particularly relevant to UAV
+tiny objects, whose discriminative structures may occupy only
+a few spatial positions.
+PhasePatchMerging2D follows the established Patch Merg-
+ing principle of rearranging the four interleaved samples in each
+2 × 2 neighborhood before channel projection, as introduced
+for hierarchical visual representations in Swin Transformer
+(Liu et al., 2021) and subsequently used in detection-oriented
+state-space architectures such as Mamba-YOLO (Wang et al.,
+2025b).
+In HDMamba-YOLO, this operation is adapted to
+the first two high-resolution EVSS transitions to expose all
+7
+
+
+four sampling phases to joint normalization and channel pro-
+jection before dimensionality reduction. Its role is therefore a
+detection-stage adaptation and placement of an established hier-
+archical transition, rather than the introduction of a new patch-
+merging principle.
+The adapted mechanism is illustrated in Fig. 4. PhasePatch-
+Merging2D first performs optional bottom/right zero padding
+when needed, decomposes the feature into four spatial phases
+in a fixed implementation order, concatenates them along the
+channel dimension, and then applies LayerNorm followed by a
+bias-free linear projection. No activation or residual branch is
+introduced inside this transition.
+Let
+X ∈RB×C×H×W
+(10)
+denote the input feature. If H or W is odd, zero padding is
+applied only to the bottom or right boundary, respectively, pro-
+ducing an even-sized feature eX. The feature is then decomposed
+according to the row and column parity of each spatial location:
+Xpq[:, :, i, j] = eX[:, :, 2i + p, 2j + q],
+p, q ∈{0, 1}.
+(11)
+Accordingly, four complementary spatial phases, X00, X10, X01,
+and X11, are obtained and concatenated in the fixed order used
+by the implementation:
+Xphase = Concatc (X00, X10, X01, X11) .
+(12)
+The resulting representation satisfies
+Xphase ∈RB×4C×⌈H/2⌉×⌈W/2⌉.
+(13)
+For each merged spatial position (i, j), the corresponding
+four-phase vector can be written as
+zi, j =
+h
+x2i,2j; x2i+1,2j; x2i,2j+1; x2i+1,2j+1
+i
+∈R4C.
+(14)
+PhasePatchMerging2D subsequently performs channel-wise
+layer normalization followed by a bias-free linear projection:
+yi, j = Wr LN(zi,j),
+Wr ∈RCout×4C.
+(15)
+The final output is therefore
+Y ∈RB×Cout×⌈H/2⌉×⌈W/2⌉.
+(16)
+By explicitly collecting the four spatial phases before dimen-
+sionality reduction, PhasePatchMerging2D makes all sampling
+phases within each 2 × 2 neighborhood jointly available to the
+subsequent normalization and channel projection. Layer nor-
+malization and the subsequent linear projection then perform
+cross-phase fusion and channel adaptation for the next back-
+bone stage. This phase-aware transition is used between the
+two high-resolution EVSS stages to construct the hierarchical
+representation without relying on direct stride-based spatial fil-
+tering.
+Together, EVSS and PhasePatchMerging2D establish the
+contextual component of the backbone while constructing the
+feature hierarchy required by the detector. The next stage has
+a different emphasis: repeated FPN/PAN aggregation combines
+features across semantic depths and spatial resolutions, mak-
+ing explicit local neighborhoods, boundary-sensitive responses,
+and two-dimensional spatial continuity increasingly important.
+HDMamba-YOLO therefore adopts a heterogeneous stage-
+wise allocation.
+State-space modeling is concentrated in
+backbone-level contextual perception, while CNN-style aggre-
+gation is retained in the neck to provide explicit local neigh-
+borhoods, boundary-sensitive responses, and two-dimensional
+spatial reconstruction.
+This division of labor motivates the
+ASSAF-centered reconstruction pathway described next and is
+summarized by the P–R–A–I rationale in Fig. 2.
+3.3. ASSAF-Centered Local Spatial Reconstruction
+Once the backbone has established broad contextual inter-
+actions, the neck must repeatedly combine features from dif-
+ferent semantic depths and spatial resolutions. At this point,
+preserving local neighborhoods, boundary-sensitive responses,
+and two-dimensional continuity becomes particularly important
+because tiny-object evidence can be diluted during repeated fu-
+sion.
+HDMamba-YOLO therefore retains a CNN-style aggrega-
+tion pathway and introduces an ASSAF-centered reconstruction
+mechanism. DST-Wrapper re-encodes the deepest backbone
+representation at the backbone–neck interface, after which Na-
+tive C3k2-ASSAF embeds ASSAF into the original C2f/C3k2
+split–iterative–concatenate scaffold for repeated reconstruction
+and feature reuse along the FPN/PAN pathways. This stage-
+wise allocation allows EVSS to establish broad contextual de-
+pendencies in the backbone, while Native C3k2-ASSAF ex-
+plicitly reconstructs local two-dimensional structure during re-
+peated FPN/PAN fusion. The reconstruction pathway and its
+two structural instantiations are illustrated in Fig. 5.
+3.3.1. Adaptive Spatial-Semantic Attention Fusion
+Retaining a CNN-style reconstruction neck preserves lo-
+cal spatial processing, but conventional homogeneous bottle-
+necks still apply nearly identical transformations to boundary-
+sensitive details and broader contextual responses. For UAV
+tiny objects, these two types of information play complemen-
+tary roles: directional local structures are important for pre-
+serving weak contours and spatial continuity, whereas a broader
+neighborhood response helps distinguish target evidence from
+structurally similar background patterns. Processing both forms
+of information through a single transformation may therefore
+limit the selectivity of local reconstruction.
+To address this limitation, Adaptive Spatial-Semantic Atten-
+tion Fusion (ASSAF) explicitly models the two forms of spa-
+tial evidence within a lightweight reconstruction operator. It
+combines (i) directionally factorized local modeling for short-
+range spatial continuity, (ii) fixed-grid bounded contextual ag-
+gregation for a coordinate-consistent neighborhood reference,
+(iii) independent dual-sigmoid calibration that allows the two
+responses to vary without a sum-to-one constraint, and (iv) a
+conditional residual route when input and output dimensions
+match. Given X ∈RB×C×H×W, these components provide com-
+plementary local and contextual responses for subsequent re-
+construction.
+8
+
+
+Figure 4: Mechanism of PhasePatchMerging2D. The input feature is decomposed into four parity-defined spatial phases, concatenated in the implementation order
+[X00, X10, X01, X11], converted to channel-last layout for LayerNorm and bias-free linear projection, and then returned to channel-first layout. Optional zero padding
+is applied only to the bottom and/or right boundary when an input dimension is odd.
+The local-detail stream is designed to model short-range spa-
+tial continuity and direction-sensitive structures that are impor-
+tant for tiny-object localization. Instead of applying a dense
+3 × 3 transformation directly, ASSAF factorizes the spatial in-
+teraction into sequential horizontal and vertical operations us-
+ing 1 × 3 and 3 × 1 convolutions. Asymmetric convolutional
+blocks have been shown to strengthen horizontal and vertical
+kernel skeletons while retaining two-dimensional spatial sup-
+port (Ding et al., 2019). Motivated by this property, their se-
+quential composition in ASSAF provides an effective 3×3 sup-
+port while explicitly decomposing horizontal and vertical inter-
+actions. The resulting factorization offers a compact operator
+for modeling anisotropic contour transitions and local spatial
+continuity at repeated reconstruction nodes.
+Floc = ϕ (B (Conv3×1 (ϕ (B (Conv1×3(X)))))) ,
+(17)
+where B denotes Batch Normalization and ϕ represents the
+SiLU activation function.
+For receptive-field analysis, ignoring the intervening normal-
+ization and nonlinearity, the two directional spatial operators
+can be regarded as a factorized composition:
+Keff = K3×1 ∗K1×3,
+(18)
+whose spatial support covers a 3 × 3 neighborhood while pre-
+serving explicit horizontal–vertical factorization.
+The contextual stream is designed to provide a broader
+yet spatially bounded reference without introducing input-
+dependent sampling coordinates.
+Large-kernel convolutions
+provide a direct mechanism for expanding the effective recep-
+tive field in CNNs (Ding et al., 2022), and adaptive large-
+kernel designs have further demonstrated the value of multi-
+scale contextual modeling in remote-sensing object detection
+(Li et al., 2023).
+Drawing on this general motivation, AS-
+SAF employs a fixed-grid 7 × 7 depthwise convolution as a
+lightweight bounded-context branch:
+Fctx = ϕ (B (DWConv7×7(X))) .
+(19)
+For channel c and spatial position p, the pre-normalization
+depthwise response can be expressed as
+uc
+ctx(p) =
+X
+q∈Ω7
+kc(q) xc(p + q),
+(20)
+where Ω7 = {−3, . . . , 3} × {−3, . . . , 3} denotes the fixed spatial
+support of the 7 × 7 kernel.
+Unlike offset-dependent dynamic sampling, the sampling co-
+ordinates p + q are independent of the input feature. Conse-
+quently, feature perturbations do not introduce an additional
+offset-induced coordinate perturbation into this branch, provid-
+ing a coordinate-consistent neighborhood reference for local re-
+construction. Meanwhile, the contextual dependency remains
+spatially bounded:
+∂uc
+ctx(p)
+∂xc(r) = 0,
+r < p + Ω7.
+(21)
+Thus, each location incorporates a broader neighborhood with-
+out allowing arbitrarily distant background responses to directly
+participate in a single contextual transformation. Because the
+operation is depthwise, spatial context is extracted indepen-
+dently within each channel before subsequent adaptive calibra-
+tion and channel projection. This decouples spatial context ex-
+9
+
+
+Figure 5: ASSAF-centered local spatial reconstruction pathway. (a) ASSAF combines directionally factorized local-detail modeling and fixed-grid large-kernel
+contextual modeling with independent dual-sigmoid calibration and gated additive reconstruction. (b) DST-Wrapper reuses the ASSAF mechanism to re-encode the
+deepest backbone feature at the perception–reconstruction interface. (c) Native C3k2-ASSAF embeds ASSAF into the native C2f/C3k2 split–iterate–concatenate
+topology and retains the initial partitions and intermediate ASSAF responses for progressive feature reuse; the canonical HDMamba-YOLO-B configuration uses
+N = 1.
+traction from cross-channel interaction while maintaining lim-
+ited computational overhead.
+The two streams encode complementary spatial properties
+and should not be forced to contribute with a fixed propor-
+tion at every channel.
+ASSAF therefore performs content-
+dependent channel calibration before additive fusion, allow-
+ing the contributions of local-detail and contextual responses to
+vary independently according to the current feature representa-
+tion. Following the channel-recalibration principle established
+by squeeze-and-excitation modeling (Hu et al., 2018), the local
+and contextual features are first concatenated along the channel
+dimension and summarized by global average pooling:
+z = GAP (Concat [Floc, Fctx]) .
+(22)
+A lightweight gating function G(·) first produces 2C channel
+logits. An element-wise Sigmoid is then applied without cross-
+branch normalization, and the resulting responses are split into
+two C-dimensional modulation vectors:
+[Wloc, Wctx] = Split (σ (G (z))) ,
+(23)
+where σ(·) denotes the Sigmoid function. Because the activa-
+tion is applied element-wise to the 2C outputs of G(·) before
+10
+
+
+splitting, the resulting Wloc and Wctx constitute two branch-
+specific gates rather than a competitively normalized pair. Their
+channel-wise entries satisfy
+Wc
+loc ∈(0, 1),
+Wc
+ctx ∈(0, 1),
+c = 1, . . . ,C.
+(24)
+No cross-branch normalization is imposed between the two
+modulation vectors. This design differs from the competitive
+softmax selection used to distribute relative attention across
+kernel branches in Selective Kernel Networks (Li et al., 2019).
+Instead, the two sigmoid gates in ASSAF can strengthen or sup-
+press the local-detail and contextual responses independently,
+allowing both forms of evidence to remain active when sup-
+ported by the current feature representation. The final gating
+projection is zero-initialized, so both modulation branches start
+from a neutral coefficient of 0.5 and progressively learn their
+respective contributions during optimization.
+The fused feature is obtained through channel-aligned gated
+addition:
+Ffuse = Wloc ⊙Floc + Wctx ⊙Fctx,
+(25)
+where ⊙denotes element-wise multiplication. Because the two
+branches are defined on the same spatial lattice, gated addition
+performs channel-wise response calibration without introduc-
+ing an additional spatial transformation. The fused feature is
+then projected back to the output space:
+Fpro j = ϕ
+
+B
+
+Conv1×1
+
+Ffuse
+
+.
+(26)
+When the input and output dimensions are consistent, a resid-
+ual connection is adopted:
+Y = X + Fproj.
+(27)
+Otherwise,
+Y = Fproj.
+(28)
+When the input and output dimensions are identical, the
+residual path retains the original feature as a direct information
+route while the fused ASSAF response acts as an adaptive re-
+construction correction. This prevents the reconstruction trans-
+form from becoming the only path through which the original
+representation must propagate.
+Overall, ASSAF integrates four complementary mecha-
+nisms:
+directionally factorized local modeling for short-
+range spatial structure, fixed-grid bounded contextual modeling
+for coordinate-consistent neighborhood reference, independent
+dual-sigmoid calibration for adaptive local–context response
+regulation, and residual reconstruction for preserving the orig-
+inal representation when dimensionality permits.
+Together,
+these mechanisms form the core local reconstruction operator
+of HDMamba-YOLO.
+3.3.2. DST-Wrapper for Deep Feature Transition and Re-
+encoding
+In the original YOLO11-S backbone, C2PSA is placed at
+the terminal stage to refine the deepest representation through
+attention-based feature interaction. Such a design is reason-
+able in the original convolution-dominated backbone, where the
+terminal module further enriches the high-level representation
+before multi-scale aggregation.
+In HDMamba-YOLO, how-
+ever, broad contextual dependencies have already been explic-
+itly modeled by the preceding EVSS stages. Consequently, the
+functional requirement of the terminal backbone stage changes:
+rather than continuing the same emphasis on contextual refine-
+ment, the deepest representation must be adapted to the subse-
+quent CNN-based reconstruction pathway.
+Based on this requirement, we replace the original C2PSA
+with DST-Wrapper, an ASSAF-derived transition block that
+re-encodes the deepest representation at the perception–
+reconstruction interface. DST-Wrapper reuses the dual-stream
+reconstruction mechanism defined in Section 3.3.1, and its op-
+eration can be compactly expressed as
+Xdst = ASSAFcin→cout (Xd) ,
+(29)
+where Xd denotes the deepest backbone feature and the sub-
+script indicates the channel adaptation performed by the AS-
+SAF output projection.
+In the canonical HDMamba-YOLO-B configuration, cin ,
+cout at this interface; therefore, the conditional identity shortcut
+inside ASSAF is inactive. DST-Wrapper consequently oper-
+ates as a gated re-encoding transformation rather than a resid-
+ual reconstruction block. The subsequent 1 × 1 projection fur-
+ther adapts the re-encoded feature to the width required by the
+FPN/PAN pathway. The effectiveness of replacing the original
+terminal C2PSA with this transition-oriented design is further
+evaluated in the progressive ablation study.
+3.3.3. Native C3k2-ASSAF Aggregation in FPN and PAN
+DST-Wrapper re-encodes the deepest representation only
+once at the backbone–neck interface, whereas local spatial re-
+construction must be maintained throughout the subsequent
+top-down and bottom-up aggregation pathways. At each fu-
+sion node, features from different semantic depths and spatial
+resolutions are repeatedly combined, making both progressive
+reconstruction and feature reuse important for preserving weak
+tiny-object structures during pyramid construction.
+To this end, we embed ASSAF into the native C2f/C3k2 scaf-
+fold to construct Native C3k2-ASSAF. Instead of reducing the
+aggregation block to two terminal feature branches, the pro-
+posed structure preserves the native split–iterative–concatenate
+topology and replaces only the internal bottleneck transforma-
+tions with ASSAF-based reconstruction. This organization re-
+tains the two initial feature partitions together with every inter-
+mediate ASSAF response, allowing representations at different
+reconstruction depths to participate directly in the final aggre-
+gation.
+Given an input feature map Fin, a single 1 × 1 projection first
+generates two hidden partitions:
+[Y0, Y1] = Split (Conv1×1(Fin)) .
+(30)
+The second partition is then progressively reconstructed:
+R1 = ASSAF(Y1),
+(31)
+Ri = ASSAF(Ri−1),
+i = 2, . . . , N.
+(32)
+11
+
+
+Rather than retaining only the terminal reconstruction response,
+all initial and intermediate representations participate in the fi-
+nal fusion:
+Fout = Conv1×1 (Concat[Y0, Y1, R1, . . . , RN]) .
+(33)
+The accumulated topology exposes multiple reconstruction
+depths directly to the output projection. This preserves the na-
+tive feature-reuse pattern of C2f/C3k2 and provides short infor-
+mation and gradient routes from the final fusion to earlier inter-
+mediate representations. These properties are particularly rele-
+vant to UAV tiny objects, whose weak local structures can oth-
+erwise be progressively diluted during repeated top-down and
+bottom-up FPN/PAN aggregation.
+Native C3k2-ASSAF consequently extends ASSAF from a
+single reconstruction operator into a repeated multi-scale recon-
+struction scaffold while retaining the native feature-reuse topol-
+ogy of C2f/C3k2. Local reconstruction is therefore maintained
+throughout both the FPN and PAN pathways rather than being
+restricted to the backbone–neck interface.
+3.4. Content-Adaptive Cross-Scale Alignment
+Local reconstruction does not eliminate the spatial corre-
+spondence requirement introduced during cross-scale feature
+propagation. In the top-down FPN pathway, low-resolution se-
+mantic features must be upsampled before fusion with higher-
+resolution spatial features. Conventional nearest-neighbor in-
+terpolation is inexpensive but static and content-agnostic: its
+fixed sampling rule cannot adapt to spatially varying tiny-object
+structures. Because tiny targets occupy only a few pixels, even
+small spatial quantization errors may perturb their boundaries
+and cross-scale correspondence. HDMamba-YOLO therefore
+integrates DySample (Liu et al., 2023) at the two top-down up-
+sampling nodes to generate content-dependent sampling coor-
+dinates and refine sub-pixel spatial alignment before lateral fu-
+sion.
+The implementation follows the grouped LP-style formu-
+lation of DySample.
+Figure 6 separates its two operations:
+sampling-coordinate generation and grouped feature resam-
+pling. Importantly, the pixel-shuffle operation is applied only
+to the coordinate representation; the feature values themselves
+are produced by bilinear grid_sample.
+Let X ∈RB×C×H×W denote the input feature, g the number
+of channel groups, and s the upsampling factor. The point-wise
+offset predictor produces 2gs2 channels. In the final configura-
+tion, g = 4 and s = 2, giving 32 offset channels. The residual
+offsets are
+∆P = 0.25 ϕ1×1(X),
+∆P ∈RB×2gs2×H×W,
+(34)
+where ϕ1×1(·) denotes the learned 1 × 1 offset projection.
+DySample defines a fixed sub-pixel initialization Pinit and com-
+bines it with the learned residual offsets:
+Pof f set = Pinit + ∆P.
+(35)
+The offset positions are then added to the pixel-center base grid
+P0:
+P = P0 + Pof f set.
+(36)
+Before sampling, the coordinates are normalized to the range
+required by grid_sample and rearranged to the target spatial
+resolution. The resulting grouped sampling grid is
+G ∈RBg×sH×sW×2,
+(37)
+where the final dimension stores the two-dimensional sampling
+coordinates.
+In parallel, the input feature is reshaped by groups:
+Xg = Reshape(X),
+Xg ∈RBg×(C/g)×H×W.
+(38)
+The upsampled grouped feature is obtained as
+Yg = GridSample
+
+Xg,G
+
+,
+(39)
+using bilinear interpolation with padding_mode=border and
+align_corners=False. Finally, the groups are restored to the
+original channel organization:
+Y = Regroup(Yg),
+Y ∈RB×C×sH×sW.
+(40)
+For the implemented s = 2 configuration, the spatial resolution
+is doubled in each dimension.
+DySample acts as an alignment operator within the recon-
+struction neck rather than as an independent representation
+stage. After top-down resampling and subsequent FPN/PAN
+aggregation, the reconstructed and aligned P3, P4, and P5 fea-
+tures are passed to the prediction head. Their shared represen-
+tation is then adapted to the distinct response preferences of
+localization and classification by OS-CVTIA.
+3.5. Lightweight Classification–Localization Interaction with
+OS-CVTIA
+After reconstruction and cross-scale alignment, the resulting
+P3, P4, and P5 features are spatially prepared for prediction,
+but they are still shared by two tasks with different response
+preferences. Prior studies have shown that classification and
+localization can favor non-identical feature regions and ben-
+efit from task-aware feature or spatial decoupling (Wu et al.,
+2020; Song et al., 2020; Dai et al., 2021; Feng et al., 2021).
+In this setting, classification typically benefits from discrimi-
+native semantic and contextual evidence, whereas localization
+places greater emphasis on geometry- and boundary-sensitive
+responses. Directly passing an identical representation to both
+prediction branches therefore leaves their distinct feature pref-
+erences insufficiently modeled.
+To introduce task-specific adaptation without replacing the
+lightweight YOLO prediction interface, we propose the Omni-
+Scale Cross-View Task-Interactive Alignment module (OS-
+CVTIA). For each pyramid feature Xi, i ∈{P3, P4, P5}, OS-
+CVTIA constructs macro- and micro-receptive-field bound-
+ary/context responses and blends them using a coefficient α ∈
+[0, 1].
+The resulting representations are subsequently trans-
+formed into asymmetric localization and classification masks
+for task-specific residual modulation.
+Given an input feature map X ∈RB×C×H×W, the macro stream
+is designed to provide broader contextual perception. It consists
+12
+
+
+Figure 6: Mechanism of DySample-based dynamic spatial alignment. A 1 × 1 offset predictor generates content-dependent residual offsets, which are combined
+with fixed sub-pixel initialization and the pixel-center base grid. After coordinate normalization and rearrangement, the resulting dynamic grid resamples grouped
+feature values using bilinear grid_sample. In HDMamba-YOLO-B, g = 4 and s = 2; padding_mode=border and align_corners=False are used.
+of a boundary-oriented branch with a 7 × 7 depthwise convolu-
+tion and a context-oriented branch with a 3×3 dilated depthwise
+convolution. The two macro features are formulated as
+Fmac
+b
+= P1×1 (ϕ (B (DWConv7×7(X)))) ,
+(41)
+Fmac
+c
+= P1×1
+
+ϕ
+
+B
+
+DWConvd=2
+3×3(X)
+
+,
+(42)
+where B denotes Batch Normalization, ϕ denotes the SiLU ac-
+tivation function, and P1×1 denotes a 1×1 pointwise projection.
+The 7 × 7 depthwise convolution provides a broader boundary-
+sensitive view, while the dilated 3 × 3 convolution captures
+sparse local contextual cues with an enlarged effective recep-
+tive field.
+In contrast, the micro stream is designed to preserve compact
+geometric details and weak fine-scale responses. It therefore
+adopts a more compact receptive-field configuration, replacing
+the 7×7 boundary branch with a 5×5 depthwise convolution and
+using a standard 3 × 3 depthwise convolution without dilation
+for local context modeling:
+Fmic
+b
+= P1×1 (ϕ (B (DWConv5×5(X)))) ,
+(43)
+Fmic
+c
+= P1×1
+
+ϕ
+
+B
+
+DWConvd=1
+3×3(X)
+
+.
+(44)
+Together, these operators provide a compact local view that
+complements the broader boundary and contextual responses
+of the macro stream before scale modulation.
+The macro and micro features are then fused by the continu-
+ous scale modulation coefficient α:
+Fb = (1 −α)Fmac
+b
++ αFmic
+b ,
+(45)
+Fc = (1 −α)Fmac
+c
++ αFmic
+c .
+(46)
+The coefficient α provides continuous control over the macro–
+micro receptive-field preference.
+As α approaches 0, the
+blended representation is biased toward broader contextual re-
+sponses; as α approaches 1, the contribution of compact fine-
+scale responses increases. This continuous interpolation avoids
+a hard architectural switch between the two receptive-field
+ranges. In the canonical HDMamba-YOLO-B implementation,
+α is fixed to 0.5, assigning equal nominal contributions to the
+macro and micro streams before task-specific interaction.
+After scale modulation, OS-CVTIA performs asymmetric
+task interaction for localization and classification. For the lo-
+calization branch, an additive interaction is adopted to generate
+the regression modulation mask:
+Mbox = σ (Fb + Fc) ,
+(47)
+where σ denotes the Sigmoid activation function. The additive
+formulation provides a relaxed interaction in which boundary-
+oriented and contextual responses can contribute jointly to lo-
+calization without requiring both responses to be simultane-
+ously strong.
+For the classification branch, a stricter multiplicative interac-
+tion is adopted. However, directly multiplying two weak re-
+sponses can over-suppress tiny-object activations. To allevi-
+ate this issue, OS-CVTIA introduces an α-aware soft-relaxation
+term into the classification gate:
+Mcls = σ ((Fb + λα) ⊙(Fc + λα)) ,
+(48)
+where ⊙denotes element-wise multiplication and λ is fixed to
+0.1. The term λα acts as an α-dependent response relaxation
+13
+
+
+Figure 7: Structure of OS-CVTIA and its native YOLO prediction interface. Four macro/micro boundary–context responses are blended using α and converted
+into asymmetric localization and classification masks. The masks modulate the shared feature through learnable residual amplitudes before the native regression
+(cv2+DFL) and classification (cv3) branches. In the final configuration, α = 0.5, λ = 0.1, λα = 0.05, and γbox = γcls = 0.01 at initialization.
+rather than as an explicit weighting coefficient for the micro
+stream. It prevents the multiplicative interaction from becom-
+ing excessively restrictive when both responses are weak while
+retaining the joint boundary–context selectivity of the classifi-
+cation mask. With the final setting α = 0.5, the relaxation added
+to each interaction term is λα = 0.05, with λ = 0.1. Increasing
+α therefore shifts the blended representation toward the micro
+stream while simultaneously strengthening the relaxation term.
+This coupled adjustment is intended to preserve sensitivity to
+weak fine-scale responses and reduce their excessive suppres-
+sion by multiplicative classification gating.
+Instead of replacing the original feature representation, OS-
+CVTIA applies residual amplitude modulation to the input fea-
+ture map. The aligned features for regression and classification
+are computed as
+ˆFbox = BN (X ⊙(1 + γboxMbox)) ,
+(49)
+ˆFcls = BN (X ⊙(1 + γclsMcls)) ,
+(50)
+where γbox and γcls are learnable scalar modulation coefficients
+initialized to 0.01. This small initialization keeps the initial
+task-specific modulation close to the shared input representa-
+tion while allowing its amplitude to be progressively adapted
+during training. The residual formulation preserves the original
+prediction feature as the main information path, and the subse-
+quent Batch Normalization stabilizes the task-specific feature
+distributions before prediction.
+Finally, the aligned features are fed into the original YOLO
+detection branches:
+Pbox = Headbox
+ ˆFbox
+
+,
+Pcls = Headcls
+ ˆFcls
+
+.
+(51)
+The modulated features are subsequently processed by the na-
+tive YOLO regression and classification branches.
+The re-
+gression branch retains the distribution-based box represen-
+tation and DFL decoding procedure, while the classification
+branch preserves the native lightweight prediction pathway.
+OS-CVTIA therefore performs task-specific feature interaction
+without replacing the established detection formulation.
+Through receptive-field blending, asymmetric task masks,
+and residual amplitude modulation, OS-CVTIA completes the
+final interaction stage of HDMamba-YOLO. The resulting pre-
+diction pipeline therefore follows the functional sequence es-
+14
+
+
+tablished throughout this section: Perception →Reconstruction
+→Alignment →Interaction.
+3.6. Detection Objective
+HDMamba-YOLO retains the classification and distribution-
+based regression objectives of the YOLO detection framework.
+The overall training objective is formulated as
+L = λclsLcls + λboxLCIoU + λdflLDFL,
+(52)
+where λcls, λbox, and λdfl are the weighting coefficients of the
+corresponding loss terms.
+Here, Lcls denotes the classifica-
+tion loss, LCIoU supervises bounding-box overlap and geomet-
+ric consistency, and LDFL optimizes the discrete distributions
+used for box regression. The same objective is adopted for the
+principal architecture comparisons unless otherwise specified
+in the ablation studies.
+4. Experiments
+This section evaluates HDMamba-YOLO on VisDrone2019
+and AI-TOD from three complementary perspectives. First, we
+compare the proposed Tiny, Lite, and Base variants with rep-
+resentative detectors to characterize their accuracy–complexity
+trade-offs on VisDrone2019. Second, we evaluate HDMamba-
+YOLO-B on AI-TOD under a unified COCO-style protocol to
+examine its generalization to aerial scenes dominated by ex-
+tremely small objects. Third, a set of controlled ablation stud-
+ies is conducted on VisDrone2019 to analyze the contributions
+of the perception, reconstruction, alignment, and interaction
+stages, as well as the localization-loss configuration.
+4.1. Datasets and Evaluation Metrics
+4.1.1. Datasets
+VisDrone2019.
+VisDrone2019 is a UAV object detection
+benchmark collected under diverse urban and suburban condi-
+tions (Du et al., 2019). It contains scenes with dense object
+distributions, substantial scale variation, partial occlusion, and
+complex backgrounds. We use the official training and vali-
+dation splits, consisting of 6,471 training images and 548 val-
+idation images, respectively. The dataset contains ten object
+categories: pedestrian, people, bicycle, car, van, truck, tricy-
+cle, awning-tricycle, bus, and motor. All VisDrone experiments
+in this work use the same 548-image validation split (denoted
+internally as VisDrone_full548).
+AI-TOD. AI-TOD is designed for aerial tiny-object detection
+and contains a large proportion of objects represented by only a
+few pixels (Wang et al., 2021b). We follow the official split used
+in our experiments, with 11,214 training images and 2,804 vali-
+dation images. The corresponding annotations contain 282,580
+and 70,424 object instances, respectively, for a total of 353,004
+annotated instances. The eight categories are airplane, bridge,
+storage-tank, ship, swimming-pool, vehicle, person, and wind-
+mill. No validation image is used for training. Table 1 summa-
+rizes the dataset splits used in the experiments.
+The VisDrone2019 training set is dominated by small-scale
+instances.
+Using the equivalent side length s =
+pwpxhpx,
+Table 1: Dataset splits used in the experiments.
+Dataset
+Categories
+Training images
+Validation images
+VisDrone2019
+10
+6,471
+548
+AI-TOD
+8
+11,214
+2,804
+89,264 objects (26.01%) satisfy s < 16 pixels, 118,340 objects
+(34.48%) fall within 16 ≤s < 32 pixels, and 135,600 objects
+(39.51%) have s ≥32 pixels. Thus, 60.49% of the training in-
+stances have an equivalent side length below 32 pixels, provid-
+ing a suitable setting for evaluating the proposed small-object-
+oriented design.
+4.1.2. Evaluation Metrics
+For VisDrone2019, Precision (P), Recall (R), mAP50, and
+mAP50:95 are used in the controlled experiments.
+The main
+cross-method comparison focuses on mAP50 and mAP50:95 be-
+cause these metrics are consistently available across the se-
+lected comparison methods.
+Model complexity is measured
+using the number of parameters and GFLOPs. For HDMamba-
+YOLO, the reported GFLOPs include an analytical compensa-
+tion for Selective Scan operations that are not counted by the
+conventional profiling tool.
+For AI-TOD, evaluation follows the COCO-style protocol
+implemented with pycocotools.COCOeval (Lin et al., 2014).
+We report AP, AP50, AP75, APvt, APt, APs, ARvt, ARt, and ARs.
+The AI-TOD-specific area ranges are set to [4, 64], [64, 256],
+[256, 1024], and [1024, 4096] pixels2 for very tiny (vt), tiny (t),
+small (s), and medium (m) objects, respectively. APm and ARm
+are additionally reported in the text for HDMamba-YOLO-B.
+4.2. Experimental Environment and Implementation Details
+All experiments were conducted under Ubuntu 22.04.3 LTS
+on a workstation equipped with an Intel Xeon Platinum 8352V
+CPU and a single NVIDIA GeForce RTX 4090 GPU with 24
+GB of memory. The models were implemented using Python
+3.10.19, PyTorch 2.1.0, CUDA 12.1, and cuDNN 8.9.2, with
+the detection pipeline developed on Ultralytics 8.3.9.
+All HDMamba-YOLO variants were trained from scratch
+without ImageNet or object-detection pretraining.
+For Vis-
+Drone2019, the input resolution was fixed to 640 × 640, the
+batch size was 8, and the maximum training length was 300
+epochs. SGD was used with an initial learning rate of 0.01, mo-
+mentum of 0.937, and weight decay of 5 × 10−4. The learning
+rate followed a cosine schedule with a final ratio of 0.01, corre-
+sponding to a scheduled endpoint of 1×10−4, and the first three
+epochs were used for warm-up.
+Automatic mixed-precision
+training was enabled, the random seed was fixed to 0, and early
+stopping was applied with a patience of 15 epochs. The loss
+coefficients for box regression, classification, and distribution
+focal loss were set to 7.5, 0.5, and 1.5, respectively, with CIoU
+used for box regression. Data augmentation included HSV per-
+turbation (0.015, 0.7, 0.4), translation of 0.1, scaling of 0.5, hor-
+izontal flipping with a probability of 0.5, and Mosaic augmen-
+tation with a probability of 1.0. MixUp and Copy-Paste were
+disabled, and Mosaic was closed during the final ten scheduled
+epochs.
+15
+
+
+For AI-TOD, the maximum training length was increased to
+400 epochs, while the mini-batch size remained 8. A nomi-
+nal batch size of 64 was used with gradient accumulation over
+eight mini-batches. Early-stopping patience was increased to
+30 epochs, and a linear learning-rate schedule (cos_lr=False)
+was adopted; the remaining core optimization settings were
+kept unchanged. All controlled ablations and models repro-
+duced within each dataset followed the same data split, initial-
+ization policy, and training protocol. Results adopted from pre-
+viously published studies retain their original experimental set-
+tings and are used only to characterize representative accuracy–
+complexity operating points.
+4.2.1. Unified AI-TOD Evaluation Protocol
+To minimize evaluation-side discrepancies, the reproduced
+AI-TOD models are reloaded from their respective best check-
+points and evaluated on the same official 2,804-image valida-
+tion set. Inference is performed with an input size of 640, con-
+fidence threshold of 0.001, NMS IoU threshold of 0.7, and a
+maximum of 300 retained detections per image. Test-time aug-
+mentation is disabled and class-aware NMS is used. Predicted
+boxes are mapped back to absolute coordinates in the original
+image space and converted to COCO format using the official
+image and category identifiers.
+The evaluator uses
+maxDets = [1, 10, 300],
+(53)
+and the AI-TOD-specific area intervals described above. For
+HDMamba-YOLO-B, 225,576 predictions were successfully
+converted, with no prediction discarded because of an image-ID
+or category-ID mismatch. Re-generating the prediction JSON
+using the unified inference pipeline produced the same object-
+level predictions as the original official evaluation output. The
+final HDMamba-YOLO-B metrics are therefore reported from
+this unified COCO-style evaluation rather than from the internal
+Ultralytics validation summary.
+4.3. Results on VisDrone2019
+4.3.1. Comparison with Representative Detectors
+Table 2 compares the proposed variants with representative
+detectors. To avoid conflating models with substantially differ-
+ent deployment budgets, the methods are organized into three
+parameter ranges. The proposed model is listed last within each
+range for readability. The best and second-best values within
+each parameter range are highlighted in bold and underlined,
+respectively.
+The three HDMamba-YOLO variants provide distinct op-
+erating points.
+HDMamba-YOLO-Tiny uses only 1.342M
+parameters and 6.419 GFLOPs, giving the lowest computa-
+tional cost in the ultra-lightweight group. HDMamba-YOLO-
+Lite increases the capacity to 5.344M parameters and achieves
+41.140% mAP50 and 24.741% mAP50:95, providing an interme-
+diate point between the Tiny and Base variants. HDMamba-
+YOLO-B reaches 42.737% mAP50 and 25.713% mAP50:95 with
+10.042M parameters and 29.879 corrected GFLOPs.
+Within the compact group, KSCNet provides a strong
+reference with 41.300% mAP50 and 24.700% mAP50:95.
+HDMamba-YOLO-B improves these two metrics by 1.437 and
+1.013 percentage points, respectively, while using fewer param-
+eters (10.042M versus 12.10M) and lower reported computa-
+tion (29.879 versus 33.000 GFLOPs). This comparison indi-
+cates that the proposed Base configuration occupies a favor-
+able accuracy–complexity operating point within the evaluated
+compact-model range.
+In the lightweight group, SFBF-YOLO-s attains the highest
+detection accuracy, whereas Mamba-YOLO-T has the lowest
+reported computational cost. HDMamba-YOLO-Lite lies be-
+tween these operating points. Compared with the reproduced
+Mamba-YOLO-T at a similar parameter scale, HDMamba-
+YOLO-Lite improves mAP50 and mAP50:95 by 3.273 and 2.026
+percentage points, respectively, while requiring higher compu-
+tation (19.304 versus 13.200 GFLOPs). Under the present Vis-
+Drone setting, this comparison shows that the stage-wise alloca-
+tion used by HDMamba-YOLO-Lite reaches a higher-accuracy
+operating point while requiring moderately greater computation
+than Mamba-YOLO-T.
+Figure 8 complements Table 2 by visualizing the accuracy–
+complexity operating points of the compared detectors. Com-
+putational cost is shown on the horizontal axis, mAP50:95 on
+the vertical axis, and marker area is proportional to the num-
+ber of parameters. The three HDMamba-YOLO variants are
+connected only to indicate their capacity progression from Tiny
+to Lite to Base.
+The trajectory shows a consistent increase
+in detection accuracy as capacity grows, while retaining sub-
+stantially lower computational cost than several higher-capacity
+comparison methods. The resulting distribution provides a di-
+rect visual summary of the different accuracy–complexity oper-
+ating points represented in Table 2.
+4.3.2. Qualitative Analysis on VisDrone2019
+Quantitative results are complemented by feature-response
+and detection visualizations on three representative valida-
+tion scenes containing dense traffic participants, cluttered road
+backgrounds, partial occlusion, and distant small instances.
+YOLO11s is used as the primary reference because it has a pa-
+rameter scale comparable to HDMamba-YOLO-B and is also
+included in the quantitative comparison.
+Figure 9 compares the spatial response patterns of the two de-
+tectors at the P3 pre-detection feature level (stride 8). For each
+image, the response map is computed from the channel-wise
+root-mean-square activation and the two models are normal-
+ized using a shared image-specific scale. Consequently, color
+intensity can be compared between YOLO11s and HDMamba-
+YOLO-B within the same row, while absolute colors should not
+be compared across different scenes. Across the three exam-
+ples, HDMamba-YOLO-B exhibits more spatially concentrated
+responses around several dense vehicle and pedestrian regions,
+whereas the YOLO11s responses are more diffuse in parts of the
+road and background. These visualizations are consistent with
+stronger target–background discrimination in the proposed rep-
+resentation, but they are used only as qualitative evidence and
+16
+
+
+Table 2: Comparison with representative detectors on the VisDrone2019 validation set. Models are grouped according to parameter budgets. Within each group, the
+proposed HDMamba-YOLO variant is listed after the comparison methods. The best result is shown in bold and the second-best result is underlined.
+Budget
+Method
+Params (M) ↓
+GFLOPs ↓
+mAP50 (%) ↑
+mAP50:95 (%) ↑
+≤3M
+YOLO11n
+2.59
+6.500
+33.400
+19.100
+YOLOv10-n
+2.71
+8.400
+33.300
+19.000
+YOLOv8n
+3.00
+8.100
+34.100
+19.500
+SFBF-YOLO-n
+1.06
+13.700
+41.000
+24.300
+HDMamba-YOLO-Tiny (Ours)
+1.34
+6.419
+35.683
+21.097
+3–8M
+SFBF-YOLO-s
+3.61
+42.600
+47.900
+29.200
+Mamba-YOLO-T
+5.80
+13.200
+37.867
+22.715
+LMF-UAV(s)
+6.30
+17.600
+36.400
+21.300
+HDMamba-YOLO-Lite (Ours)
+5.34
+19.304
+41.140
+24.741
+8–20M
+YOLOv10-s
+8.10
+24.800
+39.100
+22.900
+YOLOv12s
+9.23
+21.200
+39.500
+23.600
+YOLO11s
+9.43
+21.600
+39.600
+23.200
+YOLOv8s
+11.10
+28.700
+40.000
+23.800
+KSCNet
+12.10
+33.000
+41.300
+24.700
+Hyper-YOLO-S
+14.80
+38.900
+40.900
+24.400
+RT-DETR-R18
+19.88
+57.000
+40.900
+24.100
+HDMamba-YOLO-B (Ours)
+10.04
+29.879†
+42.737
+25.713
+Sources: YOLO11n and YOLO11s (Khanam and Hussain, 2024); YOLOv10-n and YOLOv10-s (Wang et al., 2024a); YOLOv8n and YOLOv8s (Jocher et al.,
+2023); SFBF-YOLO-n and SFBF-YOLO-s (Hua et al., 2026); Mamba-YOLO-T (Wang et al., 2025b); LMF-UAV(s) (Yang et al., 2025); YOLOv12s (Tian et al.,
+2025); KSCNet (Li et al., 2025); Hyper-YOLO-S (Feng et al., 2025); and RT-DETR-R18 (Zhao et al., 2024a).
+Note: † The GFLOPs of HDMamba-YOLO include the analytically compensated computational cost of Selective Scan operations. Cross-paper results are used
+to characterize representative accuracy–complexity operating points; reproduced methods and all HDMamba-YOLO variants follow our unified experimental
+setting where applicable.
+0
+10
+20
+30
+40
+50
+60
+Computational cost (GFLOPs)
+18
+20
+22
+24
+26
+28
+30
+mAP50:95 (%)
+Standard YOLO
+UAV-specific
+Transformer/SSM
+HDMamba-YOLO
+Parameters
+1 M
+5 M
+10 M
+20 M
+YOLO11n
+YOLOv10n
+YOLOv8n
+SFBF-YOLO-n
+SFBF-YOLO-s
+Mamba-YOLO-T
+LMF-UAV(s)
+YOLOv10s
+YOLOv12s
+YOLO11s
+YOLOv8s
+KSCNet
+Hyper-YOLO-S
+RT-DETR-R18
+Tiny
+Lite
+B
+Figure 8: Accuracy–complexity comparison on the VisDrone2019 validation set. The horizontal axis denotes reported or corrected GFLOPs, the vertical axis
+denotes mAP50:95, and marker area is proportional to the number of parameters. Marker shapes distinguish detector families, while the connected diamond markers
+indicate the Tiny, Lite, and Base configurations of HDMamba-YOLO.
+17
+
+
+do not by themselves establish the causal contribution of any
+individual module.
+Figure 10 further compares the final detections on the same
+scene set under identical inference settings. The three columns
+present the ground-truth annotations, YOLO11s predictions,
+and HDMamba-YOLO-B predictions in full-scene views, al-
+lowing the corresponding TP, FP, and FN patterns to be
+compared directly.
+In dense and partially occluded regions,
+HDMamba-YOLO-B recovers additional valid instances in sev-
+eral clusters while maintaining a comparable overall detection
+pattern to YOLO11s in less challenging regions. These selected
+examples provide qualitative evidence that is consistent with
+the quantitative improvement in mAP reported above.
+4.4. Results on AI-TOD
+4.4.1. Quantitative Comparison
+Table 3 reports the AI-TOD results. For the reproduced mod-
+els, the final metrics are obtained using the unified inference
+and COCO-style evaluation protocol described in Section 4.2.1.
+Methods whose results are taken from the literature are included
+only when their reported metric definitions are compatible with
+the AI-TOD evaluation columns used here. The purpose of this
+table is to compare representative operating points rather than
+to claim universal superiority across all detector families.
+HDMamba-YOLO-B obtains 21.621% AP, 47.881% AP50,
+and 15.986% AP75. Relative to YOLO11s, which has a sim-
+ilar parameter scale, the proposed model improves AP, AP50,
+and AP75 by 1.371, 1.011, and 1.326 percentage points, respec-
+tively. The gains are also observed for the tiny and small ranges:
+APt increases from 20.510% to 22.167%, APs from 27.780%
+to 29.718%, ARt from 33.490% to 35.355%, and ARs from
+40.450% to 41.638%. These results indicate that the improve-
+ment extends beyond a single IoU threshold and is reflected in
+both precision and recall for the 8–32-pixel scale ranges.
+YOLOv8m achieves the highest overall performance in Ta-
+ble 3, providing a useful higher-capacity reference.
+It uses
+approximately 2.58× the parameters and 2.63× the reported
+GFLOPs of HDMamba-YOLO-B. The AP gap between the two
+models is 1.889 percentage points, while the APt, APs, and ARs
+gaps are 1.293, 1.522, and 0.742 percentage points, respec-
+tively. The comparison therefore places HDMamba-YOLO-B
+at a lower-complexity operating point, while YOLOv8m retains
+higher overall accuracy.
+For very tiny objects, HDMamba-YOLO-B obtains 6.333%
+APvt and 12.213% ARvt, which are lower than the correspond-
+ing YOLO11s values of 9.030% and 13.340%. This result iden-
+tifies a remaining limitation: objects with an equivalent side
+length of only 2–8 pixels provide extremely limited visual evi-
+dence, and the current architecture does not improve this regime
+uniformly. We therefore interpret the AI-TOD results as ev-
+idence of improved performance primarily in the 8–32-pixel
+ranges rather than as an all-scale improvement.
+4.4.2. Scale-Aware Qualitative Analysis
+Figure 11 complements the scale-specific AP/AR results
+with three validation scenes selected from ground-truth-only
+candidate pools before model comparison. Row (a) is domi-
+nated by very-tiny objects (image 1697; 86 vt and 1 t instances),
+row (b) contains only tiny objects (image 1043; 16 t instances),
+and row (c) is a mixed tiny/small scene (image 1845; 47 t and
+53 s instances). For each scene, the same ground-truth-driven
+region of interest is used for YOLO11s and HDMamba-YOLO-
+B.
+The scene-level TP/FP/FN counts reveal scale-dependent be-
+havior that is consistent with the quantitative evaluation. In
+the very-tiny scene, YOLO11s records 36/31/51 TP/FP/FN,
+whereas HDMamba-YOLO-B records 30/16/57. The proposed
+model therefore produces fewer false positives but also fewer
+true positives and more misses, which is consistent with the
+lower APvt and ARvt reported in Table 3. In the tiny-object
+scene, the counts change from 3/3/13 to 4/3/12, correspond-
+ing to a modest improvement. In the mixed tiny/small scene,
+they change from 88/13/12 to 91/11/9, showing a clearer in-
+crease in recovered objects together with fewer false positives
+and misses. These counts describe the selected scenes only and
+should not be interpreted as dataset-level precision or recall.
+4.5. Ablation Studies
+All ablation studies are conducted on VisDrone_full548.
+Unless explicitly stated, the compared variants use the same
+input resolution, batch size, optimizer family, seed, pure-CIoU
+objective, augmentation pipeline, and early-stopping criterion.
+The best checkpoint of each run is selected using the Ultralytics
+validation fitness, 0.1 × mAP50 + 0.9 × mAP50:95. The ablation
+sequence follows the functional design of HDMamba-YOLO:
+perception, reconstruction, alignment, and interaction.
+4.5.1. Progressive Component Ablation
+Table 4 first evaluates the progressive construction of the
+complete model. Starting from the YOLO11s baseline, EVSS,
+DST-Wrapper, Native C3k2-ASSAF, DySample, and OS-
+CVTIA are introduced successively.
+This table is intended
+to quantify the incremental effect of the complete processing
+pipeline; more targeted controls for individual design choices
+are provided in the subsequent subsections.
+The largest single increase occurs when EVSS is introduced
+in A1: relative to A0, mAP50 and mAP50:95 increase by 2.213
+and 1.438 percentage points, respectively. This result supports
+the use of state-space modeling for the backbone-level percep-
+tion stage under the present UAV setting. Adding DST-Wrapper
+in A2 provides smaller but positive gains of 0.179 and 0.092
+percentage points in mAP50 and mAP50:95, respectively, indi-
+cating that an explicit transition between backbone perception
+and neck reconstruction is beneficial in the final pipeline.
+Introducing Native C3k2-ASSAF in A3 increases mAP50
+from 41.792% to 42.431% and mAP50:95 from 25.265% to
+25.542%.
+DySample in A4 produces a nearly unchanged
+mAP50 (42.388%) and a small increase in mAP50:95 (25.569%);
+its role is therefore examined more carefully using a two-
+condition control in Section 4.5.5. Finally, replacing the na-
+tive head with OS-CVTIA increases recall from 40.525% to
+41.572%, mAP50 from 42.388% to 42.737%, and mAP50:95
+18
+
+
+(a)
+Input
+YOLO11s
+HDMamba-YOLO-B
+(b)
+(c)
+0.00
+0.25
+0.50
+0.75
+1.00
+Normalized response
+Figure 9: Feature-response comparison on representative VisDrone2019 validation scenes. Rows (a)–(c) represent dense mixed traffic and pedestrian clusters,
+low-contrast vehicles against cluttered road backgrounds, and densely packed distant targets with partial occlusion, respectively. Columns show the input image,
+YOLO11s response, and HDMamba-YOLO-B response, respectively. Responses are extracted from the P3 pre-detection feature (stride 8) and summarized by
+channel-wise root-mean-square activation. Within each row, the two models use the same normalization scale; warmer colors indicate larger normalized responses.
+Table 3: Comparison with representative detectors on the AI-TOD validation set. The best and second-best values are highlighted in bold and underlined, respec-
+tively.
+Method
+Params (M) ↓Resolution
+AP ↑
+AP50 ↑AP75 ↑APvt ↑
+APt ↑
+APs ↑
+ARvt ↑
+ARt ↑
+ARs ↑GFLOPs ↓
+ALSS-YOLO-S
+2.18
+640 × 640
+12.900 31.770
+7.550
+2.220
+12.830 19.940
+3.670
+22.980 30.450
+8.50
+ALSS-YOLO-M
+2.74
+640 × 640
+12.940 32.830
+7.830
+2.400
+12.420 20.200
+4.920
+22.420 31.330
+10.40
+YOLOv9-S
+7.29
+640 × 640
+20.330 47.540 14.160
+7.520
+20.130 27.960 13.650 33.680 39.170
+27.08
+YOLOv10s
+8.07
+640 × 640
+19.780 45.540 13.950
+6.640
+20.380 26.970 15.090 35.890 40.430
+24.80
+YOLO11s
+9.43
+640 × 640
+20.250 46.870 14.660
+9.030
+20.510 27.780 13.340 33.490 40.450
+21.60
+YOLOv8-S
+11.14
+640 × 640
+20.800 48.450 14.690
+5.730
+20.970 29.100
+9.560
+34.410 40.650
+28.45
+YOLOv8m
+25.86
+640 × 640
+23.510 52.680 18.530 13.300 23.460 31.240 20.590 38.050 42.380
+78.70
+HDMamba-YOLO-B (Ours)
+10.04
+640 × 640
+21.621 47.881 15.986
+6.333
+22.167 29.718 12.213 35.355 41.638
+29.88†
+Sources: ALSS-YOLO-S and ALSS-YOLO-M (He et al., 2024); YOLOv9-S (Wang et al., 2024b); YOLOv10s (Wang et al., 2024a); YOLO11s (Khanam and Hussain, 2024); and
+YOLOv8-S and YOLOv8m (Jocher et al., 2023).
+Note: † The GFLOPs of HDMamba-YOLO-B include Selective Scan compensation. HDMamba-YOLO-B additionally obtains APm = 36.826% and ARm = 42.935% for the 32–64-
+pixel scale range.
+Table 4: Progressive component ablation of HDMamba-YOLO on VisDrone2019.
+Config. EVSS DST C3k2-ASSAF DySample OS-CVTIA
+P (%)
+R (%)
+mAP50 (%) mAP50:95 (%) Params (M) ↓GFLOPs ↓
+A0
+–
+–
+–
+–
+–
+49.414 38.910
+39.400
+23.735
+9.432
+21.568
+A1
+✓
+–
+–
+–
+–
+52.035 40.470
+41.613
+25.173
+9.210
+28.877
+A2
+✓
+✓
+–
+–
+–
+51.649 40.561
+41.792
+25.265
+9.749
+29.204
+A3
+✓
+✓
+✓
+–
+–
+53.006 40.972
+42.431
+25.542
+9.763
+29.166
+A4
+✓
+✓
+✓
+✓
+–
+53.747 40.525
+42.388
+25.569
+9.773
+29.182
+A5
+✓
+✓
+✓
+✓
+✓
+53.367 41.572
+42.737
+25.713
+10.042
+29.879
+19
+
+
+Figure 10: Qualitative detection comparison on representative VisDrone2019 validation scenes. The three rows follow the same scene order and challenge categories
+as Fig. 9, enabling a direct comparison between feature-response patterns and the corresponding detection outcomes. Columns show the ground-truth annotations,
+YOLO11s predictions, and HDMamba-YOLO-B predictions, respectively. Orange boxes indicate ground-truth instances. In the prediction panels, green and blue
+solid boxes denote true-positive (TP) and false-positive (FP) detections, respectively, while red dashed boxes indicate unmatched ground-truth objects (FN). Visual
+matching uses class-consistent one-to-one assignment at an IoU threshold of 0.5; detections are shown at a confidence threshold of 0.25 with an NMS IoU threshold
+of 0.7.
+from 25.569% to 25.713%, while precision decreases slightly
+from 53.747% to 53.367%. The progressive study thus sup-
+ports the complete pipeline without requiring every component
+to improve every metric independently.
+4.5.2. Stage-wise Allocation of SSM and CNN Operators
+The progressive study does not by itself isolate whether the
+final performance is caused by the stage-wise allocation of
+SSM and CNN operators. We therefore construct two com-
+plementary controls around A5. CNN Full-Control replaces
+the EVSS perception stages with channel- and stride-matched
+CNN/InRes processing while retaining PhasePatchMerging2D,
+DST-Wrapper, Native C3k2-ASSAF, DySample, OS-CVTIA,
+detection scales, and the training protocol.
+In the opposite
+direction, SSM-dominant Neck retains the EVSS backbone
+but replaces Native C3k2-ASSAF in the neck with backbone-
+homologous EVSS-based processing. These controls are de-
+signed to compare architectural allocation rather than to make a
+general statement about CNNs or SSMs as model families. The
+corresponding results are reported in Table 5.
+Relative to CNN Full-Control, HDMamba-YOLO-B im-
+proves precision, recall, mAP50, and mAP50:95 by 2.624, 3.146,
+2.913, and 1.870 percentage points, respectively. In the oppo-
+site control, replacing the CNN-style reconstruction operators
+in the neck with EVSS-based processing reduces the four met-
+rics by 0.737, 0.592, 0.517, and 0.253 percentage points rela-
+tive to A5. The latter difference is substantially smaller than
+the CNN-backbone control, but it is consistent across all four
+detection metrics.
+These complementary observations support the proposed
+stage-wise allocation under the present controlled setting:
+state-space modeling is effective when assigned to backbone-
+level contextual perception, while explicit convolutional two-
+dimensional processing remains beneficial for repeated feature
+reconstruction and aggregation in the neck. The same tendency
+is consistent with the external Mamba-YOLO-T comparison in
+Table 2, where the hybrid allocation used here reaches a higher-
+accuracy operating point under the evaluated UAV setting.
+20
+
+
+(a) VT (2–8 px)
+Ground Truth
+Zoom
+YOLO11s
+Zoom
+HDMamba-YOLO-B
+Zoom
+(b) T (8–16 px)
+(c) Mixed T/S (8–32 px)
+Figure 11: Scale-aware qualitative detection comparison on the official AI-TOD validation set. Rows (a)–(c) correspond to a very-tiny-dominated scene (image
+1697), a tiny-object scene (image 1043), and a mixed tiny/small scene (image 1845), respectively. Columns show Ground Truth, YOLO11s, and HDMamba-
+YOLO-B. Orange boxes denote ground-truth instances; green and blue solid boxes in prediction panels denote TP and FP detections, while red dashed boxes denote
+unmatched ground-truth objects (FN). Purple rectangles indicate the ground-truth-driven regions shown in the enlarged views, and the same region is used across
+the three columns of each row.
+Table 5: Controlled comparison of stage-wise SSM–CNN allocation on VisDrone2019.
+Configuration
+Perception
+Reconstruction
+Alignment
+Interaction
+P (%)
+R (%)
+mAP50 (%) mAP50:95 (%) Params (M) ↓GFLOPs ↓
+CNN Full-Control
+CNN/InRes
+DST + Native ASSAF
+DySample
+OS-CVTIA
+50.743 38.426
+39.824
+23.843
+9.718
+22.789
+SSM-dominant Neck
+EVSS
+DST + EVSS
+DySample
+OS-CVTIA
+52.630 40.980
+42.220
+25.460
+10.273
+28.700
+HDMamba-YOLO-B
+EVSS
+DST + Native ASSAF DySample OS-CVTIA 53.367 41.572
+42.737
+25.713
+10.042
+29.879
+4.5.3. Ablation of Backbone Stage-Transition Operators
+Table 6 compares EfficientDownsample, LightweightPhase-
+Downsample, and PhasePatchMerging2D to isolate the choice
+of transition operator between high-resolution backbone stages
+under the same optimizer grouping and downstream architec-
+ture. The EfficientDownsample control was retrained using the
+same optimizer configuration as the two phase-based variants,
+so that the transition operator is the only intended structural
+variable at the corresponding backbone locations.
+Compared with EfficientDownsample,
+PhasePatchMerg-
+ing2D improves precision, recall, mAP50, and mAP50:95 by
+1.404, 0.961, 1.059, and 0.421 percentage points, respectively,
+with increases of 0.121M parameters and 0.623 GFLOPs. Com-
+pared with LightweightPhaseDownsample, the corresponding
+improvements are 1.277, 1.100, 1.104, and 0.474 percentage
+points, while the complexity difference is only 0.041M param-
+eters and 0.209 GFLOPs.
+Both phase-based operators use the same four spatial phases,
+whereas the final PhasePatchMerging2D concatenates X00, X10,
+X01, and X11, applies LayerNorm to the 4C representation, and
+uses a bias-free linear projection. The result therefore does not
+imply that four-phase sampling alone is sufficient; rather, the
+complete phase-aware merging formulation provides the best
+performance among the evaluated transition designs under the
+present protocol.
+4.5.4. Internal Reconstruction Analysis of C3k2-ASSAF
+A targeted branch ablation is conducted to clarify the roles of
+the two reconstruction streams in the final Native C3k2-ASSAF
+block. All variants use the same A3 outer topology, in which
+the input is split into two initial features, the second feature is
+iteratively processed by ASSAF, and the retained raw features
+and reconstructed response are concatenated before the final 1×
+1 projection. Only the internal ASSAF branch composition is
+changed. This design avoids mixing the present analysis with
+earlier prototype topologies or gate-search experiments.
+The Local-only configuration achieves 52.512% precision,
+40.771% recall, 42.116% mAP50, and 25.545% mAP50:95. The
+21
+
+
+Table 6: Ablation of backbone stage-transition operators on VisDrone2019.
+Stage transition
+P (%)
+R (%)
+mAP50 (%)
+mAP50:95 (%)
+Params (M)
+GFLOPs
+EfficientDownsample
+51.963
+40.611
+41.678
+25.292
+9.921
+29.256
+LightweightPhaseDownsample
+52.090
+40.472
+41.633
+25.239
+10.001
+29.670
+PhasePatchMerging2D
+53.367
+41.572
+42.737
+25.713
+10.042
+29.879
+Table 7: Internal branch ablation of Native C3k2-ASSAF on VisDrone2019.
+Variant
+Local branch
+Context branch
+P (%)
+R (%)
+mAP50 (%)
+mAP50:95 (%)
+Params (M)
+GFLOPs
+Local-only
+✓
+–
+52.512
+40.771
+42.116
+25.545
+9.763
+29.116
+Context-only
+–
+✓
+50.873
+41.790
+42.001
+25.240
+9.763
+28.877
+Full C3k2-ASSAF
+✓
+✓
+53.006
+40.972
+42.431
+25.542
+9.763
+29.166
+Context-only configuration yields a higher recall of 41.790%
+but lower precision and AP. Relative to Context-only, Local-
+only changes precision, recall, and mAP50:95 by +1.639,
+−1.019, and +0.305 percentage points, respectively. These re-
+sults reveal different functional tendencies of the two branches:
+the orthogonal 1 × 3 →3 × 1 branch is more closely associ-
+ated with discriminative local reconstruction and localization
+quality, whereas the 7 × 7 depthwise context branch provides
+complementary neighborhood information and tends to favor
+recall.
+Combining both branches in the full C3k2-ASSAF in-
+creases precision, recall, and mAP50 over Local-only by
+0.494, 0.201, and 0.315 percentage points, respectively.
+Its
+mAP50:95 (25.542%) is essentially identical to that of Local-
+only (25.545%), with a difference of only 0.003 percentage
+points. Compared with Context-only, the full configuration im-
+proves precision, mAP50, and mAP50:95 by 2.133, 0.430, and
+0.302 percentage points, respectively. We therefore interpret
+the full design as providing a more favorable overall precision–
+recall balance rather than claiming that every metric is maxi-
+mized by the dual-branch configuration.
+The adaptive independent-sigmoid gating used in the final
+implementation is retained as a lightweight modulation mecha-
+nism. The present controlled analysis, however, is centered on
+the more fundamental Local/Context branch complementarity;
+the observed gain is therefore not attributed solely to the gating
+operation.
+To examine the internal spatial tendencies behind these
+branch-level metrics, Fig. 12 visualizes the Local-detail, Con-
+text, and fused ASSAF responses on two representative Vis-
+Drone regions. All three response maps are taken from the same
+forward pass of the full ASSAF block rather than from three
+separately trained models. The Local-detail response presents
+more concentrated spatial peaks, whereas the Context response
+provides broader and smoother support over neighboring struc-
+tures. The fused response preserves the dominant localized pat-
+tern while incorporating lower-amplitude contextual support,
+which is consistent with the complementary behavior observed
+in Table 7. Because each response is independently normalized
+using the 1st–99th percentile range, color intensity describes
+the within-branch spatial distribution; absolute activation mag-
+nitudes are therefore not comparable across branches.
+4.5.5. Controlled Ablation of DySample
+The progressive A3→A4 comparison shows only a small
+change after DySample is introduced, making a single pair in-
+sufficient to characterize its role. We therefore evaluate DySam-
+ple under both the native detection head and OS-CVTIA, as re-
+ported in Table 8. This two-condition design distinguishes the
+independent effect of dynamic upsampling from its interaction
+with the final head.
+With the native detection head, replacing nearest-neighbor
+upsampling with DySample changes precision, recall, mAP50,
+and mAP50:95 by +0.741, −0.447, −0.043, and +0.027 percent-
+age points, respectively. Thus, DySample alone produces only
+a marginal net AP change in this setting. Under OS-CVTIA,
+however, DySample improves precision, recall, mAP50, and
+mAP50:95 by 1.134, 0.417, 0.481, and 0.089 percentage points,
+respectively, relative to A5-DyOff. The results therefore sup-
+port a complementary relationship between content-dependent
+spatial alignment and the subsequent task-interaction head,
+rather than a claim that DySample independently produces a
+large gain in every configuration.
+4.5.6. Ablation of OS-CVTIA
+Table 9 compares OS-CVTIA with the native detection head
+and an alternative H2 interaction configuration. In the final H1
+design, boundary-sensitive and context-sensitive macro–micro
+representations are used to modulate the localization and clas-
+sification pathways. The classification interaction includes a
+small relaxation term before multiplicative modulation, and in-
+dependent learnable scaling factors regulate the classification
+and localization modulation intensities.
+Compared with the native detection head, OS-CVTIA-H1
+changes precision, recall, mAP50, and mAP50:95 by −0.380,
++1.047, +0.349, and +0.144 percentage points, respectively.
+This pattern suggests that macro–micro task interaction helps
+retain weak object responses and yields a more favorable over-
+all precision–recall balance, although it does not improve every
+detection metric.
+H1 also improves precision, mAP50, and mAP50:95 over H2
+by 1.335, 0.134, and 0.180 percentage points, respectively,
+while H2 has a 0.134-point recall advantage. These results mo-
+tivate the use of H1 as the final configuration because it pro-
+vides the highest overall AP among the evaluated head designs.
+22
+
+
+Figure 12: Internal response patterns of the full ASSAF block on two representative VisDrone regions. Columns show the input region, Local-detail response,
+Context response, and fused ASSAF response. The three response maps are extracted from the same forward pass. For visualization, each response is independently
+normalized using its 1st–99th percentile range; therefore, color intensity reflects the within-branch spatial distribution rather than absolute activation magnitude
+across branches.
+Table 8: Controlled ablation of DySample under the native head and OS-CVTIA on VisDrone2019.
+Configuration
+Upsampling
+Head
+P (%)
+R (%)
+mAP50 (%)
+mAP50:95 (%)
+Params (M)
+GFLOPs
+A3
+Nearest
+Native Detect
+53.006
+40.972
+42.431
+25.542
+9.763
+29.166
+A4
+DySample
+Native Detect
+53.747
+40.525
+42.388
+25.569
+9.773
+29.182
+A5-DyOff
+Nearest
+OS-CVTIA
+52.233
+41.155
+42.256
+25.624
+10.032
+29.864
+A5
+DySample
+OS-CVTIA
+53.367
+41.572
+42.737
+25.713
+10.042
+29.879
+Table 9: Ablation of OS-CVTIA interaction designs on VisDrone2019.
+Detection head
+Interaction design
+P (%)
+R (%)
+mAP50 (%)
+mAP50:95 (%)
+Native Detect
+–
+53.747
+40.525
+42.388
+25.569
+OS-CVTIA-H2
+Weakened micro interaction
+52.032
+41.706
+42.603
+25.533
+OS-CVTIA-H1
+Full interaction + relaxation
+53.367
+41.572
+42.737
+25.713
+The H1–H2 comparison is reported without separate complex-
+ity values because the two variants share the same static struc-
+tural complexity; earlier profiling differences were caused by
+inconsistent fused/unfused counting conventions rather than by
+a meaningful architectural difference.
+With the architectural configuration fixed to the final A5 de-
+sign, we next examine whether the localization objective should
+retain the native CIoU formulation or incorporate an NWD-
+based term for tiny-object regression.
+4.5.7. Localization-Loss Selection
+Because NWD was proposed to improve localization sensi-
+tivity for tiny objects (Wang et al., 2021a), we further examine
+whether it provides an additional benefit to the final HDMamba-
+YOLO-B detector. The architecture is fixed to the complete
+A5 configuration, and the dataset split, optimizer, augmenta-
+tion policy, random seed, training schedule, and all remain-
+ing loss terms are kept unchanged. Only the relative contri-
+bution of CIoU and NWD in the localization objective is var-
+ied. Three settings are evaluated: pure CIoU, an equal-weight
+CIoU–NWD mixture, and pure NWD.
+As shown in Table 10, pure CIoU provides the best result
+across all four detection metrics. Compared with the equal-
+weight CIoU–NWD formulation, pure CIoU improves preci-
+sion, recall, mAP50, and mAP50:95 by 1.458, 1.019, 1.046,
+and 0.702 percentage points, respectively.
+Replacing CIoU
+entirely with NWD leads to a larger degradation in AP, with
+mAP50 decreasing from 42.737% to 40.584% and mAP50:95
+from 25.713% to 23.898%.
+The results show that introducing NWD does not provide an
+additional localization benefit for the final HDMamba-YOLO-
+B configuration under the present VisDrone training protocol.
+We therefore retain pure CIoU as the localization objective for
+all final HDMamba-YOLO results. With both the architectural
+configuration and localization objective determined, we next
+examine the optimization behavior of the final model.
+4.5.8. Training Convergence
+Figure 13 compares the validation trajectories of YOLO11s
+and HDMamba-YOLO-B under the same VisDrone training
+protocol. Both models converge stably under early stopping,
+but the proposed model reaches a higher validation mAP50:95
+and maintains a lower validation box-loss trajectory near con-
+vergence. The best recorded mAP50:95 values are 23.73% for
+YOLO11s and 25.71% for HDMamba-YOLO-B, reached at
+epochs 181 and 229, respectively. Over the final 20 recorded
+epochs, the corresponding mAP50:95 means are 23.708% and
+25.701%, with standard deviations of 0.017 and 0.006 percent-
+age points. These curves support stable late-stage optimization
+and a higher converged accuracy for HDMamba-YOLO-B; be-
+23
+
+
+Table 10: Controlled ablation of the localization objective on VisDrone2019. The HDMamba-YOLO-B architecture and all remaining training settings are kept
+unchanged; only the CIoU/NWD weighting is varied.
+Localization objective
+wCIoU
+wNWD
+P (%)
+R (%)
+mAP50 (%)
+mAP50:95 (%)
+Pure CIoU
+1.0
+0.0
+53.367
+41.572
+42.737
+25.713
+CIoU + NWD
+0.5
+0.5
+51.909
+40.553
+41.691
+25.011
+Pure NWD
+0.0
+1.0
+52.819
+39.523
+40.584
+23.898
+cause the best epoch occurs later for the proposed model, they
+should not be interpreted as evidence of faster convergence.
+4.6. Discussion
+The experiments provide a consistent but nuanced picture
+of HDMamba-YOLO. On VisDrone2019, the Tiny, Lite, and
+Base variants span three parameter ranges and exhibit the ex-
+pected accuracy increase as model capacity grows. The Base
+variant achieves the strongest performance in the compact com-
+parison group, while the Lite and Tiny variants provide lower-
+complexity operating points. On AI-TOD, HDMamba-YOLO-
+B improves the principal AP metrics over the similarly sized
+YOLO11s and remains reasonably close to the substantially
+larger YOLOv8m on several tiny- and small-object metrics. At
+the same time, the lower APvt and ARvt values show that objects
+represented by only 2–8 pixels remain a challenging regime for
+the current architecture.
+The controlled ablations support the stage-wise design ra-
+tionale. EVSS provides the largest gain when introduced into
+the perception stage, whereas the SSM-dominant neck control
+performs slightly below the final convolutional reconstruction
+design.
+The CNN Full-Control result provides the comple-
+mentary observation that replacing the EVSS perception stages
+with CNN/InRes processing substantially reduces AP under the
+same downstream configuration. Together, these experiments
+support a functional allocation in which state-space modeling is
+used for contextual perception and convolutional operators are
+retained for local two-dimensional reconstruction in the neck.
+The reconstruction analysis further shows that the Local and
+Context branches of C3k2-ASSAF exhibit different response
+tendencies. The Local-only variant favors precision and stricter
+localization, whereas the Context-only variant favors recall.
+Their combination provides the highest mAP50 and the best
+overall precision–recall balance while maintaining essentially
+the same mAP50:95 as Local-only.
+This result supports the
+local–context dual-path formulation while also motivating a re-
+strained interpretation of the adaptive gate: the gate is retained
+as a lightweight modulation mechanism, but the principal evi-
+dence concerns branch complementarity rather than a large iso-
+lated gate contribution.
+The alignment and interaction studies reveal a similar com-
+plementary relationship. DySample produces only a marginal
+AP change with the native detection head, but its benefit be-
+comes more consistent when paired with OS-CVTIA. OS-
+CVTIA, in turn, primarily improves recall and overall AP
+rather than precision alone. These results are consistent with
+the intended processing sequence of reconstruction, cross-scale
+alignment, and task interaction, while avoiding the stronger
+claim that each module independently improves every metric.
+Finally, the stage-transition study shows that the final
+PhasePatchMerging2D configuration provides higher AP than
+both EfficientDownsample and LightweightPhaseDownsample
+at a modest complexity increase. Because LightweightPhase-
+Downsample also uses four spatial phases, the result suggests
+that the gain is associated with the complete phase-aware merge
+and projection formulation rather than with phase sampling
+alone. The localization-loss ablation further shows that pure
+CIoU provides the best performance among the three evaluated
+objectives for the final HDMamba-YOLO-B configuration.
+Overall, the results support the central design of HDMamba-
+YOLO as a coordinated perception–reconstruction–alignment–
+interaction pipeline.
+The evidence is strongest when inter-
+preted within the controlled UAV small-object setting used in
+this work: contextual state-space processing is effective in the
+backbone, local convolutional reconstruction remains useful in
+the neck, dynamic alignment and task interaction provide com-
+plementary refinements, and the resulting architecture offers
+multiple accuracy–complexity operating points for aerial small-
+object detection.
+5. Conclusion
+In this work, we proposed Hybrid Dual-domain Mamba-
+YOLO (HDMamba-YOLO), an efficient UAV small-object de-
+tector built on a stage-wise heterogeneous SSM–CNN archi-
+tecture.
+Rather than applying a single operator family uni-
+formly throughout the detector, HDMamba-YOLO organizes
+feature processing according to four successive functional re-
+quirements: perception, reconstruction, alignment, and interac-
+tion. EfficientVMamba-based EVSS is employed in the rela-
+tively high-resolution backbone stages to establish long-range
+contextual perception, while PhasePatchMerging2D performs
+phase-aware hierarchical transitions before deeper semantic ab-
+straction.
+CNN-style processing is retained in the neck to
+provide explicit local two-dimensional reconstruction, thereby
+complementing the contextual representation learned by the
+state-space backbone.
+To support this stage-wise allocation, DST-Wrapper re-
+encodes the deepest backbone representation at the perception–
+reconstruction interface, and Native C3k2-ASSAF introduces
+repeated local-detail and bounded-context reconstruction while
+preserving the native split–iterative–concatenate feature-reuse
+topology of C3k2.
+DySample further performs content-
+adaptive cross-scale resampling at the top-down fusion stages
+to improve spatial correspondence between features of differ-
+ent resolutions. Finally, OS-CVTIA introduces macro–micro
+receptive-field interaction and asymmetric task modulation for
+24
+
+
+0
+50
+100
+150
+200
+250
+Epoch
+0
+5
+10
+15
+20
+25
+mAP50:95 (%)
+Best: 181
+23.73%
+Best: 229
+25.71%
+(a) Validation mAP50:95
+YOLO11s
+HDMamba-YOLO-B
+0
+50
+100
+150
+200
+250
+Epoch
+1.25
+1.50
+1.75
+2.00
+2.25
+2.50
+2.75
+3.00
+Box loss
+(b) Validation box loss
+YOLO11s
+HDMamba-YOLO-B
+Figure 13: Training convergence on VisDrone2019 for YOLO11s and HDMamba-YOLO-B. The two panels report validation mAP50:95 and validation box loss,
+respectively. Both models exhibit stable optimization, while HDMamba-YOLO-B converges to a higher validation accuracy and a lower box-loss level. The figure
+is intended to compare final optimization behavior rather than convergence speed.
+localization and classification before the native YOLO predic-
+tion branches. Together, these components instantiate the pro-
+posed perception–reconstruction–alignment–interaction (P–R–
+A–I) pipeline.
+Experiments on VisDrone2019 and AI-TOD demonstrate
+that HDMamba-YOLO provides a competitive accuracy–
+complexity trade-off for UAV small-object detection in dense
+aerial scenes.
+On VisDrone2019, the canonical HDMamba-
+YOLO-B achieves 42.737% mAP50 and 25.713% mAP50:95
+with 10.042M parameters and 29.879 GFLOPs. The reduced-
+capacity HDMamba-YOLO-Tiny and HDMamba-YOLO-Lite
+variants further provide lower-complexity operating points
+while retaining the same stage-wise design principle. The pro-
+gressive ablation studies show that the individual components
+contribute complementary improvements, while the controlled
+SSM–CNN architecture comparison indicates that, under the
+present experimental setting, allocating state-space modeling to
+contextual perception and CNN-style processing to local recon-
+struction is more effective than extending state-space aggrega-
+tion uniformly into the neck. Qualitative analyses further reveal
+more concentrated feature responses, the recovery of additional
+instances in selected dense scenes, and complementary local–
+context response patterns within ASSAF.
+The results also reveal remaining challenges. In particular,
+extremely tiny targets remain difficult under the AI-TOD very-
+tiny regime, where weak appearance evidence and severe spa-
+tial quantization continue to limit recall. Future work will there-
+fore investigate stronger localization-aware learning objectives
+and feature alignment strategies for very-tiny targets, as well
+as more efficient variants of the current architecture for real-
+time edge deployment. The stage-wise global–local perception
+framework may also be extended to broader low-altitude visual
+perception tasks, including traffic monitoring, emergency re-
+sponse, and other resource-constrained aerial applications.
+References
+Bochkovskiy,
+A.,
+Wang,
+C.Y.,
+Liao,
+H.Y.M.,
+2020.
+YOLOv4:
+Optimal speed and accuracy of object detec-
+tion. arXiv:2004.10934.
+Cai, Z., Vasconcelos, N., 2018. Cascade R-CNN: Delving into
+high quality object detection, in: CVPR, pp. 6154–6162.
+Cao, Y., He, Z., Wang, L., Wang, W., Yuan, Y., Zhang, D.,
+Zhang, J., Zhu, P., Van Gool, L., Han, J., Hoi, S., Hu, Q.,
+Liu, M., Cheng, C., Cao, G., Li, G., Wang, H., Wen, L., Qi,
+Q., Zhao, Q., Lyu, S., Zhao, W., Lu, X., Zhu, X., Liu, Y.,
+Lv, Y., Ma, Y., Yang, Y., Wang, Z., Xu, Z., Luo, Z., Zhang,
+Z., Zhang, Z., Li, Z., Zhang, Z., 2021. VisDrone-DET2021:
+The vision meets drone object detection challenge results, in:
+ICCV Workshops, pp. 2847–2854.
+Carion, N., Massa, F., Synnaeve, G., Usunier, N., Kirillov, A.,
+Zagoruyko, S., 2020. End-to-end object detection with trans-
+formers, in: ECCV, pp. 213–229.
+Dai, X., Chen, Y., Xiao, B., Chen, D., Liu, M., Yuan, L., Zhang,
+L., 2021. Dynamic head: Unifying object detection heads
+with attentions, in: CVPR, pp. 7373–7382.
+Ding, X., Guo, Y., Ding, G., Han, J., 2019. ACNet: Strength-
+ening the kernel skeletons for powerful CNN via asymmetric
+convolution blocks, in: ICCV, pp. 1911–1920. doi:10.1109/
+ICCV.2019.00200.
+Ding, X., Zhang, X., Han, J., Ding, G., 2022. Scaling up your
+kernels to 31×31: Revisiting large kernel design in CNNs, in:
+25
+
+
+CVPR, pp. 11953–11965. doi:10.1109/CVPR52688.2022.
+01166.
+Dosovitskiy, A., Beyer, L., Kolesnikov, A., Weissenborn, D.,
+Zhai, X., Unterthiner, T., Dehghani, M., Minderer, M.,
+Heigold, G., Gelly, S., Uszkoreit, J., Houlsby, N., 2021. An
+image is worth 16x16 words: Transformers for image recog-
+nition at scale, in: ICLR.
+Du, D., Zhu, P., Wen, L., Bian, X., Ling, H., Hu, Q., Peng,
+T., Zheng, J., Wang, X., Zhang, Y., Bo, L., Shi, H., Zhu, Q.,
+Wang, T., Zhou, S., Xu, W., Tian, Q., Li, H., 2019. VisDrone-
+DET2019: The vision meets drone object detection in image
+challenge results, in: Proceedings of the IEEE/CVF Interna-
+tional Conference on Computer Vision Workshops, pp. 213–
+226.
+Fang, C., Cheng, S., Du, A., Wu, C., Ding, Y., 2026. LGMM-
+Net: A local–global encoder and mask mamba decoder net-
+work for remote sensing change detection.
+IEEE Trans.
+Geosci. Remote Sens. doi:10.1109/TGRS.2026.3662322.
+Feng, C., Zhong, Y., Gao, Y., Scott, M.R., Huang, W., 2021.
+TOOD: Task-aligned one-stage object detection, in: ICCV,
+pp. 3510–3519.
+Feng, Y., Huang, J., Du, S., Ying, S., Yong, J.H., Li, Y., Ding,
+G., Ji, R., Gao, Y., 2025. Hyper-YOLO: When visual ob-
+ject detection meets hypergraph computation. IEEE Trans-
+actions on Pattern Analysis and Machine Intelligence 47,
+2388–2401. doi:10.1109/TPAMI.2024.3524377.
+Gu, A., Dao, T., 2024. Mamba: Linear-time sequence modeling
+with selective state spaces, in: First Conference on Language
+Modeling (COLM).
+Gu, A., Goel, K., Ré, C., 2022. Efficiently modeling long se-
+quences with structured state spaces, in: ICLR.
+Hatamizadeh, A., Kautz, J., 2025. MambaVision: A hybrid
+mamba–transformer vision backbone, in: CVPR, pp. 25261–
+25270.
+He, A., Li, X., Wu, X., Su, C., Chen, J., Xu, S., Guo, X.,
+2024. ALSS-YOLO: An adaptive lightweight channel split
+and shuffling network for TIR wildlife detection in UAV
+imagery.
+URL: https://arxiv.org/abs/2409.06259,
+doi:10.48550/arXiv.2409.06259, arXiv:2409.06259.
+He, H., Zhang, J., Cai, Y., Chen, H., Hu, X., Gan, Z., Wang,
+Y., Wang, C., Wu, Y., Xie, L., 2025.
+MobileMamba:
+Lightweight multi-receptive visual mamba network, in: Proc.
+IEEE/CVF Conf. Comput. Vis. Pattern Recognit., pp. 4497–
+4507. doi:10.1109/CVPR52734.2025.00424.
+Hou, T., Leng, C., Wang, J., et al., 2025. MFEL-YOLO for
+small object detection in UAV aerial images. Expert Systems
+with Applications 291, 128459.
+Hu, J., Shen, L., Sun, G., 2018. Squeeze-and-excitation net-
+works, in: CVPR, pp. 7132–7141.
+doi:10.1109/CVPR.
+2018.00745.
+Hua, Q., Xu, H., Zhang, F., Dong, C., Lim, B.H., Zhang, Y.,
+2026. SFBF-YOLO for small object detection in UAV and
+remote sensing images. IEEE Transactions on Geoscience
+and Remote Sensing 64, 1–15. doi:10.1109/TGRS.2026.
+3693675. art. no. 5624215.
+Jocher, G., 2020. YOLOv5 by ultralytics. GitHub Repository.
+Jocher, G., Chaurasia, A., Qiu, J., 2023. Ultralytics YOLOv8.
+GitHub Repository.
+Khanam, R., Hussain, M., 2024. YOLOv11: An overview of
+the key architectural enhancements. arXiv:2410.17725.
+Lau, K.W., Po, L.M., Rehman, Y.A.U., 2024. Large separable
+kernel attention: Rethinking the large kernel attention design
+in CNN.
+Expert Systems with Applications 236, 121352.
+doi:10.1016/j.eswa.2023.121352.
+Lei, X., Wu, S., Wu, W., Jiang, Z., 2025. MambaNeXt-YOLO:
+A hybrid state space model for real-time object detection.
+arXiv preprint arXiv:2506.03654 arXiv:2506.03654.
+Li, X., Wang, W., Hu, X., Yang, J., 2019. Selective kernel net-
+works, in: CVPR, pp. 510–519. doi:10.1109/CVPR.2019.
+00060.
+Li, Y., Hou, Q., Zheng, Z., Cheng, M.M., Yang, J., Li, X.,
+2023. Large selective kernel network for remote sensing ob-
+ject detection, in: ICCV, pp. 16748–16759. doi:10.1109/
+ICCV51070.2023.01540.
+Li, Y., Xu, H., Sun, Y., 2025. KSCNet: Exploring KAN and
+state space model collaboration network for small object de-
+tection from UAV imagery. Expert Systems with Applica-
+tions , 130240.
+Lin, T.Y., Dollár, P., Girshick, R., He, K., Hariharan, B., Be-
+longie, S., 2017a. Feature pyramid networks for object de-
+tection, in: CVPR, pp. 936–944.
+Lin, T.Y., Goyal, P., Girshick, R., He, K., Dollár, P., 2017b.
+Focal loss for dense object detection, in: ICCV, pp. 2980–
+2988.
+Lin, T.Y., Maire, M., Belongie, S., Hays, J., Perona, P., Ra-
+manan, D., Dollár, P., Zitnick, C.L., 2014. Microsoft COCO:
+Common objects in context, in: European Conference on
+Computer Vision, pp. 740–755.
+Liu, S., Qi, L., Qin, H., Shi, J., Jia, J., 2018. Path aggrega-
+tion network for instance segmentation, in: CVPR, pp. 8759–
+8768.
+Liu, W., Anguelov, D., Erhan, D., Szegedy, C., Reed, S., Fu,
+C.Y., Berg, A.C., 2016. SSD: Single shot multibox detector,
+in: ECCV, pp. 21–37.
+Liu, W., Lu, H., Fu, H., Cao, Z., 2023. Learning to upsample
+by learning to sample, in: ICCV, pp. 6027–6037.
+26
+
+
+Liu, X., Leng, C., Niu, X., Pei, Z., Cheng, I., Basu, A.,
+2022. Find small objects in UAV images by feature min-
+ing and attention. IEEE Geosci. Remote Sens. Lett. 19, 1–5.
+doi:10.1109/LGRS.2022.3220661.
+Liu, Y., Tian, Y., Zhao, Y., Yu, H., Xie, L., Wang, Y., Ye, Q.,
+Jiao, J., Liu, Y., 2024. VMamba: Visual state space model,
+in: NeurIPS.
+Liu, Z., Lin, Y., Cao, Y., Hu, H., Wei, Y., Zhang, Z., Lin, S.,
+Guo, B., 2021. Swin transformer: Hierarchical vision trans-
+former using shifted windows, in: ICCV, pp. 10012–10022.
+Nikouei, M., Baroutian, B., Nabavi, S., Taraghi, F., Aghaei,
+A., Sajedi, A., Ebrahimi Moghaddam, M., 2025. Small ob-
+ject detection: A comprehensive survey on challenges, tech-
+niques and real-world applications. Intelligent Systems with
+Applications 27, 200561.
+Obaid, L., Hamad, K., Al-Ruzouq, R., Abu Dabous, S., Ismail,
+K., Alotaibi, E., 2025. State-of-the-art review of unmanned
+aerial vehicles (UAVs) and artificial intelligence (AI) for traf-
+fic and safety analyses: Recent progress, applications, chal-
+lenges, and opportunities. Transportation Research Interdis-
+ciplinary Perspectives 33, 101591.
+Pei, X., Huang, T., Xu, C., 2025. EfficientVMamba: Atrous
+selective scan for light weight visual mamba, in: AAAI, pp.
+6443–6451.
+Redmon, J., Divvala, S., Girshick, R., Farhadi, A., 2016.
+You only look once: Unified, real-time object detection, in:
+CVPR, pp. 779–788.
+Ren, S., He, K., Girshick, R., Sun, J., 2017. Faster R-CNN:
+Towards real-time object detection with region proposal net-
+works. IEEE Transactions on Pattern Analysis and Machine
+Intelligence 39, 1137–1149.
+Shaker, A., Wasim, S.T., Khan, S., 2025. GroupMamba: Effi-
+cient group-based visual state space model, in: Proceedings
+of the Computer Vision and Pattern Recognition Conference,
+pp. 14912–14922.
+Shi, Z., Hu, J., Ren, J., Ye, H., Yuan, X., Ouyang, Y., He, J., Ji,
+B., Guo, J., 2025. HS-FPN: High frequency and spatial per-
+ception FPN for tiny object detection, in: Proc. AAAI Conf.
+Artif. Intell., pp. 6896–6904. doi:10.1609/aaai.v39i7.
+32740.
+Song, G., Liu, Y., Wang, X., 2020. Revisiting the sibling head in
+object detector, in: CVPR, pp. 11560–11569. doi:10.1109/
+CVPR42600.2020.01158.
+Tian, Y., Ye, Q., Doermann, D., 2025. YOLOv12: Attention-
+centric real-time object detectors, in: NeurIPS.
+Wang, A., Chen, H., Liu, L., Chen, K., Lin, Z., Han, J., Ding,
+G., 2024a. YOLOv10: Real-time end-to-end object detec-
+tion, in: NeurIPS.
+Wang, C., He, W., Nie, Y., Guo, J., Liu, C., Han, K., Wang,
+Y., 2023a. Gold-YOLO: Efficient object detector via gather-
+and-distribute mechanism, in: NeurIPS.
+Wang, C.Y., Bochkovskiy, A., Liao, H.Y.M., 2023b. YOLOv7:
+Trainable bag-of-freebies sets new state-of-the-art for real-
+time object detectors, in: CVPR, pp. 7464–7475.
+Wang, C.Y., Liao, H.Y.M., Yeh, I.H., Wu, Y.H., Chen, P.Y.,
+Hsieh, J.W., 2020. CSPNet: A new backbone that can en-
+hance learning capability of CNN, in: CVPR Workshops, pp.
+1571–1580.
+Wang, C.Y., Yeh, I.H., Liao, H.Y.M., 2024b. YOLOv9: Learn-
+ing what you want to learn using programmable gradient in-
+formation, in: Proc. Eur. Conf. Comput. Vis. (ECCV).
+Wang, H., Liu, J., Zhao, J., Zhang, J., Zhao, D., 2025a. Pre-
+cision and speed: LSOD-YOLO for lightweight small object
+detection. Expert Systems with Applications 269, 126440.
+Wang, J., Chen, K., Xu, R., Liu, Z., Loy, C.C., Lin, D., 2019.
+CARAFE: Content-aware reassembly of features, in: Proc.
+IEEE/CVF Int. Conf. Comput. Vis., pp. 3007–3016. doi:10.
+1109/ICCV.2019.00310.
+Wang, J., Li, X., Zhou, L., Chen, J., He, Z., Guo, L., Liu, J.,
+2024c. Adaptive receptive field enhancement network based
+on attention mechanism for detecting the small target in the
+aerial image. IEEE Transactions on Geoscience and Remote
+Sensing 62, 1–18.
+Wang, J., Xu, C., Yang, W., et al., 2021a. A normalized gaus-
+sian wasserstein distance for tiny object detection.
+arXiv
+preprint arXiv:2110.13389 .
+Wang, J., Yang, W., Guo, H., Zhang, R., Xia, G.S., 2021b. Tiny
+object detection in aerial images, in: International Confer-
+ence on Pattern Recognition (ICPR), pp. 3791–3798.
+Wang, Z., Li, C., Xu, H., Zhu, X., Li, H., 2025b.
+Mamba
+YOLO: A simple baseline for object detection with state
+space model, in: AAAI, pp. 8205–8213.
+Wu, S., Lu, X., Guo, C., Guo, H., 2024. Accurate UAV small
+object detection based on HRFPN and EfficentVMamba.
+Sensors 24, 4966. doi:10.3390/s24154966.
+Wu, Y., Chen, Y., Yuan, L., Liu, Z., Wang, L., Li, H., Fu,
+Y., 2020. Rethinking classification and localization for ob-
+ject detection, in: CVPR, pp. 10183–10192. doi:10.1109/
+CVPR42600.2020.01020.
+Xiao, C., Li, M., Zhang, Z., Meng, D., Zhang, L., 2025. Spatial-
+Mamba: Effective visual state space models via structure-
+aware state fusion, in: Proc. Int. Conf. Learn. Represent.
+Xiong, Y., Li, Z., Chen, Y., Wang, F., Zhu, X., Luo, J., Wang,
+W., Lu, T., Li, H., Qiao, Y., Lu, L., Zhou, J., Dai, J., 2024.
+Efficient deformable ConvNets: Rethinking dynamic and
+sparse operator for vision applications, in: CVPR, pp. 5652–
+5661.
+27
+
+
+Yang, W., He, Q., Li, Z., 2025.
+A lightweight multidimen-
+sional feature network for small object detection on UAVs.
+Pattern Analysis and Applications 28, 29.
+doi:10.1007/
+s10044-024-01389-3.
+Yu, W., Wang, X., 2025.
+MambaOut: Do we really need
+mamba for vision?, in: CVPR, pp. 4484–4496.
+doi:10.
+1109/CVPR52734.2025.00423.
+Zhao, Y., Lv, W., Xu, S., Wei, J., Wang, G., Dang, Q., Liu, Y.,
+Chen, J., 2024a. DETRs beat YOLOs on real-time object
+detection, in: CVPR, pp. 16965–16974.
+Zhao, Z., Du, J., Li, C., Fang, X., Xiao, Y., Tang, J., 2024b.
+Dense tiny object detection: A scene context guided ap-
+proach and a unified benchmark. IEEE Transactions on Geo-
+science and Remote Sensing 62, 1–13.
+Zhu, L., Liao, B., Zhang, Q., Wang, X., Liu, W., Wang, X.,
+2024. Vision mamba: Efficient visual representation learning
+with bidirectional state space model, in: ICML, pp. 62429–
+62442.
+Zhu, X., Lyu, S., Wang, X., Zhao, Q., 2021a. TPH-YOLOv5:
+Improved YOLOv5 based on transformer prediction head
+for object detection on drone-captured scenarios, in: ICCV
+Workshops, pp. 2778–2788.
+Zhu, X., Su, W., Lu, L., Li, B., Wang, X., Dai, J., 2021b.
+Deformable DETR: Deformable transformers for end-to-end
+object detection, in: ICLR.
+28

@@ -1,0 +1,3443 @@
+Title: Matrix AdaGrad: Row-wise and Column-wise Adaptive Subgradient Methods
+
+URL Source: https://arxiv.org/pdf/2609.21815v1
+
+Published Time: Mon, 21 Sep 2026 01:09:36 GMT
+
+Number of Pages: 27
+
+Markdown Content:
+Preprint 
+
+# MATRIX ADA GRAD : ROW -WISE AND COLUMN -WISE 
+
+# ADAPTIVE SUBGRADIENT METHODS 
+
+Wenpeng Zhang 
+
+Independent Reasearcher 
+
+zhangwenpeng0@gmail.com 
+
+Runsheng Yu 
+
+Independent Reasearcher 
+
+runshengyu@gmail.com 
+
+Peilin Zhao 
+
+School of Artificial Intelligence Shanghai Jiao Tong University 
+
+peilinzhao@sjtu.edu.cn 
+
+## ABSTRACT 
+
+Adaptive optimization methods such as AdaGrad and Adam are widely used in modern neural-network training, but their adaptive scaling is primarily designed for vector-valued parameters and does not explicitly exploit matrix structure. Re-cent matrix-aware optimizers demonstrate the benefits of structured optimization, yet a general theoretical framework for deriving matrix-aware adaptivity compara-ble to that of AdaGrad remains lacking. In this work, we develop a general Online Mirror Descent framework with adaptive proximal functions for matrix-valued parameters, providing a principled approach to deriving matrix-aware adaptive optimization through online regret minimization. By introducing row-wise and column-wise matrix proximal functions and analyzing the resulting regret trade-off, we derive Row-wise Matrix AdaGrad (Row-AdaGrad) and Column-wise Ma-trix AdaGrad (Column-AdaGrad), with adaptive scaling determined by the accu-mulated row-wise or column-wise gradient norms. We establish regret guaran-tees and show that these matrix-aware bounds can be strictly tighter than those of entry-wise AdaGrad under structured gradients. Experiments on matrix factoriza-tion and deep neural-network training further demonstrate the benefits of aligning adaptive scaling with matrix structure, including improved optimization stability and trainability at larger learning rates and greater network depths. 
+
+## 1 INTRODUCTION 
+
+Adaptive optimization methods have emerged as a cornerstone of modern machine learning, play-ing a pivotal role in training large-scale deep neural networks. Unlike classical stochastic gradient descent (SGD), which applies a uniform learning rate to all parameters, adaptive optimizers dy-namically adjust parameter-wise learning rates based on statistics of past gradients. By capturing heterogeneous optimization dynamics across parameters, these methods facilitate more efficient and stable training in high-dimensional parameter spaces. Among various adaptive optimization algo-rithms, Adam (Kingma & Ba, 2015) and its decoupled weight decay variant, AdamW (Loshchilov & Hutter, 2019), have become the de facto standard for training contemporary deep learning models, including large language models (LLMs) (Touvron et al., 2023; Kimi Team et al., 2025; DeepSeek-AI et al., 2026), diffusion models (Peebles & Xie, 2023; Arriola et al., 2025), recommendation models (Zhai et al., 2024), and beyond. Underlying the empirical success of adaptive optimizers is a rich theoretical lineage rooted in Ada-Grad (Duchi et al., 2011), which established a principled interpretation of adaptivity through on-line convex optimization (OCO). Specifically, AdaGrad is derived within the online mirror descent (OMD) framework (Orabona, 2019), where proximal functions characterize the optimization ge-ometry and regulate the gradient steps. The key insight is that gradients observed in earlier iter-ations provide valuable information about the underlying geometry of the optimization problem, and incorporating such knowledge into the proximal function enables more informative gradient-1arXiv:2609.21815v1 [cs.LG] 18 Sep 2026 Preprint based learning. Rather than relying on a fixed proximal function, AdaGrad dynamically modifies the proximal function based on progressively accumulated gradient information. At each iteration, AdaGrad constructs the proximal function by minimizing the regret bound up to that point, yielding a sequence of data-dependent proximal functions whose regret guarantee is competitive with that of the best proximal function chosen in hindsight. In essence, AdaGrad frames adaptivity as the dy-namic construction of optimization geometry from gradient history, providing a rigorous theoretical foundation for adaptive optimization. Despite this theoretical rigor, classical adaptive optimizers, including AdaGrad, Adam, and AdamW, are designed primarily for vector-valued parameters, whereas most parameters in neural networks are inherently matrices. When applied to these matrix-valued parameters, such methods typically disregard their intrinsic matrix geometry, effectively treating them as flattened vectors of indepen-dent scalar entries. This limitation has motivated a growing body of research on matrix-aware opti-mization, which instead seeks to preserve and exploit the intrinsic geometry of matrix-valued param-eters. Within this paradigm, methods such as Shampoo (Gupta et al., 2018) and Muon (Jordan et al., 2024) have demonstrated the practical benefits of leveraging matrix structure in large-scale model training. In particular, Muon has emerged as a compelling alternative to AdamW and has been widely adopted for training frontier open-source LLMs (Kimi Team et al., 2025; GLM-4.5 Team et al., 2025; DeepSeek-AI et al., 2026). Furthermore, beyond exploiting matrix structure, recent research has increasingly explored various forms of adaptivity tailored to matrix-valued parameters. Examples include block-wise adaptation (Zhang et al., 2025), row-wise adaptation (Li et al., 2025), and one-sided Shampoo preconditioners (Xie et al., 2025; An et al., 2026). However, these designs remain largely heuristic, often motivated by approximations to existing adaptive preconditioners rather than derived from first principles. Consequently, they lack a principled theoretical foundation comparable to that of AdaGrad, where the form of adaptivity emerges naturally from online regret minimization and the dynamic construction of proximal geometry. In this work, we fill this theoretical gap by developing a general online mirror descent framework with adaptive proximal functions for matrix-valued parameters, within which matrix-aware adaptiv-ity can be derived via online regret minimization in a principled manner. The first step in establish-ing this framework is to define appropriate proximal functions, which determine the underlying opti-mization geometry. A straightforward approach is to directly apply vector-valued proximal functions to the vectorized matrix parameters. However, this approach fails to preserve the intrinsic geome-try of matrix-valued parameters and incurs prohibitive computational and memory costs. To avoid these limitations, we define proximal functions directly in the matrix space. Specifically, we intro-duce row-wise and column-wise matrix proximal functions defined as squared matrix Mahalanobis norms over the rows or columns of a matrix, respectively. By treating each row or column as a coher-ent, structurally coupled unit rather than merely a collection of independent entries, these proximal functions capture both the scaling of individual rows or columns and the coupling between them. Computationally, the metric matrix inducing the Mahalanobis geometry is applied to the matrix vari-able within the Frobenius inner product via left multiplication for the row-wise geometry and right multiplication for the column-wise geometry. Next, we formalize the online mirror descent frame-work for matrix-valued decision variables, with an extended Bregman Matrix Divergence serving as the proximal regularizer in the OMD update rule. We then equip this OMD framework with adaptive matrix proximal functions that are allowed to evolve over iterations and establish a generic regret bound that provides the analytical foundation for deriving specific matrix-aware adaptive schemes. To proceed, we first instantiate the matrix proximal function with a positive definite diagonal metric matrix, following the practical and computationally efficient choice commonly adopted in Ada-Grad (Duchi et al., 2011). This choice also facilitates clean and intuitive analysis while avoiding excessive technical complexity. We next analyze the structure of the regret bound in detail, focusing on its three constituent terms and the role of each. The first term depends solely on initialization, while the remaining two terms depend explicitly on T and thus govern the asymptotic behavior of the regret bound. The third term is given by the accumulated squared dual norms of the gradients, reflecting the cumulative cost of the observed gradients under the proximal geometry. The second term captures the differences between successive Bregman Matrix Divergences that arise from the temporal adaptation of the proximal function. In particular, if the proximal function is fixed, this term vanishes. Intuitively, allowing the proximal geometry to adapt dynamically to the observed gradients can reduce the dual-norm term, but such adaptation comes at a cost—specifically, it incurs an additional penalty quantified by the Bregman Matrix Divergence differences. 2Preprint Through further analysis, focusing first on the row-wise setting, we show that the three terms in the regret bound can ultimately be reduced to two terms with opposing dependence on the adaptive scaling factors, revealing the fundamental trade-off that governs the evolution of the matrix proximal geometry. Specifically, one term grows linearly with the scaling factors, while the other decreases inversely with them. This opposing dependence indicates the existence of a retrospectively optimal proximal geometry that balances these two terms. Crucially, under the diagonal parameterization, the regret bound further decomposes into a fully row-wise separable form, allowing the optimal proximal scaling to be determined independently for each row. The associated per-row regret bound admits a simple two-term trade-off between its scaling factor and the corresponding reciprocal. Min-imizing this bound via the arithmetic–geometric mean inequality, with equality attained when the two terms are balanced, yields the optimal scaling proportional to the square root of the accumu-lated squared ℓ2-norms of the corresponding row-wise gradients. This optimal scaling provides a concrete form for the adaptive scaling matrix, and consequently, a practical rule for evolving the matrix proximal geometry, leading to the Row-wise Matrix AdaGrad (Row-AdaGrad) algorithm. We then derive the final regret bound for Row-AdaGrad and provide an illustrative example show-ing that this bound is strictly tighter than that of standard AdaGrad when the gradient matrices are row-sparse. The column-wise counterpart follows analogously by applying the row-wise formula-tion to the transposed problem and then transposing back. We show that the column-wise proximal function is exactly the row-wise proximal function applied to the transposed variable, establishing a one-to-one correspondence that preserves the problem structure. The Column-wise Matrix AdaGrad (Column-AdaGrad) algorithm and its regret bound are thus obtained directly from the row-wise re-sults, without requiring a separate derivation. In summary, our work extends beyond the specific algorithms of Row-AdaGrad and Column-AdaGrad; it establishes a general framework for understanding and deriving matrix-aware adaptivity through the evolution of matrix proximal geometry. Our analysis explicitly reveals a fundamental trade-off underlying adaptive optimization: dynamically adapting the geometry can reduce the cu-mulative dual-norm cost of the gradients, but the resulting temporal variation of the proximal geom-etry incurs an additional penalty. The specific form of adaptivity is governed by the regret trade-off between the benefit and cost of tailoring the proximal geometry. Under the diagonal parameteriza-tion, this trade-off admits an explicit and simple separable form that is readily amenable to analysis, making transparent how the resulting adaptive scaling is derived from the regret bound. In contrast, standard AdaGrad typically characterizes its adaptive scaling through a constrained hindsight opti-mization problem, motivated primarily by reducing the contribution of the dual-norm term (Duchi et al., 2011). This characterization provides less direct and intuitive insight into the fundamental mechanism underlying adaptivity. Our framework therefore provides a rigorous yet intuitive theo-retical foundation for the design and analysis of matrix-aware adaptive optimizers, paving the way for more principled research in this area. 
+
+## 2 ROW -WISE AND COLUMN -WISE MATRIX PROXIMAL FUNCTIONS 
+
+In this section, we introduce matrix proximal functions for defining the optimization geometry of matrix-valued parameters. Specifically, we propose row-wise and column-wise matrix proximal functions. The row-wise proximal function induces a geometry over rows by weighting row inner products, whereas the column-wise counterpart operates analogously over columns. For compari-son, we also review the standard proximal function for vector-valued parameters and its extension to vectorized matrix parameters, illustrating the limitations of direct vectorization in computational efficiency and in capturing intrinsic matrix structure. 2.1 VECTORIZED PROXIMAL FUNCTION 
+
+For any vector x ∈ Rd, the vector proximal function associated with a positive definite metric (or scaling) matrix A ∈ Rd×d (A ≻ 0) is defined as 
+
+ψA(x) = 12 ∥x∥2 
+
+> A
+
+= 12 ⟨x, Ax ⟩,
+
+3Preprint where ⟨· , ·⟩ denotes the standard Euclidean inner product, and ∥x∥A = p⟨x, Ax ⟩ is the Mahalanobis norm induced by A. Expanding the quadratic form in terms of individual coordinates gives 
+
+ψA(x) = 12
+
+> d
+
+X
+
+> i=1
+> d
+
+X
+
+> j=1
+
+Aij xixj ,
+
+where the diagonal entries of A scale individual coordinates, while the off-diagonal entries encode pairwise interactions among them. This equips ψA(x) with Mahalanobis geometry, generalizing the isotropic Euclidean metric to a problem-specific anisotropic metric that better captures the underly-ing data geometry and enables more effective optimization. To define a proximal function for matrix parameters, a straightforward approach is to vectorize the matrix X ∈ Rm×n into a vector in Rmn and then directly apply the vector proximal function. Note that matrix vectorization can be performed in multiple ways. Using the standard convention of column-stacking yields the following vectorized proximal function 
+
+ψvec  
+
+> B
+
+(X) = 12 ∥vec( X)∥2 
+
+> B
+
+= 12 ⟨vec( X), B vec( X)⟩,
+
+where B ∈ Rmn ×mn is a positive definite metric matrix that induces the Mahalanobis norm on the vectorized space Rmn .However, while vectorization provides a straightforward extension from vectors to matrices, it has several drawbacks. First, it treats the matrix as an unstructured one-dimensional vector, thereby obscuring its natural two-dimensional structure and the distinct roles of rows and columns, and making natural matrix operations—such as multiplication, trace, and spectral norms—difficult to express and exploit. Second, the vectorized representation can incur prohibitive computational and memory costs. Constructing and storing a full metric matrix B ∈ Rmn ×mn is impractical. Even when B is restricted to a diagonal form, it still requires mn parameters, leading to substantial com-putational and memory overhead for large matrices. To address these drawbacks, it is preferable to define proximal functions directly on the matrix space, preserving the inherent matrix structure while allowing for more efficient computation. 2.2 ROW -WISE PROXIMAL FUNCTION 
+
+We introduce the row-wise proximal function , which applies a Mahalanobis-type scaling directly to the rows of a matrix. This proximal function retains the matrix’s row-level structure by treating each row as a holistic unit, rather than as a mere collection of independent scalar entries. Unlike vectorized proximal functions, which flatten the matrix and obscure its inherent organization, the row-wise formulation instead induces a clear and interpretable row-wise geometry that explicitly captures both individual row scaling and inter-row interactions. Formally, given a positive definite metric matrix C ∈ Rm×m, i.e., C ≻ 0, for a matrix X ∈ Rm×n,the row-wise proximal function is defined as 
+
+ψC (X) = 12 ∥X∥2 
+
+> C
+
+= 12 ⟨X, CX ⟩F ,
+
+where ⟨· , ·⟩ F denotes the Frobenius inner product, defined as ⟨X, Y ⟩F = Pmi=1 
+
+Pnj=1 Xij Yij , and 
+
+∥X∥C = p⟨X, CX ⟩F is a Mahalanobis-type norm induced by C. This norm naturally extends the Mahalanobis norm from vectors to matrices, inducing a Mahalanobis-type geometry over the rows of X. To illustrate the row-wise structure of ψC (X) more explicitly, we first rewrite the Frobenius inner product in terms of rows as 
+
+⟨X, Y ⟩F =
+
+> m
+
+X
+
+> i=1
+
+⟨X(i), Y (i)⟩,
+
+where X(i), Y (i) ∈ Rn denote the i-th rows of X and Y , respectively, and ⟨· , ·⟩ is the standard Euclidean inner product on Rn. Leveraging this representation, the proximal function can be further expressed as a weighted sum of row inner products 1
+
+ψC (X) = 12 ∥X∥2 
+
+> C
+
+= 12
+
+> m
+
+X
+
+> i=1
+> m
+
+X
+
+> j=1
+
+Cij ⟨X(i), X (j)⟩.
+
+> 1A complete derivation of this explicit row-wise form is provided in Appendix A.1 for reference.
+
+4Preprint This form makes it explicit that the diagonal entries of C scale the squared norms of the individual rows, while the off-diagonal entries weight the inner products between distinct rows. When C = Im,the m × m identity matrix, ψC (X) reduces to the standard squared Frobenius norm 12 ∥X∥2 
+
+> F
+
+, and when C = Diag( c) with c ∈ Rm
+
+> ++
+
+, ψC (X) scales each row independently by its corresponding diagonal entry ci, without capturing any inter-row interactions. 2.3 COLUMN -WISE PROXIMAL FUNCTION 
+
+Analogous to the row-wise proximal function, the column-wise proximal function applies a Mahalanobis-type scaling directly to the columns of a matrix, treating each column as a holistic unit and thereby preserving the column-level structure. While the row-wise proximal function captures the structural relationships among rows, its column-wise counterpart captures the corresponding relationships among columns, thereby inducing a complementary geometry. Given a positive definite metric matrix D ∈ Rn×n, i.e., D ≻ 0, for a matrix X ∈ Rm×n, the column-wise proximal function is defined as 
+
+ψD (X) = 12 ∥X∥2 
+
+> D
+
+= 12 ⟨X, XD ⟩F ,
+
+where ∥X∥D = p⟨X, XD ⟩F is the Mahalanobis-type norm induced by D, which induces a Mahalanobis-type geometry over the columns of X. We remark that the metric matrix C in the row-wise proximal function multiplies X from the left, whereas the metric matrix D in the column-wise proximal function multiplies X from the right. Analogous to the derivation in the row-wise case, expressing the proximal function explicitly in terms of the columns, we have 2
+
+ψD (X) = 12
+
+> n
+
+X
+
+> i=1
+> n
+
+X
+
+> j=1
+
+Dij ⟨X(i), X (j)⟩,
+
+where X(i), X (j) ∈ Rm denote the i-th and j-th columns of X, respectively, and ⟨· , ·⟩ denotes the standard Euclidean inner product on Rm. The diagonal entries of D scale the squared norms of indi-vidual columns, while the off-diagonal entries weight the inner products between distinct columns. When D = In, ψD (X) reduces to the standard squared Frobenius norm 12 ∥X∥2 
+
+> F
+
+. More generally, when D = Diag( d) with d ∈ Rn
+
+> ++
+
+, the proximal function reduces to independently weighting the squared norm of each column by the corresponding diagonal entry dj , without introducing interac-tions between different columns. 
+
+## 3 ONLINE MIRROR DESCENT FOR MATRICES WITH ADAPTIVE MATRIX 
+
+## PROXIMAL FUNCTIONS 
+
+In this section, we formalize the online learning framework upon which our theoretical analysis and algorithmic design are built. 3.1 ONLINE MIRROR DESCENT WITH MATRIX DECISION VARIABLES 
+
+Online Convex Optimization with Matrix Decision Variables We work within the framework of Online Convex Optimization (OCO) (Zinkevich, 2003; Hazan et al., 2016; Orabona, 2019), spe-cialized to matrix-valued decision variables. OCO can be viewed as a structured repeated game in which a learner and an adversary interact sequentially over T rounds. At each round t ∈ { 1, . . . , T },the learner selects a decision matrix Xt ∈ X from a convex compact set X ⊆ Rm×n. The adversary then reveals a convex loss function ft : X → R, and the learner suffers the loss ft(Xt). The learner’s goal is to minimize the regret , defined as the difference between the cumulative loss incurred by the learner and that of the best fixed matrix in hindsight: 
+
+R(T ) = 
+
+> T
+
+X
+
+> t=1
+
+ft(Xt) − min 
+
+> X∗∈X
+> T
+
+X
+
+> t=1
+
+ft(X∗).
+
+> 2A complete derivation of this explicit column-wise form is provided in Appendix A.2 for reference.
+
+5Preprint A meaningful regret is typically required to be sublinear , i.e., lim T →∞ R(T )/T = 0 , which implies that, for a sufficiently large number of rounds, the learner’s performance approaches that of the optimal fixed decision chosen in hindsight with full knowledge of all rounds. 
+
+Online Mirror Descent for Matrices We now introduce Online Mirror Descent (OMD) with ma-trix decision variables, which serves as the foundation for designing our adaptive optimization al-gorithms. OMD is an online learning algorithmic template that generalizes standard gradient-based updates by incorporating a geometry-aware proximal term or regularizer defined through a strictly convex function, which encodes the intrinsic geometry of the decision space and guides the updates to respect the underlying problem structure. In the matrix setting, the proximal term is naturally expressed through the Bregman matrix divergence , a generalization of the vanilla (vector) Bregman divergence. 
+
+Definition 1 (Bregman Matrix Divergence) . Let X ⊆ Rm×n be a compact convex set with nonempty interior, and let ψ : X → R be a strictly convex and differentiable function on the interior 
+
+int X . The Bregman Matrix Divergence with respect to ψ, denoted Bψ : X × int X → R3, is defined as 
+
+Bψ (X; Y ) = ψ(X) − ψ(Y ) − ⟨∇ ψ(Y ), X − Y ⟩F ,
+
+for X ∈ X and Y ∈ int X , where ∇ψ(Y ) ∈ Rm×n is the gradient of ψ at Y .
+
+Bψ quantifies the deviation between two matrices X and Y under the geometry induced by ψ. Simi-lar to the vector case, Bψ is non-negative due to the strict convexity of ψ, and generally asymmetric, as it depends on the reference point Y .Then, the update rule of OMD for matrices at each round t is given by 
+
+Xt+1 = argmin 
+
+> X∈X
+
+n
+
+⟨Gt, X ⟩F + 1
+
+η Bψ (X; Xt)
+
+o
+
+,
+
+where η > 0 is the step size, and Gt ∈ ∂f t(Xt) denotes a subgradient of the convex loss function 
+
+ft at Xt. Here, the term Bψ (X; Xt) acts as a proximity regularizer , which encourages Xt+1 to stay close to the previous iterate Xt under the geometry induced by ψ.Instantiating different ψ yields distinct variants of OMD for matrices, each reflecting a particular geometry associated with a corresponding proximity measure. While one could directly apply a vec-torized proximal function to matrix variables, this approach disregards the intrinsic two-dimensional structure and fails to fully exploit the geometric properties of matrices. A more natural alternative is to leverage the row-wise and column-wise matrix proximal functions introduced in the previous section, enabling OMD to better exploit the structured geometries of matrix variables. 3.2 ADAPTIVE MATRIX PROXIMAL FUNCTIONS 
+
+In the standard OMD framework, the proximal function ψ remains fixed throughout the entire learn-ing process. While such a fixed geometry may capture certain structural properties of the problem, it cannot accommodate the evolving gradient over time. Adaptive subgradient methods, such as Ada-Grad (Duchi et al., 2011), address this limitation by allowing the proximal function to vary across rounds—replacing ψ with a sequence of data-dependent proximal functions ψt. This time-varying geometry enables the algorithm to adapt not only to the intrinsic structure of the problem, but also to the gradient information accumulated over time, which is key to the success of adaptive methods. Inspired by the derivation of AdaGrad from OMD, designing matrix adaptive methods similarly requires an appropriate evolution mechanism for the matrix proximal function. At a high level, the starting intuition is analogous to that in the vector case: the regret bound of OMD for matrices depends on the choice of the proximal function ψt, and by appropriately designing the evolution of ψt to better adapt to the revealed gradient information, we can obtain a tighter regret bound. To translate this insight into algorithmic design, we begin by presenting a template regret bound for OMD for matrices with a generic adaptive proximal function, which will guide the subsequent derivation of specific adaptive schemes. 
+
+Corollary 1. Let {Xt}T +1  
+
+> t=1
+
+⊆ int X be the iterates of OMD for matrices with proximal functions 
+
+ψt, and let η > 0 be the global step size. Let ∥ · ∥ be a norm on Rm×n and let ∥ · ∥ ∗ denote its dual           
+
+> 3Restricting Y∈int Xensures that ∇ψ(Y)is well-defined, as ψmay not be differentiable on the boundary.
+
+6Preprint 
+
+norm. Suppose that, for each t, ψt is λ-strongly convex with respect to ∥ · ∥ on X . Let Gt ∈ ∂f t(Xt)
+
+be a subgradient of ft at Xt, and let X⋆ ∈ arg min X∈X 
+
+PTt=1 ft(X). Then, we have 
+
+R(T ) ≤ Bψ1 (X⋆; X1)
+
+η − BψT (X⋆; XT +1 )
+
+η + 1
+
+η 
+
+> T−1
+
+X
+
+> t=1
+
+
+
+Bψt+1 (X⋆; Xt+1 ) − Bψt (X⋆; Xt+1 )
+
+
+
++ η
+
+2λ
+
+> T
+
+X
+
+> t=1
+
+∥Gt∥2
+
+> ∗
+
+.
+
+Moreover, since BψT (X⋆; XT +1 ) ≥ 0, dropping the negative terminal term yields the following slightly looser regret bound 
+
+R(T ) ≤ Bψ1 (X⋆; X1)
+
+η + 1
+
+η 
+
+> T−1
+
+X
+
+> t=1
+
+
+
+Bψt+1 (X⋆; Xt+1 ) − Bψt (X⋆; Xt+1 )
+
+
+
++ η
+
+2λ
+
+> T
+
+X
+
+> t=1
+
+∥Gt∥2
+
+> ∗
+
+.
+
+Note that in the above corollary we use ∥ · ∥ and ∥ · ∥ ∗ to denote the primal and dual norms, re-spectively. In practice, they may vary with t and be chosen according to the corresponding proximal function ψt. The complete proof of this corollary is provided in Appendix B. In the following, we will carefully analyze this regret bound and derive the specific form of matrix adaptivity by mini-mizing it. 
+
+## 4 DERIVING ROW -WISE AND COLUMN -WISE MATRIX ADA GRAD 
+
+In this section, building on the results established in the preceding two sections, we present the derivation of the proposed Row-wise and Column-wise Matrix AdaGrad algorithms. To begin with, we specify concrete instantiations of the matrix proximal functions. In the vector AdaGrad setting, the standard formulation employs a diagonal metric matrix to define the proximal function, which is much more popular and practical than its full-matrix counterpart, as the latter incurs substantially higher memory and computational costs (Duchi et al., 2011; Gupta et al., 2018). Accordingly, we restrict our derivation to the diagonal case, which enables efficient row- or column-wise adaptive scaling while avoiding the high costs associated with full-matrix variants. In the following, we take the row-wise formulation as the basis for our derivation, with the column-wise case following analogously. Formally, for any X ∈ Rm×n, the row-wise matrix proximal function at iteration t is given by ψHt 
+
+> t
+
+(X) = 12 ∥X∥2 
+
+> Ht
+
+= 12 ⟨X, H tX⟩F , where Ht = Diag( st) ≻ 0 ∈ Rm×m
+
+is a positive definite diagonal matrix, and st = ( st, 1, . . . , s t,m )⊤ ∈ Rm 
+
+> ++
+
+is the corresponding row-wise scaling vector. In analogy with the monotonicity of the scaling factors over iterations in vector AdaGrad, we further assume that the metric sequence is non-decreasing, i.e., Ht+1 ⪰ Ht, or, equivalently st+1 ,i ≥ st,i for all i.4.1 REGRET ANALYSIS WITH ROW -WISE MATRIX PROXIMAL FUNCTIONS 
+
+Having established the explicit form of the proximal function, we now proceed to analyze the regret bound in Corollary 1 in greater depth to derive further insights. The regret bound consists of three main terms. The first term is a “constant” with respect to T ,depending merely on the initialization— X1 and ψ1. In contrast, the remaining two terms grow with T and thus dominate the asymptotic behavior of the bound. Among them, the last term has a relatively simple form, involving the accumulated squared dual norms of the subgradients, while the middle term is more intricate, reflecting the cumulative effect of the varying proximal functions through changes in the Bregman matrix divergence. We proceed by examining the second term to uncover its underlying structure. The Bregman diver-gence difference Bψt+1 (U ; Xt+1 ) − Bψt (U ; Xt+1 ) arises from the temporal adaptation of the prox-imal function, transitioning from ψt to ψt+1 —that is, the change of the diagonal matrix from Ht to 
+
+Ht+1 . If the proximal function were fixed, i.e., ψt+1 = ψt, this difference would vanish. Hence, it quantifies the additional penalty imposed by the adapted proximal function ψt+1 relative to ψt.To facilitate subsequent analysis, we introduce the trace notation: for a square matrix A, Tr( A) = 
+
+7Preprint 
+
+P 
+
+> i
+
+Ai,i denotes the sum of its diagonal entries. The Frobenius inner product can thus be written as ⟨A, B ⟩F = Tr( A⊤B), leading to ψHt 
+
+> t
+
+(X) = 12 Tr( X⊤HtX), whose gradient is ∇ψHt 
+
+> t
+
+(X) = 
+
+HtX. The Bregman matrix divergence induced by ψHt 
+
+> t
+
+can then be expressed in trace form as 
+
+BψHtt
+
+(X; Y ) = 12 Tr( X⊤HtX) − 12 Tr( Y ⊤HtY ) − Tr  Y ⊤Ht(X − Y ). This expression further simplifies to the compact form BψHtt
+
+(X; Y ) = 12 ∥X − Y ∥2 
+
+> Ht
+
+= 12 Tr  (X − Y )⊤Ht(X − Y ).4
+
+Since Ht is diagonal, the trace expression simplifies to BψHtt
+
+(X; Y ) = 12
+
+Pmi=1 st,i ∥Xi, : − Yi, :∥22,which is a weighted sum over the squared row norms. Using the compact trace representation and its row-wise form, the Bregman divergence difference can be written as 
+
+BψHt+1 
+
+> t+1
+
+(X∗; Xt+1 ) − BψHtt
+
+(X∗; Xt+1 ) = 12 Tr  (X∗ − Xt+1 )⊤(Ht+1 − Ht)( X∗ − Xt+1 )
+
+= 12
+
+> m
+
+X
+
+> i=1
+
+(st+1 ,i − st,i ) ∥X∗ 
+
+> i, :
+
+− Xt+1 ,i, :∥22.
+
+Summing over t = 1 , . . . , T − 1 and interchanging sums yields  
+
+> T−1
+
+X
+
+> t=1
+
+
+
+BψHt+1 
+
+> t+1
+
+(X∗; Xt+1 ) − BψHtt
+
+(X∗; Xt+1 )
+
+
+
+= 12
+
+> m
+
+X 
+
+> i=1
+> T−1
+
+X
+
+> t=1
+
+(st+1 ,i − st,i ) ∥X∗ 
+
+> i, :
+
+− Xt+1 ,i, :∥22.
+
+The squared deviation of each row i can be bounded by the largest squared deviation among all rows in the matrix 
+
+∥X∗ 
+
+> i, :
+
+− Xt+1 ,i, :∥22 ≤ max 
+
+> 1≤j≤m
+
+∥X∗ 
+
+> j, :
+
+− Xt+1 ,j, :∥22 = ∥X∗ − Xt+1 ∥2:2 ,∞,
+
+where ∥X∥:2 ,∞ = max 1≤j≤m∥Xj, :∥2 is the row-wise mixed (2 , ∞) norm, with the ℓ2 norm applied along each row and the ℓ∞ norm across rows, i.e., it measures the largest Euclidean norm among the rows of X. Taking the maximum over all iterations u = 1 , . . . , T , we obtain the uniform bound 
+
+∥X∗ 
+
+> i, :
+
+− Xt+1 ,i, :∥22 ≤ ∥ X∗ − Xt+1 ∥2:2 ,∞ ≤ max 
+
+> 1≤u≤T
+
+∥X∗ − Xu∥2:2 ,∞.
+
+Since st+1 ,i − st,i ≥ 0, we can first factor out the global row-wise supremum and then, by applying the telescoping sum, reduce the sum PT −1 
+
+> t=1
+
+(st+1 ,i − st,i ) to sT,i − s1,i , yielding  
+
+> T−1
+
+X
+
+> t=1
+
+
+
+BψHt+1 
+
+> t+1
+
+(X∗; Xt+1 ) − BψHtt
+
+(X∗; Xt+1 )
+
+
+
+≤ 12 max 
+
+> 1≤u≤T
+
+∥X∗ − Xu∥2:2 ,∞
+
+> m
+
+X 
+
+> i=1
+> T−1
+
+X
+
+> t=1
+
+(st+1 ,i − st,i )
+
+≤ 12 max 
+
+> 1≤u≤T
+
+∥X∗ − Xu∥2:2 ,∞
+
+ mX
+
+> i=1
+
+sT,i −
+
+> m
+
+X
+
+> i=1
+
+s1,i 
+
+
+
+.
+
+The first divergence term can be also bounded using the global row-wise supremum, giving 
+
+BψH11
+
+(X∗; X1) = 12
+
+> m
+
+X
+
+> i=1
+
+s1,i ∥X∗ 
+
+> i, :
+
+− X1,i, :∥22 ≤ 12 max 
+
+> 1≤u≤T
+
+∥X∗ − Xu∥2:2 ,∞
+
+> m
+
+X
+
+> i=1
+
+s1,i .
+
+Combining the two preceding bounds, and using the trace notation Pmi=1 sT,i = Tr( HT ), we obtain 
+
+R(T ) ≤ 12η max 
+
+> 1≤u≤T
+
+∥X∗ − Xu∥2:2 ,∞Tr( HT ) + η
+
+2λ
+
+> T
+
+X
+
+> t=1
+
+∥Gt∥2
+
+> ∗
+
+.
+
+The current form of the regret bound does not yet rely heavily on the specific instantiation of the matrix proximal function ψHt 
+
+> t
+
+, apart from assuming that Ht is diagonal and monotone. To make the bound more concrete, several additional steps are required to ultimately determine the explicit form of ψHt 
+
+> t
+
+(or equivalently, Ht). We proceed by analyzing the squared dual norm term. So far, the regret bound has been expressed in terms of a generic norm ∥ · ∥ without specifying its explicit form. To accurately reflect the geometry induced by the proximal function, we specify it as the corresponding metric-induced matrix norm, whose squared form is ∥X∥2 
+
+> Ht
+
+= Tr( X⊤HtX),
+
+> 4
+
+For completeness, the derivation is provided in Appendix C. 
+
+8Preprint with Ht ≻ 0 as defined above. The proximal function ψHt 
+
+> t
+
+(X) = 12 ∥X∥2 
+
+> Ht
+
+is 1-strongly convex with respect to ∥ · ∥ Ht , and hence satisfies the λ-strong convexity assumption in Corollary 1. The associated squared dual norm is then given by ∥Gt∥∗2 
+
+> Ht
+
+= ∥Gt∥2
+
+> H−1
+> t
+
+= Tr( G⊤ 
+
+> t
+
+H−1 
+
+> t
+
+Gt). This follows from the standard properties of matrix-induced norms and their duals; for completeness, a detailed derivation is provided in Appendix D. Accordingly, the accumulated squared dual norms of the subgradients in the regret bound are PTt=1 ∥Gt∥∗2 
+
+> Ht
+
+= PTt=1 Tr( G⊤ 
+
+> t
+
+H−1 
+
+> t
+
+Gt). Since {Ht}Tt=1 
+
+evolves over time, directly analyzing the cumulative term PTt=1 Tr( G⊤ 
+
+> t
+
+H−1 
+
+> t
+
+Gt) can be technically intricate. To simplify the analysis, we consider a surrogate in which each time-varying metric Ht
+
+is replaced by the terminal metric HT ; that is, we analyze PTt=1 Tr( G⊤ 
+
+> t
+
+H−1 
+
+> T
+
+Gt). Specifically, we assume the following bound holds 
+
+> T
+
+X
+
+> t=1
+
+Tr( G⊤ 
+
+> t
+
+H−1 
+
+> t
+
+Gt) ≤ a
+
+> T
+
+X
+
+> t=1
+
+Tr( G⊤ 
+
+> t
+
+H−1 
+
+> T
+
+Gt),
+
+where a > 1 is an abstract constant. The bound is possible because, with an appropriate choice of 
+
+{Ht}Tt=1 , the cumulative effect of the time-varying metrics can be controlled by a scalar multiple of the same sum evaluated with the terminal metric. This bounding treatment largely simplifies the analysis, allowing us to maintain the main structure of the problem without delving into excessive technical complexities. Later, we will justify this bound by showing that, once an appropriate con-crete adaptive proximal function is specified, the provisional bound a can be replaced by a very small constant multiplicative factor independent of T . Now, by substituting the generic norm with the induced matrix norm and incorporating the surrogate trace bound with the abstract factor a, the regret bound can be expressed in the following form 
+
+R(T ) ≤ 12η max 
+
+> 1≤u≤T
+
+∥X∗ − Xu∥2:2 ,∞Tr( HT ) + ηa 
+
+2λ
+
+> T
+
+X
+
+> t=1
+
+Tr( G⊤ 
+
+> t
+
+H−1 
+
+> T
+
+Gt).
+
+4.2 RETROSPECTIVELY OPTIMAL ROW -WISE PROXIMAL 
+
+Inspecting the above regret bound, we observe two components with opposing dependence on HT :one term increases with HT , while the other decreases through H−1 
+
+> T
+
+. This suggests a clear trade-off in the choice of HT and indicates the existence of a retrospectively optimal proximal function. In the following, we make this trade-off more explicit by decomposing the bound into a row-wise separable form. First, by definition of HT , its inverse is given by H−1 
+
+> T
+
+= Diag( sT )−1 = Diag(1 /s T ), where 
+
+1/s T = (1 /s T, 1, . . . , 1/s T,m )⊤ ∈ Rm
+
+> ++
+
+. For each t, the trace term can be written in a row-wise form as Tr( G⊤ 
+
+> t
+
+H−1 
+
+> T
+
+Gt) = Pmi=1 ∥Gt,i, :∥22/s T,i . Summing over all t and interchanging sums yields 
+
+> T
+
+X
+
+> t=1
+
+Tr( G⊤ 
+
+> t
+
+H−1 
+
+> T
+
+Gt) = 
+
+> T
+
+X
+
+> t=1
+> m
+
+X
+
+> i=1
+
+∥Gt,i, :∥22
+
+sT,i 
+
+=
+
+> m
+
+X
+
+> i=1
+
+1
+
+sT,i TX
+
+> t=1
+
+∥Gt,i, :∥22.
+
+By combining this expression with Tr( HT ) = Pmi=1 sT,i , the regret bound can be written in a fully row-wise separable form 
+
+R(T ) ≤ ∆2
+
+> T
+
+2η
+
+> m
+
+X
+
+> i=1
+
+sT,i + ηa 
+
+2λ
+
+> m
+
+X
+
+> i=1
+
+Vi
+
+sT,i 
+
+=
+
+> m
+
+X
+
+> i=1
+
+ ∆2
+
+> T
+
+2η sT,i + ηa 
+
+2λVi
+
+sT,i 
+
+
+
+,
+
+where ∆T = max 1≤u≤T ∥X∗ − Xu∥:2 ,∞, Vi = PTt=1 ∥Gt,i, :∥22. Through this form, the trade-off between the two terms in the regret bound becomes more explicit: increasing sT,i enlarges the first term while reducing the second, and vice versa. This opposing dependence on sT,i allows us to derive the hindsight-optimal proximal function by minimizing the regret bound. Since the bound is fully separable across rows, we can optimize each row independently to achieve this. Specifically, for the i-th row, we consider its row-wise regret function w.r.t. sT,i 
+
+Ri(sT,i ) = ∆2
+
+> T
+
+2η sT,i + ηa 
+
+2λVi
+
+sT,i 
+
+, sT,i > 0.
+
+Since both terms are positive for sT,i > 0, we can find the minimum by applying the arith-metic–geometric mean inequality 
+
+∆2
+
+> T
+
+2η sT,i + ηa 
+
+2λVi
+
+sT,i 
+
+≥ 2
+
+s
+
+∆2
+
+> T
+
+2η · ηaV i
+
+2λ = ∆T
+
+√a
+
+√λ
+
+pVi.
+
+9Preprint 
+
+Algorithm 1 Row-wise Matrix AdaGrad (Row-AdaGrad) 
+
+1: Input: Convex set X , time horizon T , step size η > 0, stabilizer δ > 0
+
+2: Initialize: X1 ∈ X ⊆ Rm×n, sr0 = δ1 ∈ Rm
+
+3: for t = 1 , . . . , T do 
+
+4: Predict Xt and receive loss function ft : X → R
+
+5: Compute subgradient Gt ∈ ∂f t(Xt) of ft at Xt
+
+6: Update row-wise scaling vector 
+
+sr 
+
+> t,i
+
+=
+
+qPtk=1 ∥Gk,i, :∥22 + δ, i = 1 , . . . , m 
+
+7: Set row-wise matrix proximal ψHt 
+
+> t
+
+(X) = 12 ⟨X, H tX⟩F , with Ht = Diag( sr
+
+> t
+
+)
+
+8: Matrix Mirror Descent Update 
+
+Xt+1 = argmin 
+
+> X∈X
+
+n
+
+η⟨Gt, X ⟩F + BψHtt
+
+(X; Xt)
+
+o
+
+9: end for 
+
+The minimum ∆T
+
+pa/λ √Vi is attained when equality holds, i.e., 
+
+∆2
+
+> T
+
+2η sT,i = ηa 
+
+2λVi
+
+sT,i 
+
+=⇒ s∗ 
+
+> T,i
+
+= η√a
+
+∆T
+
+√λ
+
+pVi, i.e., s ∗ 
+
+> T,i
+
+∝
+
+vuut TX
+
+> t=1
+
+∥Gt,i, :∥22.
+
+Here, ∝ indicates that s∗ 
+
+> T,i
+
+is proportional to the square root of the accumulated squared gradient norms of the i-th row, highlighting the core row-wise scaling relationship by omitting constant factors that are identical across all rows. Extending the same reasoning to all time steps, for each t =1, . . . , T , we set s∗ 
+
+> t,i
+
+∝
+
+qPtk=1 ∥Gk,i, :∥22, which represents the hindsight-optimal row-wise scaling up to time t. To avoid numerical instabilities caused by extremely small values of s∗
+
+> t,i
+
+—which may arise in the initial stages of optimization when the i-th rows of past gradients G1, . . . , G t are zero or nearly zero—we add a small positive stabilizer δ > 0. This also ensures that the resulting row-wise scaling vector is positive definite. We now have a concrete instantiation of st, i.e., Ht, which yields a practical evolution scheme for the adaptive row-wise matrix proximal, thereby giving rise to the Row-wise Matrix AdaGrad algorithm presented in Algorithm 1. By construction, the scaling factors are non-decreasing in t, thus satisfying the monotonicity assumption imposed at the beginning of our derivation. Also note that upon introducing δ into each st, both Tr( HT ) and Tr( G⊤ 
+
+> t
+
+H−1 
+
+> T
+
+Gt) in the preceding regret bound now contain terms involving δ. We will show that, with careful treatment, we can obtain a clean regret bound that reflects only the contribution of the subgradients, completely free of δ.In the following, we first address Tr( G⊤ 
+
+> t
+
+H−1 
+
+> T
+
+Gt). Using the derived concrete form of {Ht}Tt=1 , we can now quantify the relationship between PTt=1 Tr( G⊤ 
+
+> t
+
+H−1 
+
+> t
+
+Gt) and PTt=1 Tr( G⊤ 
+
+> t
+
+H−1 
+
+> T
+
+Gt) more precisely, deriving a bound with a concrete constant rather than an abstract one, thereby justifying the use of the abstract bound in the preceding analysis. Furthermore, we eliminate the dependence on δ in HT by deriving a bound on PTt=1 Tr( G⊤ 
+
+> t
+
+H−1 
+
+> T
+
+Gt) that depends solely on the subgradients. This result is formalized in the following corollary. 
+
+Corollary 2. Let {Gt}Tt=1 and {Ht}Tt=1 (i.e., {sr
+
+> t
+
+}Tt=1 ) be defined as in Algorithm 1, with sr 
+
+> t,i
+
+=
+
+δ +
+
+qPtk=1 ∥Gk,i, :∥22 and Ht = Diag( sr
+
+> t
+
+). Then the following bound holds 
+
+> T
+
+X
+
+> t=1
+
+Tr  G⊤ 
+
+> t
+
+H−1 
+
+> t
+
+Gt
+
+ ≤ 2
+
+> T
+
+X
+
+> t=1
+
+Tr  G⊤ 
+
+> t
+
+H−1 
+
+> T
+
+Gt
+
+ ≤ 2
+
+> m
+
+X
+
+> i=1
+
+vuut TX
+
+> t=1
+
+∥Gt,i, :∥22.
+
+Proof. By definition sr 
+
+> t,i
+
+= δ +
+
+qPtk=1 ∥Gk,i, :∥22, so that ∥Gt,i, :∥22 = ( sr 
+
+> t,i
+
+− δ)2 − (sr 
+
+> t−1,i
+
+− δ)2.Hence, the row-wise expansion of each trace can be expressed as 
+
+Tr( G⊤ 
+
+> t
+
+H−1 
+
+> t
+
+Gt) = 
+
+> m
+
+X
+
+> i=1
+
+∥Gt,i, :∥22
+
+sr
+
+> t,i
+
+=
+
+> m
+
+X
+
+> i=1
+
+(sr 
+
+> t,i
+
+− δ)2 − (sr 
+
+> t−1,i
+
+− δ)2
+
+sr
+
+> t,i
+
+.
+
+10 Preprint For each i, we claim the following termwise inequality 
+
+(sr 
+
+> t,i
+
+− δ)2 − (sr 
+
+> t−1,i
+
+− δ)2
+
+sr
+
+> t,i
+
+≤ 2 (sr 
+
+> t,i
+
+− δ)2
+
+sr
+
+> t,i
+
+− (sr 
+
+> t−1,i
+
+− δ)2
+
+sr
+
+> t−1,i
+
+!
+
+.
+
+By applying the difference-of-squares decomposition to the left-hand side and using sr 
+
+> t−1,i
+
+≤ sr 
+
+> t,i
+
+to replace sr 
+
+> t−1,i
+
+with sr 
+
+> t,i
+
+in the second factor, we obtain LHS = (sr 
+
+> t,i
+
+− sr
+
+> t−1,i
+
+)( sr 
+
+> t,i
+
++ sr 
+
+> t−1,i
+
+− 2δ)
+
+sr
+
+> t,i
+
+≤ 2( sr 
+
+> t,i
+
+− sr
+
+> t−1,i
+
+)( sr 
+
+> t,i
+
+− δ)
+
+sr
+
+> t,i
+
+.
+
+Re-expressing the first factor as sr 
+
+> t,i
+
+− sr 
+
+> t−1,i
+
+= ( sr 
+
+> t,i
+
+− δ) − (sr 
+
+> t−1,i
+
+− δ), we then have LHS ≤ 2( sr 
+
+> t,i
+
+− sr
+
+> t−1,i
+
+)( sr 
+
+> t,i
+
+− δ)
+
+sr
+
+> t,i
+
+= 2( sr 
+
+> t,i
+
+− δ)2
+
+sr
+
+> t,i
+
+− 2( sr 
+
+> t−1,i
+
+− δ)( sr 
+
+> t,i
+
+− δ)
+
+sr
+
+> t,i
+
+.
+
+Noting that sr
+
+> t,i −δsr
+> t,i
+
+= 1 − δsr
+
+> t,i
+
+≥ sr
+
+> t−1,i −δsr
+> t−1,i
+
+= 1 − δsr
+
+> t−1,i
+
+due to sr 
+
+> t,i
+
+≥ sr
+
+> t−1,i
+
+, it follows that LHS ≤ 2( sr 
+
+> t,i
+
+− δ)2
+
+sr
+
+> t,i
+
+− 2( sr 
+
+> t−1,i
+
+− δ)( sr 
+
+> t,i
+
+− δ)
+
+sr
+
+> t,i
+
+≤ 2 (sr 
+
+> t,i
+
+− δ)2
+
+sr
+
+> t,i
+
+− (sr 
+
+> t−1,i
+
+− δ)2
+
+sr
+
+> t−1,i
+
+!
+
+,
+
+proving the claimed termwise inequality. Summing over t = 1 , . . . , T and telescoping, we obtain 
+
+> T
+
+X
+
+> t=1
+
+LHS ≤ 2
+
+> T
+
+X
+
+> t=1
+
+(sr 
+
+> t,i
+
+− δ)2
+
+sr
+
+> t,i
+
+− (sr 
+
+> t−1,i
+
+− δ)2
+
+sr
+
+> t−1,i
+
+!
+
+= 2 (sr 
+
+> T,i
+
+− δ)2
+
+sr
+
+> T,i
+
+− (sr0,i − δ)2
+
+sr0,i 
+
+!
+
+.
+
+Since sr0,i = δ, the last term vanishes, leaving only the first term evaluated at t = T . Summing over 
+
+i = 1 , . . . , m then yields the first inequality in the corollary. Finally, by reordering sums and using sr 
+
+> T,i
+
+= δ +
+
+qPTt=1 ∥Gt,i, :∥22 ≥
+
+qPTt=1 ∥Gt,i, :∥22, we obtain 
+
+2
+
+> T
+
+X
+
+> t=1
+
+Tr( G⊤ 
+
+> t
+
+H−1 
+
+> T
+
+Gt) = 2 
+
+> m
+
+X
+
+> i=1
+
+PTt=1 ∥Gt,i, :∥22
+
+sr
+
+> T,i
+
+≤ 2
+
+> m
+
+X
+
+> i=1
+
+vuut TX
+
+> t=1
+
+∥Gt,i, :∥22.
+
+Next, we turn to handling Tr( HT ) = Pmi=1 sr 
+
+> T,i
+
+= mδ + Pmi=1 
+
+qPTt=1 ∥Gt,i, :∥22. The inclusion of 
+
+δ suggests the appearance of an additional term max 1≤u≤T ∥X∗ − Xu∥2:2 ,∞mδ in the regret bound. Recall that Tr( HT ) arises when bounding PT −1
+
+> t=1
+
+
+
+BψHt+1 
+
+> t+1
+
+(X∗; Xt+1 ) − BψHtt
+
+(X∗; Xt+1 )
+
+
+
++
+
+BψH11
+
+(X∗; X1) within the regret analysis. Upon closer inspection, we observe that the preced-ing derivation employs a slightly relaxed version of the regret bound that omits the negative term 
+
+−BψHTT
+
+(X∗; XT +1 ) (see Corollary 1). In fact, this negative terminal term can naturally offset the additional contribution introduced by the stabilizer δ, provided that δ is chosen sufficiently small to satisfy max 1≤u≤T ∥X∗ − Xu∥2:2 ,∞ mδ ≤ 2BψHTT
+
+(X∗; XT +1 ). By reinstating this negative term into the analysis, the contribution of the stabilizer can be fully absorbed without inflating the overall regret bound. For completeness, a detailed derivation of a sufficient condition on δ is provided in Appendix E. Combining the above results and the inequality in Corollary 2 with the preceding regret bound, we can now obtain the following theorem. 
+
+Theorem 1. Let the sequences {Xt}Tt=1 and {Gt}Tt=1 be generated by Algorithm 1. Then the following regret bound holds 
+
+R(T ) ≤ 12η max 
+
+> 1≤u≤T
+
+∥X∗ − Xu∥2:2 ,∞
+
+> m
+
+X
+
+> i=1
+
+vuut TX
+
+> t=1
+
+∥Gt,i, :∥22 + η
+
+> m
+
+X
+
+> i=1
+
+vuut TX
+
+> t=1
+
+∥Gt,i, :∥22.
+
+11 Preprint 
+
+Then let D:2 ,∞ = sup X,Y ∈X ∥X − Y ∥:2 ,∞ denote the diameter of X under the row-wise mixed 
+
+(2 , ∞) norm and set η = D:2 ,∞/√2, we have 
+
+R(T ) ≤ √2D:2 ,∞
+
+> m
+
+X
+
+> i=1
+
+vuut TX
+
+> t=1
+
+∥Gt,i, :∥22.
+
+Remark 1. Our analytical framework and the proposed matrix-aware algorithms constitute a natural extension of standard AdaGrad. Specifically, when the parameter matrix reduces to a single column, effectively degenerating into a vector, the accumulated squared ℓ2-norms of the row-wise gradients reduce to the accumulated squared coordinate-wise gradients. Consequently, the row-wise adaptive scaling in Row-AdaGrad reduces to the standard coordinate-wise scaling, thereby recovering the entry-wise AdaGrad update rule. Consistent with the algorithmic reduction, our derived regret bound reduces to that of entry-wise AdaGrad (see Corollary 1 and Corollary 6 in (Duchi et al., 2011)), with the row-wise mixed (2 , ∞) norm reducing to the ℓ∞ norm. This establishes our formulation as a unified framework for matrix-valued optimization that encompasses standard entry-wise AdaGrad as a special case. 4.3 ROW -A DA GRAD OUTPERFORMS ENTRY -W ISE ADA GRAD : A M OTIVATING EXAMPLE 
+
+We expect Row-AdaGrad to outperform entry-wise AdaGrad when the gradient matrices are concen-trated on a few rows (row-wise sparsity), or when the entries within each row are strongly correlated (intra-row dependency). We provide empirical evidence demonstrating the improved performance of Row-AdaGrad in Section 5. Here we present an abstract example showing that when the gradient matrices are row-sparse, the regret bound of Row-AdaGrad is strictly smaller than that of entry-wise AdaGrad. 5
+
+Recall that when applied to matrices, entry-wise AdaGrad treats an m × n matrix as a vector in Rmn 
+
+and applies independent per-coordinate step sizes. Its regret bound takes the form 
+
+Rvec (T ) ≤ √2 D∞
+
+> m
+
+X
+
+> i=1
+> n
+
+X
+
+> j=1
+
+vuut TX
+
+> t=1
+
+G2 
+
+> t,i,j
+
+,
+
+where D∞ = sup X,Y ∈X ∥X − Y ∥∞ is the diameter of X under the entry-wise ℓ∞ norm. We construct a scenario in which the data matrices are row-wise sparse, which leads to row-sparse gradients. We fix an integer K > 0 and set the horizon T = Km . For each row i ∈ { 1, . . . , m },define the row-activated matrix D(i) = ei1⊤ 
+
+> n
+
+, where ei is the i-th standard basis vector in Rm and 
+
+1n is the all-ones vector in Rn, so that D(i) has ones in its i-th row and zeros elsewhere. At each round t = 1 , . . . , T , a single row is activated cyclically: it = (( t − 1) mod m) + 1 and Dt = D(it).We consider the hinge loss 
+
+ft(X) = max 0, 1 − yt⟨X, D t⟩F ,
+
+where yt = ( −1) t is the label. We take the decision set to be the Frobenius norm ball X = {X ∈
+
+Rm×n : ∥X∥F ≤ B} with radius B < 1/√n. Since ∥Dt∥F = √n, this choice ensures that the margin is violated at every round, regardless of the player’s action: for all t and all Xt ∈ X ,
+
+yt⟨Xt, D t⟩F ≤ ⟨Xt, D t⟩F ≤ ∥ Xt∥F ∥Dt∥F ≤ B√n < 1.
+
+Consequently, the subgradient of ft at Xt is Gt = −ytDt = ( −1) t+1 D(it), so that only the it-th row of Gt is nonzero, with all entries equal to ±1. By construction, each row i is activated exactly 
+
+K times, and a direct computation yields 
+
+> m
+
+X
+
+> i=1
+> n
+
+X
+
+> j=1
+
+vuut TX
+
+> t=1
+
+G2 
+
+> t,i,j
+
+= mn √K, 
+
+> m
+
+X
+
+> i=1
+
+vuut TX
+
+> t=1
+
+∥Gt,i, :∥22 =
+
+> m
+
+X
+
+> i=1
+
+vuut TX
+
+> t=1
+> n
+
+X
+
+> j=1
+
+G2 
+
+> t,i,j
+
+= m √nK. 
+
+Moreover, the two diameter measures are D∞ = sup X,Y ∈X ∥X − Y ∥∞ = 2 B and D:2 ,∞ =sup X,Y ∈X ∥X − Y ∥:2 ,∞ = 2 B. Both suprema are attained, for example, by taking X = BE 11 
+
+> 5
+
+The benefits of exploiting intra-row dependency are more clearly illustrated empirically in Section 5. 
+
+12 Preprint and Y = −BE 11 , where E11 denotes the matrix whose only nonzero entry is 1 at position (1 , 1) .Substituting the above quantities into the respective regret bounds gives 
+
+Rvec (T ) ≤ 2√2B · mn √K, Rrow (T ) ≤ 2√2B · m √nK. 
+
+The ratio of these two regret upper bounds is √n, showing that Row-AdaGrad performs better in this row-sparse setting by improving the regret bound by a factor of √n compared to the entry-wise counterpart. A closer examination of this construction reveals the mechanism underlying the regret-bound im-provement. Entry-wise AdaGrad assigns an independent step size to each coordinate and conse-quently treats the entries within each row separately. In contrast, Row-AdaGrad aggregates the gra-dient information across the entries of each row, thereby adapting to the row-wise structure of the gradients. In the above construction, this reduces the per-row contribution to the cumulative gradient term from n√K to √nK , resulting in a √n improvement in the final regret bound. Remarkably, Row-AdaGrad achieves this strictly tighter bound while using significantly fewer adaptive scaling factors ( m instead of mn ). This highlights the key insight: when optimizing over matrices, aligning the adaptivity with the inherent structural geometry of the gradients (here, row-wise sparsity) is more effective and more parameter-efficient than fine-grained but structurally blind entry-wise adaptation. Finally, note that for n = 1 the two algorithms coincide, consistent with the degeneracy discussed in Remark 1. 4.4 DERIVING COLUMN -WISE MATRIX ADA GRAD VIA MATRIX TRANSPOSITION 
+
+To derive the column-wise matrix AdaGrad and its regret bound, we do not need to re-derive all the results from scratch. Instead, we can leverage the intrinsic relationship between the row-wise and column-wise formulations. To this end, we first establish a one-to-one correspondence between the row-wise and column-wise matrix proximal functions via matrix transposition. Recall that, for a positive definite diagonal matrix Q ∈ Rn×n and any matrix X ∈ Rm×n, the column-wise matrix proximal function is given by ψcol  
+
+> Q
+
+(X) = 12 ⟨X, XQ ⟩F . By the definition of the Frobenius inner product, for any two matrices A, B ∈ Rm×n, we have ⟨A, B ⟩F = ⟨A⊤, B ⊤⟩F .
+
+Applying this property to ψcol  
+
+> Q
+
+(X) and using the symmetry of Q, we obtain 
+
+ψcol  
+
+> Q
+
+(X) = 12 ⟨X⊤, (XQ )⊤⟩F = 12 ⟨X⊤, QX ⊤⟩F .
+
+Noting that 12 ⟨X⊤, QX ⊤⟩F = ψrow  
+
+> Q
+
+(X⊤), it follows that ψcol  
+
+> Q
+
+(X) = ψrow  
+
+> Q
+
+(X⊤). This equality shows that the column-wise proximal function evaluated at X is exactly the row-wise proximal function evaluated at the transposed matrix X⊤, thus establishing a one-to-one correspondence be-tween ψcol  
+
+> Q
+
+(X) and ψrow  
+
+> Q
+
+(X⊤) via matrix transposition. This correspondence reflects the intrinsic symmetry of the proximal geometry under transposition: transposing the decision matrix swaps its rows and columns, thereby converting row-wise geometry into column-wise geometry, or vice versa. Consequently, the column-wise matrix AdaGrad algorithm and its associated regret bound can be obtained directly from their row-wise counterparts through this transpositional equivalence. To more precisely formalize this transpositional equivalence, we denote X′ = X⊤ ∈ Rn×m and, for any convex loss function f : Rm×n → R, define its transposed counterpart f ′ : Rn×m → R
+
+by f ′(X′) = f (X′⊤ ) = f (X). By construction, f ′ is convex with respect to X′, and its sub-gradients are related to those of f as follows: if G ∈ ∂f (X), then G′ = G⊤ ∈ ∂f ′(X′), and conversely, if G′ ∈ ∂f ′(X′), then G = ( G′)⊤ ∈ ∂f (X). Recall that we have established the equality ψcol  
+
+> Q
+
+(X) = ψrow  
+
+> Q
+
+(X′). Moreover, since both proximal functions are differentiable, their gradients satisfy ∇ψrow  
+
+> Q
+
+(X′) = ( ∇ψcol  
+
+> Q
+
+(X)) ⊤. These facts imply that the associated Bregman ma-trix divergences satisfy Bψcol  
+
+> Q
+
+(X; Y ) = Bψrow  
+
+> Q
+
+(X′; Y ′). Hence, the column-wise mirror descent update Xt+1 = argmin X∈X 
+
+η⟨G, X ⟩F + Bψcol  
+
+> Q
+
+(X; Xt) is equivalent, up to transposition, to the row-wise update on the transposed variable X′ 
+
+> t+1
+
+= argmin X′∈X ′
+
+η⟨G′, X ′⟩F +Bψrow  
+
+> Q
+
+(X′; X′
+
+> t
+
+) ,where X ′ = {X′ | X′ = X⊤, X ∈ X } ; that is, performing the row-wise update on X′ and then transposing the result back yields exactly the same iterate as the column-wise update on X.The correspondences established above allow us to derive the column-wise matrix AdaGrad and its regret bound by applying the row-wise counterparts to the transposed variable and then transposing 13 Preprint 
+
+Algorithm 2 Column-wise Matrix AdaGrad (Column-AdaGrad) 
+
+1: Input: Convex set X , time horizon T , step size η > 0, stabilizer δ > 0
+
+2: Initialize: X1 ∈ X ⊆ Rm×n, sc0 = δ1 ∈ Rn
+
+3: for t = 1 , . . . , T do 
+
+4: Predict Xt and receive loss function ft : X → R
+
+5: Compute subgradient Gt ∈ ∂f t(Xt) of ft at Xt
+
+6: Update column-wise scaling vector 
+
+sc 
+
+> t,j
+
+=
+
+qPtk=1 ∥Gk, :,j ∥22 + δ, j = 1 , . . . , n 
+
+7: Set column-wise matrix proximal ψQt 
+
+> t
+
+(X) = 12 ⟨X, XQ t⟩F , with Qt = Diag( sc 
+
+> t
+
+)
+
+8: Matrix Mirror Descent Update 
+
+Xt+1 = argmin 
+
+> X∈X
+
+n
+
+η⟨Gt, X ⟩F + BψQtt
+
+(X; Xt)
+
+o
+
+9: end for 
+
+back. Central to this derivation is the design of the adaptive column-wise matrix proximal update rule. Specifically, when applying Row-AdaGrad to X′ = X⊤ ∈ Rn×m (with G′ 
+
+> t
+
+= G⊤ 
+
+> t
+
+), the row-wise scaling vector and matrix are updated as 
+
+srow  
+
+> t,j
+
+←
+
+qPtk=1 ∥G′
+
+> k,j, :
+
+∥22 + δ, j = 1 , . . . , n, Ht = Diag( srow  
+
+> t
+
+) ∈ Rn×n.
+
+Noting that each row of G′ 
+
+> t
+
+corresponds to a column of Gt, i.e., G′ 
+
+> t,j, :
+
+= Gt, :,j , letting scol  
+
+> t,j
+
+= srow  
+
+> t,j
+
+,
+
+Qt = Ht, and transposing back immediately yields the column-wise scaling vector and matrix update rule 
+
+scol  
+
+> t,j
+
+←
+
+qPtk=1 ∥Gk, :,j ∥22 + δ, j = 1 , . . . , n, Qt = Diag( scol  
+
+> t
+
+) ∈ Rn×n,
+
+which computes the scaling by accumulating the squared column-wise gradient norms rather than the row-wise ones. The resulting Column-wise Matrix AdaGrad (Column-AdaGrad) algorithm is presented in Algorithm 2. Next, we derive the regret bound for Column-AdaGrad. By definition, its corresponding regret is given as R(T ) = PTt=1 ft(Xt) − min X⋆∈X 
+
+PTt=1 ft(X⋆). By the transpositional equivalence, we have PTt=1 ft(Xt) = PTt=1 f ′ 
+
+> t
+
+(X′
+
+> t
+
+), min X⋆∈X 
+
+PTt=1 ft(X⋆) = min X′⋆∈X ′
+
+PTt=1 f ′ 
+
+> t
+
+(X′⋆).
+
+Therefore, the regret of Column-AdaGrad can be equivalently written as 
+
+R(T ) = 
+
+> T
+
+X
+
+> t=1
+
+ft(Xt) − min 
+
+> X⋆∈X
+> T
+
+X
+
+> t=1
+
+ft(X⋆) = 
+
+> T
+
+X
+
+> t=1
+
+f ′ 
+
+> t
+
+(X′
+
+> t
+
+) − min  
+
+> X′⋆∈X ′
+> T
+
+X
+
+> t=1
+
+f ′ 
+
+> t
+
+(X′⋆).
+
+In other words, the regret of Column-AdaGrad on the original problem is exactly the regret of Row-AdaGrad on the transposed problem. Consequently, by applying the known Row-AdaGrad regret bound to the transposed problem, we have 
+
+R(T ) ≤ 12η max 
+
+> 1≤u≤T
+
+∥X′⋆ − X′
+
+> u
+
+∥2:2 ,∞
+
+> n
+
+X
+
+> j=1
+
+vuut TX
+
+> t=1
+
+∥G′
+
+> t,j, :
+
+∥22 + η
+
+> n
+
+X
+
+> j=1
+
+vuut TX
+
+> t=1
+
+∥G′
+
+> t,j, :
+
+∥22.
+
+Noting that the row-wise mixed (2 , ∞) norm of X′ is exactly the column-wise mixed (2 , ∞) norm of X, and that the j-th row of G′ 
+
+> t
+
+corresponds to the j-th column of Gt, transposing back to column notation immediately yields the regret bound for Column-AdaGrad. 
+
+Theorem 2. Let the sequences {Xt}Tt=1 and {Gt}Tt=1 be generated by Algorithm 2. Then the following regret bound holds 
+
+R(T ) ≤ 12η max 
+
+> 1≤u≤T
+
+∥X∗ − Xu∥22: ,∞
+
+> n
+
+X
+
+> j=1
+
+vuut TX
+
+> t=1
+
+∥Gt, :,j ∥22 + η
+
+> n
+
+X
+
+> j=1
+
+vuut TX
+
+> t=1
+
+∥Gt, :,j ∥22.
+
+14 Preprint 0 5 10 15 20 25 30                                  
+
+> Epoch
+> 0.80
+> 0.85
+> 0.90
+> 0.95
+> 1.00
+> 1.05
+> 1.10
+> Training RMSE
+> Training Performance Comparison
+> Standard Adagrad
+> Row Adagrad
+> Column Adagrad
+> 0510 15 20 25 30
+> Epoch
+> 0.90
+> 0.95
+> 1.00
+> 1.05
+> 1.10
+> Test RMSE
+> Test Performance Comparison
+> Standard Adagrad
+> Row Adagrad
+> Column Adagrad
+> 0510 15 20 25 30
+> Epoch
+> 10 0
+> 6 × 10 1
+> 7 × 10 1
+> 8 × 10 1
+> 9 × 10 1
+> f(Xk)
+> Loss
+> AdaGrad (element-wise) AdaGrad (row-wise) AdaGrad (column-wise)
+> 0510 15 20 25 30
+> Epoch
+> 10 2
+> Condition Number of Gradient  Gradient Condition Number
+> AdaGrad (element-wise) AdaGrad (row-wise) AdaGrad (column-wise)
+> 0510 15 20 25 30
+> Epoch
+> 10 2
+> 6 × 10 3
+> 2 × 10 2
+> 3 × 10 2
+> Nuclear Norm of Gradient  Nuclear Norm
+> AdaGrad (element-wise) AdaGrad (row-wise) AdaGrad (column-wise)
+
+Figure 1: MovieLens 100K results with row-wise organization of user and item embeddings. Row-AdaGrad significantly outperforms entry-wise AdaGrad, while Column-AdaGrad performs the worst when its column-wise structure is misaligned with the parameter organization. 
+
+Then let D2: ,∞ = sup X,Y ∈X ∥X − Y ∥2: ,∞ denote the diameter of X under the column-wise mixed 
+
+(2 , ∞) norm and set η = D2: ,∞/√2, we have 
+
+R(T ) ≤ √2D2: ,∞
+
+nX
+
+j=1 
+
+vuut TX
+
+t=1 
+
+∥Gt, :,j ∥22.
+
+Note that, similar to the Row-AdaGrad case, we can also construct an abstract example with sparse column gradients, in which Column-AdaGrad improves the regret bound by a factor of √m over entry-wise AdaGrad, demonstrating the benefits of exploiting matrix structure. The result can be obtained from the transpositional equivalence. However, a direct derivation in column notation is very short and intuitive, so we provide it in Appendix F without invoking this equivalence. 
+
+## 5 EXPERIMENTS 
+
+To evaluate the benefits of exploiting matrix structure, we compare the proposed Row-AdaGrad and Column-AdaGrad with standard entry-wise AdaGrad on several tasks involving matrix-valued parameters. Note that, across all tasks, the proposed methods offer a clear advantage in memory effi-ciency. Specifically, for an m × n parameter matrix, Row-AdaGrad and Column-AdaGrad maintain only a scaling vector in Rm or Rn, respectively, requiring O(m) or O(n) optimizer state. In con-trast, entry-wise AdaGrad maintains independent scaling factors for all mn parameters, requiring 
+
+O(mn ) optimizer state. 5.1 MATRIX FACTORIZATION 
+
+We first consider matrix factorization as a representative task involving matrix-valued parame-ters. Specifically, we use the MovieLens 100K data set (Harper & Konstan, 2015), which con-tains 100,000 ratings from 943 users for 1,682 movies. Each user and each movie is represented by a learnable embedding vector. By stacking these embeddings, the user and item parameters naturally form two matrices. Moreover, the embeddings within these matrices exhibit strong intra-dependence: the entries of each embedding vector jointly represent the latent characteristics of a user or an item. This structure provides a simple yet representative testbed for evaluating whether exploiting row-wise or column-wise structure can improve optimization. We consider the following regularized matrix-factorization objective 
+
+min 
+
+U,V 
+
+X
+
+(i,j )∈Ω
+
+ Rij − u⊤
+
+i vj
+
+2 + λU
+
+2 ∥U ∥2
+
+F + λV
+
+2 ∥V ∥2
+
+F ,
+
+where Ω denotes the set of observed user-item pairs, U ∈ R943 ×k and V ∈ R1682 ×k are the user and item embedding matrices, respectively, and ui and vj denote their corresponding embedding vectors. We set the embedding dimension to k = 20 and the regularization coefficients to λU = λV = 0 .02 .For each optimizer, we perform a grid search over a predefined set of learning rates and select the learning rate that achieves the best cross-validation performance. All methods use the same initialization and are trained for 30 epochs. 15 Preprint 0 2000 4000 6000 8000 10000 Steps 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 Loss      
+
+> Training Loss of 15-Layer MLP
+> Adam Row-wise Momentum 02000 4000 6000 8000 10000 Steps 0.4 0.5 0.6 0.7 0.8 0.9 1.0 Loss
+> Training Loss of 25-Layer MLP
+> Adam Row-wise Momentum
+
+Figure 2: Training loss of Adam and Row-wise Momentum on stacked MLPs of different depths with lr = 0 .01 . Entry-wise scaling becomes highly unstable at 15 layers and fails to train at 25 
+
+layers, while row-wise scaling remains trainable. In this experiment, both the user and item embeddings are organized row-wise, so that each em-bedding vector corresponds to one row of the respective embedding matrix. As shown in Figure 1, Row-AdaGrad substantially outperforms standard entry-wise AdaGrad, demonstrating the benefit of adapting the scaling at the level of entire embedding vectors rather than individual parameters. In contrast, Column-AdaGrad performs the worst among the three methods, as its column-wise geometry is misaligned with the row-wise parameter organization. The performance gap between Row-AdaGrad and Column-AdaGrad highlights the importance of aligning the adaptive geometry with the underlying parameter organization. Importantly, this advantage stems from the alignment rather than the row-wise direction itself: if the same embeddings were organized column-wise, the relative performance of Row-AdaGrad and Column-AdaGrad would simply be reversed. 5.2 VARIABLE -D EPTH STACKED MLP T RAINING 
+
+To further investigate the effect of row-wise adaptive scaling on training stability, we consider a deliberately challenging setting that completely omits normalization and residual connections, i.e., without using common architectural techniques that can facilitate the optimization of deep neural networks (Ba et al., 2016; He et al., 2016). We simply stack MLP layers to increase the model depth, while keeping the learning rate and momentum coefficients fixed across optimizers. In particular, we use a relatively large learning rate, under which the choice of adaptive scaling becomes critical for stable optimization. We compare Row-wise Momentum, built on Row-AdaGrad by replacing its cumulative gradient statistics with an exponential moving average (EMA) and adding momentum, against the entry-wise adaptive scaling used in Adam under otherwise identical settings. For both optimizers, we set the learning rate to 0.01 and the momentum coefficients to β1 = β2 = 0 .9.The dataset consists of N = 640 synthetic samples, with both the input X ∈ R640 ×20 and target 
+
+Y ∈ R640 ×5 independently sampled from standard Gaussian distributions, i.e., Xij , Y ij ∼ N (0 , 1) .All hidden layers have width 20 , and the network depth is varied to study the effect of depth on training stability. The results in Figure 2 show a substantial difference in trainability between the two scaling schemes. Row-wise scaling remains trainable as the network depth increases, supporting training at 25 layers despite increased loss fluctuations. In contrast, entry-wise scaling is highly unstable at 15 layers, exhibiting pronounced oscillations in the training loss, and becomes completely untrainable at 25 
+
+layers (with training already failing at 22 layers). These results suggest that row-wise adaptive scaling leads to fundamentally different optimization dynamics and trainability from entry-wise scaling, rather than merely providing a different parameter-wise learning-rate schedule. In particular, row-wise scaling enables stable optimization at larger learning rates and supports the training of deeper networks, where entry-wise scaling becomes increasingly unstable and eventually fails to train. We further tested Adam with a smaller learning rate of 0.001 , but it still completely fails to train at 25 layers, indicating that the observed failure is not simply due to an overly large learning rate. More details of this experiment are provided in Appendix G. 16 Preprint 
+
+## 6 RELATED WORK 
+
+The idea of adapting learning rates based on observed gradients dates back to early work on adap-tive and self-confident online learning (Auer et al., 2002), and was subsequently popularized by AdaGrad (Duchi et al., 2011). A central insight underlying AdaGrad is that adaptive scaling can be derived from an online learning perspective through data-dependent regularization, or equiva-lently, time-varying proximal functions in the framework of mirror descent. A comprehensive treat-ment of adaptive online learning and its connections to data-dependent regularization is provided by McMahan (McMahan, 2017). Subsequent methods, including Adam and AdamW (Kingma & Ba, 2015; Loshchilov & Hutter, 2019), have further established adaptive gradient methods as a stan-dard approach for modern neural-network optimization. Our work builds on this adaptive proximal perspective and extends classical entry-wise AdaGrad to matrix-valued parameters. In particular, we formulate Online Mirror Descent for matrix variables with new row-wise and column-wise ma-trix proximal functions, and show that row-wise and column-wise adaptive scaling naturally arise from the corresponding proximal geometries. This formulation provides a principled framework for deriving and analyzing matrix-structured adaptive gradient methods. Beyond entry-wise adaptation, existing work has explored structured adaptive statistics from two related directions. One line focuses primarily on reducing optimizer-state memory by sharing adap-tive statistics across parameters. Adafactor (Shazeer & Stern, 2018) uses row and column statis-tics to construct a memory-efficient approximation to the entry-wise second-moment matrix, while SM3 (Anil et al., 2019) shares adaptive statistics over a cover of tensor coordinates. Block-wise methods similarly assign a common adaptive statistic to predefined parameter groups, including BAG (Zheng & Kwok, 2019), which considers rows and columns of a weight matrix as possible blocks, and Adam-mini (Zhang et al., 2025), which uses shared second-moment statistics within parameter blocks. A distinct line of work explicitly incorporates the matrix or tensor structure of model parameters into adaptive optimization. Methods such as Shampoo (Gupta et al., 2018), AdaBlock (Yun et al., 2022), and other matrix- and tensor-aware preconditioners (Yong et al., 2023; Xie et al., 2025) use structured preconditioning to capture dependencies beyond individual parameters. NorMuon (Li et al., 2025) further employs row- or column-wise adaptive scaling together with matrix orthogo-nalization. While these methods demonstrate the practical value of exploiting matrix structure, their formulations are developed from specific preconditioning or optimization constructions. In con-trast, our work develops a unified matrix-valued OMD framework for understanding row-wise and column-wise adaptivity. Within this framework, we identify the corresponding matrix proximal ge-ometries, establish the equivalence between row-wise and column-wise formulations through matrix transposition, and derive matrix-specific regret guarantees. We further provide motivating examples showing that structured gradients can lead to strictly tighter regret bounds than entry-wise AdaGrad. 
+
+## 7 CONCLUSION 
+
+We presented Row-AdaGrad and Column-AdaGrad as explicit matrix-space specializations of blockwise adaptive gradient methods. Their diagonal left- or right-sided metrics share one accumu-lator along a selected matrix axis, require only O(m) or O(n) adaptive state, and yield mixed-norm regret bounds that expose when axis-aligned gradient structure is advantageous. The four prelim-inary experiments show that the preferred grouping is task-dependent: row sharing can help when parameters naturally form vectors, but it need not dominate entry-wise adaptation. Larger multi-seed studies are therefore the main empirical next step. 
+
+## REFERENCES 
+
+Kang An, Yuxing Liu, Rui Pan, Yi Ren, Shiqian Ma, Donald Goldfarb, and Tong Zhang. Asgo: Adaptive structured gradient optimization. Advances in Neural Information Processing Systems (NeurIPS) , 2026. Rohan Anil, Vineet Gupta, Tomer Koren, and Yoram Singer. Memory efficient adap-tive optimization. In Advances in Neural Information Processing Systems , vol-17 Preprint ume 32, 2019. URL https://papers.nips.cc/paper/2019/hash/ 8f1fa0193ca2b5d2fa0695827d8270e9-Abstract.html .Marianne Arriola, Aaron Gokaslan, Justin Chiu, Zhihan Yang, Zhixuan Qi, Jiaqi Han, Subham Sahoo, and Volodymyr Kuleshov. Block diffusion: Interpolating between autoregressive and diffusion language models. In International Conference on Learning Representations , 2025. Peter Auer, Nicolo Cesa-Bianchi, and Claudio Gentile. Adaptive and self-confident on-line learning algorithms. Journal of Computer and System Sciences , 64(1):48–75, 2002. Jimmy Lei Ba, Jamie Ryan Kiros, and Geoffrey E Hinton. Layer normalization. arXiv preprint arXiv:1607.06450 , 2016. DeepSeek-AI, Anyi Xu, Bangcai Lin, Bing Xue, Bingxuan Wang, Bingzheng Xu, Bochao Wu, Bowei Zhang, Chaofan Lin, Chen Dong, Chenchen Ling, et al. DeepSeek-V4: Towards highly efficient million-token context intelligence. arXiv preprint arXiv:2606.19348 , 2026. John Duchi, Elad Hazan, and Yoram Singer. Adaptive subgradient methods for online learning and stochastic optimization. Journal of Machine Learning Research , 12(61):2121–2159, 2011. GLM-4.5 Team, Aohan Zeng, Xin Lv, Qinkai Zheng, Zhenyu Hou, Bin Chen, Chengxing Xie, Cunxiang Wang, Da Yin, Hao Zeng, Jiajie Zhang, et al. GLM-4.5: Agentic, reasoning, and coding (ARC) foundation models. arXiv preprint arXiv:2508.06471 , 2025. Vineet Gupta, Tomer Koren, and Yoram Singer. Shampoo: Preconditioned stochastic tensor opti-mization. In International Conference on Machine Learning , pp. 1842–1850. PMLR, 2018. F. Maxwell Harper and Joseph A. Konstan. The MovieLens datasets: History and context. ACM Transactions on Interactive Intelligent Systems , 5(4):19:1–19:19, 2015. doi: 10.1145/2827872. Elad Hazan et al. Introduction to online convex optimization. Foundations and Trends® in Opti-mization , 2(3-4):157–325, 2016. Kaiming He, Xiangyu Zhang, Shaoqing Ren, and Jian Sun. Deep residual learning for image recog-nition. In Proceedings of the IEEE conference on computer vision and pattern recognition , pp. 770–778, 2016. Keller Jordan, Yuchen Jin, Vlado Boza, Jiacheng You, Franz Cesista, Laker Newhouse, and Jeremy Bernstein. Muon: An optimizer for hidden layers in neural networks, 2024. URL https: //kellerjordan.github.io/posts/muon/ .Kimi Team, Yifan Bai, Yiping Bao, Y Charles, Cheng Chen, Guanduo Chen, Haiting Chen, Huarong Chen, Jiahao Chen, Ningxin Chen, et al. Kimi K2: Open agentic intelligence. arXiv preprint arXiv:2507.20534 , 2025. Diederik P. Kingma and Jimmy Ba. Adam: A method for stochastic optimization. In International Conference on Learning Representations (ICLR) , 2015. Zichong Li, Liming Liu, Chen Liang, Weizhu Chen, and Tuo Zhao. NorMuon: Making Muon more efficient and scalable. arXiv preprint arXiv:2510.05491 , 2025. Ilya Loshchilov and Frank Hutter. Decoupled weight decay regularization. In International Confer-ence on Learning Representations (ICLR) , 2019. H Brendan McMahan. A survey of algorithms and analysis for adaptive online learning. The Journal of Machine Learning Research , 18(1):3117–3166, 2017. Francesco Orabona. Online learning: A modern introduction using convex optimization. arXiv preprint arXiv:1912.13213 , 2019. William Peebles and Saining Xie. Scalable diffusion models with transformers. In IEEE/CVF International Conference on Computer Vision (ICCV) , pp. 4195–4205. IEEE, 2023. 18 Preprint Noam Shazeer and Mitchell Stern. Adafactor: Adaptive learning rates with sublinear mem-ory cost. In Proceedings of the 35th International Conference on Machine Learning , vol-ume 80 of Proceedings of Machine Learning Research , pp. 4596–4604, 2018. URL https: //proceedings.mlr.press/v80/shazeer18a.html .Hugo Touvron, Thibaut Lavril, Gautier Izacard, Xavier Martinet, Marie-Anne Lachaux, Timoth´ ee Lacroix, Baptiste Rozi` ere, Naman Goyal, Eric Hambro, Faisal Azhar, et al. Llama: Open and efficient foundation language models. arXiv preprint arXiv:2302.13971 , 2023. Shuo Xie, Tianhao Wang, Sashank J. Reddi, Sanjiv Kumar, and Zhiyuan Li. Structured precon-ditioners in adaptive optimization: A unified analysis. In Proceedings of the 42nd International Conference on Machine Learning , volume 267 of Proceedings of Machine Learning Research , pp. 68746–68776, 2025. URL https://proceedings.mlr.press/v267/xie25j.html .Hongwei Yong, Ying Sun, and Lei Zhang. A general regret bound of preconditioned gradi-ent method for DNN training. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pp. 7866–7875, 2023. URL https://openaccess. thecvf.com/content/CVPR2023/html/Yong_A_General_Regret_Bound_of_ Preconditioned_Gradient_Method_for_DNN_CVPR_2023_paper.html .Jihun Yun, Aurelie Lozano, and Eunho Yang. AdaBlock: SGD with practical block diagonal matrix adaptation for deep learning. In Proceedings of the 25th International Conference on Artificial Intelligence and Statistics , volume 151 of Proceedings of Machine Learning Research , pp. 2574– 2606, 2022. URL https://proceedings.mlr.press/v151/yun22a.html .Jiaqi Zhai, Lucy Liao, Xing Liu, Yueming Wang, Rui Li, Xuan Cao, Leon Gao, Zhaojie Gong, Fangda Gu, Jiayuan He, Yinghai Lu, and Yu Shi. Actions speak louder than words: Trillion-parameter sequential transducers for generative recommendations. In International Confer-ence on Machine Learning (ICML) , volume 235 of Proceedings of Machine Learning Research ,pp. 58484–58509, 2024. URL https://proceedings.mlr.press/v235/zhai24a. html .Yushun Zhang, Congliang Chen, Ziniu Li, Tian Ding, Chenwei Wu, Diederik Durk Kingma, Yinyu Ye, Zhi-Quan Luo, and Ruoyu Sun. Adam-mini: Use fewer learning rates to gain more. In 
+
+International Conference on Learning Representations , 2025. Shuai Zheng and James T. Kwok. Blockwise adaptivity: Faster training and better generalization in deep learning. arXiv preprint arXiv:1905.09899 , 2019. URL https://arxiv.org/abs/ 1905.09899 .Martin Zinkevich. Online convex programming and generalized infinitesimal gradient ascent. In 
+
+International Conference on Machine Learning , pp. 928–936, 2003. 
+
+## AI U SE STATEMENT 
+
+Generative AI tools were used to assist with literature search, citation metadata verification, lan-guage editing, and L ATEX restructuring. The authors are responsible for verifying all claims, deriva-tions, references, and experimental results. 
+
+## APPENDIX 
+
+## A DERIVATION OF THE EXPLICIT ROW -WISE FORM OF ψC (X) AND 
+
+## COLUMN -WISE FORM OF ψD(X)
+
+A.1 DERIVATION OF THE EXPLICIT ROW -WISE FORM OF ψC (X)
+
+Proof. By definition of the row-wise proximal function, we have 
+
+ψC (X) = 12 ∥X∥2 
+
+> C
+
+= 12 ⟨X, CX ⟩F .
+
+19 Preprint Using the row-wise form of the Frobenius inner product, 
+
+⟨X, Y ⟩F =
+
+> m
+
+X
+
+> i=1
+
+⟨X(i), Y (i)⟩,
+
+where X(i), Y (i) ∈ Rn denote the i-th rows of X and Y , respectively, we can rewrite ψC (X) as 
+
+ψC (X) = 12
+
+> m
+
+X
+
+> i=1
+
+⟨X(i), (CX )(i)⟩.
+
+Noting that the i-th row of CX is given by (CX )(i) = Pmj=1 Cij X(j), it follows that 
+
+ψC (X) = 12
+
+> m
+
+X
+
+> i=1
+
+D
+
+X(i),
+
+> m
+
+X
+
+> j=1
+
+Cij X(j)E
+
+.
+
+By linearity of the inner product, we obtain 
+
+ψC (X) = 12
+
+> m
+
+X
+
+> i=1
+> m
+
+X
+
+> j=1
+
+Cij ⟨X(i), X (j)⟩.
+
+This completes the derivation, showing the equivalence of the Frobenius representation and the explicit row-wise form of ψC (X).A.2 DERIVATION OF THE EXPLICIT COLUMN -WISE FORM OF ψD (X)
+
+Proof. By definition of the column-wise proximal function, we have 
+
+ψD (X) = 12 ∥X∥2 
+
+> D
+
+= 12 ⟨X, XD ⟩F .
+
+Using the column-wise form of the Frobenius inner product, 
+
+⟨X, Y ⟩F =
+
+> n
+
+X
+
+> j=1
+
+⟨X(j), Y (j)⟩,
+
+where X(j), Y (j) ∈ Rm denote the j-th columns of X and Y , respectively, we can rewrite ψD (X)
+
+as 
+
+ψD (X) = 12
+
+> n
+
+X
+
+> j=1
+
+⟨X(j), (XD )(j)⟩.
+
+Noting that the j-th column of XD is given by (XD )(j) = Pni=1 Dij X(i), it follows that 
+
+ψD (X) = 12
+
+> n
+
+X
+
+> j=1
+
+D
+
+X(j),
+
+> n
+
+X
+
+> i=1
+
+Dij X(i)
+
+E
+
+.
+
+By linearity of the inner product, we obtain 
+
+ψD (X) = 12
+
+> n
+
+X
+
+> i=1
+> n
+
+X
+
+> j=1
+
+Dij ⟨X(i), X (j)⟩.
+
+This completes the derivation, showing the equivalence of the Frobenius representation and the explicit column-wise form of ψD (X).
+
+## B PROOF OF COROLLARY 1
+
+In this section, we provide the complete proof of Corollary 1. We first establish the one-step regret bound and then derive the final bound. The one-step bound relies on the three-point identity for Bregman matrix divergence stated below. 20 Preprint 
+
+Lemma 1 (Three-point Identity for Bregman Matrix Divergence) . Let Bψ be the Bregman matrix divergence w.r.t. ψ : X → R, then for any three matrix points X, Y ∈ int X and Z ∈ X , the following identity holds 
+
+Bψ (Z; X) + Bψ (X; Y ) − Bψ (Z; Y ) = ⟨∇ ψ(Y ) − ∇ ψ(X), Z − X⟩F .
+
+Proof. By definition of Bψ , we have 
+
+Bψ (Z; X) + Bψ (X; Y ) − Bψ (Z; Y ) = [ ψ(Z) − ψ(X) − ⟨∇ ψ(X), Z − X⟩F ]+ [ ψ(X) − ψ(Y ) − ⟨∇ ψ(Y ), X − Y ⟩F ]
+
+− [ψ(Z) − ψ(Y ) − ⟨∇ ψ(Y ), Z − Y ⟩F ] .
+
+The ψ terms cancel as ψ(Z) − ψ(X) + ψ(X) − ψ(Y ) − ψ(Z) + ψ(Y ) = 0 . The inner product terms remain, so the left-hand side simplifies to 
+
+−⟨∇ ψ(X), Z − X⟩F − ⟨∇ ψ(Y ), X − Y ⟩F + ⟨∇ ψ(Y ), Z − Y ⟩F .
+
+Combining terms yield 
+
+⟨∇ ψ(X), X − Z⟩F + ⟨∇ ψ(Y ), Z − X⟩F = ⟨∇ ψ(Y ) − ∇ ψ(X), Z − X⟩F ,
+
+matching the right-hand side, proving this lemma. Next, we establish the following one-step regret bound. 
+
+Lemma 2 (One-Step Regret Bound) . Let {Xt}T +1  
+
+> t=1
+
+⊆ int X be the iterates of OMD for matrices with proximal functions ψt, and let η > 0 be the global step size. Suppose that, for each t, ψt is 
+
+λ-strongly convex with respect to ∥ · ∥ on X , and let Gt ∈ ∂f t(Xt) be a subgradient of ft at Xt.Then, for all U ∈ X , we have 
+
+η ft(Xt) − ft(U ) ≤ Bψt (U ; Xt) − Bψt (U ; Xt+1 ) + η2
+
+2λ ∥Gt∥2
+
+> ∗
+
+,
+
+where ∥ · ∥ ∗ denotes the dual norm of ∥ · ∥ .Proof. Since Gt is a subgradient of the convex function ft at Xt, it follows that 
+
+ft(U ) ≥ ft(Xt) + ⟨Gt, U − Xt⟩F .
+
+Rearranging terms and multiplying both sides by η, we obtain 
+
+η(ft(Xt) − ft(U )) ≤ η⟨Gt, X t − U ⟩F .
+
+Let J(X) = ⟨Gt, X ⟩F + 1 
+
+> η
+
+Bψt (X; Xt). Then, the update Xt+1 is the minimizer of J(X) over 
+
+X ∈ X . The gradient of J(X) at Xt+1 is 
+
+∇J(Xt+1 ) = Gt + 1
+
+η ∇ψt(Xt+1 ) − 1
+
+η ∇ψt(Xt).
+
+By the first-order optimality condition for Xt+1 , we have 
+
+⟨Gt + 1
+
+η ∇ψt(Xt+1 ) − 1
+
+η ∇ψt(Xt), U − Xt+1 ⟩F ≥ 0, ∀ U ∈ X .
+
+We now express η⟨Gt, X t − U ⟩F using the three-point identity for Bregman matrix divergence. To this end, we first introduce Xt+1 into the expression Xt − U , which yields 
+
+η⟨Gt, X t − U ⟩F = η⟨Gt, X t − Xt+1 ⟩F + η⟨Gt, X t+1 − U ⟩F .
+
+Then, rewriting the second term by adding and subtracting the gradient difference ∇ψt(Xt+1 ) −∇ψt(Xt) and rearranging, we get 
+
+η⟨Gt, X t − U ⟩F = ⟨∇ ψt(Xt+1 ) − ∇ ψt(Xt), U − Xt+1 ⟩F
+
++ ⟨∇ ψt(Xt) − ∇ ψt(Xt+1 ) − ηG t, U − Xt+1 ⟩F + ⟨ηG t, X t − Xt+1 ⟩F .
+
+21 Preprint From the optimality condition for Xt+1 established earlier, the second term in the above equality is non-positive, leading to 
+
+η⟨Gt, X t − U ⟩F ≤ ⟨∇ ψt(Xt+1 ) − ∇ ψt(Xt), U − Xt+1 ⟩F + ⟨ηG t, X t − Xt+1 ⟩F .
+
+Applying the three-point identity for Bψt with X = Xt+1 , Y = Xt and Z = U , we obtain 
+
+⟨∇ ψt(Xt+1 ) − ∇ ψt(Xt), U − Xt+1 ⟩F = Bψt (U ; Xt) − Bψt (U ; Xt+1 ) − Bψt (Xt+1 ; Xt).
+
+Substituting this identity, we obtain 
+
+η⟨Gt, X t − U ⟩F ≤ Bψt (U ; Xt) − Bψt (U ; Xt+1 ) − Bψt (Xt+1 ; Xt) + ⟨ηG t, X t − Xt+1 ⟩F .
+
+Applying Young’s inequality for matrices (Lemma 3), we obtain 
+
+⟨ηG t, X t − Xt+1 ⟩F ≤ η2
+
+2λ ∥Gt∥2 
+
+> ∗
+
++ λ
+
+2 ∥Xt − Xt+1 ∥2.
+
+Then, since ψt is λ-strongly convex w.r.t. ∥ · ∥ , it follows that 
+
+Bψt (Xt+1 ; Xt) ≥ λ
+
+2 ∥Xt − Xt+1 ∥2.
+
+Combining these inequalities, we get 
+
+⟨ηG t, X t − Xt+1 ⟩F − Bψt (Xt+1 ; Xt) ≤ η2
+
+2λ ∥Gt∥2
+
+> ∗
+
+.
+
+Thus, the bound for η⟨Gt, X t − U ⟩F simplifies to 
+
+η⟨Gt, X t − U ⟩F ≤ Bψt (U ; Xt) − Bψt (U ; Xt+1 ) + η2
+
+2λ ∥Gt∥2
+
+> ∗
+
+.
+
+This completes the proof of the one-step bound. 
+
+Lemma 3 (Young’s Inequality for Matrices) . Let Rm×n be equipped with the Frobenius inner prod-uct. Let ∥ · ∥ be a norm on Rm×n with its dual norm ∥ · ∥ ∗ defined by 
+
+∥Y ∥∗ = sup 
+
+> ∥X∥≤ 1
+
+|⟨ X, Y ⟩F |.
+
+Then for any A, B ∈ Rm×n and scalar λ > 0,
+
+⟨A, B ⟩F ≤ 12λ ∥A∥2 
+
+> ∗
+
++ λ
+
+2 ∥B∥2.
+
+Proof. By the definition of the dual norm, we have 
+
+⟨A, B ⟩F ≤ ∥ A∥∗ · ∥ B∥.
+
+To bound the product ∥A∥∗∥B∥, consider the non-negative quadratic 
+
+√λ∥B∥ − ∥A∥∗
+
+√λ
+
+2
+
+≥ 0.
+
+Expanding the square yields 
+
+λ∥B∥2 − 2∥A∥∗∥B∥ + ∥A∥2
+
+> ∗
+
+λ ≥ 0.
+
+Rearranging terms, we get 
+
+∥A∥∗∥B∥ ≤ 12λ ∥A∥2 
+
+> ∗
+
++ λ
+
+2 ∥B∥2.
+
+Next, building on the one-step regret bound, we derive the final regret bound. 22 Preprint 
+
+Proof. Dividing the one-step bound by η and summing over t = 1 , . . . , T gives 
+
+> T
+
+X
+
+> t=1
+
+ ft(Xt) − ft(U ) ≤ 1
+
+η
+
+> T
+
+X
+
+> t=1
+
+
+
+Bψt (U ; Xt) − Bψt (U ; Xt+1 )
+
+
+
++ η
+
+2λ
+
+> T
+
+X
+
+> t=1
+
+∥Gt∥2
+
+> ∗
+
+.
+
+We first rearrange the sum of Bregman divergences as 
+
+> T
+
+X
+
+> t=1
+
+ Bψt (U ; Xt) − Bψt (U ; Xt+1 ) = Bψ1 (U ; X1) − BψT (U ; XT +1 )+
+
+> T
+
+X
+
+> t=2
+
+Bψt (U ; Xt) − 
+
+> T−1
+
+X
+
+> t=1
+
+Bψt (U ; Xt+1 ).
+
+Re-indexing the first sum on the right-hand side by t 7 → t + 1 , we obtain 
+
+> T
+
+X
+
+> t=2
+
+Bψt (U ; Xt) − 
+
+> T−1
+
+X
+
+> t=1
+
+Bψt (U ; Xt+1 ) =  
+
+> T−1
+
+X
+
+> t=1
+
+
+
+Bψt+1 (U ; Xt+1 ) − Bψt (U ; Xt+1 )
+
+
+
+.
+
+Therefore, 
+
+> T
+
+X
+
+> t=1
+
+ ft(Xt) − ft(U ) ≤ Bψ1 (U ; X1)
+
+η − BψT (U ; XT +1 )
+
+η
+
++ 1
+
+η 
+
+> T−1
+
+X
+
+> t=1
+
+
+
+Bψt+1 (U ; Xt+1 ) − Bψt (U ; Xt+1 )
+
+
+
++ η
+
+2λ
+
+> T
+
+X
+
+> t=1
+
+∥Gt∥2
+
+> ∗
+
+.
+
+Since BψT (U ; XT +1 ) ≥ 0, the negative term −BψT (U ; XT +1 )/η can be dropped to obtain the following regret bound 
+
+> T
+
+X
+
+> t=1
+
+ ft(Xt) − ft(U ) ≤ Bψ1 (U ; X1)
+
+η + 1
+
+η 
+
+> T−1
+
+X
+
+> t=1
+
+
+
+Bψt+1 (U ; Xt+1 ) − Bψt (U ; Xt+1 )
+
+
+
++ η
+
+2λ
+
+> T
+
+X
+
+> t=1
+
+∥Gt∥2
+
+> ∗
+
+.
+
+Since the above bound holds for every U ∈ X , we take U = X⋆ ∈ arg min X∈X 
+
+PTt=1 ft(X),which yields the stated regret bound in Corollary 1. This completes the proof. 
+
+## C PROOF OF THE COMPACT FORM OF THE BREGMAN MATRIX DIVERGENCE 
+
+Proposition 1. Let ψHt 
+
+> t
+
+(X) = 12 Tr( X⊤HtX) with Ht ∈ Rm×m symmetric and positive definite. Then, for any two matrices X, Y ∈ Rm×n, the Bregman matrix divergence induced by ψHt 
+
+> t
+
+admits the compact form 
+
+BψHtt
+
+(X; Y ) = 12 ∥X − Y ∥2 
+
+> Ht
+
+= 12 Tr(( X − Y )⊤Ht(X − Y )) .
+
+Proof. We start from the trace-based expression of the Bregman matrix divergence induced by ψHt
+
+> t
+
+BψHtt
+
+(X; Y ) = 12 Tr( X⊤HtX) − 12 Tr( Y ⊤HtY ) − Tr  Y ⊤Ht(X − Y ).
+
+Expanding the last term using linearity of the trace gives 
+
+− Tr  Y ⊤Ht(X − Y ) = − Tr( Y ⊤HtX) + Tr( Y ⊤HtY ).
+
+Substituting back and combining terms into a single trace, we obtain 
+
+BψHtt
+
+(X; Y ) = 12 Tr( X⊤HtX) − 12 Tr( Y ⊤HtY ) − Tr( Y ⊤HtX) + Tr( Y ⊤HtY )= 12 Tr( X⊤HtX − 2Y ⊤HtX + Y ⊤HtY ).
+
+23 Preprint Next, we separate the cross terms 
+
+X⊤HtX − 2Y ⊤HtX + Y ⊤HtY = X⊤HtX − Y ⊤HtX − Y ⊤HtX + Y ⊤HtY. 
+
+Since Ht is symmetric, i.e., H⊤ 
+
+> t
+
+= Ht, we have (X⊤HtY )⊤ = Y ⊤HtX, which implies that 
+
+Tr( X⊤HtY ) = Tr( Y ⊤HtX). Using this, the expression can be rewritten as 
+
+X⊤HtX − X⊤HtY − Y ⊤HtX + Y ⊤HtY. 
+
+Recognizing this as the expansion of a quadratic form, we have 
+
+(X − Y )⊤Ht(X − Y ) = X⊤HtX − X⊤HtY − Y ⊤HtX + Y ⊤HtY. 
+
+Hence, 
+
+X⊤HtX − 2Y ⊤HtX + Y ⊤HtY = ( X − Y )⊤Ht(X − Y ),
+
+and the Bregman matrix divergence can be expressed in compact quadratic form as 
+
+BψHtt
+
+(X; Y ) = 12 Tr(( X − Y )⊤Ht(X − Y )) = 12 ∥X − Y ∥2 
+
+> Ht
+
+.
+
+This completes the proof. 
+
+## D DERIVATION OF THE DUAL NORM OF THE Ht-INDUCED MATRIX NORM 
+
+Proposition 2. Let Ht ∈ Rm×m be symmetric and positive definite. For any X ∈ Rm×n, the 
+
+Ht-induced matrix norm is ∥X∥Ht = p⟨X, H tX⟩F , then for any G ∈ Rm×n, the corresponding dual norm is given by 
+
+∥G∥∗ 
+
+> Ht
+
+= sup  
+
+> X̸=0
+
+⟨G, X ⟩F
+
+∥X∥Ht
+
+= ∥G∥H−1
+
+> t
+
+=
+
+q
+
+Tr( G⊤H−1 
+
+> t
+
+G).
+
+Equivalently, the squared dual norm is 
+
+∥G∥∗2 
+
+> Ht
+
+= ∥G∥2
+
+> H−1
+> t
+
+= Tr( G⊤H−1 
+
+> t
+
+G).
+
+Proof. By definition, the dual norm with respect to the Frobenius inner product is 
+
+∥G∥∗ 
+
+> Ht
+
+= sup  
+
+> X̸=0
+
+⟨G, X ⟩F
+
+∥X∥Ht
+
+.
+
+To simplify the supremum, consider the matrix square root of Ht, denoted H1/2 
+
+> t
+
+, which satisfies 
+
+Ht = H1/2 
+
+> t
+
+H1/2 
+
+> t
+
+. Defining Y = H1/2 
+
+> t
+
+X, we can invert this relation as X = H−1/2 
+
+> t
+
+Y , where 
+
+H−1/2 
+
+> t
+
+= ( H1/2 
+
+> t
+
+)−1. This is well-defined since H1/2 
+
+> t
+
+is invertible ( Ht ≻ 0). Then 
+
+⟨G, X ⟩F = ⟨G, H −1/2 
+
+> t
+
+Y ⟩F = Tr  G⊤H−1/2 
+
+> t
+
+Y .
+
+Since H−1/2 
+
+> t
+
+is symmetric (being the inverse of a symmetric matrix), i.e., H−1/2 
+
+> t
+
+= ( H−1/2 
+
+> t
+
+)⊤, we can rewrite the trace as 
+
+Tr  G⊤H−1/2 
+
+> t
+
+Y  = Tr  (H−1/2 
+
+> t
+
+G)⊤Y  = ⟨H−1/2 
+
+> t
+
+G, Y ⟩F .
+
+Moreover, substituting X = H−1/2 
+
+> t
+
+Y into the Ht-induced norm gives 
+
+∥X∥Ht = p⟨X, H tX⟩F =
+
+q
+
+⟨H−1/2 
+
+> t
+
+Y, H t(H−1/2 
+
+> t
+
+Y )⟩F .
+
+Using HtH−1/2 
+
+> t
+
+= H1/2 
+
+> t
+
+(by the definition of the matrix square root), we have 
+
+⟨H−1/2 
+
+> t
+
+Y, H tH−1/2 
+
+> t
+
+Y ⟩F = ⟨H−1/2 
+
+> t
+
+Y, H 1/2 
+
+> t
+
+Y ⟩F = Tr  (H−1/2 
+
+> t
+
+Y )⊤(H1/2 
+
+> t
+
+Y ).
+
+Using the cyclic property of the trace, and the properties of H−1/2 
+
+> t
+
+, we get 
+
+Tr  (H−1/2 
+
+> t
+
+Y )⊤(H1/2 
+
+> t
+
+Y ) = Tr  Y ⊤(H−1/2 
+
+> t
+
+H1/2 
+
+> t
+
+)Y  = Tr( Y ⊤Y ) = ⟨Y, Y ⟩F = ∥Y ∥2 
+
+> F
+
+.
+
+24 Preprint Thus, the Ht-induced norm of X reduces exactly to the standard Frobenius norm of Y
+
+∥X∥Ht = ∥Y ∥F .
+
+Hence, the dual norm becomes 
+
+∥G∥∗ 
+
+> Ht
+
+= sup  
+
+> Y̸=0
+
+⟨H−1/2 
+
+> t
+
+G, Y ⟩F
+
+∥Y ∥F
+
+.
+
+By the Cauchy–Schwarz inequality, the supremum is attained when Y is a scalar multiple of 
+
+H−1/2 
+
+> t
+
+G, which gives 
+
+∥G∥∗ 
+
+> Ht
+
+=
+
+q
+
+⟨H−1/2 
+
+> t
+
+G, H −1/2 
+
+> t
+
+G⟩F =
+
+q
+
+Tr  (H−1/2 
+
+> t
+
+G)⊤(H−1/2 
+
+> t
+
+G).
+
+By the symmetry of H−1/2 
+
+> t
+
+, we have 
+
+Tr  (H−1/2 
+
+> t
+
+G)⊤(H−1/2 
+
+> t
+
+G) = Tr  G⊤H−1/2 
+
+> t
+
+H−1/2 
+
+> t
+
+G.
+
+Since H1/2 
+
+> t
+
+is the square root of Ht, we have 
+
+Ht = H1/2 
+
+> t
+
+H1/2 
+
+> t
+
+=⇒ H−1 
+
+> t
+
+= H−1/2 
+
+> t
+
+H−1/2 
+
+> t
+
+.
+
+Therefore, 
+
+Tr  (H−1/2 
+
+> t
+
+G)⊤(H−1/2 
+
+> t
+
+G) = Tr  G⊤H−1 
+
+> t
+
+G = ⟨G, H −1 
+
+> t
+
+G⟩F .
+
+Hence, we obtain 
+
+∥G∥∗ 
+
+> Ht
+
+= ∥G∥H−1
+
+> t
+
+=
+
+q
+
+Tr  G⊤H−1 
+
+> t
+
+G.
+
+This completes the proof. Note that the derivation does not require Ht to be diagonal. 
+
+## E A S UFFICIENT CONDITION FOR FULLY ABSORBING THE EFFECT OF THE 
+
+## STABILIZER δ
+
+In this section, we derive a sufficient condition for fully offsetting the effect of the stabilizer δ.To completely remove the effect of the stabilizer δ, it is sufficient to require 
+
+max 
+
+> 1≤u≤T
+
+∥X∗ − Xu∥2:2 ,∞ mδ ≤ 2BψHTT
+
+(X∗; XT +1 ).
+
+Note that BψHTT
+
+(X∗; XT +1 ) still contains δ. Expressing it in row-wise form and substituting sT,i =
+
+δ +
+
+qPTt=1 ∥Gt,i, :∥22, we have 
+
+BψHTT
+
+(X∗; XT +1 ) = 12
+
+> m
+
+X
+
+> i=1
+
+sT,i ∥X∗ 
+
+> i, :
+
+− XT +1 ,i, :∥22
+
+= 12
+
+> m
+
+X
+
+> i=1
+
+
+
+δ +
+
+vuut TX
+
+> t=1
+
+∥Gt,i, :∥22
+
+
+
+∥X∗ 
+
+> i, :
+
+− XT +1 ,i, :∥22.
+
+Thus, it is sufficient to require 
+
+max 
+
+> 1≤u≤T
+
+∥X∗ − Xu∥2:2 ,∞ mδ ≤
+
+> m
+
+X
+
+> i=1
+
+vuut TX
+
+> t=1
+
+∥Gt,i, :∥22 ∥X∗ 
+
+> i, :
+
+− XT +1 ,i, :∥22.
+
+Solving for δ yields an explicit upper bound 
+
+δ ≤
+
+> m
+
+X
+
+> i=1
+
+vuut TX
+
+> t=1
+
+∥Gt,i, :∥22 ∥X∗ 
+
+> i, :
+
+− XT +1 ,i, :∥22
+
+. 
+
+m max  
+
+> 1≤u≤T
+
+∥X∗ − Xu∥2:2 ,∞
+
+
+
+.
+
+By choosing δ sufficiently small to satisfy this inequality, the additional contribution introduced by the stabilizer is fully absorbed by the negative terminal Bregman term, effectively eliminating its impact on the final regret bound. 25 Preprint 
+
+## F COLUMN -A DA GRAD OUTPERFORMS ENTRY -W ISE ADA GRAD : A MOTIVATING EXAMPLE 
+
+Recall that when applied to matrices, entry-wise AdaGrad treats an m × n matrix as a vector in Rmn 
+
+and applies independent per-coordinate step sizes. Its regret bound takes the form 
+
+Rvec (T ) ≤ √2 D∞
+
+> m
+
+X
+
+> i=1
+> n
+
+X
+
+> j=1
+
+vuut TX
+
+> t=1
+
+G2 
+
+> t,i,j
+
+,
+
+where D∞ = sup X,Y ∈X ∥X − Y ∥∞ is the diameter of X under the entry-wise ℓ∞ norm. We construct a scenario in which the data matrices are column-wise sparse, which leads to column-sparse gradients. We fix an integer K > 0 and set the horizon T = Kn . For each column j ∈{1, . . . , n }, define the column-activated matrix D(j) = 1me⊤ 
+
+> j
+
+, where ej is the j-th standard basis vector in Rn and 1m is the all-ones vector in Rm, so that D(j) has ones in its j-th column and zeros elsewhere. At each round t = 1 , . . . , T , a single column is activated cyclically: jt = (( t −
+
+1) mod n) + 1 and Dt = D(jt). We consider the hinge loss 
+
+ft(X) = max 0, 1 − yt⟨X, D t⟩F ,
+
+where yt = ( −1) t is the label. We take the decision set to be the Frobenius norm ball X = {X ∈
+
+Rm×n : ∥X∥F ≤ B} with radius B < 1/√m. Since ∥Dt∥F = √m, this choice ensures that the margin is violated at every round, regardless of the player’s action: for all t and all Xt ∈ X ,
+
+yt⟨Xt, D t⟩F ≤ ⟨Xt, D t⟩F ≤ ∥ Xt∥F ∥Dt∥F ≤ B√m < 1.
+
+Consequently, the subgradient of ft at Xt is Gt = −ytDt = ( −1) t+1 D(jt), so that only the jt-th column of Gt is nonzero, with all entries equal to ±1. By construction, each column j is activated exactly K times, and a direct computation yields 
+
+> m
+
+X
+
+> i=1
+> n
+
+X
+
+> j=1
+
+vuut TX
+
+> t=1
+
+G2 
+
+> t,i,j
+
+= mn √K, 
+
+> n
+
+X
+
+> j=1
+
+vuut TX
+
+> t=1
+
+∥Gt, :,j ∥22 =
+
+> n
+
+X
+
+> j=1
+
+vuut TX
+
+> t=1
+> m
+
+X
+
+> i=1
+
+G2 
+
+> t,i,j
+
+= n √mK. 
+
+Moreover, the two diameter measures are D∞ = sup X,Y ∈X ∥X − Y ∥∞ = 2 B and D2: ,∞ =sup X,Y ∈X ∥X − Y ∥2: ,∞ = 2 B. Both suprema are attained, for example, by taking X = BE 11 
+
+and Y = −BE 11 , where E11 denotes the matrix whose only nonzero entry is 1 at position (1 , 1) .Substituting the above quantities into the two respective regret bounds gives 
+
+Rvec (T ) ≤ 2√2B · mn √K, Rcol (T ) ≤ 2√2B · n √mK. 
+
+The ratio of these two regret upper bounds is √m, showing that Column-AdaGrad achieves a √m-factor improvement in the regret bound over the entry-wise counterpart in this column-sparse setting. 
+
+## G VARIABLE -D EPTH STACKED MLP T RAINING AT A SMALLER LEARNING 
+
+## RATE 
+
+Under exactly the same experimental configuration, we additionally reduce the learning rate from 
+
+0.01 to 0.001 and evaluate both optimizers across different network depths. At 15 layers, both methods exhibit substantially smaller loss fluctuations, while Row-wise Momentum still achieves a lower training loss than Adam. At 25 layers, Row-wise Momentum remains able to train effectively, whereas Adam still completely fails to train. These results further indicate that, in this setting, row-wise scaling can support stable training at learning rates more than 10 × larger than those at which entry-wise scaling fails. This highlights a key advantage of row-wise adaptive scaling: its ability to maintain stable training at larger learning rates and greater network depths. 26 Preprint 0 2000 4000 6000 8000 10000 Steps 0.6 0.7 0.8 0.9 1.0 Loss 
+
+Training Loss of 15-Layer MLP      
+
+> Adam Row-wise Momentum 02000 4000 6000 8000 10000 Steps 0.6 0.7 0.8 0.9 1.0 Loss
+
+Training Loss of 25-Layer MLP 
+
+> Adam Row-wise Momentum
+
+Figure 3: Training loss of Adam and Row-wise Momentum on stacked MLPs of different depths with lr = 0 .001 . Compared with lr = 0 .01 , both methods exhibit reduced loss fluctuations at 15 
+
+layers, while entry-wise scaling still fails to train at 25 layers. 27
