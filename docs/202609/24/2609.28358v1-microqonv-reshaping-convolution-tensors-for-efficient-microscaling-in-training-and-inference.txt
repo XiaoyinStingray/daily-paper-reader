@@ -1,0 +1,880 @@
+Title: MicroQonv: Reshaping Convolution Tensors for Efficient Microscaling in Training and Inference
+
+URL Source: https://arxiv.org/pdf/2609.28358v1
+
+Published Time: Thu, 24 Sep 2026 01:29:00 GMT
+
+Number of Pages: 12
+
+Markdown Content:
+> 1
+
+# MICRO QONV : Reshaping Convolution Tensors for Efficient Microscaling in Training and Inference 
+
+Romain Facq, Sami Ben-Ali, Olivier Sentieys Univ Rennes, Inria, CNRS, IRISA, Rennes, France 
+
+Abstract —Microscaling quantization techniques are increas-ingly used to represent neural network parameters with 8 bits or fewer while preserving near-full precision accuracy. However, applying these methods efficiently in convolutional layers is not straightforward. A naive approach transfers full-precision weights and activations to processing units and quantizes each tensor twice, resulting in much more memory movement than expected. Additional overhead comes from the activation tensors, whose sizes grow substantially because of the im2col transfor-mation applied before quantization. We propose MICRO QONV , a way to combine microscaling with convolutional layers’ forward and backward operations by quantizing each tensor only once and quantizing the activation tensor before applying a modified version of im2col : channel-batch-first im2col . MICRO QONV 
+
+reduces the quantization cost by a factor of ×2 for weights and gradients, and by up to ×9 for activations, at a negligible accuracy cost. It reduces memory movement and storage by up to 
+
+×7.53 compared to their full-precision counterparts. This way, MicroQonv reduces microscaling-quantized activation memory movement by ×3.5 for state-of-the-art object detection models YOLOV8nano and ×2.2 for YOLOV26nano. It also enables 4-bit microscaling in a quantized latent replay strategy for continual learning at the edge, improving accuracy by +5.7% to +11%. 
+
+Index Terms —Quantization, convolutional neural networks (CNNs), microscaling, hardware acceleration. 
+
+I. I NTRODUCTION 
+
+Recent progress in Artificial Intelligence (AI) has enabled substantial improvements in numerous fields, such as natural language processing or medical imaging. Some of its ap-plications are executed on resource-constrained devices, e.g., UAVs [1] and autonomous driving systems, while models are mostly trained in the cloud. Whether the model is trained in the cloud or on an edge device, backpropagation is energy-intensive and time-consuming: reducing training costs will benefit all training scenarios. Moreover, giving embedded systems the ability to train locally is a huge improvement to their autonomy. Thanks to Continual Learning (CL) [2], models trained in the cloud can be adapted to the dynamic real-world environment encountered by each device, and can even learn new tasks and classes while maintaining performance on previously seen data. A simple yet very effective CL strategy is the replay buffer [3], where devices regularly store data from their environment to keep training on it while encountering new data. By reducing the number of bits per parameter for weights, activations, and gradients, quantization techniques [4] help reduce energy and latency cost in two complementary ways: they reduce memory movement [5] to bring data to the processing elements, and lower processing cost by using smaller hardware operators [6], [7]. Thus, combining training strategies with quantization — also known as Fully-Quantized Training (FQT) — is a good approach to enhancing device efficiency. Recent microscaling [8], [9] data formats stand out among quantization methods because they support 4-bit quantization, often using the 4-bit Floating-Point (FP4) format to maintain near-full-precision accuracy. For example, Large Language Models (LLMs) are trained from scratch using various fla-vors of FP4 and microscaling for weights, activations, and gradients [10], [11]. Microscaling partitions a tensor into line-shaped blocks whose elements share a single scaling factor. For efficiency, these lines must be aligned with the direction of the dot-product computation. However, weights, activations, and gradients participate in two distinct General Matrix Multiplications (GeMMs), and their computation di-rections differ. As a result, they must be quantized twice, which is suboptimal. The issue is particularly pressing for activations: the tensor is expanded via explicit or implicit 
+
+im2col (image-to-column) [12], [13] before being quantized to the microscale format. Since the same full-precision element can be assigned different quantized values due to varying distributions inside the blocks, either the im2col -expanded quantized tensor or the original full-precision tensor must be saved for back-propagation, which results in excessive memory movement and memory storage compared to other quantization techniques. This contributes to the well-known ”AI memory wall” [5] problem. This paper addresses these issues of increased memory movement and quantization computation due to the microscal-ing format by proposing the following contributions. We first present M ICRO QONV , a tensor reordering method that quantizes each tensor only once during training, using the microscaling format. Activations are quantized before an im-plicit variant of im2col called channel-batch-first im2col 
+
+is applied, significantly reducing memory movement, memory storage, and overhead due to quantization computations. M I-
+
+> CRO
+
+QONV is compared with other quantized training methods, showing its relevance by achieving higher accuracy at the same quantization level or by requiring much less computation with only a tiny accuracy loss, far outweighed by the memory size and memory movement reductions it provides. The gains are validated using a DRAM simulator [14], which simulates memory transfers between off-chip and on-chip memory. No-tably, MicroQonv reduces microscaling-quantized activation memory movement in state-of-the-art object detection models, by ×3.5 for YOLOV8nano and ×2.2 for YOLOV26nano. We arXiv:2609.28358v1 [cs.AR] 23 Sep 2026 2
+
+then apply 4-bit M ICRO QONV to a Continual Learning setting using quantized latent replay buffer strategy, to improve the state-of-the-art (SoTA) final model accuracy by up to +11%. The paper is organized as follows. Section II gives the background on training, im2col transformations, and quan-tization. In Section III, we describe the problems that arise when applying microscaling quantization to convolutional layers. Section IV describes the M ICRO QONV approach. Then, Section V presents the DRAM simulation results to quantify energy and latency gains. Section VI presents the experimental setup and results in a deep learning scenario, while Section VII shows improvements in a continual learning scenario. II. B ACKGROUND AND RELATED WORK 
+
+A. CNN Training 
+
+Following the emergence of the Transformer architecture for natural language processing, Vision Transformers (ViTs) [15] gained widespread popularity in computer vision. Because ViT achieves very good accuracy with the attention mechanism, it is worth asking whether convolutional layers will remain state-of-the-art. As an example, ConvNext [16] demonstrates that carefully designed convolutional networks can compete with vision transformers in accuracy. More importantly, embedded systems applications such as image classification and object detection not only require accuracy but also low latency and low energy consumption. In that domain, the high computa-tional cost of attention mechanisms can be a disadvantage, as shown in [17, Fig. 1]. In object detection, as we write these lines, YOLO26 [18] and RF-DETR [19] achieve the best accuracy-latency tradeoff depending on the deployment plat-form. Like earlier YOLO versions, YOLO26 is a fully convo-lutional network. While RF-DETR mainly uses a transformer architecture, it also uses a YOLO convolutional projector to have richer encoder features. Another competitive model is RT-DETRv4 [20], which combines a convolutional backbone with an attention mechanism. Regarding real-time open vo-cabulary object detection, convolution-based YOLO26-E [18] is leading the way. Thus, in embedded-system applications, the convolutional layer is a core component, and improving it will benefit the overall system. The training process of convolutional neural networks (CNNs) involves three primary operations performed on each convolution layer: forward propagation , backward propa-gation , and weight update . In this subsection, we focus on standard convolution layers. For clarity, we assume a stride of 1 and no padding. However, the methods presented in this paper are independent of these assumptions. 
+
+1) Forward Pass: Given a tensor representing a batch of N
+
+input feature maps X ∈ RN ·Cin ·Hin ·Win ,1 and convolutional weights W ∈ RCout ·Cin ·Kh·Kw , where Cin and Cout are the input and output channel dimensions, respectively, Hin · Win 
+
+the input dimensions, and Kh · Kw the convolution kernel dimensions, the output feature map tensor is computed using the convolution operation: 
+
+Y = W ⋆ X, (1)   
+
+> 1”·“ denotes starting a new dimension, e.g. here Xis a 4D tensor.
+
+where ⋆ denotes the standard convolution. The output tensor is defined as Y ∈ RN ·Cout ·Hout ·Wout , with Hout = Hin −Kh +1 
+
+and Wout = Win − Kw + 1 .
+
+2) Backward Pass: During backpropagation, compute two gradients: the gradient with respect to the input activations and the gradient with respect to the weights. 
+
+Input Gradient: Given the gradient of the output feature maps 
+
+GY ∈ RN ·Cout ·Hout ·Wout , the gradient with respect to the input activations is computed by convolving GY with the transposed kernels: 
+
+GX = W T ⋆ G Y , (2) where W T ∈ RCin ·Cout ·Kh·Kw is obtained by swapping the input and output channel dimensions of W .
+
+Weight Gradient: The gradient w.r.t the weights GW ∈
+
+RCout ·Cin ·Kh·Kw is computed by accumulating over the batch dimension: 
+
+GW [cout , c in , :, :] = 
+
+> N
+
+X
+
+> n=1
+
+(GY [n, c out , :, :] ⋆ X [n, c in , :, :]) ,
+
+(3) with cin ∈ [1 . . . C in ] and cout ∈ [1 . . . C out ]. Notations in this paper follow the principles of Python tensor iterators. 
+
+3) Weight Update: After computing the gradients, the weights are updated using a learning rate η. A standard Stochastic Gradient Descent update step is computed as 
+
+W = W − η G W .
+
+B. Compute Architecture Model 
+
+CNN training computation can run on different hardware targets, such as a Central Processing Unit (CPU), a Graphics Processing Unit (GPU), or a Systolic Array (SA). While these architectures differ in performance and use cases, they share one limitation: none can store the entire model in the memory of the chip performing the computations. Thus, they require frequent data movement to and from off-chip memory to load GeMM inputs and store GeMM outputs. The general and hardware-agnostic architecture considered in this paper is illustrated in Figure 1. Computations are performed on data (weights, activations, or gradients) in the on-chip memory. Data must be transferred to and from off-chip memory before computation. We consider optimal reuse of tiles and tensors once located in on-chip memory. Off-Chip memory (DRAM) On-Chip memory (SRAM) Computation Unit (CPU, SA, GPU)  
+
+> Chip Data Data
+
+Fig. 1: Generic compute architecture model considered. 3
+
+C. Im2col Transformation 
+
+The im2col transformation is the most widely used tech-nique for mapping convolution operations to general matrix multiplications [12], [13]. This enables the use of highly opti-mized matrix-multiply libraries or dedicated hardware units (e.g., systolic arrays). In this subsection, we illustrate the forward and backward pass transformations for a standard convolution layer, a necessary step for understanding M ICRO -QONV as detailed in Section IV. Given the input activation tensor X, the goal of the im2col operation is to rearrange all local receptive fields (i.e., patches) of size Cin KhKw from all N input feature maps into the columns of a large 2D matrix 
+
+X′ = im2col (X).
+
+1) Input Rearrangement: For each sample n ∈ { 1, . . . , N }
+
+and for every spatial output position (h, w ), corresponding to 
+
+h ∈ { 1, . . . , H out } and w ∈ { 1, . . . , W out }, the im2col 
+
+operator extracts the patch of X[n, :, h : h + Kh − 1, w :
+
+w + Kw − 1] . This patch is then flattened into a vector of length Cin KhKw and placed as one column of the resulting matrix X′ ∈ R(Cin KhKw )·(N H out Wout ).Therefore, Rows of X′ correspond to all kernel positions across all input channels. Columns of X′ correspond to every spatial position of the sliding window across all samples in the batch. 
+
+2) Kernel Flattening: The convolution kernel W is simi-larly reshaped into a 2D matrix Wf ∈ RCout ·(Cin KhKw ) by flattening each filter W [cout , :, :, :] into a row vector of length 
+
+Cin KhKw, preserving the channel-major layout: 
+
+Wf [cout , :] = flatten( W [cout , :, :, :]) .
+
+3) Matrix Multiplication Formulation: After applying both transformations, the forward convolution in Equation 1 can be computed as a single matrix multiplication Yf = Wf · X′,where Yf ∈ RCout ·(N H out Wout ) is a flattened representation of the output tensor Y .The im2col and flattened formats are used in the backward pass for computing the flattened weight gradients GWf ∈
+
+RCout ·(Cin KhKw ):
+
+GWf = GYf · X′T
+
+where GYf ∈ RCout ·(N H out Wout ) is a flattened 2D representa-tion of the output gradient GY and X′T the transpose matrix of X′. Consequently, the input gradient GX′ with the same format as X′ is also computed using matrix multiplication: 
+
+GX′ = W Tf · GYf .
+
+This classic im2col approach is central to high-performance CNN implementations, enabling convolutions to reuse efficient GeMM kernels and hardware acceleration. However, it incurs significant memory overhead, as the re-duced feature matrix from the im2col transformation can use up to Kh × Kw times as much memory as the original feature map. 
+
+4) Channel-First Im2col: In [13], the authors introduce a more efficient variant of the im2col transformation that relies on storing the input feature maps in a channel-first layout within off-chip memory. As illustrated in Figure 2, the input tensor is organized as XCin ∈ RCin ·(N H in Win ),
+
+rather than being stored directly in the full im2col format 
+
+X′ 
+
+> Cin
+
+. This data layout enables the hardware to contiguously load input activations into on-chip memory along the input channel dimension as the convolution window slides over the spatial domain. Consequently, the im2col columns can be generated on the fly , during the read operation. By avoiding explicit im2col storage and exploiting contiguous channel-wise access, this approach significantly reduces both off-chip memory usage and bandwidth requirements. However, this optimization applies only to the forward 
+
+convolution pass. During backpropagation, the computation of the weight gradients requires loading the transposed activation matrix X′TCin , which inherently incurs discontinuous access patterns across the Win dimension of the channel-first tensor 
+
+XCin stored in off-chip memory. This discontinuous access pattern is illustrated by the red arrow in Figure 2. As a consequence, the channel-first layout does not preserve the same efficiency for the backward pass, limiting this approach to inference or forward-only execution paths. Other im2col improvement methods exist, such as [21], [22]: they generate im2col elements as the computation unit needs them, avoiding storage of the im2col -expanded tensor. While this is efficient for FP32 tensors where elements are independent, these methods do not combine well with microscaling quantization. Because the same activation pixel repeated in im2col shares several microscaling blocks, each time with different neighboring pixels, it can have several different microscaling-quantized values in the im2col tensor. Thus, the same element must be re-quantized several times, as in classic im2col expansion. Furthermore, either the FP32 tensor must be stored in memory for reuse in backward prop-agation, or its microscaling-quantized im2col expanded ver-sion must be stored, which significantly reduces the off-chip-to-on-chip memory-movement gains of microscaling quanti-zation. To address these limitations, Section IV introduces a new storage layout designed to maintain contiguous memory access in both the forward and backward passes of convolution layers, enabling efficient end-to-end training without relying on explicit im2col representations within off-chip memory. 2
+
+D. Quantization 
+
+Quantization strategies aim to reduce the quantization error between full-precision elements and their quantized versions. The goal is to balance accurate quantization of small values (i.e., rounding error) with accurate quantization of large values (i.e., clipping error). A small rounding error causes a large clipping error, and vice versa. This is where microscaling [9], [8] thrives. By performing per-block quantization that does not clip the block’s maximum value, microscaling improves the balance between rounding and clipping errors. In blocks with large values, the clipping error is minimized at the                               
+
+> 2As shown in Figure 3, we keep the following notation for the rest of the paper: when a dimension of a 2D matrix is defined by a product of tensor dimensions, the last dimension of the product is the one along which memory access is performed. 44D Representation of Input
+> Feature Tensor
+> 2A 1A 1B
+> 1A 1B 1C
+> 2A 2B 2C
+> 3A 3B 3C 2B
+> 3A 3B
+> 4A 4B
+> 5A
+> 1C
+> 2A 2B 2C
+> 3A 3B 3C
+> 4A 4B
+> 1A 1B 1C
+> 2A 2B 2C
+> 3A 3B 3C
+> 1A 1B 1C
+> 2A 2B 2C
+> 1C 3B 3C 1B
+> 1C 2C
+> 2C 3C
+> 3C
+> 1A
+> 1B
+> 2B
+> 3B
+> 1A
+> 2A
+> 3A
+> 1A
+> 1A
+> 1A
+> 1A
+> 1B
+> 1B
+> 1B
+> 1B
+> 1C
+> 1C
+> 1C
+> 1C
+> 3C
+> 3C
+> 3C
+> 3C
+> 1A
+> 1A
+> 1A
+> 1A
+> 1B
+> 1B
+> 1B
+> 1B
+> 1C
+> 1C
+> 1C
+> 1C
+> 3C
+> 3C
+> 3C
+> 3C
+> 1A
+> 1A
+> 1A
+> 1A
+> 1B
+> 1B
+> 1B
+> 1B
+> 2A
+> 2A
+> 2A
+> 2A
+> 2B
+> 2B
+> 2B
+> 2B
+> 2B
+> 2B
+> 2B
+> 2B
+> 2C
+> 2C
+> 2C
+> 2C
+> 3B
+> 3B
+> 3B
+> 3B
+> 3C
+> 3C
+> 3C
+> 3C
+> 2A
+> 2A
+> 2A
+> 2A
+> 1B
+> 1B
+> 1B
+> 1B
+> 1C
+> 1C
+> 1C
+> 1C
+> 2B
+> 2B
+> 2B
+> 2B
+> 2C
+> 2C
+> 2C
+> 2C
+> 2A
+> 2A
+> 2A
+> 2A
+> 2B
+> 2B
+> 2B
+> 2B
+> 3A
+> 3A
+> 3A
+> 3A
+> 3B
+> 3B
+> 3B
+> 3B
+> 1A
+> 1A
+> 1A
+> 1A
+> 1B
+> 1B
+> 1B
+> 1B
+> 2A
+> 2A
+> 2A
+> 2A
+> 2B
+> 2B
+> 2B
+> 2B
+> 2B
+> 2B
+> 2B
+> 2B
+> 2C
+> 2C
+> 2C
+> 2C
+> 3B
+> 3B
+> 3B
+> 3B
+> 3C
+> 3C
+> 3C
+> 3C
+> 1B
+> 1B
+> 1B
+> 1B
+> 1C
+> 1C
+> 1C
+> 1C
+> 2B
+> 2B
+> 2B
+> 2B
+> 2C
+> 2C
+> 2C
+> 2C
+> 2A
+> 2A
+> 2A
+> 2A
+> 2B
+> 2B
+> 2B
+> 2B
+> 3A
+> 3A
+> 3A
+> 3A
+> 3B
+> 3B
+> 3B
+> 3B
+> Continuous vs Discontinous
+> Memory Access
+> Rearrange
+> and Reshape
+> Tensor
+> On-Chip Data Layout Using
+> Channel First Representation
+> Im2col
+> Transformation
+> While Reading
+> From Memory
+> Off-Chip Data Layout Using
+> Channel First Representation
+
+Fig. 2: Example of the channel-first layout for a convolution layer with Kh = Kw = 2 and Hin = Hout = 3 . The tensor is flattened along the spatial and batch dimensions, producing 
+
+N H in Win contiguous representation across columns, each containing all Cin channels. These columns are streamed to generate the im2col matrix. Forming the transposed repre-sentation requires reading across lines rather than columns. expense of the approximation of small elements of that block. In other blocks, rounding error is minimized. This balance between clipping and rounding errors makes microscaling a good technique for quantizing weights, activations, and gra-dients [10], enabling energy-efficient low-precision multiply-and-accumulate (MAC) units. In the original microscaling format [9], the block scale is a power of two encoded in E8M0 format. The NVFP4 format from Nvidia [11] further reduces quantization error by per-forming per-tensor scaling before the block-scale calculation in the 8-bit floating-point FP8 E4M3 (4-bit exponent, 3-bit mantissa plus one sign bit) format. The added complexity of per-tensor quantization and the mantissa in the block scale is offset by lower quantization error, enabling small-bitwidth formats and the hardware gains they provide while maintaining satisfactory accuracy. Elements are quantized in FP4 E2M1 as in the original microscaling format [9], organized as block-lines of B = 16 elements. In the experiments, we assume a master copy of the weights is kept in FP32 precision and used to update the weights, as in SoTA methods. III. M OTIVATIONS 
+
+We first describe how to quantize a tensor in the microscal-ing format, then show its limitations in convolution operations, which prior work has not addressed. 
+
+A. Microscaling quantization 
+
+To quantize following the microscaling format, a tensor X
+
+is decomposed into blocks Xi of B elements {xi, 1, . . . , x i,B }.Following the principles of the NVFP4 format, each value of 
+
+X is scaled with a per-tensor scaling factor Tscale and a per-block scaling factor Bscale .
+
+Tscale = max |X|/ (max Bsf × max Bef ) , (4) where max Bsf is the maximum of the block-scale format (i.e., 448 for FP8 E4M3), and max Bef is the maximum of the element format (i.e., 6 for FP4 E2M1). 
+
+Bscale = CastE 4M 3 (max |Xi|/(Tscale × maxB ef )) , (5) where CastE 4M 3( .) rounds its argument to the nearest FP8 E4M3 value. Block elements Xi are turned into quantized format Xqi as 
+
+Xqi = Round (Xi/(Bscale × Tscale )) , (6) where Round (.) denotes rounding, either round-to-nearest or stochastic, to an FP4 E2M1 format value. In simulation, fake quantization is obtained by multiplying Xqi by Bscale ×Tscale .Following [23], activations and weights are rounded to the nearest quantized value while stochastic rounding is performed on the gradient. 
+
+B. Issues with dot products of microscaled blocks 
+
+We consider two vectors R = {r1, . . . , r S } and T =
+
+{t1, . . . , t S } of size S, which belong to bigger matrices quan-tized using microscaling with block size B. If the quantization is performed in the same direction as the dot product, the dot product can be written as 
+
+Q(R×T ) = Q
+
+> S
+
+X
+
+> i=1
+
+ri × ti
+
+!
+
+=
+
+> ⌈S/B ⌉
+
+X
+
+> j=1
+
+sr j ×st j ×
+
+> B
+
+X
+
+> i=1
+
+rqi,j ×tqi,j 
+
+(7) where ⌈.⌉ rounds the content to the nearest superior integer, and Q(.) represents quantization of both vectors involved in microscaling format. sr j and st j represent the scales of each microscale block, rqi,j and tqi,j are quantized elements of R and 
+
+T vectors, respectively, in the i-th position of the j-th block. However, when the quantization direction is not the one of the dot product, scale blocks must be applied after every low-precision element multiplication, making the computation inefficient to the point where requantizing the whole tensor in the same direction is better. Ideally, each tensor would be quantized only once. In practice, as seen in the matrix multiplication formulation of Section II-C for GX′ , Yf and 
+
+GWf , each tensor is involved in two GeMM computations that happen in different directions: weight and activation matrices are transposed in the backward pass, whereas output gradients are on different sides of the GeMM product. 
+
+C. Limitations of related work 
+
+The associated code with the DaCapo accelerator [24] shows that their convolutional layers load full precision tensors and then quantize them in line, in the forward as well as in the backward pass. To avoid requantization and extra memory movement, the accelerator of Cuyckens et al. [25] uses square quantization: instead of quantizing along a single dimension, it quantizes in a square shape across two dimensions of the ten-sor. Thus, tensors quantized in the forward pass can be reused 5
+
+in the backward pass. However, the authors consider only mod-els with fully-connected layers. Extrapolating their method to convolutional layers involves memorizing the square-quantized version of an im2col -expanded tensor for activations during the forward pass, for its reuse during the backward pass. This reduces, if not cancels, the memory-movement and mem-ory storage gains from quantization. Therefore, combining microscaling quantization and convolution layer operations remains an open question. IV. M ICRO QONV : R ESHAPING MEMORY LAYOUT FOR 
+
+EFFICIENT MICROSCALING TRAINING 
+
+In this section, we first introduce channel-batch-first 
+
+im2col , a method that reorders weights, activations, and gradients so they can be quantized once during training while maintaining efficient computation. We then specify the selected quantization format, show the quantization and memory-movement gains, and compare M ICRO QONV ’s accu-racy with other methods. 
+
+A. Reshaping memory layout with channel-batch-first im2col 
+
+We store the input feature maps in a layout that enables 
+
+contiguous data access along both the input-channel dimen-sion Cin and the batch dimension N . To this end, we propose rearranging the input activations X, as presented in Figure 2, to XCin ,N ∈ RCin ·(Hin Win N ), as illustrated in Figure 3. In this representation, each spatial location (h, w ) contains a contiguous block of all channels across all batch ele-ments. This organization ensures contiguous memory access during both major phases of convolutional training. During the forward pass, streaming the im2col matrix X′ 
+
+> Cin ,N
+
+∈
+
+R(KhKw Cin )·(Hout Wout N ) into on-chip memory requires slid-ing the convolution window and reading consecutive values along the Cin dimension. Since channel values are stored contiguously at each spatial position, the im2col blocks can be generated on the fly with minimal memory overhead. During the backward pass, computing input gradients requires reading the transposed activation matrix XTCin ,N along the batch dimension N . With batch elements stored adjacently, these accesses are also contiguous, eliminating the discontin-uous striding that occurs in channel-first layouts. This layout preserves the memory-storage benefits of the channel-first representation while enabling optimal memory-bandwidth use for both forward and backward convolution operations. Furthermore, this layout enables data reuse: con-tiguous blocks of XCin ,N in either channel or batch dimension can be loaded only once from off-chip memory to on-chip memory and repeated on-chip to form channel-batch first 
+
+im2col representation X′ 
+
+> Cin ,N
+
+, noticeably reducing memory movement. 
+
+B. Efficient quantization directions 
+
+Reordering input activations with channel-batch-first 
+
+im2col requires changing the shapes of other tensors for GeMM computations. Wf must be reshaped as 
+
+Wf C out ,C in ∈ RCout ·(KhKw Cin ), and GYf reshaped as 
+
+GYf Cout ,N ∈ RCout ·(Hout Wout N ). We now have a 2D matrix formulation of all tensors, which are compliant with all three GeMM computations: Yf C out ,N = Wf C out ,C in · X′ 
+
+> Cin ,N
+
+,
+
+GWf Cout ,C in = GYf Cout ,N · X′TCin ,N and GX′Cin ,N =
+
+W Tf C out ,C in · GYf Cout ,N . Simple reordering of Yf C out ,N ,
+
+GWf Cout ,C in and GX′Cin ,N turns them into Yf , GWf
+
+and GX′ respectively. Note that X′ 
+
+> Cin ,N
+
+is the im2col 
+
+transformation of off-chip data layout XCin ,N , while 
+
+Wf C in ,C out and GYf Cout ,N have the same representation off-chip and on-chip. With a 2D matrix formulation, we can quantize each tensor into a square block, so the computation direction always aligns with one dimension of the square. This ensures contiguous memory accesses and efficient computations as in Eq. 7 with a small variation: block scales must be applied every √B
+
+elements in both dimensions covered by the square. This way, 
+
+XCin ,N is quantized along Cin and N directions, Wf C in ,C out 
+
+is quantized along Cin and Cout directions and GYf Cout ,N is quantized along Cout and N directions. Figure 3 shows an example of M ICRO QONV quantization block for input activa-tions in 2D shape, as stored in the memory: quantizing XCin ,N 
+
+allows for keeping contiguous memory access for quantization blocks after im2col transformation into X′ 
+
+> Cin ,N
+
+.We combine these quantization directions with the NVFP4 format described in Section II-D, except the block shape is a square, not a line, and its size is B = 64 (8 ×8) as in [25], not 16. All experiments involving microscaling quantization are with a block size of B = 64 . While we employ a specific block size and representation, M ICRO QONV is compliant with all block scales and element representation formats, and applies to all microscaling variants, including their early version, the block floating-point format. MICRO QONV is hardware-agnostic: it applies to every hardware accelerator following the generic model depicted in Figure 1. Among others, it applies easily to custom fully-quantized-training accelerators with an explicit off-chip/on-1A  
+
+> 1A
+> 1A
+> 1A
+> 1A
+> 1A
+> 1A
+> 1A
+> 1B
+> 1B
+> 1B
+> 1B
+> 1B
+> 1B
+> 1B
+> 1B
+> 1C
+> 1C
+> 1C
+> 1C
+> 1C
+> 1C
+> 1C
+> 1C
+> 3C
+> 3C
+> 3C
+> 3C
+> 3C
+> 3C
+> 3C
+> 3C
+> 1A
+> 1A
+> 1A
+> 1A
+> 1B
+> 1B
+> 1B
+> 1B
+> 2A
+> 2A
+> 2A
+> 2A
+> 2B
+> 2B
+> 2B
+> 2B
+> 2B
+> 2B
+> 2B
+> 2B
+> 2C
+> 2C
+> 2C
+> 2C
+> 3B
+> 3B
+> 3B
+> 3B
+> 3C
+> 3C
+> 3C
+> 3C
+> 1B
+> 1B
+> 1B
+> 1B
+> 1C
+> 1C
+> 1C
+> 1C
+> 2B
+> 2B
+> 2B
+> 2B
+> 2C
+> 2C
+> 2C
+> 2C
+> 1A
+> 1A
+> 1A
+> 1A
+> 1B
+> 1B
+> 1B
+> 1B
+> 2A
+> 2A
+> 2A
+> 2A
+> 2B
+> 2B
+> 2B
+> 2B
+> 1B
+> 1B
+> 1B
+> 1B
+> 1C
+> 1C
+> 1C
+> 1C
+> 2B
+> 2B
+> 2B
+> 2B
+> 2C
+> 2C
+> 2C
+> 2C
+> 2A
+> 2A
+> 2A
+> 2A
+> 2B
+> 2B
+> 2B
+> 2B
+> 3A
+> 3A
+> 3A
+> 3A
+> 3B
+> 3B
+> 3B
+> 3B
+> 2A
+> 2A
+> 2A
+> 2A
+> 2B
+> 2B
+> 2B
+> 2B
+> 3A
+> 3A
+> 3A
+> 3A
+> 3B
+> 3B
+> 3B
+> 3B
+> 2B
+> 2B
+> 2B
+> 2B
+> 2C
+> 2C
+> 2C
+> 2C
+> 3B
+> 3B
+> 3B
+> 3B
+> 3C
+> 3C
+> 3C
+> 3C
+> Continuous
+> Memory Access
+> MicroQonv
+> Squared Block
+> Im2col
+> Transformation
+> While Reading
+> From Memory
+> Off-Chip Data Layout Using
+> Channel, Batch First
+> Representation On-Chip Data Layout Using
+> Channel, Batch First
+> Representation
+> 1A
+> 1A
+> 1A
+> 1A
+> ...
+> ...
+> ...
+> ...
+> ...
+> ...
+> ...
+> ...
+> 1A
+> 1A
+> 1A
+> 1A
+> Data
+> Reuse
+
+Fig. 3: Channel-batch-first layout: activations are stored com-pactly in off-chip memory for contiguous im2col and trans-pose access. Highlighted squares show MicroQconv quanti-zation blocks across N and Cin dimensions. This layout also enables activation reuse, reducing redundant memory reads by avoiding repeated accesses to the same data. 6
+
+chip hierarchy and programmable address generation/dataflow, the same class as Dacapo [24] and Cuyckens et al. [25]. MICRO QONV is a design technique informing how such accelerators should lay out and quantize data, and it requires zero additional hardware circuitry. 
+
+C. Gains in memory movement and per-element quantization 
+
+Table I compares MICRO QONV performance with Da-capo [24], and an adaptation of Cuyckens et al. [25] to convo-lutional layers, whose methods are available in Section III. The method described in Cuyckens et al. quantizes the im2col -expanded activation tensor in square 8 ×8 blocks and saves it for reuse during backward propagation. Dacapo quantizes the 
+
+im2col -expanded tensor in line blocks of 64, following a constant line direction for forward propagation and a constant column direction for backward propagation, and stores the FP32 activation tensor. These theoretical results are obtained by applying a standard convolution using layer dimensions with parameters: KH = KW = 3 , padding and stride of 1. Per-element (Per-elt.) quantization represents the number of times an element is quantized. Backward tensor size represents the size of the tensor that must be transferred and stored off-chip during forward propagation, to then be brought on-chip during backward propagation. The backward tensor size is compared to the M ICRO QONV tensor. As discussed previously, M ICRO -QONV reordering allows for quantizing every tensor once, and the reordered activation tensor XCin ,N is quantized before its 
+
+im2col expansion into X′ 
+
+> Cin ,N
+
+. Table I confirms the claims with reductions of the activation quantization overhead by 
+
+×9 and the backward memory movement for activations by 
+
+×7.53 compared to other methods, which would translate into significant energy gains for the hardware performing training. This is further analyzed in Section V. TABLE I: Quantization overhead and memory movement during backpropagation for Weights (W), Activations (A) and Gradients (G) of a convolutional layer with Kh = Kw = 3 
+
+quantized with 4-bit microscaling.                       
+
+> Method Per elt. quantization Backward Mem. Move.
+> AWGAWDacapo [24] ×18 ×2×2×7.53 ×7.53
+> Cuyckens et al. [25] ×9×1×1×9×1
+> MICRO QONV ×1×1×1×1×1
+
+D. Accuracy analysis 
+
+All methods use NVFP4 quantization format and a block size of 64, unless otherwise specified. Since M ICRO QONV 
+
+introduces a new quantization pattern, the computation differs slightly from other methods. To compare accuracy, we train a ResNet-32 model on the CIFAR-100 dataset and a ResNet-18 model on the first 100 ImageNet classes. All methods use the same hyperparameters. Both training methods use a cosine-annealed scheduler and stochastic gradient descent with a momentum of 0.9. ResNet-32 is trained with a learning rate of 0.1 for 200 epochs, a weight decay of 5e−4, and a batch size of 128. ResNet-18 is trained with a learning rate of 0.05 for 150 epochs, a weight decay of 4e−5, and a batch size of 256. All layers are quantized except the first and last layers, which are kept at full precision. Results reported in Table II include the test accuracy mean and standard deviation ( σ) on five training runs. All methods are within 0.6% of the FP32 baseline in both training scenarios; the different quantization methods are within a 0.25% σ window, which is roughly the margin of error. M ICRO QONV is slightly below Cuyckens et al. , itself slightly below Dacapo [24]. We further investigate this by measuring the average per-element quantization mean-square error (MSE) for Weights (W), Activations (A), and output Gradients (G), and normalize values by M ICRO QONV error for readability, on Resnet-32 with CIFAR-100. While all methods have similar weight errors, the activation MSE is slightly higher for MICRO -QONV . Since the same element is repeated several times in the im2col -expanded tensor, it is quantized several times, inducing a slightly lower average quantization error than when quantized once, as in M ICRO QONV . It is interesting to note that in-line (1D) gradient quantization error [24] is lower than its square (2D) counterpart of [25] and M ICRO QONV ,which is probably why in-line quantization has moderately better accuracy than square quantization. However, this tiny accuracy loss must be balanced against the energy gains provided by M ICRO QONV shown in Section V. In energy-limited scenarios, spending less energy means training for more epochs, yielding better accuracy within the same energy budget. In these cases, it is likely that M ICRO QONV will close the accuracy gap with the other methods thanks to signif-icant energy savings from reduced memory movement and quantization overhead. Furthermore, if accuracy is extremely important, we propose M ICRO QONV +, in which activations are quantized in NVFP6 (identical to the NVFP4 format, except that elements are quantized in FP6 E3M2). As shown in Table VI, while weights and gradients remain in NVFP4, its accuracy exceeds that of the other methods and matches the FP32 baseline. Although M ICRO QONV + requires ≈50% more memory movement for activations because it uses 6 bits per element instead of 4 bits for M ICRO QONV , it still requires less memory movement and storage: roughly ×5.1 less than Dacapo and ×6 less than Cuyckens et al. extrapolation, while providing better accuracy, as shown in Table II. 
+
+E. Viability in Object Detection 
+
+We train YOLOV8nano and YOLOV26nano using Ultra-lytics 3 setup and native hyperparameters, except batch size, 
+
+> 3https://github.com/ultralytics/ultralytics/releases/tag/v8.4.14
+
+TABLE II: Comparison of test accuracy and quantization MSE per element on ResNet-32 (R32) with CIFAR-100 (C100) and Resnet-18 (R18) with ImageNet (Inet100).                                                      
+
+> Method Test acc % Normalized MSE
+> R32-C100 R18-Inet100 AWGFP32 baseline 71 .05 ±.29 75 .55 ±.22 N A N A N A
+> Dacapo [24] 70 .86 ±.24 75 .19 ±.12 0.891 0.982 0.827
+> Cuyck. et al. [25] 70 .82 ±.11 75 .20 ±.18 0.875 0.992 0.996
+> MICRO QONV 70 .62 ±.13 75 .08 ±.36 1.01.01.0
+> MICRO QONV +71 .10 ±.28 75 .76 ±.12 0.236 1.01.07
+
+which is set to 8. Both models are pretrained on the COCO dataset and finetuned for 20 epochs on the PascalVOC dataset for YOLOV8nano [26], while YOLOV26nano is finetuned on the KITTI dataset [27] for 20 epochs. To maintain a mean Average Precision (mAP50 and mAP50-95 [28]) close to the baseline, all methods use the NVFP8 representation for weights, activations, and gradients, which is the same as NVFP4 except that elements are in FP8 E4M3 format instead of FP4 E2M1. For YOLOV8nano, we keep the first layer and the last Distribution Focal Loss (DFL) convolution layer [29] at full precision. For YOLOV26nano, only the first layer is not quantized. YOLOV26nano also includes depthwise convolution layers, which are more sensitive to quantization and account for less than 1% of YOLOV26nano’s MACs. Therefore, we keep them in BF16 precision. The mean and standard deviation for mAP50 and mAP50-95 across five runs are shown in Table III for YOLOV8nano and Table IV for YOLOV26nano. We append ’-8’ to the method names to indicate the use of the NVFP8 format. For YOLOV8nano, M ICRO QONV -8 is within 0.3 mAP of the FP32 baseline and less than 0.15 away from the Dacapo-8 and Cuyckens et al.-8 extrapolations, while offering much better energy efficiency, as we show in the following section. We further report in Table III an experiment in which the model is trained from scratch for 100 epochs on M ICRO QONV 
+
+and the FP32 baseline only. Here, M ICRO QONV -8 is within 0.2 mAP of the baseline. Regarding YOLOV26nano, microscaling quantization slightly improves the FP32 baseline by providing regularization, which prevents overfitting. MICRO QONV -8 is above Dacapo-8 and Cuyckens et al.-8. We also train MICRO QONV from scratch for 100epochs and compare it to the FP32 baseline. There, MICRO QONV -8 is .2 mAP away from the baseline with the mAP50 metric and less than 0.8mAP away from FP32 accuracy with the mAP50-95 metric. For both YOLO models, the close distance between MICRO QONV -8 accuracy and FP32 accuracy indicates that MICRO QONV can enhance the efficiency of SoTA object detection models. TABLE III: Object detection performance on YOLOV8nano model and PascalVOC dataset.                                       
+
+> Method Finetuning From scratch
+> mAP50 mAP50-95 mAP50 mAP50-95 FP32 baseline 82 .06 ±.06 60 .89 ±.06 76 .53 ±.12 55 .56 ±.10
+> MICRO QONV -8 81 .87 ±.15 60 .62 ±.12 76 .52 ±.27 55 .39 ±.19
+> Dacapo-8 [24] 81 .88 ±.10 60 .75 ±.10 --Cuyck. et al. -8 81 .85 ±.06 60 .75 ±.11 --
+
+TABLE IV: Object detection performance on YOLOV26nano model and KITTI dataset.                                       
+
+> Method Finetuning From scratch
+> mAP50 mAP50-95 mAP50 mAP50-95 FP32 baseline 53 .91 ±.40 33 .75 ±.24 74 .26 ±1.2 49 .44 ±.73
+> MICRO QONV -8 55 .10 ±1.3 34 .20 ±.78 74 .11 ±1.2 48 .74 ±.55
+> Dacapo-8 [24] 54 .44 ±.47 33 .56 ±.89 --Cuyck. et al. -8 54 .88 ±1.3 33 .90 ±.79 --Stage 1: forward pass, before GeMM Off-Chip memory (DRAM) On-Chip memory (SRAM) Weights
+> Stage 2: forward pass, during/after GeMM Stage 3: backward pass, before GeMM Off-Chip memory (DRAM) On-Chip memory (SRAM) Activations
+> Off-Chip memory (DRAM) On-Chip memory (SRAM)
+> Activations Weights
+
+Fig. 4: Memory transfers considered for DRAM simulation. V. DRAM S IMULATION 
+
+To measure latency reduction and energy gains from re-duced memory movement, we simulate memory movement using DRAMsim3 [14]. Cuyckens et al. store the entire model on-chip, which is realistic for their use cases where models consist of a few fully-connected layers, but not for much larger convolutional networks. We assume that we can store input and output tensors for one layer on-chip, while other layer tensors must be stored off-chip. We consider memory move-ment during forward and backward pass phases, as shown in Figure 4. In the forward pass, the activation tensor is computed as the output of the last layer. Therefore, it is already on-chip. Because we quantize weights during the weight-update phase to reduce memory movement, we only need to transfer the quantized weights (if a quantization method is employed, as in Cuyckens et al. extrapolation and M ICRO QONV , but not in Dacapo). We then quantize the activations to perform the forward convolution, and save the quantized activations in memory. During backward propagation, the gradient tensor is already on-chip due to the previous layer’s computation. The system then loads weights and activations on-chip for the associated backward operations. We exclusively consider transfers between off-chip (DRAM) and on-chip (SRAM) memories, as memory movement between off-chip and on-chip memory is much more costly than internal on-chip memory movement and computations, as shown in [30]. Because all methods use the same convolution operations, internal on-chip memory transfer and computation costs will not differ much between methods, unlike off-chip-to-on-chip transfers. 
+
+A. Experimental Setup 
+
+We simulate various model and dataset configurations: ResNet32 with CIFAR-100, ResNet18 with ImageNet, YOLOV8nano with PascalVOC, and YOLOV26nano with KITTI. Batch size is 32 for CIFAR100 (image size of 32 ×
+
+32 × 3) and ImageNet ( 224 × 224 × 3), and 8 for PascalVOC and KITTI ( 640 × 480 × 3). All reported results are obtained using the LPDDR4 (Low-Power Double Data Rate) memory model from the DRAMsim3 repository 4.
+
+> 4https://github.com/umd-memsys/DRAMsim3/releases/tag/1.0.0 8
+
+B. Results 
+
+Table V reports the tensor size transferred between off-chip memory and on-chip memory, the transfer energy spent from DRAMsim3, and the memory transfer latency from DRAM-sim3, for the whole model. As predicted by the analytical model in Table I, M ICRO QONV shows improvements over both methods. Given the same quantization method and the same model, the gains of these three parameters are the same. We have observed this not only with LPDDR4 but also with DDR5, DDR6, and HBM (High Bandwidth Memory) memory models. For simplicity, while we refer to energy in the following discussion, the same statements apply to tensor size and memory transfer latency. The gain of M ICRO QONV compared to saving full-precision activations like in Dacapo is more or less constant and close to ×7.53 as in Table I for ResNet-32 and ResNet-18, close to 
+
+×3.93 for YOLOV8n and close to ×3.4 for YOLOV26n. Since the activation and weight tensors are of the same dimensions in both cases, the gain comes from the quantization format. DRAM overhead varies slightly across methods because of their internal components, which explains the small variation around that gain. The improvement factor is closer to ×3.93 
+
+for YOLOV8n because elements are quantized in FP8 instead of FP4. Improvement factor is around ×3.4 for YOLOV26n because of depthwise convolution layers which are quantized in BF16 for both methods. For Cuyckens et al. extrapolation, however, the im2col -expanded version is saved, and its dimensions heavily depend on the stride and kernel sizes of the tensor. Roughly, the expansion factor of im2col is Kh × Kw/stride. Thus, a smaller stride and a larger kernel size will increase the gains of M ICRO QONV over im2col expansion, and vice versa. In these conditions, all ResNet32 layers have kernel sizes 
+
+Kh = Kw = 3 . Most layers have a stride of 1, and a few have a stride of 2, which explains the energy gain of around 
+
+×8.5 in activation size, energy, and latency. ResNet18 has 17 convolutional layers with a kernel size of 3 ×3, 14 with a stride of 1, and 3 with a stride of 2, which explains why the energy gain is closer to ×7. In the YOLOv8n model, most layers have a stride of 1; 40% of them use a kernel size of 1 ×1, and it regroups most layers with large activation tensors. Other layers use a 3 ×3 kernel, which explains the energy gain of about ×3.5. In the YOLOv26n model, most layers use a stride of 1 too. The percentage of layers using a kernel size of 1 increases to 53%, and a few layers with a kernel size of 3 are depthwise convolution layers, which are quantized in BF16. That is why YOLOv26n has an energy gain of about ×2.2. Regarding the weights, as there is no im2col 
+
+expansion, Cuyckens et al. and M ICRO QONV thus quantize the same tensor. Only the quantization pattern varies, which explains the lack of difference. This simulation does not account for quantization cost: when the kernel size is larger than 1, the im2col -expanded tensor will require quantizing roughly Kh × Kw/stride more elements, which in turn requires more silicon area for quan-tization or adds extra latency, further improving the gains of MICRO QONV .TABLE V: Energy (E) in mJ and Latency (L) in ms for all transfers in Fig. 4. Tensor Size (S) is in MegaBytes (MB).                                                                                                         
+
+> Method Activations Weights
+> R32-Cifar100 S(MB) E(mJ) L(ms) S(MB) E(mJ) L(ms) Dacapo 38.67 92.56 46.63 1.87 4.402 1.95 Cuyck. et al. 42.57 100.40 50.89 0.244 0.529 0.164 MICRO QONV 5.04 11.68 6.09 0.244 0.529 0.164 R18-Imagenet S(MB) E(mJ) L(ms) S(MB) E(mJ) L(ms) Dacapo 279.44 669.68 337.91 46.72 111.9 56.37 Cuyck. et al. 271.92 643.91 324.97 6.28 14.77 7.33 MICRO QONV 38.56 91.12 45.97 6.28 14.77 7.33 YV8n-PVOC S(MB) E(mJ) L(ms) S(MB) E(mJ) L(ms) Dacapo-8 492.44 1179.85 595.19 12.58 29.9 14.76 Cuyck et al. -8 441.13 1057.15 533.46 3.195 7.44 3.35 MICRO QONV -8 125.22 300.03 151.36 3.195 7.44 3.35 YV26n-KITTI S(MB) E(mJ) L(ms) S(MB) E(mJ) L(ms) Dacapo-8 634.82 1520.73 767.43 10.17 23.98 11.56 Cuyck et al. -8 420.39 1007.26 507.96 2.61 5.95 2.45 MICRO QONV -8 187.16 448.33 225.85 2.61 5.95 2.45
+
+VI. T RAINING PERFORMANCE 
+
+We first demonstrate the relevance of M ICRO QONV by comparing its performance with other fully-quantized training techniques in a classic learning scenario, which yields more stable results to facilitate comparison. Experiments are con-ducted on image classification, then on object detection. In all tables, quantization methods use the same setup, including learning rate and number of epochs, for a fair comparison. 
+
+A. Image classification 
+
+We train ResNet-32 and ResNet-18 using the same setup as in Table II. Table VI compares final test accuracy (mean and standard deviation over five training runs) between the FP32 baseline, LUQ [23], QLR [31], and M ICRO QONV . 4-bit per-tensor and per-channel quantization [4] showed more than 10% accuracy degradation or convergence issue, they are therefore not displayed. In LUQ [23], activations, weights, and gradients are quantized with a per-tensor scale. In ResNet-32 and ResNet-18, all convolutions except the first one occur after a ReLU activation function: the sign bit can be replaced by a mantissa/exponent bit for activations, or simply removed, leaving activations at 3-bit precision. We report LUQ results in two cases: keeping the original paper configuration at 4 bits (UINT4) or matching the M ICRO QONV effective bitwidth at 3 bits (INT4, LUQ †). In the first case, MICRO QONV 
+
+shows better average performance with only half as many quantization bins. In the second case, M ICRO QONV beats LUQ by more than 2% for ResNet-32 and by 0.8% for ResNet-18. M ICRO QONV also uses a unified format, leading to better accelerator efficiency per silicon area than LUQ, which requires different computation formats for forward and backward propagation. Hence, M ICRO QONV delivers the best precision at 4-bit quantization. Its FP4 E2M1 activation format saves 3 bits per activation pixel instead of 4 (+8/64 = 3.125 with block scale), significantly increasing the amount of data we can store. In Table VI, we also compare to QLR [31], where training is done in FP32 for weights, activations, and gradients, then activations and weights are quantized to 8 bits for inference. QLR provides slightly better accuracy, at a much higher training cost than M ICRO QONV .9
+
+TABLE VI: Performance comparison of quantization methods on ResNet-32 (R32) with CIFAR-100 (C100) and Resnet-18 (R18) with ImageNet (Inet100). FP4E corresponds to the E3M0 format.                                                                                 
+
+> Technique Elements Format Test acc % AWGR32-C100 R18-Inet100 Baseline FP32 FP32 FP32 71 .05 ±.29 75 .55 ±.22
+> Dacapo [24] FP4 FP4 FP4 70 .86 ±.24 75 .19 ±.12
+> Cuyck. et al. [25] FP4 FP4 FP4 70 .82 ±.11 75 .20 ±.18
+> MICRO QONV FP4 FP4 FP4 70 .62 ±.13 75 .08 ±.36
+> MICRO QONV +FP6 FP4 FP4 71 .10 ±.28 75 .76 ±.12
+> QLR [31] UINT8 INT8 FP32 70 .95 ±.41 75 .28 ±.25
+> LUQ [23] UINT4 INT4 FP4E 70 .54 ±.35 74 .77 ±.22
+> LUQ †INT4 INT4 FP4E 68 .32 ±.08 74 .19 ±.10
+
+B. Object detection 
+
+YOLOV8nano and YOLOV26nano are trained reusing Ta-ble III and Table IV setup. In addition to MicroQonv, Dacapo, and Cuyckens et al., we evaluate accuracy using symmetric per-tensor and per-channel quantization. Per-tensor quantiza-tion uses one scale per tensor, mapping the tensor’s absolute maximum value to the absolute maximum of the quantized element format for weights, activations, and gradients. Per-channel quantization attributes one scale per output channel for weight and gradient tensors, and one scale per input channel for activation tensors. The absolute maximum value of a chan-nel is mapped to the quantized element absolute maximum. All methods use FP6 E2M3 for element quantization. We append ’-6’ to the method names to indicate the use of the FP6 format. This means microscaling-based quantization methods use NVFP6 representation, identical to NVFP4 except that elements are in FP6 E2M3 format instead of FP4 E2M1. Because the input and output layers are more sensitive to quantization, we keep the input layer and every output layer in higher precision. Because the YOLOV8 model aggregates 3 levels of feature maps and has two branches for prediction, one for localization and one for prediction, it has 6 output layers plus the DFL layer kept in full precision (out of 64 convolution layers in the model). YOLOV26 further divides each branch into one-to-one (used for training only) and one-to-many (used for training and inference) subbranches, in order to get rid of Non-Maximum-Suppression (NMS) step [18]: its 12 output layers (out of 126 convolution layers in the model) remain in full precision. Following Table IV setup The depthwise convolution layers of YOLOv26nano are set to BF16 precision. Results are shown in Table VII and Table VIII. For YOLOV8nano, M ICRO QONV -6 is within 0.3mAP of the baseline and less than .15mAP away from Dacapo-6 and Cuyckens et al.-6. More importantly, it is significantly above Per-tensor-6 and 0.4mAP to 0.8mAP higher than Per-channel-6. A similar pattern emerges from the YOLOV26nano results: M ICRO QONV -6 is less than 0.3mAP from the FP32 baseline in the fine-tuning scenario and less than 1.3mAP away in the training-from-scratch scenario. It shows a 0.1mAP improvement over Dacapo-6 and is less than 0.85mAP away from Cucykens et al.-6, which is above the FP32 baseline. At the same time, it is way higher than per-tensor quantization and 1.2mAP to 3mAP higher than per-channel quantization. Figure 5 shows the test-of-accuracy training-curve com-
+
+(a) Test of accuracy during training on YOLOV8nano using the PascalVOC dataset. 
+
+(b) Test of accuracy during training on YOLOV26nano using the KITTI dataset. 
+
+Fig. 5: Test of accuracy along training of M ICRO QONV -6 (in blue) and FP32 baseline (in green). parison between MICRO QONV -6 and the FP32 baseline in a training-from-scratch scenario for YOLOV8nano using the PascalVOC dataset (Fig. 5a) and YOLOV26nano us-ing the KITTI dataset (Fig. 5b). As shown in the figure, MICRO QONV -6 closely follows the FP32 curve across epochs. Section V has shown that M ICRO QONV is significantly more energy efficient than Dacapo and Cuyckens et al., and this section shows that it also maintains accuracy close to these methods and to the FP32 baseline. Moreover, M ICRO QONV is more accurate and offers a much more hardware-friendly com-putation pattern than per-channel quantization [4]. It therefore has a better accuracy-energy efficiency tradeoff than every other quantization method. TABLE VII: 6 bit Object detection performance on YOLOV8nano-PascalVOC.                                                       
+
+> Method Finetuning From scratch
+> mAP50 mAP50-95 mAP50 mAP50-95 FP32 baseline 82 .33 ±.02 61 .33 ±.09 77 .11 ±.29 56 .25 ±.22
+> MICRO QONV -6 82 .12 ±.20 61 .08 ±.13 76 .95 ±.26 55 .98 ±.26
+> Per Channel-6 81 .31 ±.14 60 .15 ±.12 76 .58 ±.20 55 .55 ±.15
+> Per Tensor-6 65 .88 ±.42 43 .89 ±.35 --Dacapo-6 [24] 82 .19 ±.10 61 .14 ±.06 --Cuyck. et al. -6 82 .18 ±.09 61 .20 ±.13 --
+
+VII. M ICRO QONV IN A CONTINUAL LEARNING SETTING 
+
+Continual learning (CL) [2] aims to train AI models con-tinually to adapt to changing data distributions. Because the complete history of data seen by the model is too large to be stored entirely, especially for on-device models, and because backpropagation optimizes only on currently available data, catastrophic forgetting occurs. Thus, the field aims to mitigate 10 
+
+TABLE VIII: 6 bit Object detection performance on YOLOV26nano-KITTI.                                                        
+
+> Method Finetuning From scratch
+> mAP50 mAP50-95 mAP50 mAP50-95 FP32 baseline 53 .91 ±.73 33 .86 ±.61 74 .26 ±1.2 49 .44 ±.73
+> MICRO QONV -6 54 .11 ±.93 33 .51 ±.51 73 .02 ±.62 48 .18 ±.54
+> Per Channel-6 51 .22 ±.64 31 .49 ±.39 71 .96 ±1.1 46 .99 ±.81
+> Per Tensor-6 9.1±.76 4.09 ±.42 --Dacapo-6 [24] 54 .08 ±.11 33 .36 ±.63 --Cuyck. et al. -6 54 .93 ±.65 34 .02 ±.46 --
+
+catastrophic forgetting. We focus on the Class Incremental Learning (CIL) scenario [32], where a model is trained se-quentially on a series of tasks, each introducing new classes not seen in previous tasks. In this section, we present results in a (CL) setting that relies on latent replay [33]. 
+
+A. Related Work 
+
+Among existing CL strategies, the replay buffer [3] is one of the simplest and most effective ways to mitigate catastrophic forgetting. At the end of each task, a subset of the training data is selected and stored in the replay buffer memory. The replay buffer is then combined with data from subsequent tasks, allowing the model to learn new classes while mitigating catastrophic forgetting of previously seen classes. It can be used alone or in conjunction with other strategies to ensure optimal performance [34], [35]. The latent replay buffer [33] (LR), as shown in Figure 6, is a variant of the replay buffer: early layers of the feature extractor are frozen, and the output activations of the frozen feature extractor, rather than the original images, are stored in the replay buffer. This significantly reduces backpropagation com-putational cost. Moreover, early layers tend to learn generic features from large datasets [36], limiting accuracy degradation compared to whole-model retraining. Compressing the replay buffer items allows for storing more elements for the same memory budget, without LR [37], [38], [39] or with LR [40]. However, full-precision models used in these papers make these methods hard to adapt to energy-constrained devices. Few papers study the interaction between quantization and the latent replay buffer. Input activations from a convolutional or linear layer can be quantized and stored in memory to further reduce memory storage. LifeLearner [35] combines 8-bit quantization with a meta-learned feature extractor and product quantization. However, they require pre-training on the same data distribution as the test data, making them sensitive to distribution shifts. Quantized Latent Replay (QLR) [31] combines LR with integer 8-bit quantization for weights and activations during inference, while training is done in FP32. They use no compression technique other than quantization, which gives them good adaptability to unseen distributions. We seek to improve these results by using the ad hoc microscaling format proposed by M ICRO QONV .
+
+B. Experimental Results 
+
+To run our experiments, we combine the PyTorch-based PyCIL library [41] with quantization methods, and we use the PyCIL hyperparameters for all methods. A ResNet18 model General Feature Extractor Classification Head Application specific Feature Extractor Latent memory Available Data Predictions Fill at Task end   
+
+> C
+> CConcatenate Frozen Trained
+> QQQQuantize
+
+Fig. 6: Quantized Latent Replay (QLR) strategy overview. Feature extractor layers are also quantized. pretrained on ImageNet is quantized and full-precision accu-racy retrieved through fine-tuning with Quantization-Aware Training [4]: activations and weights are quantized in the tested formats, while gradients remain in full-precision. Each quantization method is used with the Hindsight technique [42], which estimates tensor statistics, such as the maximum and mean, from previous batches. This helps load each tensor only once, reducing memory movement. All methods quantize the first and last layers to 8 bits for weights, gradients, and activations, as a common practice to mitigate accuracy degra-dation. Only convolutional layers without parallel residual connections can be treated as LR layers. For our experiments, we select the first convolutional layer of blocks 3.1, 4.0, and 4.1. We select samples for the replay buffer using the herding mechanism [43], a widely used strategy. Figure 7 shows the test accuracy after training on the last task, in the CIL scenario on CIFAR-100. M ICRO QONV accuracy is systematically and significantly above QLR across a range of layers and replay buffer sizes. Since 3.125 bits per activation pixel are saved instead of 8 bits, approximately ×2.5 more samples can be stored, which explains the accuracy delta. This would not be possible with other methods: Dacapo would save them using 32 bits per activation pixel, while Cuyckens et al. extrapolation would save the expanded im2col tensor, significantly reducing the number of samples that can be stored given a memory size. As LR at layer 4.1 shows the best performance, we keep this configuration for the rest of the experiments. We now test MICRO QONV on the CIFAR-100, CORE50 [44], and CUB-200 datasets. Each task has 10 10 2
+
+> Replay Buffer Size in MegaBytes (MB)
+> 30 32 34 36 38 40 42 44 46 48 50 52 54 56 58 60 62 64 66 68
+> End Test Accuracy (%)
+> MicroQonv QLR Layer3.1 Layer4.0 Layer4.1
+
+Fig. 7: End-test accuracy vs replay buffer memory size. 11 
+
+TABLE IX: LR end test accuracy of ResNet18 for various LR memory sizes in MB and datasets. 
+
+CIFAR-100 25MB 50MB 75MB 125MB 
+
+QLR[31] 39 .3 ± .7 49 .1 ± .7 54 .2 ± .5 60 .1 ± .7
+
+MicroQonv 50 .3 ± .5 59 .0 ± .5 62 .4 ± .7 65 .8 ± .5
+
+CORE50 15MB 25MB 50MB 75MB 
+
+QLR 59 .1 ± .5 64 .0 ± .5 70 .7 ± .8 73 .2 ± 1.1
+
+MicroQonv 68 .5 ± 1.0 72 .2 ± .4 75 .5 ± .5 78 .0 ± .8
+
+CUB200 10MB 20MB 30MB 40MB 
+
+QLR 26 .6 ± .6 39 .9. ± .5 43 .5 ± .7 50 .2 ± .3
+
+MicroQonv 43 .3 ± .7 52 .8 ± .3 57 .1 ± .5 59 .8 ± .3
+
+classes for CIFAR-100, 5 for CORE50, and 40 for CUB-200. Table IX lists the results at various memory sizes. MICRO QONV accuracy is always way above QLR, with test accuracy difference between +5.7% and +11% for CIFAR-100, +4.8% and +9.4% on CORE50, and +9.6% and +16.7% for CUB-200. The accuracy gap tends to be higher when there are fewer samples. This aligns with neural network scaling laws [45]: doubling the dataset size yields less accuracy improvement when the dataset is large than when it is small. We perform a final test to compare quantization performance on the CIFAR-100 dataset with a fixed memory budget of 2000 samples for all methods. The FP32 baseline achieves an accuracy of 48 .83 ± .36% while QLR attains 48 .77 ± .23% 
+
+and M ICRO QONV reaches 48 .16 ± .66% , less than 1% from baseline. VIII. C ONCLUSION 
+
+MICRO QONV uses in-memory tensor reshaping for con-volution kernels to simplify microscaling quantization and reduce quantization overhead by a factor of ×2 for weights and gradients, and up to ×9 for activations. By enabling the storage of a quantized activation tensor instead of its im2col -expanded version, it reduces activation memory movement and storage by up to ×7.53 under standard convolution parameters. Validation with a DRAM simulator shows significant memory and energy gains on various models, including state-of-the-art object detection models: ×3.5 for YOLOV8nano and ×2.2
+
+for YOLOV26nano. When applied to CL with an LR strategy, 4-bit MICRO QONV activations reduce memory usage and improve accuracy by +5.7% to +11% for the same memory budget. Future work includes building a hardware accelerator that leverages MICRO QONV memory layout and studying the relationships between other lossy compression techniques (e.g., vector quantization) and microscaling. We will release all code used in this work as open source upon publication. ACKNOWLEDGMENT 
+
+This work was supported by the PEPR IA - HOLIGRAIL project of the Agence Nationale de la Recherche, ANR-23-PEIA-0010. Experiments presented in this paper were carried out using the Grid’5000 testbed, supported by a scientific interest group hosted by Inria and including CNRS, RENATER and several Universities as well as other organizations (see https://www.grid5000.fr) REFERENCES [1] E. Cereda, A. Giusti, and D. Palossi, “Training on the Fly: On-Device Self-Supervised Learning Aboard Nano-Drones Within 20 mW,” IEEE Trans. Comp.-Aided Des. Integ. Cir. Sys. , vol. 43, no. 11, p. 3685–3695, 2024. [2] L. Wang, X. Zhang, H. Su, and J. Zhu, “A Comprehensive Survey of Continual Learning: Theory, Method and Application ,” IEEE Trans. on Pattern Analysis & Machine Intelligence , vol. 46, no. 08, pp. 5362–5383, Aug. 2024. [3] D. Rolnick, A. Ahuja, J. Schwarz, T. Lillicrap, and G. Wayne, “Experi-ence Replay for Continual Learning,” Advances in Neural Information Processing Systems (NeurIPS) , vol. 32, 2019. [4] M. Nagel, M. Fournarakis, R. A. Amjad, Y. Bondarenko, M. van Baalen, and T. Blankevoort, “A White Paper on Neural Network Quantization,” 
+
+arXiv:2106.08295 , 2021. [5] A. Gholami, Z. Yao, S. Kim, C. Hooper, M. W. Mahoney, and K. Keutzer, “AI and Memory Wall,” IEEE Micro , vol. 44, no. 3, pp. 33–39, 2024. [6] S. Ben Ali, S.-I. Filip, and O. Sentieys, “A Stochastic Rounding-Enabled Low-Precision Floating-Point MAC for DNN Training,” in 27th IEEE/ACM Design, Automation and Test in Europe (DATE) , Mar. 2024, pp. 1–6. [7] L. Huang, Y. Liu, X. Lin, C. Wei, W. Sun, Z. Wang, B. Cao, C. Zhang, X. Fu, W. Zhao, and S. Zhang, “MPICC: Multiple-Precision Inter-Combined MAC Unit with Stochastic Rounding for Ultra-Low-Precision Training,” in 30th Asia and South Pacific Design Automation Conference (ASPDAC) , 2025, p. 554–559. [8] B. D. Rouhani, R. Zhao, V. Elango, R. Shafipour, M. Hall, M. Mes-makhosroshahi, A. More, L. Melnick, M. Golub, G. Varatkar, L. Shao, G. Kolhe, D. Melts, J. Klar, R. L’Heureux, M. Perry, D. Burger, E. S. Chung, Z. Deng, S. Naghshineh, J. Park, and M. Naumov, “With Shared Microexponents, A Little Shifting Goes a Long Way,” 50th Annual International Symposium on Computer Architecture (ISCA) , 2023. [9] B. D. Rouhani, R. Zhao, A. More et al. , “Microscaling Data Formats for Deep Learning.” arXiv:2310.10537 , 2023. [10] B. Chmiel, M. Fishman, R. Banner, and D. Soudry, “FP4 All the Way: Fully Quantized Training of LLMs,” arXiv:2505.19115 , 2025. [11] F. Abecassis, A. Agrusa et al. , “Pretraining Large Language Models with NVFP4,” arXiv:2509.25149 , 2025. [12] M. Dukhan, “Indirect Deconvolution Algorithm,” in IEEE International Parallel and Distributed Processing Symposium Workshops (IPDPSW) ,2020, pp. 922–926. [13] Y. Zhou, M. Yang, C. Guo, J. Leng, Y. Liang, Q. Chen, M. Guo, and Y. Zhu, “Characterizing and Demystifying the Implicit Convolution Algorithm on Commercial Matrix-Multiplication Accelerators,” in IEEE International Symposium on Workload Characterization (IISWC) , 2021, pp. 214–225. [14] S. Li, Z. Yang, D. Reddy, A. Srivastava, and B. Jacob, “ DRAMsim3: A Cycle-Accurate, Thermal-Capable DRAM Simulator ,” IEEE Computer Architecture Letters , vol. 19, no. 02, pp. 106–109, 2020. [15] A. Dosovitskiy, L. Beyer, A. Kolesnikov, D. Weissenborn, X. Zhai, T. Unterthiner, M. Dehghani, M. Minderer, G. Heigold, S. Gelly, J. Uszkoreit, and N. Houlsby, “An Image is Worth 16x16 Words: Trans-formers for Image Recognition at Scale,” in International Conference on Learning Representations (ICLR) , 2021. [16] S. Woo, S. Debnath, R. Hu, X. Chen, Z. Liu, I.-S. Kweon, and S. Xie, “ConvNeXt V2: Co-designing and Scaling ConvNets with Masked Au-toencoders,” in IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , 2023, pp. 16 133–16 142. [17] P. K. A. Vasu, J. Gabriel, J. Zhu, O. Tuzel, and A. Ranjan, “MobileOne: An Improved One millisecond Mobile Backbone,” in IEEE/CVF Con-ference on Computer Vision and Pattern Recognition (CVPR) , 2023, pp. 7907–7917. [18] G. Jocher, J. Qiu, M. Liu, S. Lyu, F. C. Akyon, and M. E. Kalfaoglu, “Ultralytics YOLO26: Unified Real-Time End-to-End Vision Models,” 
+
+arXiv:2606.03748 [cs.CV] , 2026. [19] I. Robinson, P. Robicheaux, M. Popov, D. Ramanan, and N. Peri, “RF-DETR: Real-Time Detection Transformer,” in International Conference on Learning Representations (ICLR) , 2026. [20] Z. Liao, Y. Zhao, X. Shan, Y. Yan, C. Liu, L. Lu, X. Ji, and J. Chen, “RT-DETRv4: Painlessly Furthering Real-Time Object Detection with Vision Foundation Models,” arXiv: 2510.25257 [cs.CV] , 2025. [21] J. Fornt, P. Fontova-Must´ e, M. Caro, J. Abella, F. Moll, J. Altet, and C. Studer, “An Energy-Efficient GeMM-Based Convolution Accelerator With On-the-Fly im2col,” IEEE Trans. Very Large Scale Integr. Syst. ,vol. 31, no. 11, p. 1874–1878, Nov. 2023. 12 
+
+[22] M. Cho and D. Brand, “MEC: memory-efficient convolution for deep neural network,” in Proceedings of the 34th International Conference on Machine Learning - Volume 70 , ser. ICML’17, 2017, p. 815–824. [23] B. Chmiel, R. Banner, E. Hoffer, H. Ben Yaacov, and D. Soudry, “Accurate Neural Training with 4-bit matrix multiplications at standard formats,” in 11th International Conference on Learning Representations (ICLR) , 2023. [24] Y. Kim, C. Oh, J. Hwang, W. Kim, S. Oh, Y. Lee, H. Sharma, A. Yaz-danbakhsh, and J. Park, “DaCapo: Accelerating Continuous Learning in Autonomous Systems for Video Analytics,” in ACM/IEEE 51st Annual International Symposium on Computer Architecture (ISCA) , Jun. 2024, pp. 1246–1261. [25] S. Cuyckens, X. Yi, N. S. Murthy, C. Fang, and M. Verhelst, “Effi-cient Precision-Scalable Hardware for Microscaling (MX) Processing in Robotics Learning,” in IEEE/ACM International Symposium on Low Power Electronics and Design (ISLPED) , 2025. [26] M. Everingham, L. Van Gool, C. K. I. Williams, J. Winn, and A. Zisser-man, “The pascal visual object classes (voc) challenge,” International Journal of Computer Vision , vol. 88, no. 2, pp. 303–338, Jun. 2010. [27] A. Geiger, P. Lenz, C. Stiller, and R. Urtasun, “Vision meets Robotics: The KITTI Dataset,” International Journal of Robotics Research (IJRR) ,2013. [28] P. Henderson and V. Ferrari, “End-to-End Training of Object Class Detectors for Mean Average Precision,” in Computer Vision – ACCV .Springer International Publishing, 2016, pp. 198–213. [29] X. Li, W. Wang, L. Wu, S. Chen, X. Hu, J. Li, J. Tang, and J. Yang, “Generalized focal loss: learning qualified and distributed bounding boxes for dense object detection,” in 34th International Conference on Neural Information Processing Systems (NeurIPS) , 2020. [30] M. Horowitz, “Computing’s energy problem (and what we can do about it),” in IEEE International Solid-State Circuits Conference Digest of Technical Papers (ISSCC) , 2014, pp. 10–14. [31] L. Ravaglia, M. Rusci, D. Nadalini, A. Capotondi, F. Conti, and L. Benini, “A TinyML Platform for On-Device Continual Learning with Quantized Latent Replays,” IEEE Journal on Emerging and Selected Topics in Circuits and Systems , vol. 11, no. 4, pp. 789–802, 2021. [32] G. M. van de Ven, T. Tuytelaars, and A. S. Tolias, “Three types of incremental learning,” Nature Machine Intelligence , vol. 4, no. 12, pp. 1185–1197, Dec 2022. [33] L. Pellegrini, G. Graffieti, V. Lomonaco, and D. Maltoni, “Latent Replay for Real-Time Continual Learning,” in IEEE/RSJ International Confer-ence on Intelligent Robots and Systems (IROS) , 2020, p. 10203–10209. [34] D.-W. Zhou, Q.-W. Wang, H.-J. Ye, and D.-C. Zhan, “A Model or 603 Exemplars: Towards Memory-Efficient Class-Incremental Learning,” in 
+
+International Conference on Learning Representations (ICLR) , 2023. [35] Y. D. Kwon, J. Chauhan, H. Jia, S. I. Venieris, and C. Mascolo, “LifeLearner: Hardware-Aware Meta Continual Learning System for Embedded Computing Platforms,” in 21st ACM Conference on Embed-ded Networked Sensor Systems , ser. SenSys’23, 2024, p. 138–151. [36] I. Miro-Panades, V. Lorrain et al. , “A 772uJ/frame ImageNet Feature Extractor Accelerator on HD Images at 30FPS,” in IEEE Asia Pacific Conference on Circuits and Systems (APCCAS) , 2024, pp. 25–29. [37] L. Wang, X. Zhang, K. Yang, L. Yu, C. Li, H. Lanqing, S. Zhang, Z. Li, Y. Zhong, and J. Zhu, “Memory Replay with Data Compres-sion for Continual Learning,” in International Conference on Learning Representations (ICLR) , 2021. [38] J. Yang, Z. Duan, A. Peng, Y. Huang, J. He, and F. Zhu, “Probing Image Compression For Class-Incremental Learning,” arXiv:2403.06288 , 2024. [39] Z. Luo, Y. Liu, B. Schiele, and Q. Sun, “Class-Incremental Exemplar Compression for Class-Incremental Learning,” in IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , 2023, pp. 11 371– 11 380. [40] T. L. Hayes, K. Kafle, R. Shrestha, M. Acharya, and C. Kanan, “REMIND Your Neural Network to Prevent Catastrophic Forgetting,” in 16th European Conference (ECCV) , 2020, p. 466–483. [41] D.-W. Zhou, F.-Y. Wang, H.-J. Ye, and D.-C. Zhan, “PyCIL: a Python toolbox for class-incremental learning,” Science China Information Sciences , vol. 66, no. 9, 2023. [42] M. Fournarakis and M. Nagel, “In-Hindsight Quantization Range Esti-mation for Quantized Training,” in IEEE Conference on Computer Vision and Pattern Recognition (CVPR) Workshops , 2021, pp. 3063–3070. [43] S.-A. Rebuffi, A. Kolesnikov, G. Sperl, and C. H. Lampert, “iCaRL: Incremental Classifier and Representation Learning,” in IEEE Confer-ence on Computer Vision and Pattern Recognition (CVPR) , 2016, pp. 5533–5542. [44] V. Lomonaco and D. Maltoni, “CORe50: a New Dataset and Benchmark for Continuous Object Recognition,” in 1st Annual Conference on Robot Learning , ser. Proceedings of Machine Learning Research (PMLR), vol. 78, 13–15 Nov 2017, pp. 17–26. [45] B. Sorscher, R. Geirhos, S. Shekhar, S. Ganguli, and A. S. Morcos, “Beyond neural scaling laws: beating power law scaling via data prun-ing,” in 36th International Conference on Neural Information Processing Systems (NeurIPS) , 2022.

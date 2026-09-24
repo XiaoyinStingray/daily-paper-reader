@@ -48,17 +48,17 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-09-23</span>
+      <span class="dpr-home-dashboard-kicker">2026-09-24</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 13 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 9 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
     <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>2</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>11</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>1</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>8</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-09-23 22:17:07 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-09-24 22:21:06 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -69,7 +69,7 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日精选 13 篇论文，精读 2 篇、速读 11 篇，聚焦优化算法与面向机器的图像编码。最值得看的是两篇 8.0 分工作：Matrix AdaGrad 把自适应子梯度扩展到行、列两个维度，另一篇则用质量约束为机器视觉优化图像编码。普通读者可先从这两篇精读入手，再按兴趣速览高效密集预测与边缘视觉语言模型方向。</p>
+<p>今日精读1篇、速读8篇，共9篇论文。最值得关注的是8.0分的《You&#x27;ve Seen Enough》，探讨面向机器的质量约束图像编码，以及神经网络规模可微分计数与生成视频压缩的信息容量衡量。普通读者可优先了解“按需压缩”和“按算力换码率”这两条实用主线。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -78,12 +78,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">精读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">2 篇</strong>
+    <strong class="dpr-home-dashboard-count">1 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Matrix AdaGrad: Row-wise and Column-wise Adaptive Subgradient Methods">Matrix AdaGrad: Row-wise and Column-wise Adaptive Subgradient Methods</span></li><li><span class="dpr-home-dashboard-paper-title" title="You&#x27;ve Seen Enough: Quality-Constrained Image Coding for Machines">You&#x27;ve Seen Enough: Quality-Constrained Image Coding for Machines</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="You&#x27;ve Seen Enough: Quality-Constrained Image Coding for Machines">You&#x27;ve Seen Enough: Quality-Constrained Image Coding for Machines</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">compress <strong>1</strong></span><span class="dpr-home-dashboard-tag">neural-arch <strong>1</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">compress <strong>1</strong></span></div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -91,12 +91,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">速读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">11 篇</strong>
+    <strong class="dpr-home-dashboard-count">8 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Neural Spectral Capacity: Measuring and Designing Architectures from Network Specification Alone">Neural Spectral Capacity: Measuring and Designing Architectures from Network Specification Alone</span></li><li><span class="dpr-home-dashboard-paper-title" title="GTR: Gated Token Recurrence for Efficient Dense Prediction">GTR: Gated Token Recurrence for Efficient Dense Prediction</span></li><li><span class="dpr-home-dashboard-paper-title" title="Efficient Quantization-Aware Distillation with Cross-Modal Alignment for Edge Vision-Language Models">Efficient Quantization-Aware Distillation with Cross-Modal Alignment for Edge Vision-Language Models</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Neural Spectral Capacity: Measuring and Designing Architectures from Network Specification Alone">Neural Spectral Capacity: Measuring and Designing Architectures from Network Specification Alone</span></li><li><span class="dpr-home-dashboard-paper-title" title="NGN: Learning Neural Network Size as a Differentiable Count">NGN: Learning Neural Network Size as a Differentiable Count</span></li><li><span class="dpr-home-dashboard-paper-title" title="Information Capacity of Generative Video Compression: Quantifying the Rate-Compute Exchange at Identical Quality">Information Capacity of Generative Video Compression: Quantifying the Rate-Compute Exchange at Identical Quality</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">neural-arch <strong>9</strong></span><span class="dpr-home-dashboard-tag">compress <strong>2</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">neural-arch <strong>6</strong></span><span class="dpr-home-dashboard-tag">compress <strong>2</strong></span></div>
 </section>
 </div>
 
