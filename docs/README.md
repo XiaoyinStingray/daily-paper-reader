@@ -48,17 +48,17 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-09-24</span>
+      <span class="dpr-home-dashboard-kicker">2026-09-25</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
     <strong class="dpr-home-dashboard-count">共 9 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
     <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>1</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>8</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>3</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>6</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-09-24 22:21:06 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-09-25 22:33:38 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -69,7 +69,9 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日精读1篇、速读8篇，共9篇论文。最值得关注的是8.0分的《You&#x27;ve Seen Enough》，探讨面向机器的质量约束图像编码，以及神经网络规模可微分计数与生成视频压缩的信息容量衡量。普通读者可优先了解“按需压缩”和“按算力换码率”这两条实用主线。</p>
+<p>9月25日日报完成9篇论文筛选，3篇精读中VQ-LIC以9.0分领跑，速读覆盖编码优化与量化缓存。</p>
+<p>最值得看的是VQ-LIC的资源受限FPGA共享向量量化图像压缩（9.0），以及面向机器的质量约束图像编码（8.0），都聚焦压缩效率与实际部署/下游任务。</p>
+<p>普通读者可先读这两篇精读摘要，再按兴趣补速读里的码率-失真优化和2-bit KV Cache量化话题。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -78,12 +80,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">精读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">1 篇</strong>
+    <strong class="dpr-home-dashboard-count">3 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="You&#x27;ve Seen Enough: Quality-Constrained Image Coding for Machines">You&#x27;ve Seen Enough: Quality-Constrained Image Coding for Machines</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="VQ-LIC: Shared Vector-Quantized Learned Image Compression on a Resource-Constrained FPGA">VQ-LIC: Shared Vector-Quantized Learned Image Compression on a Resource-Constrained FPGA</span></li><li><span class="dpr-home-dashboard-paper-title" title="You&#x27;ve Seen Enough: Quality-Constrained Image Coding for Machines">You&#x27;ve Seen Enough: Quality-Constrained Image Coding for Machines</span></li><li><span class="dpr-home-dashboard-paper-title" title="LC3EM: Long-Range Context Extrapolation Enhanced Entropy Model for Coordinate-based Overfitting Image Codecs">LC3EM: Long-Range Context Extrapolation Enhanced Entropy Model for Coordinate-based Overfitting Image Codecs</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">compress <strong>1</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">compress <strong>3</strong></span></div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -91,12 +93,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">速读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">8 篇</strong>
+    <strong class="dpr-home-dashboard-count">6 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Neural Spectral Capacity: Measuring and Designing Architectures from Network Specification Alone">Neural Spectral Capacity: Measuring and Designing Architectures from Network Specification Alone</span></li><li><span class="dpr-home-dashboard-paper-title" title="NGN: Learning Neural Network Size as a Differentiable Count">NGN: Learning Neural Network Size as a Differentiable Count</span></li><li><span class="dpr-home-dashboard-paper-title" title="Information Capacity of Generative Video Compression: Quantifying the Rate-Compute Exchange at Identical Quality">Information Capacity of Generative Video Compression: Quantifying the Rate-Compute Exchange at Identical Quality</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Rate-distortion optimization for full-reference image quality metrics via stochastic Hessian estimates">Rate-distortion optimization for full-reference image quality metrics via stochastic Hessian estimates</span></li><li><span class="dpr-home-dashboard-paper-title" title="The Ups and Downs of Backprop Weights">The Ups and Downs of Backprop Weights</span></li><li><span class="dpr-home-dashboard-paper-title" title="QuantWM: Temporally Consistent 2-Bit KV Cache Quantization for World Models and Video Generation">QuantWM: Temporally Consistent 2-Bit KV Cache Quantization for World Models and Video Generation</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">neural-arch <strong>6</strong></span><span class="dpr-home-dashboard-tag">compress <strong>2</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">compress <strong>3</strong></span><span class="dpr-home-dashboard-tag">neural-arch <strong>3</strong></span></div>
 </section>
 </div>
 
