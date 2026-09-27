@@ -48,17 +48,17 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-09-26</span>
+      <span class="dpr-home-dashboard-kicker">2026-09-27</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 5 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 3 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
     <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
     <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>0</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>5</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>3</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-09-26 22:12:29 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-09-27 22:19:52 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -69,7 +69,9 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日速读5篇，0篇精读，聚焦3D高斯压缩、混合神经视频解码与网格纹理压缩三大方向。最值得关注的是最高分7.0的《Towards Practical Compression of 3D Gaussian Splatting》，以及《Beyond UV Mapping》提出的表面对齐纹理场新思路。普通读者可先从3D高斯压缩入手，理解如何在保持渲染质量的同时大幅减小模型体积。</p>
+<p>今日共生成 3 篇推荐（精读 0 篇，速读 3 篇）</p>
+<p>速读：《NS-ATTENTION: Newton-Schulz Transformations of Attention Outputs in Vision Transformers》（7.0/10）, 《LightMIS: Ultra-Lightweight Medical Image Segmentation Without a Stage-Wise Decoder》（7.0/10）, 《Lightweight Vision Transformer-Based U-Net for Brain Tumor Segmentation from MRI》（6.0/10）</p>
+<p>这些结果覆盖了当下较热的方向，建议先看精读区论文的关键问题与方法。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -91,12 +93,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">速读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">5 篇</strong>
+    <strong class="dpr-home-dashboard-count">3 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Towards Practical Compression of 3D Gaussian Splatting">Towards Practical Compression of 3D Gaussian Splatting</span></li><li><span class="dpr-home-dashboard-paper-title" title="Resolution-Flexible Decoding for Hybrid Neural Video Representations">Resolution-Flexible Decoding for Hybrid Neural Video Representations</span></li><li><span class="dpr-home-dashboard-paper-title" title="Beyond UV Mapping: Mesh Texture Compression via Surface-Aligned Texture Fields">Beyond UV Mapping: Mesh Texture Compression via Surface-Aligned Texture Fields</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="NS-ATTENTION: Newton-Schulz Transformations of Attention Outputs in Vision Transformers">NS-ATTENTION: Newton-Schulz Transformations of Attention Outputs in Vision Transformers</span></li><li><span class="dpr-home-dashboard-paper-title" title="LightMIS: Ultra-Lightweight Medical Image Segmentation Without a Stage-Wise Decoder">LightMIS: Ultra-Lightweight Medical Image Segmentation Without a Stage-Wise Decoder</span></li><li><span class="dpr-home-dashboard-paper-title" title="Lightweight Vision Transformer-Based U-Net for Brain Tumor Segmentation from MRI">Lightweight Vision Transformer-Based U-Net for Brain Tumor Segmentation from MRI</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">compress <strong>3</strong></span><span class="dpr-home-dashboard-tag">neural-arch <strong>2</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">neural-arch <strong>3</strong></span></div>
 </section>
 </div>
 
