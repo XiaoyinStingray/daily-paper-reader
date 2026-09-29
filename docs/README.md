@@ -51,14 +51,14 @@
       <span class="dpr-home-dashboard-kicker">2026-09-29</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 7 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 19 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
-    <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>0</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>7</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>2 次</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>4</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>15</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-09-29 00:22:00 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-09-29 23:33:34 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -69,9 +69,9 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日速读 7 篇、精读 0 篇，焦点集中在压缩与表示学习方向。</p>
-<p>最值得看的是免训练卷积自编码器瓶颈宽度规划（7.0）与隐式神经表示做高光谱视频压缩（7.0），另有视觉 token 通信的按需反事实推理摊销（7.0）值得留意。</p>
-<p>建议普通读者先挑&quot;免训练&quot;那篇入手，理解瓶颈宽度如何影响压缩效果，再对照高光谱视频压缩看表示学习的通用性。</p>
+<p>2026-09-29 日报完成19篇论文筛选，精读4篇、速读15篇，重点落在卷积自编码器与高光谱视频压缩。</p>
+<p>最值得看的是两篇8.0分精读：《Training-Free Bottleneck Width Planning for Convolutional Autoencoders》和《Implicit Neural Representation for Hyperspectral Video Compression》。</p>
+<p>普通读者可先读这两篇精读，再按兴趣浏览速读中的Token剪枝与视觉Token通信方向。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -80,12 +80,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">精读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">0 篇</strong>
+    <strong class="dpr-home-dashboard-count">4 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p class="dpr-home-dashboard-empty">今日暂无推荐。</p>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Training-Free Bottleneck Width Planning for Convolutional Autoencoders">Training-Free Bottleneck Width Planning for Convolutional Autoencoders</span></li><li><span class="dpr-home-dashboard-paper-title" title="Implicit Neural Representation for Hyperspectral Video Compression">Implicit Neural Representation for Hyperspectral Video Compression</span></li><li><span class="dpr-home-dashboard-paper-title" title="Rate-Adaptive One-Step Diffusion Compression for AIGC Images">Rate-Adaptive One-Step Diffusion Compression for AIGC Images</span></li></ul>
   </div>
-
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">compress <strong>4</strong></span></div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -93,12 +93,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">速读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">7 篇</strong>
+    <strong class="dpr-home-dashboard-count">15 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Training-Free Bottleneck Width Planning for Convolutional Autoencoders">Training-Free Bottleneck Width Planning for Convolutional Autoencoders</span></li><li><span class="dpr-home-dashboard-paper-title" title="Selective Amortization of Full-Budget Counterfactual Reasoning for Visual Token Communication">Selective Amortization of Full-Budget Counterfactual Reasoning for Visual Token Communication</span></li><li><span class="dpr-home-dashboard-paper-title" title="Implicit Neural Representation for Hyperspectral Video Compression">Implicit Neural Representation for Hyperspectral Video Compression</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Selective Amortization of Full-Budget Counterfactual Reasoning for Visual Token Communication">Selective Amortization of Full-Budget Counterfactual Reasoning for Visual Token Communication</span></li><li><span class="dpr-home-dashboard-paper-title" title="VisionHOPE: Visual Backbones as Self-Modifying Learning Systems">VisionHOPE: Visual Backbones as Self-Modifying Learning Systems</span></li><li><span class="dpr-home-dashboard-paper-title" title="DORA: Dynamic Online Reinforcement Agent for Token Pruning in Vision Transformers">DORA: Dynamic Online Reinforcement Agent for Token Pruning in Vision Transformers</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">compress <strong>5</strong></span><span class="dpr-home-dashboard-tag">neural-arch <strong>2</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">neural-arch <strong>8</strong></span><span class="dpr-home-dashboard-tag">compress <strong>7</strong></span></div>
 </section>
 </div>
 

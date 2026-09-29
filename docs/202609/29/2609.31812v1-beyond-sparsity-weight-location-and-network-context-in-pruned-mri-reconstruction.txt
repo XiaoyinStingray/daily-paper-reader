@@ -1,0 +1,194 @@
+Title: Beyond Sparsity: Weight Location and Network Context in Pruned MRI Reconstruction
+
+URL Source: https://arxiv.org/pdf/2609.31812v1
+
+Published Time: Tue, 29 Sep 2026 00:08:11 GMT
+
+Number of Pages: 5
+
+Markdown Content:
+# BEYOND SPARSITY: WEIGHT LOCATION AND NETWORK CONTEXT IN PRUNED MRI RECONSTRUCTION 
+
+# Mohammed Wattad, Tamir Shor, and Alexander M. Bronstein 
+
+# Faculty of Computer Science, Technion - Israel Institute of Technology, Haifa, Israel 
+
+ABSTRACT 
+
+Pruning reduces the number of weights in magnetic resonance imaging (MRI) reconstruction networks. Equal sparsity, however, can retain weights with different computational roles and differ-ent compatibility with the trained network. We study these effects across 120 convolutional U-Net and vision transformer models using controlled edits evaluated before retraining. In U-Net, preserving high-resolution computation improves reconstruction at equal dele-tion counts across all tested sparsity levels. Equal-operation controls reveal additional sensitivity of the first convolution, which operation count alone cannot explain. In transformers, retained pretrained weight energy correlates with quality within sparsity levels, yet the same masks reverse their reconstruction ranking when the surround-ing trained weights change. At 90% sparsity, matching intermediate output scales largely removes a high-energy-mask penalty while re-taining an advantage for the network’s original mask. Thus sparsity alone does not characterize reconstruction quality: architecture-specific descriptors are informative, but mask quality can still de-pend on the surrounding trained network. 
+
+Index Terms : MRI reconstruction, network pruning, weight reuse, mask transfer, distribution shift 
+
+1. INTRODUCTION 
+
+Magnetic resonance imaging (MRI) reconstruction estimates an im-age from spatial-frequency measurements, called k-space. Acquir-ing fewer measurements can shorten a scan, while increasing the reconstruction task’s reliance on learned image structure. Pruning can reduce the storage and theoretical computation of reconstruction networks, but its effect on image quality depends on which connec-tions remain. Understanding that dependence is particularly relevant when acquisition conditions differ from training [1, 2, 3, 4]. A pruning mask is a binary array that keeps selected weights and sets the others to zero. Sparsity is the fraction of eligible weights removed. Equal sparsity provides a natural comparison of model size, yet weights can play different roles. A convolutional weight is reused at every spatial position of its feature map. A weight in a high-resolution layer therefore contributes to more computations than one in a low-resolution layer. In a vision transformer (ViT), the pruned multilayer perceptron (MLP) weights all process the same image tokens, so their reuse is uniform. In both architectures, their effect also depends on the trained parameters that receive and pro-cess their outputs. Prior pruning methods use second-order or loss/gradient cri-teria [5, 6, 7], data-free synaptic-flow criteria [8], layer-adaptive magnitude scores [9], activation-aware scores [10], or dynamic con-nectivity during training [11]. PUN-IT learns masks over fixed weights and has been studied for MRI generalization [12]. Sparse-network performance also depends on architecture and initializa-tion [13, 14, 15]. Prior pruning work has emphasized that parameter count and FLOPs measure different aspects of efficiency [16]. Here we investigate which structural effects remain after matching counts, and whether a mask’s reconstruction advantage persists in another trained network. We combine observations across 120 trained models with con-trolled edits to test three aspects of pruning. (i) Within sparsity lev-els, we identify architecture-specific associations with reconstruc-tion quality: operation count in U-Net and retained pretrained en-ergy in ViT. (ii) Equal-count U-Net deletions demonstrate sensitivity to spatial allocation, while equal-operation controls isolate an addi-tional first-convolution effect. (iii) ViT mask exchanges establish context-dependent rankings, and output-scale calibration implicates scale mismatch in a high-energy-mask penalty at extreme sparsity. The main edits are evaluated before retraining to expose their imme-diate effect on a fixed network. 
+
+2. ANALYSIS 
+
+To distinguish storage from arithmetic, let al denote the number of active weights in layer l, ul their number of uses, and Ffixed the operations outside the pruned layers. Counting a multiply-add as two operations gives the theoretical cost in billions of floating-point operations (GFLOPs): 
+
+Feff = 10 −9 Ffixed + 2 X
+
+> l
+
+ulal
+
+!
+
+. (1) In our U-Net, feature maps range from 320 ×320 to 20 ×20 , giving a 256-fold difference in weight reuse. Every pruned ViT MLP matrix processes 1,024 tokens. Thus equal weight counts can hide differ-ent U-Net operation counts, whereas count-matched ViT masks have equal theoretical cost. Equation 1 assumes that zero weights can be skipped. It excludes Fourier transforms and memory access, and does not measure inference time. To compare which values a mask preserves, let W 0 
+
+> l
+
+be the shared pretrained ViT MLP matrix and Ml its binary mask. With ⊙ denot-ing elementwise multiplication, define retained energy as 
+
+E(M ) = 
+
+P 
+
+> l
+
+∥Ml ⊙ W 0 
+
+> l
+
+∥2
+
+> F
+
+P 
+
+> l
+
+∥W 0 
+
+> l
+
+∥2
+
+> F
+
+. (2) The squared Frobenius norm sums squared entries. We evaluate 
+
+f (B, M ⊙ W 0), where the network context B comprises trained at-tention, embeddings, biases, normalization and output layers. Each mask retains the same locations, values and energy as B changes. A reversal in the quality ordering of two masks therefore establishes a dependence on context that a fixed mask-only ranking cannot cap-ture. arXiv:2609.31812v1 [eess.IV] 25 Sep 2026 For a complementary energy test, we construct masks with the same active count as the context’s original mask Mown and zero overlap with it: 
+
+M = {M : ∥M ∥0 = ∥Mown ∥0, M ⊙ Mown = 0 }. (3) Here ∥M ∥0 counts active entries. Selecting available pretrained weights by low magnitude, uniformly at random, or by high magni-tude varies energy at fixed count and overlap. Weight locations and layer allocation can still change, so this construction tests energy-directed selection under those controls. 
+
+3. SETUP 
+
+We train on fastMRI brain [17], using 4,671 training slices from 527 files and 2,814 validation slices from 320 files with disjoint patient IDs, and evaluate on separate fastMRI test volumes and low-field M4Raw validation data [18]. Each architecture has 12 models at each of 50, 60, 70, 80 and 90% sparsity: five image-SNIP masks [6], five random masks, one PUN-IT and one RigL. Image-SNIP uses loss sensitivity on one training slice per mask. After mask selection, retained weights and unpruned parameters are trained. RigL updates connectivity during training. Sparsity refers to eligible weights: con-volutional and linear weights in U-Net [19], and 20 MLP matrices in ViT [20]. At 70% MLP sparsity, 54.06% of all ViT parameters re-main active, because attention and other components remain dense. The U-Net has four pooling stages and 3.35 million parameters. ViT has ten blocks, 704-dimensional tokens, 10 × 10 patches and 60.4 million parameters. It uses a shared reconstruction-pretrained checkpoint as the reference W 0 for all mask comparisons. U-Net selection and training initialize separately. Adam minimizes mean absolute pixel error with batch size one and training seed 42. U-Net trains for 50 epochs at peak learning rate 5 × 10 −4, ViT for 40 at 
+
+10 −4. Validation peak signal-to-noise ratio (PSNR, higher is better) selects checkpoints. For each coil image, we combine real components and imag-inary components separately by root-sum-of-squares, then form a complex image from those two results. Sampling its Fourier trans-form is simulated, retaining about one quarter of frequency lines, including a central fraction of .08. This construction differs from reconstructing native acquired multicoil data. The input is the mag-nitude of the inverse Fourier transform after missing measurements are zero-filled. Input and target are independently normalized to 
+
+[0 , 1] . Sampling jitter shifts lines by rounded Gaussian offsets with standard deviation three lines, rejecting collisions and out-of-range moves. We evaluate 1,500 slices per dataset with and without jit-ter. Scores average slice PSNR in decibels (dB), using each target’s intensity range. The initial controlled study uses four models at 70% sparsity, one per method. Expanded tests use all 12 models at the specified levels. Reported adjusted intervals use 40,000 paired bootstrap re-samples of 170 fastMRI volumes or 23 M4Raw study-ID groups, with Bonferroni adjustment within each original family of 16 com-parisons. U-Net scores first average five deletion seeds per image. Intervals describe evaluation-group variation for fixed networks. Ex-panded sweeps and correlations are descriptive. 
+
+Table 1 . Within-sparsity Pearson correlations with PSNR. Entries span five levels, with 12 trained models per level. ViT energy uses Eq. 2. These are descriptive associations. Model Descriptor fastMRI M4Raw U-Net Active count −.17 to .39 −.34 to .19 
+
+Operations .54 to .72 .14 to .69 
+
+ViT Energy .81 to .97 .77 to .96 
+
+Table 2 . U-Net PSNR difference H minus L (dB). H deletes at low resolution first, L at high resolution first, with equal counts. Each range spans 12 models after averaging five deletion seeds. F denotes fastMRI, M denotes M4Raw, and J denotes sampling jitter. All 240 means are positive. Sparsity F F+J M M+J 50% 3.49-8.72 1.28-4.34 1.28-4.22 .81-3.01 60% 2.30-9.20 .86-5.17 .64-4.44 .35-3.45 70% 1.52-8.07 .36-4.41 .85-4.21 .43-3.01 80% 2.11-7.66 .06-4.22 .95-3.74 .53-2.89 90% 2.35-7.89 .79-4.48 .87-4.33 .48-3.27 
+
+4. RESULTS 4.1. U-Net Results 
+
+We first ask whether masks at similar sparsity differ in ways that track quality. Within each sparsity level, operation count has a posi-tive association with U-Net PSNR, while retained weight count has weak associations of varying sign (Table 1). Count is nearly fixed by design, so its within-level correlations reflect only small achieved-count differences. The operation-count association motivates an in-tervention on spatial allocation. Associations alone cannot distin-guish weight reuse from the roles of individual layers. The same qualitative separation holds for structural similarity (SSIM) [21]: operation count remains positively associated with quality, while within-level active-count associations are weak. Target Unedited H L26.67 26.63 22.28 
+
+Absolute error 
+
+0 0.2 
+
+Fig. 1 . M4Raw reconstruction from a SNIP U-Net at 70% sparsity, using the first deletion seed. H preserves high-resolution computa-tion, while L deletes it first. The slice was selected before visual inspection as the example closest to the median H-minus-L PSNR difference. Labels give PSNR in dB. Image intensities and absolute errors relative to the target use shared ranges [0 , 1] and [0 , . 2] .50% sparsity 
+
+S S S S S G R R P R R R Mask (decreasing energy) SSSSSRRRRRPGTrained context 
+
+70% sparsity 
+
+S S S S S P G R R R R R Mask (decreasing energy) 
+
+90% sparsity 
+
+S S S S S P G R R R R R Mask (decreasing energy) 
+
+-6 -3 036dB Fig. 2 . ViT mask exchange on M4Raw, with 144 combinations per sparsity level. Rows select trained context and columns select masks in decreasing retained energy. S denotes SNIP, R random, P PUN-IT, and G RigL. Color shows PSNR relative to each context’s median across 12 masks, clipped at ±6 dB. The line separates the three highest-energy masks. High-energy masks benefit SNIP contexts, while their preference reverses in random contexts at 90% sparsity. All MLP values are reset to the shared pretrained reference. For equal-count deletions, rule H preserves high-resolution computation by deleting from low-resolution layers first. Rule L deletes from high-resolution layers first. Each removes 10% of active weights in the 18 body convolutions, capped at 20% of the ac-tive filter weights per output channel. The three output convolutions remain unchanged. Five paired random seeds order deletions within each resolution, and surviving values remain fixed. H has higher PSNR in all 240 model-condition comparisons across five sparsity levels (Table 2). The initial 16 method-condition comparisons at 70% also have adjusted intervals above zero. The deleted weights have similar magnitudes under H and L, while their reuse-weighted squared magnitudes differ by more than an order of magnitude. These results establish an effect of deletion allocation, which changes both reuse and layer function. To separate these factors, we compare deletions at the same spa-tial resolution, matching both count and operation cost. Table 3 re-ports these controls on M4Raw at 70% sparsity. Moving deletions from the first convolution to its adjacent convolution improves scale-invariant PSNR by 1.09 to 2.87 dB in criterion-based models. Equal-resolution encoder-decoder differences are smaller. Four random-mask models have a first-layer difference of only .05 to .13 dB. The fifth retains a dense first layer and is excluded from that compari-son. Grouped-bootstrap intervals for the matched first-convolution comparisons exclude zero for the criterion-based models. The ef-fect therefore depends on the learned sparse network, as well as the layer’s position. The scale-invariant scores remove a global output-scale differ-ence before evaluating image error. The raw first-layer penalties are 19 to 46% larger, so output scale explains part of the sensitivity. The remaining effect at equal count and operations shows why a compu-tational descriptor alone is insufficient. An exploratory rule L1, designed after inspecting outputs, pro-tects the first convolution and relocates its planned deletions. At less than .05% change in operation count, it recovers a median 87 to 93% of the H-minus-L gap in non-random models at each sparsity level. Figure 1 illustrates the H-versus-L difference on a slice selected be-fore visual inspection. Together, these controls show that operation 
+
+Table 3 . Equal-count, equal-operation U-Net deletions on M4Raw at 70% sparsity. Entries are scale-invariant PSNR differences (dB). First minus adjacent compares the first convolution with its neigh-bor. Encoder minus decoder spans four matched resolutions. Nega-tive means the first-named location is more damaging. Ranges span masks and, in the last column, resolutions. Model family First minus Encoder minus adjacent decoder PUN-IT −1.43 −.05 to .08 
+
+RigL −1.09 −.04 to .01 
+
+SNIP −2.87 to −1.35 −.18 to .14 
+
+Random −.13 to −.05 −.34 to .09 
+
+Table 4 . SNIP-mask minus RigL-mask PSNR on M4Raw at 70% ViT sparsity. All masks use shared pretrained MLP values and 94.935 GFLOPs. Brackets give group-bootstrap intervals adjusted within 16 comparisons. Positive favors SNIP. Trained context Difference (dB) Interval SNIP +4 .243 [4 .034 , 4.458] 
+
+Random −.177 [−.566 , . 235] 
+
+PUN-IT +.513 [−.034 , 1.098] 
+
+RigL −.474 [−.847 , −.061] 
+
+count is informative, while the first convolution contributes addi-tional sensitivity. Its role in processing the aliased input is a possible explanation that these experiments do not isolate. 
+
+4.2. ViT Results 
+
+Equal reuse makes operation count constant for count-matched ViT masks. Retained energy nevertheless correlates with PSNR within every sparsity level on both datasets (Table 1). To test whether this association implies a transferable mask ranking, we exchange all 12 masks among all 12 contexts at 50, 70 and 90% sparsity. Every 20 40 60 
+
+# E (%) 
+
+18 20 22 24 
+
+> PSNR (dB)
+
+# 60% 
+
+network 1 network 2 
+
+0 25 50 
+
+# E (%) 
+
+17.5 20.0 22.5 
+
+# 70% 
+
+0 25 50 
+
+# E (%) 
+
+18 20 22 
+
+# 80% 
+
+0 20 40 
+
+# E (%) 
+
+20 22 24 
+
+# 90% Fig. 3 . Controlled retained-energy test on M4Raw. Masks keep equal counts and have zero overlap with the context’s original mask (Eq. 3). Each line evaluates low-energy, random and high-energy selections in one of two randomly pruned contexts. Fitted energy-quality slopes are positive at 60 to 80% sparsity and negative at 90%. Each line contains only three masks, and the middle-energy mask is best in one 90% context. 
+
+Table 5 . ViT controls on M4Raw (dB). Top: original-mask ad-vantage over the 11 foreign masks, averaged over 12 contexts per level, before and after one training epoch. Bottom: the 90% scale-control comparison. Original-mask lead uses the same con-trast. High-energy effect is the reported high-energy-minus-count-matched-random mask contrast. Scale factors use 32 unlabeled slices. Original-mask advantage 50% 70% 90% Before retraining 1.73 2.45 4.64 After one epoch .95 1.35 1.85 90% scale control Original-mask High-energy lead effect None 4.64 −4.67 
+
+Per matrix 3.28 +.08 
+
+Per channel 3.60 +.35 
+
+combination, including the original-mask baseline, resets MLP val-ues to W 0, so masks bring only locations and shared values into each context. A deterministic index-based rule equalizes counts without consulting image scores. Figure 2 shows that mask preference depends on context. At 50 and 70% sparsity, every context places its three highest-energy masks above its median score across all 12 masks. At 90%, only half do. The original four-model comparison gives a supported reversal on M4Raw at 70%: the SNIP mask wins in the SNIP context, while the RigL mask wins in the RigL context (Table 4). Each mask’s energy and values are identical across these contexts. The rever-sal therefore limits a universal mask-only ranking, while remaining compatible with useful average energy associations. To reduce confounding by pruning-method identity, we evalu-ate the three constructed masks from Eq. 3 in two randomly pruned contexts per level. On M4Raw, the fitted slopes through the three energy-quality points are positive at 60 to 80% sparsity (6.5 to 10.9 dB per unit energy fraction) and negative at 90% ( −6.8 and −8.4). One 90% context favors the middle-energy mask. Figure 3 makes this change in the energy-quality relationship visible at fixed count and overlap. At 90%, high-energy exchanged masks produce intermediate MLP outputs roughly ten times their size under the context’s orig-inal mask. Matching each matrix’s output scale to that reference, es-timated from 32 unlabeled slices, changes the reported high-energy-minus-random effect from −4.67 to +.08 dB. Per-channel matching gives +.35 dB. Original-mask advantages remain 3.28 and 3.60 dB, respectively (Table 5). This control implicates scale mismatch in the extreme-sparsity penalty, while compatibility with the trained con-text remains relevant. It uses an available original-mask network as its calibration reference. One epoch of fixed-mask retraining at learning rate 2 × 10 −5
+
+provides a further check across all 432 combinations. In random-mask contexts, the mean score of the three highest-energy masks relative to the context’s median changes from −1.40 to +.04 dB at 90%. Foreign-mask scores improve, but remain below the corre-spondingly retrained original-mask networks at all three levels (Ta-ble 5). Relative to the original-mask score before retraining, the 90% deficit is still .67 dB. Retraining thus removes the random-context reversal while retaining the original-mask advantage. 
+
+5. CONCLUSION 
+
+Sparsity is a storage descriptor, but it is insufficient to characterize reconstruction quality. In U-Net, operation count explains part of the observed variation, while equal-operation controls reveal additional first-convolution sensitivity. In ViT, retained pretrained energy is informative within sparsity levels, but the same masks can reverse their ranking across trained networks. Scale calibration and retrain-ing further show how the energy effect interacts with output scale at extreme sparsity. Architecture-specific descriptors therefore help interpret pruning, while the value of a mask can still depend on the surrounding trained network. Evidence is limited to selected checkpoints, one training seed and simulated single-channel acquisition. The tested networks omit explicit data-consistency steps, unlike model-based MRI reconstruc-tion networks such as MoDL and variational networks [22, 23]. ViT exchanges reset pretrained values, reducing the selected original net-works’ PSNR by 1.5 to 6.1 dB before exchange. The conclusions concern these controlled states, and require validation across train-ing runs and native multicoil reconstruction systems. 6. COMPLIANCE WITH ETHICAL STANDARDS 
+
+This retrospective analysis used released anonymized fastMRI and M4Raw data, with no new participants or acquisitions. fastMRI cu-ration was approved by the New York University School of Medicine Institutional Review Board [17]. M4Raw acquisition was approved by Shenzhen Technology University’s Institutional Review Board (SZTULL012021005), with written consent for anonymized public release [18]. 
+
+7. ACKNOWLEDGMENTS 
+
+No funding was received for conducting this study. The authors have no relevant financial or nonfinancial interests to disclose. 
+
+8. REFERENCES 
+
+[1] Mohammed Wattad, Tamir Shor, and Alex Bronstein, “On the role of K-Space acquisition in MRI reconstruction domain-generalization,” arXiv preprint arXiv:2512.06530 , 2025. [2] Vegard Antun, Francesco Renna, Clarice Poon, Ben Adcock, and Anders C. Hansen, “On instabilities of deep learning in image reconstruction and the potential costs of AI,” Proceed-ings of the National Academy of Sciences , vol. 117, no. 48, pp. 30088-30095, 2020. [3] Mohammad Zalbagi Darestani, Akshay S. Chaudhari, and Reinhard Heckel, “Measuring robustness in deep learning based compressive sensing,” in ICML , 2021, pp. 2433-2444. [4] Florian Knoll, Kerstin Hammernik, Erich Kobler, Thomas Pock, Michael P. Recht, and Daniel K. Sodickson, “Assess-ment of the generalization of learned image reconstruction and the potential for transfer learning,” Magnetic Resonance in Medicine , vol. 81, no. 1, pp. 116-128, 2019. [5] Yann LeCun, John S. Denker, and Sara A. Solla, “Optimal brain damage,” in Advances in Neural Information Processing Systems , 1989, vol. 2, pp. 598-605. [6] Namhoon Lee, Thalaiyasingam Ajanthan, and Philip H. S. Torr, “SNIP: Single-shot network pruning based on connec-tion sensitivity,” in ICLR , 2019. [7] Chaoqi Wang, Guodong Zhang, and Roger Grosse, “Picking winning tickets before training by preserving gradient flow,” in 
+
+ICLR , 2020. [8] Hidenori Tanaka, Daniel Kunin, Daniel L. K. Yamins, and Surya Ganguli, “Pruning neural networks without any data by iteratively conserving synaptic flow,” in NeurIPS , 2020. [9] Jaeho Lee, Sejun Park, Sangwoo Mo, Sungsoo Ahn, and Jin-woo Shin, “Layer-adaptive sparsity for the magnitude-based pruning,” in ICLR , 2021. [10] Mingjie Sun, Zhuang Liu, Anna Bair, and J. Zico Kolter, “A simple and effective pruning approach for large language mod-els,” in ICLR , 2024. [11] Utku Evci, Trevor Gale, Jacob Menick, Pablo Samuel Castro, and Erich Elsen, “Rigging the lottery: Making all tickets win-ners,” in ICML , 2020. [12] Shijun Liang, Evan Bell, Avrajit Ghosh, and Saiprasad Rav-ishankar, “Pruning unrolled networks (PUN) at initialization for MRI reconstruction improves generalization,” in Asilo-mar Conference on Signals, Systems, and Computers , 2024, pp. 100-104. [13] Jonathan Frankle and Michael Carbin, “The lottery ticket hy-pothesis: Finding sparse, trainable neural networks,” in ICLR ,2019. [14] Zhuang Liu, Mingjie Sun, Tinghui Zhou, Gao Huang, and Trevor Darrell, “Rethinking the value of network pruning,” in ICLR , 2019. [15] Jonathan Frankle, Gintare Karolina Dziugaite, Daniel M. Roy, and Michael Carbin, “Pruning neural networks at initialization: Why are we missing the mark?,” in ICLR , 2021. [16] Davis Blalock, Jose Javier Gonzalez Ortiz, Jonathan Frankle, and John Guttag, “What is the state of neural network prun-ing?,” in Proceedings of Machine Learning and Systems (ML-Sys) , 2020. [17] Jure Zbontar et al., “fastMRI: An open dataset and benchmarks for accelerated MRI,” arXiv preprint arXiv:1811.08839 , 2018. [18] Mengye Lyu et al., “M4Raw: A multi-contrast, multi-repetition, multi-channel MRI k-space dataset for low-field MRI research,” Scientific Data , vol. 10, pp. 264, 2023. [19] Olaf Ronneberger, Philipp Fischer, and Thomas Brox, “U-Net: Convolutional networks for biomedical image segmentation,” in MICCAI , 2015. [20] Kang Lin and Reinhard Heckel, “Vision transformers enable fast and robust accelerated MRI,” in Medical Imaging with Deep Learning , 2022, pp. 774-795. [21] Zhou Wang, Alan C. Bovik, Hamid R. Sheikh, and Eero P. Simoncelli, “Image quality assessment: From error visibility to structural similarity,” IEEE Transactions on Image Processing ,vol. 13, no. 4, pp. 600-612, 2004. [22] Hemant K. Aggarwal, Merry P. Mani, and Mathews Jacob, “MoDL: Model-based deep learning architecture for inverse problems,” IEEE Transactions on Medical Imaging , vol. 38, no. 2, pp. 394-405, 2019. [23] Kerstin Hammernik, Teresa Klatzer, Erich Kobler, Michael P. Recht, Daniel K. Sodickson, Thomas Pock, and Florian Knoll, “Learning a variational network for reconstruction of acceler-ated MRI data,” Magnetic Resonance in Medicine , vol. 79, no. 6, pp. 3055-3071, 2018.
