@@ -1,0 +1,1507 @@
+CSCWD: Cross-Scale Channel-wise Knowledge Distillation for
+Lightweight Tiny Object Detection on Edge Devices
+Amir Zamani1 and Zeinab Ghasemi-Naraghi2*
+1Department of Computer Engineering, Islamic Revolution Comprehensive University,
+Tehran, Iran .
+2*Department of Computer Engineering, K.N. Toosi University of Technology, Tehran,
+Iran .
+*Corresponding author(s). E-mail(s): naraghi@kntu.ac.ir;
+Contributing authors: amirzamani@cuir.ac.ir;
+Abstract
+Real-time tiny object detection in aerial imagery is constrained by the weak spatial evidence of
+very small objects and the loss of high-resolution detail in lightweight detectors. This study presents
+Cross-Scale Channel-wise Knowledge Distillation (CSCWD), a training-time framework that trans-
+fers high-resolution spatial representations from a YOLO11m-P2 teacher to a compact YOLO11n
+student without altering the student’s inference architecture. Unlike conventional same-scale feature
+distillation, CSCWD transfers supervision from teacher P2 to student P3 after feature alignment
+while retaining same-scale distillation at deeper pyramid levels. Under the unified seven-sequence
+Drone-vs-Bird validation protocol, YOLO11n-CSCWD achieves 50.17% mean average precision at
+an intersection-over-union threshold of 0.5 (mAP@0.5) and 59.73% recall, improving the matched
+CA-YOLO11n baseline by 2.92 percentage points in mAP@0.5 and 3.55 points in recall. Cross-scale
+alignment further increases mAP@0.5 by 2.09 points over the corresponding same-scale channel-
+wise distillation configuration. In zero-shot evaluation on DUT-Anti-UAV, mAP@0.5 increases from
+48.29% to 50.06% without target-domain fine-tuning. This domain was included because its chal-
+lenging small targets make low-latency, computationally efficient detection particularly relevant. On
+Raspberry Pi 5 using NCNN-FP16 at 640×640 resolution, the 2.58-million-parameter student achieves
+50.32% mAP@0.5 at 82.32 ms mean wall-clock latency, or 12.15 frames per second, while retaining
+essentially the same runtime and memory requirements as the matched baseline. The results support
+cross-scale distillation for improving tiny-target detection without increasing inference-time model
+complexity.
+Keywords: Tiny object detection, Knowledge distillation, Cross-scale feature distillation, Lightweight
+object detection, Edge computing, Real-time image processing
+1 Introduction
+Tiny object detection is difficult because targets
+spanning only a few pixels provide limited appear-
+ance information and weak localization evidence
+[1]. In long-range visual detection of small objects,
+problems such as imaging distance, scale variation,
+motion blur, low contrast, and background clut-
+ter further weaken these cues. Long-range visual
+detection of unmanned aerial vehicles (UAVs) is
+1
+arXiv:2609.30395v1  [cs.CV]  24 Sep 2026
+
+
+a representative instance of this problem because
+targets frequently occupy tiny image regions while
+practical detectors operate under latency, mem-
+ory, and computational constraints on embedded
+hardware [2, 3]. Accordingly, this study evaluates
+the proposed approach on UAV imagery, where
+preserving fine spatial evidence under real-time
+edge constraints is relevant.
+Existing approaches improve tiny-target repre-
+sentation through multi-scale processing, higher-
+capacity backbones, and temporal compensa-
+tion. Representative Drone-vs-Bird methods use
+multi-scale inference, wide residual networks, or
+tracking-assisted recovery of missed detections [4–
+6]. These strategies can strengthen weak-target
+representation, but their additional computa-
+tion and memory demand can increase inference
+latency on low-power platforms [7]. Lightweight
+detectors reduce inference complexity, yet the
+accompanying loss of feature resolution and rep-
+resentational capacity can discard shallow high-
+resolution cues needed for tiny-target localiza-
+tion. This accuracy–efficiency tension motivates
+training-time mechanisms that enrich a compact
+detector without enlarging its network.
+Knowledge distillation (KD) transfers infor-
+mation from a high-capacity teacher to a com-
+pact student during training [8]. Feature-level
+KD is particularly relevant to detection because
+intermediate maps retain spatial structure that
+final predictions do not preserve. Channel-wise
+knowledge distillation (CWD) matches channel-
+wise spatial distributions, but conventional scale-
+matched alignment cannot directly exploit a high-
+resolution teacher feature level when the student
+has no corresponding pyramid level [9, 10]. For
+tiny objects, this mismatch restricts the transfer
+of localization-sensitive spatial detail, motivating
+cross-scale feature distillation.
+This
+work
+presents
+Cross-Scale
+Channel-
+wise Knowledge Distillation (CSCWD) using a
+YOLO11m-P2 teacher with a high-resolution P2
+detection branch and a standard YOLO11n stu-
+dent [11]. CSCWD transfers supervision from
+teacher P2 to student P3 while retaining matched-
+scale distillation at P4 and P5. Teacher and
+auxiliary distillation components are removed
+after training, leaving the student inference graph
+unchanged. The resulting student is evaluated
+5
+6
+7
+8
+9
+10
+11
+12
+13
+Inference Speed on Raspberry Pi 5 (FPS)
+44
+45
+46
+47
+48
+49
+50
+51
+mAP@0.5 (%)
+Δ mAP@0.5 = +2.51
+YOLOv8n
+YOLOv10n
+YOLO11s
+CA-YOLO11n
+YOLO11n-CSCWD
+Fig. 1: Deployed accuracy and inference speed
+of lightweight detectors on Raspberry Pi 5 using
+NCNN-FP16 at 640×640 under the unified seven-
+sequence validation protocol
+against CA-YOLO11n [12] and lightweight detec-
+tors on Raspberry Pi 5; Fig. 1 summarizes
+deployed accuracy and inference speed.
+The main contributions are summarized as
+follows:
+• A cross-scale CWD formulation transfers high-
+resolution teacher knowledge from P2 to student
+P3 while retaining deeper same-scale distilla-
+tion, targeting the loss of fine spatial informa-
+tion in lightweight tiny-object detection.
+• A deployment-preserving teacher–student for-
+mulation restricts high-resolution supervision to
+training, allowing the distilled model to retain
+the original YOLO11n inference graph and com-
+putational footprint.
+• Controlled ablations, Drone-vs-Bird evaluation,
+zero-shot DUT-Anti-UAV testing, and physical
+Raspberry Pi 5 deployment quantify detection
+gains, zero-shot cross-dataset performance, and
+embedded inference efficiency [13, 14].
+2 Related Work
+Prior work relevant to lightweight tiny-object
+detection has sought to strengthen weak-target
+representation
+through
+multi-scale
+inference,
+increased feature-extraction capacity, and tempo-
+ral compensation. On Drone-vs-Bird, Laroca et
+al. combine multi-scale processing with data aug-
+mentation and temporal post-processing, Wong
+et
+al.
+employ
+a
+WideResNet-based
+detector,
+and Sawada et al. recover missed detections
+2
+
+
+using tracking-assisted temporal information [4–
+6]. These approaches improve detection perfor-
+mance through different mechanisms but add
+computation or pipeline complexity, limiting their
+suitability when deployment complexity must
+remain low. Context-aware augmentation offers a
+training-only alternative that improves a nano-
+scale detector without modifying its inference
+graph [12]; this augmentation strategy, however,
+does not directly provide teacher-derived feature
+supervision.
+Building
+on
+the
+original
+KD
+formulation
+[15], feature-level methods include intermedi-
+ate representation regression, attention trans-
+fer, masked generative distillation, and focal-
+and-global knowledge distillation [16–19]. These
+methods differ in the form of supervision, but
+they
+share
+the
+goal
+of
+improving
+the
+stu-
+dent through training-time representation transfer
+without adding inference modules. CWD rep-
+resents feature knowledge through channel-wise
+spatial probability distributions, making channel-
+specific spatial structure explicit during transfer
+[9]. Many feature-level formulations still rely on
+matching selected teacher and student represen-
+tations at compatible or corresponding scales.
+ScaleKD specifically addresses scale-aware distil-
+lation for small-object detection through a scale-
+decoupled feature distillation module and a cross-
+scale assistant [10]. A narrower architectural gap
+arises when the teacher contains a high-resolution
+P2 level while a lightweight student begins at
+P3, leaving no direct same-scale counterpart for
+teacher P2. Transferring this teacher-only high-
+resolution representation while preserving the
+student’s original inference graph motivates the
+proposed cross-scale P2-to-P3 transfer.
+3 Proposed Method
+The
+proposed
+CSCWD
+framework
+transfers
+teacher-only high-resolution representations to a
+lightweight student during training while preserv-
+ing the student’s original inference architecture.
+3.1 Framework Overview
+CSCWD uses an asymmetric teacher–student con-
+figuration to transfer high-resolution supervision
+that is unavailable in the student’s native feature
+pyramid. During training, the frozen YOLO11m-
+P2 teacher provides cross-scale P2-to-P3 supervi-
+sion together with matched-scale distillation at P4
+and P5, while the YOLO11n student remains the
+only network retained for deployment. Figure 2
+summarizes the complete training and inference
+flow.
+3.2 Asymmetric Teacher–Student
+Design
+The teacher and student are deliberately asym-
+metric in model capacity and feature resolution.
+The teacher extends YOLO11m [11] with a high-
+resolution P2 detection branch, producing a 160×
+160 feature map for a 640×640 input. The teacher
+is trained in two stages: VisDrone [21] adaptation
+followed by target-domain fine-tuning. The corre-
+sponding optimization and augmentation settings
+are summarized in Table 1.
+The student retains the standard YOLO11n
+architecture without a P2 branch and therefore
+begins its detection pyramid at P3. It is initialized
+from COCO-pretrained weights and adapted on
+VisDrone before CSCWD training. This asymme-
+try preserves the lightweight student graph while
+exposing it during training to spatial information
+available only at the teacher’s higher-resolution P2
+level.
+3.3 Cross-Scale Feature Alignment
+CSCWD transfers supervision from teacher P2
+to student P3, while P4 and P5 are distilled at
+matched scales. For loss computation, the student
+representations are aligned to the corresponding
+Table 1: Teacher training settings for VisDrone
+adaptation and target fine-tuning.
+Setting
+Stage 1: VisDrone
+adaptation
+Stage 2: Target
+fine-tuning
+Initialization
+COCO (yolo11m.pt)
+Stage-1 best
+Epochs / batch
+30 / 4
+100 / 12
+Optimizer
+Default
+SGD
+Mosaic (p/close)
+1.0 / last 5
+0.75 / last 10
+MixUp
+0.0
+0.15
+Scale / translate
+0.5 / 0.1
+0.5 / 0.0
+Flip (V/H)
+0.5 / 0.5
+0.0 / 0.0
+HSV (H/S/V)
+0.015 / 0.7 / 0.4
+0.0 / 0.0 / 0.4
+3
+
+
+Fig. 2: Overview of CSCWD training and inference. The frozen YOLO11m-P2 teacher provides cross-
+scale P2-to-P3 supervision and matched-scale distillation at P4 and P5 during training. Inference retains
+only the distilled YOLO11n-CSCWD model. Raspberry Pi image: CC BY 2.0 [20]
+teacher feature spaces:
+S:P3 →T:P2,
+S:P4 →T:P4,
+S:P5 →T:P5
+(1)
+The
+first
+pair
+defines
+the
+cross-scale
+trans-
+fer, whereas the remaining two pairs are scale
+matched. For loss computation, each student rep-
+resentation is projected to the channel dimension
+of its paired teacher feature. The S:P3 feature is
+additionally upsampled to the spatial resolution of
+T:P2; P4 and P5 require channel projection only.
+3.4 Cross-Scale Channel-wise
+Knowledge Distillation
+To transfer the aligned feature representations,
+the framework extends Channel-wise Distillation
+(CWD) [9] to support cross-scale matching. Unlike
+feature-regression approaches such as FitNets [16],
+CWD converts each feature channel into a spa-
+tial probability distribution and minimizes the
+Kullback–Leibler (KL) divergence between the
+teacher and student distributions.
+Let T and S denote the frozen teacher and
+trainable student networks, respectively. For each
+feature pair defined by these alignment map-
+pings P3 →P2, P4 →P4, and P5 →P5, the
+intermediate feature representations are denoted
+as:
+Fk
+T ∈RN×Ck
+T×Hk
+T×W k
+T
+(2)
+and
+Fk
+S ∈RN×Ck
+S ×Hk
+S ×W k
+S ,
+(3)
+where N represents the batch size, and C,
+H, and W denote the channel, height, and width
+dimensions of the feature tensors. For the cross-
+scale pair (P3 →P2), Fk
+T specifically represents
+the teacher’s high-resolution P2 feature.
+Channel alignment and spatial
+matching
+Since teacher and student features have different
+channel dimensions, the student representation
+4
+
+
+is first projected into the teacher feature space
+using a learnable 1 × 1 convolution. The channel
+transformation function is defined as:
+gk
+map : RN×Ck
+S ×Hk
+S ×W k
+S −→RN×Ck
+T×Hk
+S ×W k
+S . (4)
+The
+channel-aligned
+student
+feature
+is
+obtained by:
+˜Fk
+S = gk
+map
+ Fk
+S
+
+.
+(5)
+If the spatial resolution does not match the
+corresponding teacher feature, bilinear interpola-
+tion is applied:
+Upsample : RN×Ck
+T×Hk
+S ×W k
+S −→RN×Ck
+T×Hk
+T×W k
+T.
+(6)
+Therefore, the final aligned student feature is
+obtained as:
+ˆFk
+S =
+(
+Upsample
+
+˜Fk
+S; Hk
+T, W k
+T
+
+,
+if (Hk
+S, W k
+S )̸ = (Hk
+T, W k
+T),
+˜Fk
+S,
+otherwise.
+(7)
+After alignment, teacher and student features
+share identical dimensions and can be compared
+through the distillation objective.
+Channel-wise probability distributions
+Following the CWD formulation, each feature
+channel is normalized independently over spatial
+positions using a temperature-scaled softmax. Let
+xk
+c,i denote the activation value of channel c at spa-
+tial position i. The spatial probability distribution
+is defined as:
+ϕ
+ xk
+c,i
+
+=
+exp
+ xk
+c,i/T
+
+PHkW k
+j=1
+exp
+ xk
+c,j/T
+,
+(8)
+where T denotes the temperature parameter.
+This normalization converts each channel activa-
+tion map into a spatial probability distribution,
+allowing the student to learn the teacher’s spatial
+attention patterns.
+Channel-wise distillation loss
+The distillation loss is calculated by minimiz-
+ing the KL divergence between the teacher and
+aligned student channel distributions:
+Lk
+CWD = T 2
+Ck
+Ck
+X
+c=1
+HkW k
+X
+i=1
+ϕ
+ Fk
+T,c,i
+
+log
+
+ϕ
+ Fk
+T,c,i
+
+ϕ
+
+ˆFk
+S,c,i
+
+
+
+(9)
+where Ck represents the number of chan-
+nels at the corresponding aligned feature level.
+The complete distillation objective is obtained by
+aggregating all feature mappings:
+LCWD = αCWD
+X
+k∈{P3,P4,P5}
+Lk
+CWD,
+(10)
+where αCWD controls the contribution of the
+distillation term.
+Total training objective
+The final optimization objective combines the
+original detection loss and the proposed distilla-
+tion loss:
+LTOTAL = LYOLO + LCWD.
+(11)
+All teacher, projection, and spatial-alignment
+components are discarded after training. Deploy-
+ment therefore retains only the distilled YOLO11n
+student
+(YOLO11n-CSCWD),
+preserving
+the
+original inference graph and computational foot-
+print.
+4 Experiments and Results
+Experiments evaluate CSCWD under a unified
+Drone-vs-Bird protocol, zero-shot cross-dataset
+testing, controlled ablations, and physical deploy-
+ment on Raspberry Pi 5.
+4.1 Experimental Setup and
+Evaluation Protocol
+Datasets and evaluation. Drone-vs-Bird [2, 13]
+is the primary benchmark. Frames are sampled
+at 2 FPS, and the seven-sequence validation pro-
+tocol of Laroca et al. [4] contains 12,381 labeled
+frames. The seven sequences form the validation
+split; the reported metrics are computed sepa-
+rately for each sequence and averaged with equal
+weight, while the remaining 70 of 77 sequences are
+5
+
+
+used for target-domain training. Zero-shot eval-
+uation uses the 2,200-image DUT-Anti-UAV test
+split [14], without target-domain fine-tuning.
+Training
+configuration.
+CA-YOLO11n
+denotes the matched baseline trained with the
+context-aware augmentation strategy of Zamani
+et al. [12]. Before distillation, the student is
+initialized
+from
+COCO-pretrained
+YOLO11n
+weights and adapted to VisDrone [21] for 50
+epochs.
+This
+aerial-domain
+adaptation
+uses
+Mosaic with probability 1.0, vertical and hori-
+zontal flips with probability 0.5, and HSV color
+augmentation. CSCWD training then proceeds
+for 100 epochs on a single NVIDIA RTX 5070 Ti
+GPU with 16 GB VRAM using SGD (batch size
+32, momentum 0.937, weight decay 5 × 10−4),
+unless a specific ablation variant is stated oth-
+erwise. The final distillation configuration uses
+T = 4 and αCWD = 150.
+Metrics and deployment protocol. Detec-
+tion performance is reported using Precision,
+Recall, mAP@0.5, and mAP@0.5:0.95. Desktop
+PyTorch and deployed NCNN-FP16 accuracies
+are reported separately. For intermediate-feature
+analysis, a normalized Target Concentration Ratio
+(nTCR) is defined as a diagnostic of spatial selec-
+tivity. Here, zc(u) denotes the activation of chan-
+nel c at spatial position u, C is the channel count,
+H and W are feature-map dimensions, v spans all
+spatial positions, ΩGT denotes the ground-truth
+region, and q(u) is the channel-averaged spatial
+probability.
+nTCR =
+P
+u∈ΩGT q(u)
+|ΩGT|/(HW),
+q(u) = 1
+C
+C
+X
+c=1
+exp(zc(u)/T )
+P
+v exp(zc(v)/T )
+(12)
+Values above 1 indicate target-region enrich-
+ment relative to a spatially uniform allocation.
+The matched comparison uses CA-YOLO11n and
+YOLO11n-CSCWD at P3 over the 11,128 valida-
+tion frames containing at least one ground-truth
+target; teacher P2 is descriptive only because of
+its different spatial resolution.
+Raspberry Pi 5 measurements use the 8 GB
+model, a four-core 2.4 GHz ARM CPU, Debian 13,
+NCNN-FP16, batch size 1, and the performance
+governor. CA-YOLO11n and YOLO11n-CSCWD
+use a 10-image warm-up and three full valida-
+tion passes at 640 and 960; 1280 is accuracy-only.
+Figure 1 reference-detector FPS values use one
+full 640 pass on the same hardware and backend.
+Mean wall-clock latency, 95th-percentile (P95)
+latency, FPS, and peak resident set size (RSS) are
+reported.
+4.2 Benchmark Comparison on
+Drone-vs-Bird
+Controlled
+comparisons
+examine
+whether
+the
+CSCWD gain is retained against representa-
+tive
+lightweight
+YOLO
+detectors
+under
+the
+same
+Drone-vs-Bird
+training
+and
+evaluation
+setting. YOLO11n-CSCWD is compared with
+YOLOv8n, YOLOv10n, YOLO11s, the matched
+CA-YOLO11n baseline [12], and the YOLO11m-
+P2 teacher. The controlled detectors use family-
+specific VisDrone-adapted initialization and oth-
+erwise follow the same Drone-vs-Bird training con-
+figuration. Table 2 summarizes these controlled
+results together with contextual values reported in
+the literature.
+Under
+the
+unified
+seven-sequence
+valida-
+tion protocol, YOLO11n-CSCWD improves CA-
+YOLO11n by 2.92 percentage points in mAP@0.5
+and achieves 4.00 points higher mAP@0.5 than
+the
+larger
+YOLO11s
+model,
+while
+retaining
+the 2.58 M-parameter, 6.4-GFLOP YOLO11n
+inference graph. YOLO11m-P2 reaches 56.75%
+mAP@0.5 but requires 20.82 M parameters and
+134.5 GFLOPs; this higher-capacity teacher is
+used only during training. Literature-reported val-
+ues are treated as contextual references rather
+than direct rankings because their data splits and
+inference procedures differ.
+4.3 Sequence-Level and
+Cross-Dataset Analysis
+Sequence-level
+results
+show
+that
+YOLO11n-
+CSCWD outperforms CA-YOLO11n on six of
+the
+seven
+sequences,
+with
+the
+largest
+gains
+on Swarm (+10.34 points) and Hillside (+9.23
+points). GoPro 002 is the only sequence show-
+ing a decrease, from 28.86% to 23.48% mAP@0.5,
+indicating scenario-dependent behavior (Table 3).
+Target scale alone does not explain sequence
+difficulty. Inspire contains comparatively larger
+resized targets but remains difficult for the con-
+trolled detectors, whereas GoPro 002 combines
+extremely small targets with the clearest CSCWD
+failure case. The reduced qualitative comparison
+6
+
+
+Table 2: Comparison on Drone-vs-Bird. The first three rows report literature values obtained under
+different data splits or inference procedures; the remaining models are evaluated under the unified seven-
+sequence validation protocol.
+Method
+Architecture
+Split
+type
+Params
+(M)
+GFLOPs
+mAP
+@0.5
+mAP
+@0.5:0.95
+Wong et al. [5]
+WideResNet-based
+Frame-
+based
+100.70
+260.0
+75.70b
+–
+Sawada et al. [6]
+Faster R-CNN + RFLA
+Video-
+based
+23.50
+130.0
+64.18a
+–
+Laroca et al. [4]
+YOLO11m (whole image)
+Video-
+based
+20.10
+68.0
+55.23c
+–
+YOLOv8n [22]
+YOLOv8n
+Video-
+based
+3.20
+8.7
+45.74
+15.90
+YOLOv10n [23]
+YOLOv10n
+Video-
+based
+2.30
+6.7
+44.49
+15.42
+YOLO11s [11]
+YOLO11s
+Video-
+based
+9.40
+21.6
+46.17
+16.37
+CA-YOLO11n [12]
+YOLO11n
+Video-
+based
+2.58
+6.4
+47.25
+16.92
+YOLO11n-CSCWD
+YOLO11n
+Video-
+based
+2.58
+6.4
+50.17
+17.30
+YOLO11m-P2
+YOLO11m + P2 branch
+Video-
+based
+20.82
+134.5
+56.75
+21.26
+aDifferent seven-video split in the original study.
+bIntra-video frame-based random split.
+cWhole-image-only
+result; the complete multi-scale and temporal pipeline reports 73.90%.
+in Fig. 3 therefore illustrates successful detections
+under two challenging visual conditions.
+Zero-shot evaluation on DUT-Anti-UAV is
+reported in Table 4. The Drone-vs-Bird-trained
+checkpoints are applied directly to the DUT
+test
+split
+without
+target-domain
+fine-tuning.
+YOLO11n-CSCWD improves CA-YOLO11n by
+3.98 points in precision, 1.61 points in recall, and
+1.77 points in mAP@0.5, whereas mAP@0.5:0.95
+remains essentially unchanged (24.00% versus
+24.04%).
+4.4 Ablation Analysis
+Two controlled ablations isolate the effects of the
+feature-distillation objective and teacher–student
+feature pairing. The first compares alternative
+Table 3: Sequence-level mAP@0.5 under the uni-
+fied seven-sequence validation protocol.
+Sequence
+CA-
+YOLO11n
+YOLO11n-
+CSCWD
+YOLO11m-
+P2
+Mavic
+91.28
+91.41
+93.07
+Inspire
+31.86
+35.99
+36.56
+Disco
+79.33
+79.48
+84.38
+GOPR5843
+26.80
+28.63
+37.73
+Swarm
+48.98
+59.32
+56.65
+Hillside
+23.61
+32.84
+54.96
+GoPro 002
+28.86
+23.48
+33.87
+feature-transfer objectives, whereas the second
+separates teacher design from cross-scale align-
+ment. Both ablations retain the same student
+initialization and data pipeline unless explicitly
+stated otherwise.
+4.4.1 Distillation Objective
+CWD [9] is compared with Masked Generative
+Distillation (MGD) [18] and a hybrid objective
+combining LYOLO, LCWD, and LMGD.
+Among
+the
+evaluated
+objectives,
+MGD
+achieves the highest mAP@0.5 (50.53%) and
+mAP@0.5:0.95
+(18.00%),
+whereas
+YOLO11n-
+CSCWD provides the highest Recall (59.73%)
+with 50.17% mAP@0.5 (Table 5). The 0.36-point
+mAP@0.5 difference does not support a claim
+of
+universal
+CWD
+superiority;
+the
+principal
+CSCWD contribution is instead the cross-scale
+feature pairing examined next.
+Table 4: Zero-shot DUT-Anti-UAV evaluation
+without target-domain fine-tuning.
+Model
+Precision Recall mAP
+@0.5
+mAP
+@0.5:0.95
+CA-YOLO11n
+70.61
+46.59
+48.29
+24.04
+YOLO11n-CSCWD
+74.59
+48.20 50.06
+24.00
+YOLO11m-P2
+83.33
+56.34
+62.57
+30.43
+7
+
+
+Ground Truth
+YOLO11m-P2
+CA-YOLO11n
+YOLO11n-CSCWD
+Fig. 3: Qualitative Drone-vs-Bird examples comparing ground truth, YOLO11m-P2, CA-YOLO11n, and
+YOLO11n-CSCWD. The selected cases illustrate successful tiny-target detection under challenging visual
+conditions
+Table 5: Ablation of feature-distillation objec-
+tives under the unified seven-sequence validation
+protocol.
+Model
+Precision Recall mAP
+@0.5
+mAP
+@0.5:0.95
+CA-YOLO11n [12]
+61.72
+56.18
+47.25
+16.92
+YOLO11n-MGD [18]
+63.96
+58.71
+50.53
+18.00
+YOLO11n-Hybrid
+63.68
+57.16
+49.70
+17.36
+YOLO11n-CSCWD
+63.42
+59.73
+50.17
+17.30
+4.4.2 Teacher Design and Cross-Scale
+Alignment
+The second ablation distinguishes the contribution
+of the P2-enhanced teacher from that of cross-scale
+teacher–student pairing.
+Adding P2 increases teacher mAP@0.5 from
+52.84% to 56.75%, whereas CWD using the
+teacher without P2 yields only 44.08% for the stu-
+dent. With the P2-enhanced teacher, same-scale
+CWD reaches 48.08%, while YOLO11n-CSCWD
+reaches 50.17% and increases Recall from 55.36%
+to 59.73%, despite a modest reduction in Pre-
+cision (Table 6). The 2.09-point mAP@0.5 gain
+over same-scale CWD indicates that the student
+improvement is not explained by teacher capacity
+alone and also depends on the proposed cross-scale
+pairing.
+4.5 Embedded Deployment on
+Raspberry Pi 5
+Raspberry Pi 5 results in Table 7 report NCNN-
+FP16 accuracy and application-level runtime at
+640 and 960, while 1280 remains an accuracy-only
+setting.
+At
+640 × 640,
+YOLO11n-CSCWD
+raises
+deployed mAP@0.5 from 47.81% to 50.32% while
+both models remain at approximately 82.3 ms
+mean wall-clock latency and 12.15 FPS. At 960 ×
+960, the mAP@0.5 advantage widens to 4.86
+points (52.85% versus 47.99%) while latency and
+throughput again remain essentially unchanged.
+Peak RSS is also comparable at both resolutions,
+consistent with the unchanged student inference
+graph.
+Accuracy is non-monotonic with input resolu-
+tion. YOLO11n-CSCWD increases from 50.32%
+mAP@0.5 at 640 to 52.85% at 960, but decreases
+to
+48.53%
+at
+1280;
+CA-YOLO11n
+shows
+a
+stronger decline. Desktop PyTorch evaluation
+shows the same qualitative trend at 1280 (48.17%
+for
+YOLO11n-CSCWD
+and
+39.38%
+for
+CA-
+YOLO11n),
+making
+a
+purely
+NCNN-export-
+specific explanation unlikely. Across the mea-
+sured 640 and 960 operating points, YOLO11n-
+CSCWD therefore improves deployed detection
+accuracy while retaining essentially the same
+latency, throughput, and memory footprint as
+CA-YOLO11n.
+5 Discussion
+The results indicate that CSCWD benefits pri-
+marily from cross-scale access to the teacher’s
+high-resolution representation rather than from
+teacher capacity or detector scaling alone.
+8
+
+
+Table 6: Effect of teacher design and feature pairing under the unified seven-sequence validation protocol.
+Configuration
+Precision
+Recall
+mAP@0.5
+mAP@0.5:0.95
+YOLO11m
+67.66
+60.52
+52.84
+19.17
+YOLO11m-P2
+69.43
+62.73
+56.75
+21.26
+YOLO11n-CWD (YOLO11m teacher)
+56.21
+52.45
+44.08
+15.58
+YOLO11n-CWD (YOLO11m-P2, same-scale)
+64.84
+55.36
+48.08
+16.64
+YOLO11n-CSCWD
+63.42
+59.73
+50.17
+17.30
+Table 7: Raspberry Pi 5 deployment results for NCNN-FP16 artifacts. Accuracy follows the unified
+seven-sequence validation protocol. Runtime statistics at 640 and 960 are averaged over three complete
+validation runs; 1280 reports accuracy only.
+Model
+Input
+size
+mAP
+@0.5
+mAP
+@0.5:0.95
+Mean wall
+latency (ms)
+P95
+latency (ms)
+FPS
+Peak RSS
+(MB)
+CA-YOLO11n
+640
+47.81
+16.92
+82.29
+109.48
+12.15
+561.23
+960
+47.99
+17.54
+183.64
+213.21
+5.45
+628.02
+1280
+39.17
+13.61
+–
+–
+–
+–
+YOLO11n-CSCWD
+640
+50.32
+17.36
+82.32
+109.97
+12.15
+559.81
+960
+52.85
+19.38
+183.44
+212.05
+5.45
+624.31
+1280
+48.53
+17.76
+–
+–
+–
+–
+5.1 Cross-Scale Transfer and
+Feature Selectivity
+The ablation evidence shows that a stronger
+teacher is not sufficient for effective student trans-
+fer. Although the P2 branch improves the teacher,
+same-scale CWD with YOLO11m-P2 reaches
+48.08% mAP@0.5 for the student, whereas the
+proposed teacher-P2 to student-P3 pairing reaches
+50.17%. The resulting 2.09-point gain, together
+with the Recall increase from 55.36% to 59.73%,
+supports the importance of the spatial source
+and pairing of the transferred representation.
+Model scaling alone does not explain this behav-
+ior: the larger YOLO11s reference remains 4.00
+points below YOLO11n-CSCWD in mAP@0.5.
+The loss ablation provides an important qual-
+ification. MGD gives slightly higher mAP@0.5
+and mAP@0.5:0.95 than CSCWD (50.53% ver-
+sus 50.17% and 18.00% versus 17.30%), while
+YOLO11n-CSCWD provides the highest Recall.
+The contribution is therefore attributed to cross-
+scale feature pairing rather than to universal
+superiority of CWD. This distinction is particu-
+larly relevant to tiny-object detection, where the
+location of high-resolution supervision can matter
+as much as the choice of transfer loss.
+The nTCR analysis provides complementary
+evidence at the feature level. Across the 11,128
+paired frames, YOLO11n-CSCWD has higher
+nTCR than CA-YOLO11n on 62.7% of frames; a
+paired Wilcoxon signed-rank test gives p < 0.001.
+The effect is modest and sequence dependent,
+so nTCR is interpreted only as a diagnostic of
+intermediate spatial selectivity. This distinction is
+important because GoPro 002 shows higher nTCR
+for YOLO11n-CSCWD despite lower sequence-
+level mAP@0.5. Stronger target-region concen-
+tration is therefore not sufficient for improved
+final detection, where localization quality, feature
+resolution, detection-head behavior, and scene
+ambiguity also contribute. Figure 4 illustrates the
+same pattern qualitatively: YOLO11n-CSCWD
+produces a more target-focused P3 response than
+CA-YOLO11n in the selected Hillside example,
+while the teacher P2 response is shown only for
+higher-resolution comparison.
+5.2 Resolution and
+Edge-Deployment Trade-offs
+The Raspberry Pi 5 results show that input reso-
+lution acts as an empirical deployment operating
+point rather than a monotonic accuracy con-
+trol. For YOLO11n-CSCWD, 640 × 640 provides
+the higher-throughput setting (50.32% mAP@0.5
+at 12.15 FPS), whereas 960 × 960 provides the
+highest measured deployed accuracy (52.85% at
+5.45 FPS). Accuracy then decreases to 48.53%
+at 1280 × 1280. CA-YOLO11n exhibits the same
+9
+
+
+Ground Truth
+YOLO11m-P2
+CA-YOLO11n
+YOLO11n-
+CSCWD
+Fig. 4: Target-centered feature responses on a
+representative Hillside frame. YOLO11n-CSCWD
+shows a more concentrated P3 response than
+CA-YOLO11n; YOLO11m-P2 provides a higher-
+resolution comparison
+qualitative high-resolution degradation, and desk-
+top PyTorch reproduces the trend, making a
+purely NCNN-specific export artifact unlikely to
+be the sole cause. Because both detectors were
+trained at 640, train–test scale mismatch may
+contribute, although the experiment does not iso-
+late this mechanism. At a fixed resolution, the
+two lightweight models retain essentially identi-
+cal latency, throughput, and memory usage, con-
+sistent with the unchanged YOLO11n inference
+graph after distillation. The resulting trade-off
+favors 640 when throughput is prioritized and
+960 when the highest measured accuracy is more
+important.
+The sustained-load comparison provides a sec-
+ondary hardware perspective. YOLO11n-CSCWD
+sustains 11.85 FPS with a final-120-s mean CPU
+temperature of 72.49◦C, whereas YOLO11m-P2
+reaches 0.94 FPS and 78.13◦C; no throttling is
+observed in either run (Fig. 5). This difference
+reflects deployed model scale and computational
+demand rather than a direct thermal effect of the
+distillation loss. Because one controlled 10-min
+run is used per model, the result is descriptive and
+0
+100
+200
+300
+400
+500
+600
+Elapsed time (s)
+60
+65
+70
+75
+CPU temperature (°C)
+YOLO11n-CSCWD
+YOLO11m-P2 Teacher
+Fig. 5: Raspberry Pi 5 CPU temperature dur-
+ing 10 min of sustained NCNN-FP16 inference at
+640×640. YOLO11n-CSCWD remains cooler than
+YOLO11m-P2, with no observed throttling
+should not be interpreted as a statistical estimate
+of long-term thermal reliability.
+5.3 Limitations and Future
+Directions
+Zero-shot DUT-Anti-UAV evaluation retains an
+mAP@0.5
+advantage
+for
+YOLO11n-CSCWD,
+while
+mAP@0.5:0.95
+remains
+essentially
+unchanged. The benefit under domain shift is
+therefore stronger for detection confidence and
+sensitivity than for stricter localization quality,
+while a substantial gap to the higher-capacity
+teacher remains. This result provides cross-dataset
+evidence for the proposed approach but does
+not establish broad generalization across unseen
+tiny-object settings. Evaluation remains concen-
+trated on aerial imagery, with UAVs serving as
+representative tiny targets. Resolution sensitivity
+is measured with models trained at 640 rather
+than
+with
+resolution-aware
+retraining.
+nTCR
+is correlational and does not establish a causal
+link between feature concentration and detection
+accuracy, while the thermal comparison is based
+on one sustained-load run per model. Future
+work should examine resolution-aware training,
+broader tiny-object benchmarks, hardware-aware
+compression, and lightweight temporal modeling
+for transient misses.
+6 Conclusion
+This work introduced Cross-Scale Channel-wise
+Knowledge Distillation (CSCWD) for lightweight
+tiny-object detection under resource-constrained
+10
+
+
+deployment. CSCWD transfers the teacher’s high-
+resolution P2 representation to student P3 during
+training while preserving the deployed YOLO11n
+inference graph. Using aerial UAV imagery as
+a representative tiny-object setting, YOLO11n-
+CSCWD achieves 50.17% mAP@0.5 under the
+unified seven-sequence Drone-vs-Bird validation
+protocol, improving CA-YOLO11n by 2.92 per-
+centage points. Cross-scale P2-to-P3 alignment
+further improves mAP@0.5 by 2.09 points over
+same-scale CWD, supporting the importance of
+teacher–student feature pairing beyond teacher
+capacity alone. Zero-shot DUT-Anti-UAV evalu-
+ation adds 1.77 mAP@0.5 points without target-
+domain fine-tuning. On Raspberry Pi 5, the
+NCNN-FP16 artifact achieves 50.32% mAP@0.5
+at 82.3 ms mean wall-clock latency and 12.15 FPS,
+with runtime essentially unchanged relative to
+CA-YOLO11n. This separation directly preserves
+the
+intended
+accuracy–efficiency
+trade-off
+on
+embedded edge hardware. These findings support
+cross-scale distillation as a practical training-time
+strategy for improving compact tiny-object detec-
+tors without carrying teacher-side complexity into
+deployment.
+Statements and Declarations
+Funding. No funding was received for this study.
+Competing interests. The authors have no rele-
+vant financial or non-financial interests to disclose.
+Author
+contributions. Amir Zamani: Con-
+ceptualization, Methodology, Software, Valida-
+tion, Formal analysis, Investigation, Data cura-
+tion, Visualization, and Writing–original draft.
+Zeinab Ghasemi-Naraghi: Supervision, Methodol-
+ogy, Project administration, and Writing–review
+and editing. Both authors reviewed and approved
+the final manuscript.
+Data availability. The Drone-vs-Bird dataset
+is available from the official challenge organizers
+upon request and subject to its access condi-
+tions. DUT-Anti-UAV and VisDrone are publicly
+available from their official repositories. Derived
+evaluation outputs and deployment benchmark
+logs are available from the corresponding author
+upon reasonable request, subject to the original
+dataset licensing conditions.
+Code availability. The source code and config-
+uration files are not publicly available at the time
+of this preprint release.
+References
+[1] Nikouei,
+M.,
+Baroutian,
+B.,
+Nabavi,
+S.,
+Taraghi, F., Aghaei, A., Sajedi, A., Moghad-
+dam, M.E.: Small object detection: A com-
+prehensive survey on challenges, techniques
+and
+real-world
+applications.
+Intell.
+Syst.
+Appl. 27, 200561 (2025) https://doi.org/10.
+1016/j.iswa.2025.200561
+[2] Coluccia, A., Fascista, A., Sommer, L., Schu-
+mann, A., Dimou, A., Zarpalas, D.: The
+drone-vs-bird detection grand challenge at
+icassp 2023: A review of methods and results.
+IEEE
+Open
+J.
+Signal
+Process.
+5,
+766–
+779
+(2024)
+https://doi.org/10.1109/OJSP.
+2024.3379073
+[3] Zhou, S., Yang, L., Liu, H., Zhou, C., Liu,
+J., Wang, Y., Zhao, S., Wang, K.: Improved
+yolo for long range detection of small drones.
+Sci. Rep. 15, 12280 (2025) https://doi.org/
+10.1038/s41598-025-95580-z
+[4] Laroca, R., Dos Santos, M., Menotti, D.:
+Improving small drone detection through
+multi-scale processing and data augmenta-
+tion. In: Proc. Int. Joint Conf. Neural Netw.
+(IJCNN), pp. 1–8 (2025). https://doi.org/10.
+1109/IJCNN64981.2025.11227421
+[5] Wong, Y.J., Voon, W., Tham, M.-L., Kwan,
+B.-H., Chang, Y.C., Hum, Y.C.: Wrn-yolo:
+An improved yolo for drone detection using
+wide resnet. In: Proc. Int. Joint Conf. Neural
+Netw. (IJCNN), pp. 1–8 (2025). https://doi.
+org/10.1109/IJCNN64981.2025.11229346
+[6] Sawada, A., Ogawa, T., Higa, K.: Tiny
+drone detection from videos with tracking-
+based temporal lost compensation. In: Proc.
+Int. Joint Conf. Neural Netw. (IJCNN),
+pp.
+1–6
+(2025).
+https://doi.org/10.1109/
+IJCNN64981.2025.11228641
+[7] Mittal,
+P.:
+A
+comprehensive
+survey
+of
+deep learning-based lightweight object detec-
+tion models for edge devices. Artif. Intell.
+Rev. 57, 242 (2024) https://doi.org/10.1007/
+s10462-024-10877-1
+[8] Mansourian, A.M., Ahmadi, R., Ghafouri,
+11
+
+
+M., Babaei, A.M., Golezani, E.B., Ghamchi,
+Z.Y., Ramezanian, V., Taherian, A., Dinashi,
+K., Miri, A., Kasaei, S.: A comprehensive sur-
+vey on knowledge distillation. Transactions
+on Machine Learning Research (2025)
+[9] Shu, C., Liu, Y., Gao, J., Yan, Z., Shen,
+C.: Channel-wise knowledge distillation for
+dense prediction. In: Proc. IEEE/CVF Int.
+Conf. Comput. Vis. (ICCV), pp. 5291–5300
+(2021). https://doi.org/10.1109/ICCV48922.
+2021.00526
+[10] Zhu,
+Y.,
+Zhou,
+Q.,
+Liu,
+N.,
+Xu,
+Z.,
+Ou,
+Z.,
+Mou,
+X.,
+Tang,
+J.:
+Scalekd:
+Distilling scale-aware knowledge in small
+object detector. In: Proc. IEEE/CVF Conf.
+Comput. Vis. Pattern Recognit. (CVPR),
+pp. 19723–19733 (2023). https://doi.org/10.
+1109/CVPR52729.2023.01889
+[11] Jocher, G., Qiu, J.: Ultralytics YOLO11.
+Online. Version 11.0.0. Accessed 16 Septem-
+ber
+2026
+(2024).
+https://github.com/
+ultralytics/ultralytics
+[12] Zamani,
+A.,
+Abedini,
+Z.:
+Optimiz-
+ing
+data
+augmentation
+for
+real-time
+small
+uav
+detection:
+A
+lightweight
+context-aware
+approach.
+In:
+34th
+Int.
+Conf.
+Electr.
+Eng.
+(ICEE)
+(2026).
+https://doi.org/10.48550/arXiv.2604.19999 .
+Accepted for presentation
+[13] Coluccia,
+A.,
+Fascista,
+A.,
+Dimou,
+A.,
+Zarpalas, D., Sommer, L., Schumann, A.,
+Mele, E.: The drone-vs-bird detection grand
+challenge at ijcnn 2025. In: Proc. Int. Joint
+Conf. Neural Netw. (IJCNN), pp. 1–8 (2025).
+https://doi.org/10.1109/IJCNN64981.2025.
+11228314
+[14] Zhao, J., Zhang, J., Li, D., Wang, D.:
+Vision-based anti-uav detection and tracking.
+IEEE Trans. Intell. Transp. Syst. 23, 25323–
+25334 (2022) https://doi.org/10.1109/TITS.
+2022.3177627
+[15] Hinton, G., Vinyals, O., Dean, J.: Distilling
+the knowledge in a neural network. In: NIPS
+Deep Learning and Representation Learning
+Workshop (2015)
+[16] Romero, A., Ballas, N., Kahou, S.E., Chas-
+sang, A., Gatta, C., Bengio, Y.: Fitnets:
+Hints for thin deep nets. In: Int. Conf. Learn.
+Represent. (ICLR) (2015)
+[17] Zagoruyko, S., Komodakis, N.: Paying more
+attention to attention: Improving the per-
+formance of convolutional neural networks
+via attention transfer. In: Int. Conf. Learn.
+Represent. (ICLR) (2017)
+[18] Yang, Z., Li, Z., Shao, M., Shi, D., Yuan,
+Z., Yuan, C.: Masked generative distillation.
+In: Proc. Eur. Conf. Comput. Vis. (ECCV),
+pp. 53–69 (2022). https://doi.org/10.1007/
+978-3-031-20083-0 4
+[19] Yang,
+Z.,
+Li,
+Z.,
+Jiang,
+X.,
+Gong,
+Y.,
+Yuan,
+Z.,
+Zhao,
+D.,
+Yuan,
+C.:
+Focal
+and global knowledge distillation for detec-
+tors.
+In:
+Proc.
+IEEE/CVF
+Conf.
+Com-
+put. Vis. Pattern Recognit. (CVPR), pp.
+4633–4642 (2022). https://doi.org/10.1109/
+CVPR52688.2022.00460
+[20] SparkFun Electronics: Raspberry Pi 5 (2023).
+https://commons.wikimedia.org/wiki/File:
+23551-raspberry-pi-5.jpg
+[21] Zhu, P., Wen, L., Du, D., Bian, X., Fan, H.,
+Hu, Q., Ling, H.: Detection and tracking meet
+drones challenge. IEEE Trans. Pattern Anal.
+Mach. Intell. 44, 7380–7399 (2022) https://
+doi.org/10.1109/TPAMI.2021.3119563
+[22] Jocher, G., Chaurasia, A., Qiu, J.: Ultralytics
+YOLOv8. Online. Version 8.0.0. Accessed 16
+September 2026 (2023). https://github.com/
+ultralytics/ultralytics
+[23] Wang, A., Chen, H., Liu, L., Chen, K.,
+Lin,
+Z.,
+Han,
+J.,
+Ding,
+G.:
+YOLOv10:
+Real-time end-to-end object detection. In:
+Adv. Neural Inf. Process. Syst., vol. 37,
+pp. 107984–108011 (2024). https://doi.org/
+10.52202/079017-3429
+12

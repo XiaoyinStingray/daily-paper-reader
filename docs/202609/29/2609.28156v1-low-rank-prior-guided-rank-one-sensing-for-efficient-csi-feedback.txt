@@ -1,0 +1,334 @@
+Title: Low-Rank Prior-Guided Rank-One Sensing for Efficient CSI Feedback
+
+URL Source: https://arxiv.org/pdf/2609.28156v1
+
+Published Time: Thu, 24 Sep 2026 01:16:53 GMT
+
+Number of Pages: 5
+
+Markdown Content:
+LOW-RANK PRIOR-GUIDED RANK-ONE SENSING FOR EFFICIENT CSI FEEDBACK 
+
+Shunpu Tang 1, Qianqian Yang 1, Seung-Woo Ko 2, and Jihong Park 31Zhejiang University, Hangzhou, China, 2Inha University, Incheon, Korea 
+
+> 3
+
+Singapore University of Technology and Design, Singapore 
+
+ABSTRACT 
+
+Downlink channel state information (CSI) feedback is es-sential for frequency-division duplex massive MIMO, yet the feedback overhead grows rapidly with the numbers of antennas and subcarriers. To reduce this overhead, most deep learning approaches compress CSI by treating it as a generic image, leaving its low-rank multipath structure un-exploited. In contrast, model-driven alternatives explicitly embed this structure in iterative recovery, but at the cost of high computational complexity and latency. To overcome these limitations, we propose a low-rank prior-guided (LRP) framework that performs learnable rank-one sensing at the user equipment to compress CSI into low-dimensional code-words, and reconstructs CSI by direct rank-one synthesis at the base station. Both compression and reconstruction are jointly optimized, and fully exploit the low-rank structure of CSI. We further develop DCRNetV2, which preserves LRP as its backbone and uses gated dilated-convolutional resid-ual paths to compensate for finite-rank errors. Experimental results show that LRP outperforms iterative model-based methods with lower complexity, and DCRNetV2 achieves a better accuracy-complexity tradeoff than existing learning-based methods. 
+
+Index Terms — CSI feedback, massive MIMO, low-rank prior, rank-one sensing, model-driven deep learning 
+
+1. INTRODUCTION 
+
+In frequency-division duplex (FDD) massive MIMO, accurate downlink channel state information (CSI) at the base station (BS) is important for beamforming and interference mitiga-tion [1]. However, because channel reciprocity does not hold, the user equipment (UE) must feed back the CSI over a lim-ited uplink channel [2], leading to an extremely high feedback overhead in wideband systems as the numbers of antennas and subcarriers increase. Compressed sensing reduces this overhead by exploit-ing angular–delay sparsity, but their performance can degrade when the assumed sparse representation mismatches practical channels, while iterative recovery introduces non-negligible BS-side computation [3–5]. Learning-based approaches avoid explicit inverse optimization by training end-to-end autoencoders to compress and reconstruct CSI [6–10]. These networks, however, treat CSI primarily as a generic image and learn its physical structure implicitly. In contrast, model-driven designs embed complex signal physical priors into trainable architectures [11–13], nevertheless, they often retain iterative optimization structures through algorithm unfolding. This raises a simple question: can propagation structure directly drive both CSI compression and reconstruction with low complexity? We answer this by exploiting the low-rank multipath structure of wideband channels. In wideband trans-mission, each path is essentially a rank-one outer product of separable delay and angular responses. Because the number of dominant paths is limited, the channel matrix is naturally low-rank [14–17]. Existing works typically treat this low-rank property using matrix completion, tensor decomposition, or iterative recovery. However, rarely has this path-wise rank-one structure been used as a shared prior to jointly guide CSI compression and direct BS reconstruction. Motivated by this observation, we formulate CSI feed-back as structured sensing and synthesis over rank-one com-ponents. Our contributions are threefold. We propose a low-rank prior-guided (LRP) framework that learns paired delay- and angular-domain sensing vectors at the UE and directly synthesizes CSI from rank-one factors at the BS. Building upon LRP, we further propose DCRNetV2, which retains LRP as its main path and introduces a gated dilated-convolutional architecture to capture residual channel struc-ture beyond the dominant low-rank component. We evaluate LRP and DCRNetV2 on COST 2100 channels, showing that LRP outperforms iterative recovery with lower complexity, and that DCRNetV2 achieves a better accuracy-complexity tradeoff than existing learning-based methods. 
+
+2. SYSTEM MODEL 
+
+We consider an FDD massive MIMO-OFDM downlink with an Nt-antenna BS, a single-antenna UE, and Nc subcar-riers. The spatial-frequency CSI is represented by H =[h1, . . . , hNc ]T ∈ CNc×Nt . By applying discrete Fourier transform (DFT) matrices Fc and Ft along with a truncation matrix Sa, the UE converts H into the angular-delay domain and retains the first Na delay bins as Ha = SaFcHF Ht ∈
+
+CNa×Nt . The UE then encodes this into a compressed arXiv:2609.28156v1 [eess.SP] 23 Sep 2026 vector z = Eθe (Ha) ∈ RM , from which the BS recon-structs ˆHa = Dθd (z). The compression ratio is defined as η = M/ (2 NaNt), and the network parameters (θe, θ d)
+
+are trained end-to-end to minimize the mean squared error 
+
+E[∥Ha − ˆHa∥2 
+
+> F
+
+].
+
+3. PROPOSED LRP 3.1. Low-rank multipath prior 
+
+Under the standard far-field geometric channel model with frequency-invariant array responses, the frequency-spatial CSI can be expressed as a superposition of L propagation paths [14–16], 
+
+H =
+
+> L
+
+X
+
+> ℓ=1
+
+αℓq(τℓ)aH (θℓ), (1) where αℓ, τℓ, and θℓ denote the complex gain, delay, and an-gle of the ℓth path, respectively. The frequency response q(τℓ)
+
+and spatial array response a(θℓ) are separable for each path. Applying the DFTs and retaining the first Na delay-domain rows preserves this outer-product structure: 
+
+Ha =
+
+> L
+
+X
+
+> ℓ=1
+
+αℓ(SaFcq(τℓ))( Fta(θℓ)) H . (2) Since each term in (2) is rank one, we have rank( Ha) ≤ L.When only a limited number of propagation modes domi-nate, Ha can therefore be well approximated by R rank-one components, Ha ≈ PRr=1 dr aHr , where R is a model rank controlling the approximation capacity and need not coincide with the physical path count L.
+
+3.2. Rank-one sensing encoder 
+
+Prior matrix-sensing studies have shown that low-rank matri-ces can be recovered from rank-one projection measurements [18,19]. We parameterize the rank-one sensing operators with learnable weights to adaptively match the underlying channel characteristics. Specifically, we use Renc rank-one sensing branches, where the rth branch employs Ar = ur vHr and produces the scalar measurement 
+
+cr = ⟨Ar , Ha⟩F = uHr Havr , r = 1 , . . . , R enc , (3) where ⟨· , ·⟩ F denotes the complex Frobenius inner product, and ur ∈ CNa and vr ∈ CNt are learnable delay- and angular-domain sensing vectors, respectively. Substituting the above low-rank approximation into (3) yields 
+
+cr ≈
+
+> R
+
+X
+
+> k=1
+
+(uHr dk)
+
+| {z }
+
+> delay correlation
+
+(aHk vr )
+
+| {z }
+
+> angular correlation
+
+. (4) This can be viewed as an attention-like similarity response: the learnable vectors (ur , vr ) act as query probes matching the channel’s delay-angular keys. The measurement cr re-flects this query-key similarity, producing a strong response only when a path matches both the delay and angular queries. To obtain the feedback dimension M , we stack the sens-ing outputs into c ∈ CRenc , and concatenate their real and imaginary parts as ¯c ∈ R2Renc . A lightweight learnable pro-jection then produces the feedback codeword 
+
+z = Wenc σ(¯ c) + benc ∈ RM , (5) where Wenc ∈ RM ×2Renc and benc ∈ RM are learnable parameters, and σ(·) denotes an activation function. Conse-quently, the LRP encoder embeds the low-rank delay–angular prior directly into the sensing operation, while the subsequent projection adapts the resulting structured measurements to the required feedback dimension. 
+
+3.3. Low-rank multipath reconstruction 
+
+At the BS, the LRP decoder avoids directly generating all 
+
+NaNt complex CSI coefficients. Instead, it maps z ∈ RM
+
+to Rdec pairs of rank-one factors through a linear projection, 
+
+ξ = Wdec z + bdec ∈ R2Rdec (Na+Nt), (6) The learnable matrix Wdec has 2Rdec (Na + Nt) rows and M
+
+columns, and bdec is a bias vector of length 2Rdec (Na + Nt).The output ξ is partitioned into the real and imaginary parts of ˆdr ∈ CNa and ˆar ∈ CNt , which denote the delay- and angular-domain factors of branch r, respectively. The CSI is then synthesized as ˆHdir  
+
+> a
+
+= PRdec  
+
+> r=1
+
+ˆdr ˆaHr . where the com-plex gains ˆαr are absorbed into the factors. In this way, the branches jointly capture the dominant low-rank CSI structure without requiring a one-to-one path correspondence. 
+
+3.4. End-to-end training 
+
+The structured codec is jointly parameterized by Θ =
+
+{U , V, Wenc , benc , Wdec , bdec }, with U = {ur }Renc  
+
+> r=1
+
+and 
+
+V = {vr }Renc  
+
+> r=1
+
+. While classical matrix sensing relies on random projections and iterative recovery without statisti-cal adaptation, we jointly optimize sensing and synthesis by minimizing the expected reconstruction risk: 
+
+min  
+
+> Θ
+
+EHa∼pdata 
+
+h
+
+∥Ha − ˆHa∥2
+
+> F
+
+i
+
+, (7) via mini-batch stochastic gradient descent. This objective couples sensing with synthesis, ensuring that each measure-ment preserves the channel structures essential for final CSI reconstruction. LRP Encoder                     
+
+> DCR Encoder Fusion Feedback  LRP Decoder DCR Refine +
+> Residual Decoder
+> ++
+> MLP
+> c
+> Input Input
+> DCR Encoder
+> Input 3x1 d=1 1x3 d=1 3x1 d=2 3x1 d=2 3x1 d=2 3x1 d=2 3x3 c+1x1 MLP Output
+> DCR Refine Module
+> Input 3x3 d=2 3x1 d=3 1x3 d=3 3x3 d=1 3x1 d=2 3x1 d=2 1x3 5x1 1x5 3x1 c1x1 Output
+> Residual Decoder Fusion Module
+> Input Linear
+> DCRNet-V2
+> Input CSI Reconstruction
+> codeword 3x1 Asymmetric Convolution 1x3 1x1 Standard Convolution 3x3 3x3 Dilated Convolution 1x3
+> +Add cConcat
+> Linear Linear Linear
+> ×…
+> …
+> .
+> ∑Output
+> .Element-wise Product
+> ∑Sum
+> ×Outer Product
+
+Fig. 1 : Architecture of DCRNetV2. LRP provides the main low-rank path, while DCR modules encode and refine the residual structure. 
+
+4. PROPOSED DCRNETV2 
+
+We then further improve LRP by introducing DCRNetV2, which retains LRP as its main path and adds dilated convolu-tions blocks from [7] with design modifications. The overall architecture is shown in Fig. 1. 
+
+4.1. Residual encoder and fusion 
+
+At the UE, the angular-delay CSI Ha is processed by two parallel branches. The LRP encoder produces zLRP ∈ RM
+
+from global rank-one measurements. In parallel, a DCR block fDCR (·) extracts local residual features zDCR =
+
+γefDCR (Ha). Following [7], the DCR block uses asym-metric and dilated convolutions: 1 × k and k × 1 kernels separately capture angular and delay correlations, while dila-tion expands the receptive field to model spatial dependencies of multipath clusters. The auxiliary and fused codewords can be expressed as 
+
+z = zLRP + zDCR + gfuse ([ zLRP ; zDCR ]) . (8) where γe is a learnable scalar that controls the DCR contri-bution, and [·; ·] denotes concatenation. The two-layer MLP 
+
+gfuse : R2M → RM learns the residual interaction between the branches, while the additive paths preserve their direct in-formation. Initializing γe and the output layer of gfuse near zero makes the initial codeword close to zLRP and allows the residual contribution to grow during training. 
+
+4.2. Hybrid decoder and refinement 
+
+At the BS, the LRP decoder first reconstructs the direct esti-mate ˆHdir 
+
+a . Empirically, increasing Rdec monotonically im-proves performance as it captures weak multipath compo-nents and residual channel energy. However, scaling Rdec 
+
+directly inflates the projection parameter overhead. To en-large the effective rank with minimal cost, a residual decoder 
+
+Table 1 : Performance comparison of LRP with classical and model-based methods on COST 2100. 
+
+η = 1 /4 η = 1 /32 
+
+Method FLOPs Indoor Outdoor FLOPs Indoor Outdoor FISTA 42.99M −10 .46 −6.35 5.37M −1.11 −0.35 
+
+MS4L2O – −5.96 – 5.38M −1.62 –ISTA – −4.27 – 2.75M −0.52 –LRP ( Renc = 128 , Rdec = 4 ) 0.68M −13 .18 −4.83 0.34M −8.58 −2.40 
+
+LRP ( Renc = 512 , Rdec = 4 ) 1.88M −14 .11 −5.96 1.20M −8.61 −2.64 
+
+LRP ( Renc = 512 , Rdec = 8 ) 2.16M −17 .94 −8.33 1.25M −8.62 −2.70 
+
+LRP ( Renc = 512 , Rdec = 16 ) 2.72M −21 .62 −9.04 1.34M −8.67 −2.72 
+
+maps z through Wres ∈ RRed×M and reshapes the output into F ∈ RRe×d, where Re is the number of additional rank-one components, d is the bottleneck dimension, and Fr ∈ Rd
+
+is the r-th row of F . Shared matrices Wd ∈ R2Na×d and 
+
+Wa ∈ R2Nt×d map Fr to the real and imaginary parts of 
+
+ˆder ∈ CNa and ˆaer ∈ CNt , respectively. The direct and resid-ual paths are merged as 
+
+ˆHhyb 
+
+a = ˆHdir 
+
+a + α
+
+ReX
+
+r=1 
+
+gr (z) ˆder (ˆ aer )H , (9) where gr (z) ∈ [0 , 1] denotes a sample-adaptive sigmoid gate for the r-th residual component, and α is a learnable scaling factor. As with the encoder, the residual decoder is initialized near zero to preserve the initial LRP solution. To further improve reconstruction, we add a final DCR module fref (·) to refine the hybrid estimate by predicting a residual correction, resulting in the final output 
+
+ˆHa = ˆHhyb 
+
+a + γref fref ( ˆHhyb 
+
+a ). (10) where γref is a learnable scalar gate. This final refinement step is also widely used in existing CSI feedback networks [6–8] to capture residual structure beyond the low-rank approxima-tion. 
+
+4.3. Configurations 
+
+To balance accuracy and complexity, we configure four DCRNetV2 variants via four key hyperparameters: sens-ing branches Renc , direct synthesis branches Rdec , resid-ual components Re, and bottleneck width d, denoted as 
+
+(Renc , R dec , R e, d ). Specifically, Mini uses (128 , 10 , 8, 8) 
+
+and Unified scales to (512 , 32 , 16 , 16) . For simpler architec-tures, Small (256 , 16 , 0, 0) and Base (512 , 16 , 0, 0) omit the factored residual decoder ( Re = 0 , d = 0 ). 
+
+5. EXPERIMENTS 5.1. Experimental settings 
+
+Following the standard COST 2100 settings [20, 22, 23], we evaluate indoor (5.3 GHz) and outdoor (0.3 GHz) scenarios Table 2 : Lightweight DL comparison on COST 2100 (NMSE in dB). Best and second-best results are bold and underlined. 
+
+Method η = 1 /4 η = 1 /8 η = 1 /16 η = 1 /32 
+
+FLOPs Indoor Outdoor FLOPs Indoor Outdoor FLOPs Indoor Outdoor FLOPs Indoor Outdoor CsiNet [20] 5.41M −17 .36 −8.75 4.37M −12 .70 −7.65 3.84M −8.65 −4.51 3.58M −6.24 −2.81 
+
+CRNet [6] 5.12M −26 .99 −12 .70 4.07M −16 .01 −8.04 3.55M −11 .35 −5.44 3.28M −8.93 −3.51 
+
+CLNet [9] 4.05M −29 .16 −12 .88 3.01M −15 .60 −8.29 2.48M −11 .15 −5.56 2.22M −9.25 −3.75 
+
+ACRNet-1× [21] 4.64M −27 .16 −10 .71 3.60M −15 .34 −7.85 3.07M −10 .36 −5.19 2.81M −8.60 −3.31 
+
+DCRNet-1× [7] 4.01M −28 .04 −12 .58 2.96M −16 .26 −7.95 2.44M −11 .74 −5.60 2.18M −9.05 −3.47 
+
+DCRNetV2-mini 2.83 M −31 .00 −10 .83 1.87 M −19 .23 −7.20 1.39 M −14 .18 −4.83 1.15 M −9.55 −3.14 
+
+DCRNetV2-small 4.00 M −31 .12 −11 .44 2.67 M −20 .51 −7.70 2.05 M −14 .64 −5.17 1.74 M −9.16 −3.31 
+
+DCRNetV2-base 5.23M −32 .75 −11 .89 3.88M −20 .07 −7.83 3.20M −14 .73 −5.51 2.86M −9.35 −3.56 
+
+DCRNetV2-unified 6.59M −32 .84 −12 .99 4.64M −20 .36 −8.65 3.66M −14 .62 −5.85 3.17M −9.69 −3.79 0 5 10 15 20 25 30 35                                
+
+> FLOPs (M)
+> −34 −32 −30 −28 −26 −24
+> NMSE (dB)
+> CRNet CLNet DS-NLCsiNet CsiNet+ TransNet TCLNet SSE-Net
+> DCRNet ACRNet DCRNetV2
+> (a) ´= 1 =4
+> 0510 15 20 25 30 35
+> FLOPs (M)
+> −15 −14 −13 −12 −11 −10
+> NMSE (dB)
+> CRNet CLNet DS-NLCsiNet CsiNet+ TransNet TCLNet SSE-Net LLMCsiNet-S
+> DCRNet ACRNet DCRNetV2
+> (b) ´= 1 =16 0510 15 20 25 30 35
+> FLOPs (M)
+> −34 −32 −30 −28 −26 −24
+> NMSE (dB)
+> CRNet CLNet DS-NLCsiNet CsiNet+ TransNet TCLNet SSE-Net
+> DCRNet ACRNet DCRNetV2
+> (a) ´= 1 =4
+> 0510 15 20 25 30 35
+> FLOPs (M)
+> −15 −14 −13 −12 −11 −10
+> NMSE (dB)
+> CRNet CLNet DS-NLCsiNet CsiNet+ TransNet TCLNet SSE-Net LLMCsiNet-S
+> DCRNet ACRNet DCRNetV2
+> (b) ´= 1 =16
+
+Fig. 2 : FLOPs vs. indoor NMSE trade-off for representative DL-based CSI feedback methods at (a) η = 1 /4 and (b) η =1/16 .with (Nt, N c, N a) = (32 , 1024 , 32) . Networks are trained for 1500 epochs using Adam with MSE loss, a batch size of 200, and an initial learning rate of 2 × 10 −3. We report the normalized mean squared error (NMSE) on the testset, as well as the number of floating-point operations (FLOPs). Baselines include classical and model-based solvers (ISTA, FISTA [5], and MS4L2O [24]) as well as learning-based mod-els (CsiNet [20], CRNet [6], CLNet [9], and ACRNet [21], DCRNet-1× [7]). 
+
+5.2. Performance comparison 
+
+Table 1 first compares LRP with classical and model-based algorithms. LRP consistently outperforms iterative methods while incurring lower computational complexity, validat-ing the effectiveness of the multipath low-rank prior. Ta-ble 2 further evaluates DCRNetV2 against existing learning-based methods. DCRNetV2-mini achieves the lowest FLOPs across all compression ratios and surpasses the baselines in most cases. Scaled variants (DCRNetV2-small, -base, and -unified) offer further accuracy gains with moderate com-plexity increases, with DCRNetV2-unified achieving the best overall performance at most ratios. Fig. 2 illustrates the accuracy-complexity trade-off among representative DL-based methods. We benchmark DCR-NetV2 against the aforementioned baselines at η = 1/4
+
+and η = 1/16 , while also incorporating high-complexity benchmarks, including DS-NLCsiNet, CsiNet+, TransNet, 
+
+Table 3 : Ablation of architectural components on indoor COST 2100 at η = 1 /4.
+
+Enc. Dec. NMSE FLOPs LRP DCR LRP DCR 
+
+✓ – ✓ – −21 .62 2.72M 
+
+✓ – ✓ ✓ −29 .34 3.84M 
+
+✓ ✓ ✓ – −32 .00 6.45M 
+
+✓ ✓ ✓ ✓ −32 .84 6.59M 
+
+and the LLM-powered LLMCsiNet-S [8, 22, 25]. As shown, DCRNetV2 consistently delivers a superior trade-off between reconstruction accuracy and complexity, confirming the ar-chitectural efficacy of our design. 
+
+5.3. Ablation studies 
+
+Table 3 ablates the two residual paths in DCRNetV2-unified. Incorporating only the decoder- or encoder-side DCR im-proves NMSE from −21 .62 dB to −29 .34 dB and −32 .00 dB, respectively, while combining both achieves −32 .84 dB. This highlights the efficacy of the proposed architecture in captur-ing residual structures and reducing low-rank approximation errors. 
+
+6. CONCLUSION 
+
+In this paper, we have revisited the problem of CSI feed-back as a low-rank matrix sensing and reconstruction prob-lem. We proposed a novel low-rank multipath prior (LRP) framework for CSI feedback. LRP achieves strong perfor-mance with low complexity, and can be further extended to DCRNetV2, which combines LRP with dilated convolutional residual paths. Experiments on COST 2100 verify the effec-tiveness of the proposed methods. 
+
+7. REFERENCES 
+
+[1] Erik G. Larsson, Ove Edfors, Fredrik Tufvesson, et al., “Massive MIMO for next generation wireless systems,” 
+
+IEEE Commun. Mag. , vol. 52, no. 2, pp. 186–195, 2014. [2] David J. Love, Robert W. Heath, Vincent K. N. Lau, et al., “An overview of limited feedback in wireless communication systems,” IEEE J. Sel. Areas Commun. ,vol. 26, no. 8, pp. 1341–1365, 2008. [3] Xiongbin Rao and Vincent K. N. Lau, “Distributed com-pressive CSIT estimation and feedback for FDD multi-user massive MIMO systems,” IEEE Trans. Signal Pro-cess. , vol. 62, no. 12, pp. 3261–3271, 2014. [4] Joel A. Tropp and Anna C. Gilbert, “Signal recov-ery from random measurements via orthogonal match-ing pursuit,” IEEE Trans. Inf. Theory , vol. 53, no. 12, pp. 4655–4666, 2007. [5] Amir Beck and Marc Teboulle, “A fast itera-tive shrinkage-thresholding algorithm for linear inverse problems,” SIAM J. Imaging Sci. , vol. 2, no. 1, pp. 183– 202, 2009. [6] Zhilin Lu, Jintao Wang, and Jian Song, “Multi-resolution CSI feedback with deep learning in massive MIMO system,” in Proc. IEEE Int. Conf. Commun. (ICC) , 2020, pp. 1–6. [7] Shunpu Tang, Junjuan Xia, Lisheng Fan, et al., “Dilated convolution based CSI feedback compression for mas-sive MIMO systems,” IEEE Trans. Veh. Technol. , vol. 71, no. 10, pp. 11216–11221, 2022. [8] Yaodong Cui, Aihuang Guo, and Chunlin Song, “TransNet: Full attention network for CSI feedback in FDD massive MIMO system,” IEEE Wireless Commun. Lett. , vol. 11, no. 5, pp. 903–907, 2022. [9] Sijie Ji and Mo Li, “CLNet: Complex input lightweight neural network designed for massive MIMO CSI feed-back,” IEEE Wireless Commun. Lett. , vol. 10, no. 10, pp. 2318–2322, 2021. [10] Yuyao Sun, Wei Xu, Le Liang, et al., “A lightweight deep network for efficient CSI feedback in massive MIMO systems,” IEEE Wireless Commun. Lett. , vol. 10, no. 8, pp. 1840–1844, 2021. [11] Hengtao He, Shi Jin, Chao-Kai Wen, et al., “Model-driven deep learning for physical layer communica-tions,” IEEE Wireless Commun. , vol. 26, no. 5, pp. 77– 83, 2019. [12] Jianhua Guo, Lei Wang, Feng Li, et al., “CSI feedback with model-driven deep learning of massive MIMO sys-tems,” IEEE Commun. Lett. , vol. 26, no. 3, pp. 547–551, 2022. [13] Yifan Ma, Hengtao He, Shenghui Song, et al., “Low-complexity CSI feedback for FDD massive MIMO sys-tems via learning to optimize,” IEEE Trans. Wireless Commun. , vol. 24, no. 4, pp. 3483–3498, 2025. [14] Evangelos Vlachos, George C. Alexandropoulos, and John Thompson, “Wideband MIMO channel estima-tion for hybrid beamforming millimeter wave systems via random spatial sampling,” IEEE J. Sel. Topics Sig-nal Process. , vol. 13, no. 5, pp. 1136–1150, 2019. [15] Xingjian Li, Jun Fang, Hongbin Li, et al., “Millimeter wave channel estimation via exploiting joint sparse and low-rank structures,” IEEE Trans. Wireless Commun. ,vol. 17, no. 2, pp. 1123–1133, 2018. [16] Zhou Zhou, Jun Fang, Linxiao Yang, et al., “Low-rank tensor decomposition-aided channel estimation for mil-limeter wave MIMO-OFDM systems,” IEEE J. Sel. Ar-eas Commun. , vol. 35, no. 7, pp. 1524–1538, 2017. [17] Xiaodan Shao, Xiaoming Chen, Caijun Zhong, et al., “Exploiting simultaneous low-rank and sparsity in delay-angular domain for millimeter-wave/Terahertz wideband massive access,” IEEE Trans. Wireless Com-mun. , vol. 21, no. 4, pp. 2336–2351, 2022. [18] T. Tony Cai and Anru Zhang, “ROP: Matrix recovery via rank-one projections,” Ann. Statist. , vol. 43, no. 1, pp. 102–138, 2015. [19] Kai Zhong, Prateek Jain, and Inderjit S. Dhillon, “Ef-ficient matrix sensing using rank-1 Gaussian measure-ments,” in Proc. Int. Conf. Algorithmic Learning The-ory , 2015, pp. 3–18. [20] Chao-Kai Wen, Wan-Ting Shih, and Shi Jin, “Deep learning for massive MIMO CSI feedback,” IEEE Wire-less Commun. Lett. , vol. 7, no. 5, pp. 748–751, 2018. [21] Zhilin Lu, Xudong Zhang, Hongyi He, et al., “Bina-rized aggregated network with quantization: Flexible deep learning deployment for CSI feedback in massive MIMO systems,” IEEE Trans. Wireless Commun. , vol. 21, no. 7, pp. 5514–5525, 2022. [22] Jiajia Guo, Chao-Kai Wen, Shi Jin, et al., “Convolu-tional neural network-based multiple-rate compressive sensing for massive MIMO CSI feedback: Design, sim-ulation, and analysis,” IEEE Trans. Wireless Commun. ,vol. 19, no. 4, pp. 2827–2840, 2020. [23] Lingfeng Liu, Claude Oestges, Juho Poutanen, et al., “The COST 2100 MIMO channel model,” IEEE Wire-less Commun. , vol. 19, no. 6, pp. 92–99, 2012. [24] Jialin Liu, Xiaohan Chen, Zhangyang Wang, et al., “To-wards constituting mathematical structures for learning to optimize,” in Proc. Int. Conf. Mach. Learn. , 2023, pp. 21426–21449. [25] Jie Wu, Wei Xu, Le Liang, et al., “Large language model empowered CSI feedback in massive MIMO systems,” arXiv preprint arXiv:2603.02686, 2026.
