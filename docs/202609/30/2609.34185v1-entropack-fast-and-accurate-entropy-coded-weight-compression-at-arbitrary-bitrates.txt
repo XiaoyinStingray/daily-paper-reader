@@ -1,0 +1,663 @@
+Title: EntroPack: Fast and Accurate Entropy-Coded Weight Compression at Arbitrary Bitrates
+
+URL Source: https://arxiv.org/pdf/2609.34185v1
+
+Published Time: Tue, 29 Sep 2026 02:51:45 GMT
+
+Number of Pages: 20
+
+Markdown Content:
+Preprint 
+
+# ENTRO PACK : F AST AND ACCURATE ENTROPY -C ODED 
+
+# WEIGHT COMPRESSION AT ARBITRARY BITRATES 
+
+Hong Zhang Zhongjie Duan Yingda Chen 
+
+{hongzhang99,duanzhongjie.dzj,yingda.chen }@alibaba-inc.com 
+
+## ABSTRACT 
+
+Weight compression helps large neural networks fit deployment memory budgets, but common fixed-width formats offer only coarse storage choices. Entropy cod-ing supports finer rates, yet the achieved size depends on the quantized weight distribution and coding overhead. Exploiting this flexibility requires accurate rate selection and efficient weight reconstruction for inference. We present EntroPack, an entropy-coded weight compressor that supports arbitrary target bitrates with-out activation calibration or fine-tuning. It combines row-normalized E8 lattice quantization with a conditional probability model of lattice coordinates. Sampled storage estimates select the quantization resolution without repeated full-stream encoding. The final coordinates are entropy-coded in independently decodable tiles, enabling fast, fused symbol decoding and numerical weight reconstruction on the GPU. EntroPack supports floating-point and integer weight containers, such as BF16, FP16, FP8, and INT8, with storage bitrate controlled independently of numerical precision. Online decoding adds latency that grows with weight count, making the method well suited to compute-intensive workloads such as diffusion denoising and Transformer prefill. Experiments demonstrate fast encoding and modest inference overhead in these settings. When compressing the linear-layer weights of the image generator Z-Image-Turbo, EntroPack achieves substantially lower weight and denoiser output errors than fixed-width formats at comparable storage rates, with modest denoising-step overhead. Targeting 4 bits per parame-ter, it achieves lower weight and denoiser output errors than NF4, including about 24% lower relative L2 weight error, with less storage. Source code is available at 
+
+https://github.com/modelscope/entropack .
+
+## 1 INTRODUCTION 
+
+Weight storage constrains the deployment of large neural networks. Fixed-width formats, including INT8, FP8, and four-bit formats, provide established compute paths, but a deployment budget may lie between their available storage sizes (Dettmers et al., 2022; 2023; Micikevicius et al., 2022; Darvish Rouhani et al., 2023). Entropy coding allows finer choices by assigning shorter codes to frequent quantized values: adjusting quantization resolution changes both weight error and average storage. This approach is well established in weight compression (Han et al., 2016; Wiedemann et al., 2019), with recent methods supporting fractional rates without activation calibration (Chen et al., 2026; Domb et al., 2026). Using this flexibility introduces two challenges. First, a requested bitrate must be translated into a quantization resolution (Chen et al., 2026), even though the stored size also depends on the ten-sor’s symbol distribution and coding metadata. Repeatedly encoding full tensors during this search can make compression expensive. Second, inference requires the compressed symbols to be de-coded and converted into numerical weights before matrix products. The stream layout and weight representation must support parallel reconstruction to limit added latency (Zhang et al., 2025a). A practical compressor needs inexpensive storage estimation and efficient weight recovery. In this paper, we present EntroPack, a calibration-free weight compressor that combines fine-grained bitrate control with efficient GPU reconstruction. After row normalization, it quantizes blocks of eight weights onto the E8 lattice and represents the resulting points as invertible integer fields (Con-way & Sloane, 1982). A conditional probability model captures distribution differences between 1arXiv:2609.34185v1 [cs.LG] 28 Sep 2026 Preprint 3 4 5 6 7 8 9 10 stored bitrate of quantized layers (bpp) 0.1 1.0 10.0 network weight rel.  L2 error (%, log scale) 
+
+> EntroPack (ours, continuous) NF4 (bitsandbytes) FP4 (bitsandbytes) NVFP4 (torchao) MXFP4 (torchao) INT8 (torchao) FP8 (torchao) INT8 convrot (comfy-kitchen) FP8 (comfy-kitchen) HyperQuant at 4 bpp SDNQ at 4 bpp HRTN at 4 bpp
+
+Figure 1: Storage and reconstruction error of compressed linear weights in Z-Image-Turbo. the lattice’s integer and half-integer cosets. Using this model and coding metadata, EntroPack es-timates storage from sampled rows and searches for a quantization scale matching the requested bitrate, avoiding repeated full-stream encoding. After scale selection, we apply row-scale fitting and optional per-row rate–distortion refinement to further improve weight reconstruction. EntroPack then encodes the fields with range asymmetric numeral systems (rANS) in independently decodable tiles. This layout permits parallel decoding across tiles while preserving the field order required by the conditional model. The arithmetic inverse of the field representation allows symbol decoding, lattice reconstruction, and row rescaling to be fused on the GPU, without an intermedi-ate symbol tensor or reconstruction codebook. The decoder outputs weights for matrix products in floating-point or integer formats, including FP8 and INT8 for low-precision computation. Online decoding adds latency that grows with weight count, making EntroPack well suited to compute-intensive workloads such as diffusion denoising and Transformer prefill. We evaluate weight recon-struction, inference quality, and runtime after compressing linear weights of the image generator Z-Image-Turbo, the audio-video generator MiniMax-H3, and the language model Qwen3.8-27B. EntroPack supports continuously adjustable target bitrates, and Figure 1 shows that it reconstructs Z-Image-Turbo’s linear weights with lower error than the tested fixed-width formats at comparable storage. Our contributions are as follows: • Fine-grained rate control. EntroPack selects lattice quantization resolution from sam-pled storage estimates specific to each tensor. This provides user-specified weight bitrates without activation calibration or repeated full-stream encoding during rate selection. • Compact coding and GPU reconstruction. Coset-conditioned coordinate coding and in-dependent rANS tiles allow symbol decoding, arithmetic reconstruction, and row rescaling to be fused on the GPU. The representation requires neither an intermediate symbol tensor nor a reconstruction codebook and supports floating-point and integer outputs. • Compression quality and runtime. EntroPack achieves lower weight error than tested fixed-width formats at comparable storage and faster conversion than tested entropy-coded methods. For Z-Image-Turbo’s linear weights at a 4 bpp target, conversion takes 3.5 s and reconstruction adds 7.7% to denoising-step time relative to the uncompressed model. 
+
+## 2 RELATED WORK 
+
+Entropy-coded quantization. Entropy-constrained quantization jointly considers coding rate and distortion (Chou et al., 1989; Gray & Neuhoff, 1998). In weight compression, Deep Compression 2Preprint applies Huffman coding to quantized weights (Han et al., 2016), while DeepCABAC uses context-adaptive arithmetic coding with rate–distortion optimization (Wiedemann et al., 2019). More re-cently, EntQuant reduces weight entropy before coding with asymmetric numeral systems (Putzky et al., 2026), and NeuZip combines exponent coding with a precision-reduction option (Hao et al., 2024). For rate control, HRTN selects scalar quantization scales using Huffman code length (Chen et al., 2026). HyperQuant combines rotated lattices, algebraic constraint removal, and Rice coding with a precomputed relationship between rate and signal-to-noise ratio (Domb et al., 2026). 
+
+Structured weight quantization. Weight quantizers differ in both their use of calibration data and their representation of weights. GPTQ and AWQ use activation information for low-bit quantization (Frantar et al., 2022; Lin et al., 2024). In terms of representation, NF4 provides a nonuniform four-bit scalar format (Dettmers et al., 2023). Beyond scalar formats, QuIP and QuIP# combine weight transformations with structured quantization. QuIP# uses a shared E8-based codebook to quantize blocks of eight weights jointly (Chee et al., 2023; Tseng et al., 2024a). Other structured represen-tations include additive codebooks, grouped and Leech lattices, and trellis quantization (Egiazarian et al., 2024; Zhang et al., 2025b; van der Ouderaa et al., 2026; Tseng et al., 2024b). 
+
+Deployment and GPU compression. Deployment-oriented systems such as SDNQ, Quanto, and GGUF provide quantized storage and execution paths (Disty0, 2026; Corvoysier & Hugging Face contributors, 2026; ggml contributors, 2023). At the storage level, lossless weight compressors exploit redundancy in numerical representations to reduce storage without altering weight values (Zhang et al., 2025a; Hershcovitch et al., 2025; Tan et al., 2026). For lossy compression, ZFP and cuSZp address precision- or error-controlled compression of numerical arrays (Lindstrom, 2014; Huang et al., 2023). For parallel entropy coding, DietGPU provides GPU rANS primitives for sym-bol encoding and decoding (Johnson, 2022), based on asymmetric numeral systems (Duda, 2013). 
+
+## 3 METHOD 
+
+3.1 OBJECTIVE AND PIPELINE 
+
+Let W ∈ RR×C be a weight matrix with N = RC elements stored in numerical data type (dtype) τ ,where C is divisible by eight. EntroPack produces a compressed representation C and reconstructs 
+
+ˆW in the same dtype. We measure relative reconstruction error and stored rate as 
+
+Erel (W, ˆW ) = 
+
+vuutPRr=1 
+
+PCj=1 ( ˆWrj − Wrj )2
+
+PRr=1 
+
+PCj=1 W 2
+
+> rj
+
+, Rstored (C) = 8Bstored (C)
+
+N , (1) where Bstored is the actual stored size in bytes. For a requested rate Rtgt in bpp, the goal is to minimize reconstruction error while keeping the stored rate close to the request. The dtype specifies numerical values independently of compressed bit width. Figure 2 shows the compression and reconstruction pipeline. Encoding starts by selecting a quan-tization scale on a sample of rows. For each candidate scale, we map normalized weights to lattice points and represent these points as integer fields, whose statistics determine an estimated storage cost. At the selected scale, we quantize the full tensor and fit one reconstruction scale per row. Optional rate–distortion optimization (RDO) refines the per-row quantization before the final fields are rANS-encoded into independent tiles. The resulting compressed representation contains the tile payloads and the information needed to decode them. The decoding path reverses these operations: rANS decoding recovers the fields, the algebraic in-verse reconstructs lattice points, and row rescaling and dtype conversion produce numerical weights. 3.2 ROW -NORMALIZED LATTICE REPRESENTATION 
+
+Normalization and nearest points. We normalize row magnitudes so that a common scale can control quantization resolution across rows. The E8 lattice combines the geometric efficiency of vector quantization with a structured nearest-point algorithm (Conway & Sloane, 1999). We convert 
+
+W to FP32, denoted by x, and compute the root-mean-square (RMS) magnitude of each row, μr =
+
+3Preprint (a) Encoding             
+
+> Weights Win dtype τ
+> Row normalization
+> Sampled target-rate search Target Rtgt
+> Sample rows
+> E8quantization + integer fields
+> Conditional model + size estimate
+> Geometric scale update
+> next candidate s
+> selected scale sand table precision bX
+> Full-tensor
+> E8quantization + integer fields Row-scale fit least-squares σ
+> Per-row RDO (optional)
+> Final frequency tables + tiled rANS encoding
+> Compressed weights
+> 
+> Full-tensor quantization and refinement before entropy encoding
+> (b) Decoding
+> Compressed weights
+> 
+> Fused GPU decoding and reconstruction
+> rANS decoding
+> Lattice-point reconstruction
+> Row rescaling + dtype cast
+
+̂ W   
+
+> (c,z,m)p
+
+Figure 2: EntroPack encoding and decoding. (a) Sampled scale selection precedes full-tensor quan-tization, row-scale fitting, optional RDO, and tiled rANS encoding. (b) Symbol decoding, lattice reconstruction, row rescaling, and dtype conversion are fused on the GPU. 
+
+max( 
+
+q
+
+C−1 P 
+
+> j
+
+x2 
+
+> rj
+
+, η ), with η = 10 −12 . We divide row r by μr and partition it into vectors 
+
+Xv ∈ R8. A shared quantization scale s > 0 determines their lattice points: 
+
+pv (s) = nearest E8 (Xv /s ). (2) For a block in row r, the corresponding weight approximation is sμ r pv (s). Thus s controls quanti-zation in normalized coordinates, while μr restores the row’s original magnitude. Write D8 = {z ∈ Z8 : P 
+
+> i
+
+zi ≡ 0 (mod 2) }, so that E8 = D8 ∪ (D8 + 12 1). The nearest point in each coset is obtained by coordinate rounding followed, when needed, by a parity correction (Conway & Sloane, 1982). For Y = Xv /s , let f = round( Y ), d = Y − f , π = ( P 
+
+> i
+
+fi) mod 2 ,and j⋆ = arg max j |dj |. With ej denoting the jth coordinate basis vector, 
+
+nearest D8 (Y ) = f + π sign( dj⋆ )ej⋆ . (3) We compare this candidate with nearest D8 (Y − 12 1) + 12 1 and select the closer one. Coordinate ties round to the nearest even integer. Parity correction breaks equal-residual ties by the first coordinate and uses sign(0) = +1 . These conventions fix the point recovered during decoding. 
+
+An invertible field representation. Each pv lies in one of the two cosets. Let c ∈ { 0, 1} identify that coset and write z = pv − c 
+
+> 2
+
+1 ∈ D8. The eighth integer coordinate satisfies a parity constraint determined by the first seven. Define 
+
+π = ( P7 
+
+> i=1
+
+zi) mod 2 , m = ( z8 − π)/2. (4) The point is represented by (c, z 1, . . . , z 7, m ) and recovered as 
+
+pv = ( z1, . . . , z 7, 2m + π) + c 
+
+> 2
+
+1. (5) The fields uniquely identify each point and permit arithmetic recovery. In EntroPack, this represen-tation supplies the symbols for the conditional entropy model described next. 3.3 COSET -CONDITIONED PROBABILITY MODEL 
+
+The coordinate fields can have different distributions in the two cosets. We capture this dependence by conditioning their probabilities on the coset. Let a = ( z1, . . . , z 7, m ) denote the eight coordinate 4Preprint fields, and let θ collect the distribution parameters. We model the coset and coordinates as 
+
+qθ (c, a ) = qθ (c)
+
+> 8
+
+Y
+
+> i=1
+
+qθ (ai | c), (6) using seventeen categorical distributions: one for the coset and two for each coordinate field. For any given set of quantized vectors, we estimate these distributions from the corresponding field counts. The pooled alternative codes the coset and each coordinate field independently. With exact empirical probabilities, conditioning reduces its ideal coding cost by 
+
+[H(c) + P 
+
+> i
+
+H(ai)] − [H(c) + P 
+
+> i
+
+H(ai | c)] = P 
+
+> i
+
+I(ai; c), (7) where H denotes entropy and I mutual information, both in bits. The model captures dependence between each coordinate field and the coset, while treating the coordinates as conditionally inde-pendent. The net stored-rate gain also depends on frequency quantization and table storage. We measure it at fixed reconstructions in Appendix A.3. We represent probabilities by normalizing counts to integer frequencies summing to 2b, where b is the probability-table precision in bits. Every observed symbol receives a positive frequency. Let 
+
+nt,z (s) be the count of symbol z in distribution t at quantization scale s, and let ft,z (s) be its normalized frequency. The probability is ft,z (s)/2b, giving the modeled code length in bits 
+
+CCE (s, b ) = X
+
+> t
+
+X 
+
+> z:nt,z >0
+
+nt,z (s) b − log 2 ft,z (s). (8) This quantity is evaluated from symbol counts and provides the coding-cost term for scale selection. 3.4 TARGET -RATE SCALE SELECTION 
+
+Scale–rate relationship. The scale s changes both the lattice resolution and the distribution of coded fields. Under a smooth continuous-source approximation and sufficiently fine quantization, the ideal rate of an eight-dimensional scaled lattice is 
+
+Rideal (s) ≈ h(X)/8 − log 2 s − (log 2 vΛ)/8. (9) Here h(X) is the source differential entropy in bits and vΛ the lattice cell volume, with vE8 = 1 
+
+(Gray & Neuhoff, 1998). This motivates geometric scale search. 
+
+Stored-size estimate. Stored size includes coded symbols and the metadata needed for recon-struction. We estimate it from candidate field counts and the planned tile layout, without producing a codestream. The model cost CCE estimates the symbol cost, but some of this information remains in the coder’s final states rather than in emitted payload words. We estimate the payload after this correction, then add the stored states and other metadata. In the tiled rANS format (§3.6), each independently decodable tile uses J coder states and 16-bit payload words. For ntile tiles, 
+
+bLpayload = 16 ⌈max(0 , C CE − 16 Jn tile )/16 ⌉. (10) The subtraction approximates information retained in those states, and the remainder is rounded to whole payload words. Adding auxiliary storage gives 
+
+bL = bLpayload + Lrestart + Ltables + Lscales + bLother , bB = bL/ 8. (11) Here Lrestart covers the final states and payload offsets needed to start decoding each tile. The remaining terms account for probability tables, row scales, and other metadata. 
+
+Sampled rate evaluation. We reuse a fixed sample of complete rows across candidate scales. At each (s, b ), we quantize the sample, obtain CCE (s, b ) from field counts, and apply the stored-size estimate above. For Nsub sampled weights and estimated size bBsub (s, b ), scale selection seeks 
+
+bRsub (s, b ) = 8 bBsub (s, b )/N sub ≈ Rtgt . (12) This avoids encoding full streams for candidate scales. Appendix C.1 specifies the sampling settings. 5Preprint 
+
+Geometric search. At a fixed probability precision b, we evaluate the geometric midpoint s =√lo hi of a scale bracket. When the estimated rate exceeds the target, we replace lo by s. Other-wise, we replace hi by s. After a fixed number of iterations, we use the geometric midpoint of the remaining bracket to quantize the full tensor. If its field alphabets exceed the capacity of the prob-ability representation, we increase b and repeat the search, coarsening s if the maximum supported precision is reached. Algorithm 1 summarizes scale selection and full-tensor quantization. B lists probability precisions in ascending order and Is is the number of scale-search steps. 
+
+Algorithm 1 Target-rate scale selection and full-tensor quantization. 
+
+Require: Tensor W , target Rtgt , precisions B, search steps Is 
+
+> 1:
+
+Normalize rows to obtain X and fix a row sample S of Nsub weights  
+
+> 2:
+
+for b ∈ B in ascending order do  
+
+> 3:
+
+Initialize the scale bracket (lo, hi ) 
+
+> 4:
+
+for i = 1 , . . . , I s do  
+
+> 5:
+
+s ← √lo hi  
+
+> 6:
+
+Quantize XS /s and obtain field counts nt,z and b-bit frequencies ft,z  
+
+> 7:
+
+CCE ← P  
+
+> t,z :nt,z >0
+
+nt,z 
+
+ b − log 2 ft,z 
+
+ 
+
+> 8:
+
+Estimate stored bytes bBsub (s, b ) from CCE and format overheads  
+
+> 9:
+
+bRsub ← 8 bBsub (s, b )/N sub  
+
+> 10:
+
+Set lo ← s if bRsub > R tgt and hi ← s otherwise  
+
+> 11:
+
+end for  
+
+> 12:
+
+Set s ← √lo hi and quantize all blocks to form their fields  
+
+> 13:
+
+Stop the precision search when the full-tensor alphabets fit 2b 
+
+> 14:
+
+end for  
+
+> 15:
+
+return s, b, lattice points {pv }, and fields {(cv , a v )}
+
+3.5 ROW -SCALE REFIT AND RATE –DISTORTION OPTIMIZATION 
+
+Row-scale refit. The search scale s determines which lattice points are selected. Once those points are fixed, a separate reconstruction scale can reduce row error without changing their coded fields. Writing prj for the lattice coordinates of row r, we fit this scale by least squares: 
+
+σr =
+
+
+
+max η, 
+
+P 
+
+> j
+
+xrj prj 
+
+P 
+
+> j
+
+p2
+
+> rj
+
+!
+
+, P 
+
+> j
+
+p2 
+
+> rj
+
+> 0,sμ r , otherwise .
+
+(13) For nonzero lattice rows, this minimizes P 
+
+> j
+
+(xrj − σr prj )2 over scales at least η. The fitted σr re-places sμ r , restoring the row’s numerical scale without changing its coded symbols or scale storage. 
+
+Per-row rate–distortion refinement. Rows can have different rate–distortion trade-offs even after normalization. RDO compares several quantization resolutions per row and allocates them under a common storage budget. It alternates between selecting row candidates under a fixed probability model and updating that model from the selected fields. Each row’s K candidates use scales ρks,with ratios in the empirically chosen range [0 .70 , 1.45] . Starting from ρ = 1 , we add candidates by bisecting the widest remaining interval in log scale, so candidate sets are nested as K increases. Each candidate is quantized at ρks and refit using equation 13. Let Dr,k be its sum of squared reconstruction errors on row r. All rows initially use the baseline at scale s. To compare candidates under a shared coding model, we estimate conditional probabilities from the current row selections, adding 12 to each symbol count before normalization over the coordinate ranges spanned by all candidates. Writing (c(k) 
+
+> v
+
+, a (k) 
+
+> v
+
+) for the fields of candidate k, its estimated code length on row r is 
+
+Rr,k = X
+
+> v∈r
+
+h
+
+− log 2 qθ (c(k) 
+
+> v
+
+) −
+
+> 8
+
+X
+
+> j=1
+
+log 2 qθ (a(k) 
+
+> v,j
+
+| c(k) 
+
+> v
+
+)
+
+i
+
+. (14) 6Preprint We use the baseline’s estimated stored size, B bytes, as the allocation target. Let bBmix be the estimated stored bytes for current row selections k(r). The next code-length budget is 
+
+Rbudget = X
+
+> r
+
+Rr,k (r) + 8  B − bBmix 
+
+. (15) The correction converts the current storage surplus or deficit into bits: an oversized mixture reduces the next code-length budget, while spare storage increases it. For a rate penalty λ ≥ 0, each row selects 
+
+κλ(r) = arg min 
+
+> k
+
+Dr,k + λR r,k 
+
+. (16) We search for λ to keep the modeled code length within Rbudget , then update probabilities from the selected fields. This allocation–update procedure runs for T sweeps. Further details are given in Appendix C.2. 3.6 RANS ENCODING AND THE STORED REPRESENTATION 
+
+After scale selection, refitting, and any RDO refinement, the quantized fields and reconstruction scales are fixed. We encode these fields with rANS to form the codestream in Figure 2. 
+
+Frequency tables and tiles. We recount the final full-tensor fields and construct seventeen shared integer frequency tables using the model in §3.3. Each coordinate table stores a minimum-value offset for zero-based symbol indices. For parallel decoding, we partition the fields into independent tiles of V lattice vectors, each containing 9V symbols, and use J = 32 interleaved rANS states per tile. This layout assigns one tile to a GPU warp and one state to each lane. 
+
+Encoding the fields. For a symbol with integer frequency f and cumulative frequency F in a table totaling M = 2 b, rANS updates the coder state ξ as follows (Duda, 2013) 
+
+ξ′ = M ⌊ξ/f ⌋ + ( ξ mod f ) + F. (17) Before this update, renormalization emits payload words as needed to bound the state. Since decod-ing reverses the updates, we encode each vector’s coordinate fields in reverse order, then its coset. The decoder recovers the coset first to select the conditional coordinate tables. 
+
+Stored representation. The emitted words form each tile’s payload. We concatenate these pay-loads and store their offsets and terminal rANS states for independent decoding. The compressed representation also contains the frequency tables, alphabet offsets, row reconstruction scales, and tensor layout. Their combined byte count gives the actual stored rate in equation 1. Larger tiles amortize the states and offsets over more weights but expose less decoding parallelism. 3.7 GPU DECODING AND WEIGHT RECONSTRUCTION 
+
+Given the stored representation, the decoder follows the lower path of Figure 2. One GPU warp loads a tile’s terminal states and locates its payload using the stored offsets, with one state per lane. For a current state ξ′, it identifies the symbol whose cumulative-frequency interval contains 
+
+u = ξ′ mod M and inverts equation 17: 
+
+ξ = f ⌊ξ′/M ⌋ + u − F. (18) Renormalization consumes payload words as required to restore the state. Each lane decodes a vector’s coset before its coordinate fields, using the coset to choose the conditional tables. Thus entropy decoding recovers the field tuple (c, z 1, . . . , z 7, m ).The lane then applies the algebraic inverse in equation 5 to recover the lattice point and multiplies it by the stored row scale. Let ¯σr denote that scale read in FP32. Rounding and saturation to the requested dtype τ produce the reconstructed weight: 
+
+ˆWrj = snap τ (¯ σr prj ). (19) These steps fuse symbol recovery, lattice reconstruction, and row rescaling without materializing an intermediate symbol tensor or consulting a reconstruction codebook. The field representation and entropy coder are shared across supported floating-point and integer output dtypes. 7Preprint 
+
+## 4 EXPERIMENTS 
+
+4.1 EXPERIMENTAL SETUP 
+
+We compress linear weights of the image generation model Z-Image-Turbo (Z-Image Team, 2025), the audio-video generation model MiniMax-H3 (MiniMax, 2026), and the language model Qwen3.8-27B (Qwen Team, 2026). We measure weight storage and reconstruction error, along with model quality and runtime using the compressed weights. All experiments use a single NVIDIA H20 with PyTorch (Paszke et al., 2019). Diffusion models run in DiffSynth-Studio (ModelScope Team, 2024). Additional experiments and ablations are reported in Appendices A and B. 
+
+Metrics. We report stored rate, relative L2 weight error, task fidelity, model conversion time, and inference time. Stored rate in bpp is eight times the total stored bytes, including side information, divided by the total number of weight elements across the evaluated layers. Linear biases are ex-cluded from the denominator. Network weight error follows equation 1, computed jointly over these weights and reported as a percentage. For task fidelity, we compare diffusion outputs with the un-compressed BF16 reference and report perplexity for the language model. Inference timing uses each method’s execution path. Evaluation and timing details are provided in Appendix A.1. 
+
+Baselines. We compare with NF4 and FP4 from bitsandbytes (Dettmers et al., 2023), INT8, FP8, NVFP4, and MXFP4 from torchao (Or et al., 2025; Micikevicius et al., 2022; Darvish Rouhani et al., 2023; Alvarez et al., 2025), and INT8 with convolutional rotation and FP8 from comfy-kitchen (Comfy Org, 2025). We also evaluate the released HyperQuant, HRTN, and SDNQ implementations (Domb et al., 2026; Chen et al., 2026; Disty0, 2026). Weights that a format cannot represent remain at BF16 and contribute to its reported storage. EntroPack labels give target rates, while columns report stored bpp. 4.2 RATE –DISTORTION AND TARGET -RATE ACCURACY 
+
+Figure 1 plots the aggregate storage and reconstruction error of Z-Image-Turbo’s compressed linear weights. EntroPack consistently achieves lower weight error than the tested fixed-width formats at comparable storage rates. Baseline markers are measured at 4- and 8-bit quantization targets. Across the measured targets, achieved rate increases with the requested rate, while weight error decreases. The absolute relative targeting error, 100 |Rstored /R tgt − 1|, has a mean of 0.80% and a maximum of 2.13%. At its 4 bpp target, EntroPack stores 4.02 bpp with 7.18% weight error, compared with NF4’s 4.50 bpp and 9.41% error. Entropy-coded alternatives are closer: HyperQuant and HRTN achieve 7.31% and 7.38% error at 4.15 and 4.06 bpp, respectively. 4.3 DIFFUSION MODEL RESULTS 
+
+We compare Z-Image-Turbo outputs produced with compressed weights against the BF16 reference in Table 1: relative L2 measures first-step denoising output error, while peak signal-to-noise ratio (PSNR) and structural similarity (SSIM) measure image fidelity. EntroPack compresses weights substantially faster than HRTN and HyperQuant and incurs less inference overhead. Among the evaluated four-bit configurations, it achieves the lowest weight reconstruction error, with a substan-tial advantage over fixed-width formats. At 4.02 bpp, EntroPack achieves 19.62 dB PSNR and 0.80 SSIM, close to those of HyperQuant and HRTN at their slightly higher stored rates. Increasing En-troPack’s storage to 8.06 bpp improves weight reconstruction and image fidelity: weight and output errors fall to 0.54% and 3.92%, and PSNR and SSIM rise to 29.14 dB and 0.95. At a 4 bpp target, EntroPack compresses the linear weights in 3.5 s, versus 33.2 s for HRTN and 34.2 s for HyperQuant. With on-demand reconstruction, denoising steps take 544.7–555.6 ms at targets of 4, 7, and 8 bpp, only 7.7–9.9% above BF16’s 505.7 ms. These times are lower than those of the tested torchao floating-point configurations, HRTN, and HyperQuant. 4.4 LANGUAGE MODEL RESULTS 
+
+In Table 2, we compare storage, weight error, WikiText-2 perplexity (PPL) (Merity et al., 2017), and runtime across methods for compressing Qwen3.8-27B’s linear weights. At 4.03 bpp, EntroPack’s 8Preprint 
+
+method bpp weights network out images (3 seeds, 2 prompts) inference conversion rel. L2 (%) ↓ rel. L2 (%) ↓ PSNR ↑ SSIM ↑ step (ms) ↓ (s) ↓
+
+BF16 reference 16.00 0.00 0.00 99.00 1.00 505.7 0.0 NF4 (bitsandbytes) 4.50 9.41 25.76 18.97 ±3.08 0.77 ±0.09 518.2 0.1 FP4 (bitsandbytes) 4.50 12.73 31.55 17.74 ±2.08 0.74 ±0.08 520.0 0.1 NVFP4 (torchao) 4.50 9.47 22.44 19.85 ±3.45 0.79 ±0.09 802.6 0.6 MXFP4 (torchao) 4.25 12.02 25.74 18.00 ±1.86 0.73 ±0.07 798.8 0.6 INT8 (torchao) 8.01 1.08 4.71 24.90 ±4.67 0.91 ±0.06 554.9 0.2 FP8 (torchao) 8.01 2.65 9.47 23.06 ±3.22 0.87 ±0.06 577.3 0.2 INT8 convrot (comfy-kitchen) 8.01 0.97 6.35 28.54 ±5.80 0.93 ±0.06 464.9 0.1 FP8 (comfy-kitchen) 8.00 2.65 20.86 23.33 ±4.08 0.88 ±0.06 348.5 0.0 HyperQuant (4 bpp) 4.15 7.31 23.04 20.28 ±2.46 0.81 ±0.07 1041.4 34.2 SDNQ (4 bpp) 4.50 11.43 28.46 17.68 ±1.97 0.73 ±0.08 524.1 0.2 HRTN (4 bpp) 4.06 7.38 20.31 20.27 ±3.37 0.80 ±0.09 570.3 33.2 EntroPack (4 bpp) 4.02 7.18 20.51 19.62 ±3.01 0.80 ±0.09 544.7 3.5 EntroPack (7 bpp) 7.07 0.99 6.72 27.61 ±4.41 0.93 ±0.04 551.1 8.0 EntroPack (8 bpp) 8.06 0.54 3.92 29.14 ±3.35 0.95 ±0.03 555.6 10.8 
+
+Table 1: Weight compression, image fidelity, and runtime for Z-Image-Turbo. Network output error compares first-step denoising outputs with those of the BF16 model.                                                                                                         
+
+> method network bpp rel. L2(%) ↓WikiText-2 PPL ↓prefill decode conversion (ms / 32k tokens) ↓(ms / 8 tokens) ↓(s) ↓
+> BF16 reference 16.00 0.00 5.98 18639 155.1 0.0 NF4 (bitsandbytes) 4.50 9.28 6.08 18634 210.8 0.3 FP4 (bitsandbytes) 4.50 12.41 6.23 18638 210.7 0.3 NVFP4 (torchao) 4.50 9.49 6.09 19727 1456.7 2.0 MXFP4 (torchao) 4.31 11.80 6.16 19693 1436.4 2.0 INT8 (torchao) 8.01 1.02 5.98 19203 277.2 0.7 FP8 (torchao) 8.01 2.65 5.98 18869 468.4 0.5 INT8 convrot (comfy-kitchen) 8.01 0.99 5.98 16666 161.0 0.2 FP8 (comfy-kitchen) 8.00 2.65 5.98 13210 152.3 0.1 HyperQuant (4 bpp) 4.09 7.31 6.04 27711 2829.4 149.6 SDNQ (4 bpp) 4.50 11.12 6.24 18635 230.8 0.9 HRTN (4 bpp) 4.05 7.44 6.07 18828 454.4 109.1 EntroPack (4 bpp) 4.03 7.19 6.06 18709 272.8 5.8 EntroPack (7 bpp) 7.10 0.98 5.98 18720 321.5 12.6 EntroPack (8 bpp) 8.08 0.54 5.98 18726 341.1 17.3
+
+Table 2: Weight reconstruction, WikiText-2 perplexity, and runtime on Qwen3.8-27B. PPL rises from BF16’s 5.98 to 6.06, compared with 6.08 for NF4 at 4.50 bpp and 6.04 for Hyper-Quant at 4.09 bpp. At 7.10 and 8.08 bpp, PPL matches BF16 to the reported precision. At a 4 bpp target, EntroPack converts Qwen3.8-27B’s linear weights in 5.8 s, versus 109.1 s for HRTN and 149.6 s for HyperQuant. Inference overhead depends on the workload. Processing a 32k-token input (prefill) takes 18,709 ms with EntroPack-compressed weights, close to the BF16 reference’s 18,639 ms. Autoregressive decoding has less computation over which to amortize weight reconstruction. Our workload uses the checkpoint’s Next-N module to draft tokens and the main model to verify eight positions, assuming full draft acceptance at a 32k-token context. The 4 bpp configuration takes 272.8 ms, versus 155.1 ms for BF16. 
+
+## 5 CONCLUSION 
+
+We presented EntroPack, a calibration-free weight compression method that combines arbitrary tar-get bitrates with efficient GPU reconstruction. Lattice quantization and conditional entropy mod-eling define the coded representation, and sampled storage estimates guide rate selection without repeated full-stream encoding. The resulting fields are encoded in independent rANS tiles, allowing symbol decoding and weight reconstruction to be fused on the GPU without intermediate sym-bol tensors or reconstruction codebooks. By separating storage bitrate from numerical precision, this representation supports floating-point and integer compute formats. The same codec can also compress FP8- or INT8-quantized weights and reconstruct them for low-precision inference. On-line decoding time grows with weight count, making the method well suited to compute-intensive 9Preprint workloads such as diffusion denoising and Transformer prefill. Experiments in these settings show accurate bitrate control, fast encoding, and lower weight error than the tested fixed-width formats at comparable storage, with modest inference overhead. 
+
+## AI U SE STATEMENT 
+
+We used generative AI tools to assist with parts of the algorithm implementation and runtime opti-mization, literature retrieval, review of theoretical claims, and manuscript editing. The authors are responsible for the final implementation, experimental results, and content of the paper. 
+
+## REFERENCES 
+
+Eduardo Alvarez, Omri Almog, Eric Chung, Simon Layton, Dusan Stosic, Ronny Krashinsky, and Kyle Aubrey. Introducing NVFP4 for Efficient and Accurate Low-Precision Inference. NVIDIA Technical Blog, June 2025. URL https://developer.nvidia.com/blog/ ?p=102000 .Jerry Chee, Yaohui Cai, Volodymyr Kuleshov, and Christopher De Sa. QuIP: 2-bit quantization of large language models with guarantees. In Advances in Neural Information Processing Systems ,volume 36, pp. 4396–4429, 2023. doi: 10.52202/075280-0196. Jiale Chen, Yalda Shabanzadeh, Elvir Crnˇ cevi´ c, Torsten Hoefler, and Dan Alistarh. The Geometry of LLM Quantization: GPTQ as Babai’s Nearest Plane Algorithm. In The Fourteenth International Conference on Learning Representations , 2026. Philip A Chou, Tom Lookabaugh, and Robert M Gray. Entropy-constrained vector quantization. 
+
+IEEE Transactions on Acoustics, Speech, and Signal Processing , 37(1):31–42, 1989. Comfy Org. Comfy Kitchen, 2025. URL https://github.com/Comfy-Org/ comfy-kitchen . Software. Accessed 2026-09-22. J. H. Conway and N. J. A. Sloane. Sphere Packings, Lattices and Groups , volume 290 of 
+
+Grundlehren der mathematischen Wissenschaften . Springer, New York, 3rd edition, 1999. doi: 10.1007/978-1-4757-6568-7. John Conway and Neil Sloane. Fast quantizing and decoding algorithms for lattice quantizers and codes. IEEE Transactions on Information Theory , 28(2):227–232, 1982. David Corvoysier and Hugging Face contributors. Optimum Quanto, 2026. URL https://github.com/huggingface/optimum-quanto/tree/ 2290af22625527d0c91ff4862d750b573d2fb0ac . Software, revision dated 2026-08-19. Bita Darvish Rouhani, Ritchie Zhao, Ankit More, Mathew Hall, Alireza Khodamoradi, Summer Deng, Dhruv Choudhary, Marius Cornea, Eric Dellinger, Kristof Denolf, Stosic Dusan, Ven-mugil Elango, Maximilian Golub, Alexander Heinecke, Phil James-Roxby, Dharmesh Jani, Gau-rav Kolhe, Martin Langhammer, Ada Li, Levi Melnick, Maral Mesmakhosroshahi, Andres Ro-driguez, Michael Schulte, Rasoul Shafipour, Lei Shao, Michael Siu, Pradeep Dubey, Paulius Mi-cikevicius, Maxim Naumov, Colin Verrilli, Ralph Wittig, Doug Burger, and Eric Chung. Mi-croscaling Data Formats for Deep Learning. October 2023. Tim Dettmers, Mike Lewis, Younes Belkada, and Luke Zettlemoyer. LLM.int8(): 8-bit matrix multiplication for Transformers at scale. In Advances in Neural Information Processing Systems ,volume 35, pp. 30318–30332, 2022. doi: 10.52202/068431-2198. Tim Dettmers, Artidoro Pagnoni, Ari Holtzman, and Luke Zettlemoyer. QLoRA: efficient finetuning of quantized LLMs. In Advances in Neural Information Processing Systems , volume 36, pp. 10088–10115, 2023. doi: 10.52202/075280-0441. Disty0. SDNQ: SD.Next Quantization Engine, 2026. URL https://github.com/Disty0/ sdnq/tree/06c83b3878d7240da5d8b8c94ae798af9a047e6b . Software, version 0.2.7, revision dated 2026-08-30. 10 Preprint Yuval Domb, Hadar Sackstein, and Tomer Solberg. HyperQuant: a rate-distortion-optimal quanti-zation pipeline for large language and diffusion models. arXiv preprint arXiv:2606.23406 , 2026. Jarek Duda. Asymmetric numeral systems: entropy coding combining speed of Huffman coding with compression rate of arithmetic coding. arXiv preprint arXiv:1311.2540 , 2013. Vage Egiazarian, Andrei Panferov, Denis Kuznedelev, Elias Frantar, Artem Babenko, and Dan Alis-tarh. Extreme compression of large language models via additive quantization. In Proceedings of the 41st International Conference on Machine Learning , volume 235 of Proceedings of Machine Learning Research , pp. 12284–12303. PMLR, 2024. Elias Frantar, Saleh Ashkboos, Torsten Hoefler, and Dan Alistarh. GPTQ: Accurate Post-training Compression for Generative Pretrained Transformers. arXiv preprint arXiv:2210.17323 , 2022. ggml contributors. GGUF, 2023. URL https://github.com/ggml-org/ggml/blob/ master/docs/gguf.md . Format specification. Accessed 2026-09-22. Robert M. Gray and David L. Neuhoff. Quantization. IEEE Transactions on Information Theory ,44(6):2325–2383, 1998. doi: 10.1109/18.720541. Song Han, Huizi Mao, and William J Dally. Deep compression: Compressing deep neural networks with pruning, trained quantization and Huffman coding. In International Conference on Learning Representations (ICLR) , 2016. Yongchang Hao, Yanshuai Cao, and Lili Mou. NeuZip: memory-efficient training and inference with dynamic compression of neural networks. In NeurIPS 2024 Workshop on Efficient Natural Language and Speech Processing (ENLSP-IV) , 2024. Moshik Hershcovitch, Andrew Wood, Leshem Choshen, Guy Girmonsky, Roy Leibovitz, Or Ozeri, Ilias Ennmouri, Michal Malka, Peter Chin, Swaminathan Sundararaman, et al. ZipNN: lossless compression for AI models. In 2025 IEEE 18th International Conference on Cloud Computing (CLOUD) , pp. 186–198. IEEE, 2025. Yafan Huang, Sheng Di, Xiaodong Yu, Guanpeng Li, and Franck Cappello. cuSZp: An Ultra-fast GPU Error-bounded Lossy Compression Framework with Optimized End-to-End Performance. In Proceedings of the International Conference for High Performance Computing, Networking, Storage and Analysis , pp. 1–13, 2023. Jeff Johnson. DietGPU: GPU-based lossless compression for numerical data, 2022. URL https: //github.com/facebookresearch/dietgpu . Software. Accessed 2026-09-22. Ji Lin, Jiaming Tang, Haotian Tang, Shang Yang, Wei-Ming Chen, Wei-Chen Wang, Guangxuan Xiao, Xingyu Dang, Chuang Gan, and Song Han. AWQ: activation-aware weight quantization for on-device LLM compression and acceleration. In Proceedings of Machine Learning and Systems , volume 6, pp. 87–100, 2024. Peter Lindstrom. Fixed-Rate Compressed Floating-Point Arrays. IEEE Transactions on Visualiza-tion and Computer Graphics , 20(12):2674–2683, 12 2014. doi: 10.1109/TVCG.2014.2346458. Stephen Merity, Caiming Xiong, James Bradbury, and Richard Socher. Pointer sentinel mixture models. In International Conference on Learning Representations , 2017. Paulius Micikevicius, Dusan Stosic, Patrick Judd, John Kamalu, Stuart Oberman, Mohammad Shoeybi, Michael Siu, Hao Wu, Neil Burgess, Sangwon Ha, Richard Grisenthwaite, Naveen Mellempudi, Marius Cornea, Alexander Heinecke, and Pradeep Dubey. FP8 formats for deep learning. arXiv preprint arXiv:2209.05433 , 2022. MiniMax. MiniMax-H3, 2026. URL https://www.modelscope.cn/models/MiniMax/ MiniMax-H3 . Model card. Accessed 2026-09-22. ModelScope Team. DiffSynth-Studio, 2024. URL https://github.com/modelscope/ DiffSynth-Studio . Software. Accessed 2026-09-22. 11 Preprint Andrew Or, Apurva Jain, Daniel Vega-Myhre, Jesse Cai, Charles David Hernandez, Zhenrui Zheng, Driss Guessous, Vasiliy Kuznetsov, Christian Puhrsch, Mark Saroufim, et al. Torchao: Pytorch-native training-to-serving model optimization. arXiv preprint arXiv:2507.16099 , 2025. Adam Paszke, Sam Gross, Francisco Massa, Adam Lerer, James Bradbury, Gregory Chanan, Trevor Killeen, Zeming Lin, Natalia Gimelshein, Luca Antiga, Alban Desmaison, Andreas K¨ opf, Ed-ward Yang, Zach DeVito, Martin Raison, Alykhan Tejani, Sasank Chilamkurthy, Benoit Steiner, Lu Fang, Junjie Bai, and Soumith Chintala. PyTorch: an imperative style, high-performance deep learning library. In Advances in Neural Information Processing Systems , volume 32, pp. 8024–8035, 2019. Patrick Putzky, Martin Genzel, Mattes Mollenhauer, Sebastian Schulze, Thomas Wollmann, and Stefan Dietzel. Float8@2bits: Entropy Coding Enables Data-Free Model Compression. Preprint arXiv:2601.22787 , 2026. Qwen Team. Qwen3.8-Max: A New Bar for Coding and Cowork, August 2026. URL https: //qwen.ai/blog?id=qwen3.8 .Hongshi Tan, Yao Chen, Gustavo Alonso, Weng-Fai Wong, and Bingsheng He. Approaching Shan-non bound with lossless LLM weight compression. arXiv preprint arXiv:2606.15789 , 2026. Albert Tseng, Jerry Chee, Qingyao Sun, Volodymyr Kuleshov, and Christopher De Sa. QuIP#: even better LLM quantization with Hadamard incoherence and lattice codebooks. In Proceedings of the 41st International Conference on Machine Learning , volume 235 of Proceedings of Machine Learning Research , pp. 48630–48656, 2024a. Albert Tseng, Qingyao Sun, David Hou, and Christopher De Sa. QTIP: quantization with trellises and incoherence processing. In Advances in Neural Information Processing Systems , volume 37, pp. 59597–59620, 2024b. Tycho F. A. van der Ouderaa, Mart van Baalen, Paul Whatmough, and Markus Nagel. Leech lat-tice vector quantization for efficient LLM compression. In ICML 2026 Workshop on Resource-Adaptive Foundation Model Inference (AdaptFM) , 2026. Simon Wiedemann, Heiner Kirchhoffer, Stefan Matlage, Paul Haase, Arturo Marban, Talmaj Mar-inc, David Neumann, Ahmed Osman, Detlev Marpe, Heiko Schwarz, et al. DeepCABAC: Context-adaptive binary arithmetic coding for deep neural network compression. In Joint ICML Workshop on On-Device Machine Learning and Compact Deep Neural Network Representations (ODML-CDNNR) , pp. 1–4, 2019. Thomas Wolf, Lysandre Debut, Victor Sanh, Julien Chaumond, Cl´ ement Delangue, Anthony Moi, Pierric Cistac, Tim Rault, R´ emi Louf, Morgan Funtowicz, et al. Transformers: state-of-the-art natural language processing. In Proceedings of the 2020 Conference on Empirical Methods in Natural Language Processing: System Demonstrations , pp. 38–45, 2020. Z-Image Team. Z-Image: An Efficient Image Generation Foundation Model with Single-Stream Diffusion Transformer. arXiv preprint arXiv:2511.22699 , 2025. Tianyi Zhang, Mohsen Hariri, Shaochen Henry Zhong, Vipin Chaudhary, Yang Sui, Xia Hu, and Anshumali Shrivastava. 70% size, 100% accuracy: Lossless LLM compression for efficient GPU inference via dynamic-length float (DFloat11). In Advances in Neural Information Processing Systems , volume 38, pp. 98966–98994, 2025a. Xi Zhang, Xiaolin Wu, Jiamang Wang, and Weisi Lin. Learning grouped lattice vector quantizers for low-bit LLM compression. In Advances in Neural Information Processing Systems , volume 38, pp. 110672–110698, 2025b. 12 Preprint 
+
+## APPENDIX 
+
+Appendix A presents the evaluation protocol, video and audio results, design ablations, and codec measurements. Appendix B studies low-precision inference and per-layer storage allocation. Ap-pendix C gives search settings, the RDO algorithm, and GPU implementation details. Appendix D discusses limitations and future research directions. 
+
+## A SUPPLEMENTARY EXPERIMENTS 
+
+This section provides the evaluation protocol and supplementary results on video and audio genera-tion. The ablations measure the storage savings from the entropy model and the error–time trade-off of per-row refinement. We also characterize GPU reconstruction under different tile sizes and work-loads, and evaluate compression across floating-point and integer dtypes. A.1 EVALUATION DETAILS 
+
+For each model, methods share a weight population and quality evaluator. Runtime uses each method’s execution path, including weight reconstruction where required. These settings apply to all experiments in the main paper and appendix. 
+
+Quantized populations. Z-Image-Turbo evaluations cover 276 linear-weight tensors in the dif-fusion transformer, excluding the text encoder and other modules. MiniMax-H3 evaluations cover the 259 linear-weight tensors in its quantization configuration. For Qwen3.8-27B, we compress 518 quantizable two-dimensional weight tensors from the trunk, visual tower, and Next-N block, excluding the token embedding and output projection. Unless noted, layer-level experiments use the 10240 × 3840 Z-Image-Turbo weight noise refiner.0.feed forward.w1 , called the reference layer. RDO is disabled except in its dedicated ablations. 
+
+Baseline handling. To keep the evaluated population fixed, weights unsupported by a format re-main at BF16 and count toward its storage and element totals. This affects 27 Qwen visual-tower layers with widths incompatible with MXFP4, and one MiniMax layer for HRTN. Comfy-kitchen INT8 and FP8 quantize both weights and activations. The other methods quantize weights only. 
+
+Image fidelity. Z-Image-Turbo generations use eight denoising steps, two prompts, and seeds 42, 7, and 123. Each compressed-weight output is compared with the BF16 output for the same prompt and seed. PSNR and SSIM summarize image fidelity as mean ± standard deviation over these six pairs, while network output error compares the first-step denoising outputs. The BF16 reference’s 99 dB PSNR is the metric’s zero-error cap. Artifacts contain prompts and per-seed measurements. 
+
+Video and audio fidelity. For MiniMax-H3, we generate 120 frames at 768 × 1344 using 20 denoising steps and seeds 0, 1, and 2. Video fidelity is measured by PSNR and SSIM against matched BF16 outputs. Audio is extracted from the generated files and compared through log-mel spectrogram relative L2 error. We report mean and standard deviation over seeds, with the same 99 dB PSNR cap for the reference. Prompts and per-seed results accompany the artifacts. 
+
+Language model quality. We evaluate Qwen3.8-27B perplexity on WikiText-2 raw test text with the checkpoint’s tokenizer and the Transformers library (Wolf et al., 2020). For this quality compar-ison, each method’s reconstructed weights are inserted into the BF16 model. The shared evaluator uses 1,024-token target windows, a stride of 512 tokens, and up to 512 preceding tokens of context. Runtime uses each method’s execution representation for the workloads below. 
+
+Diffusion runtime. Diffusion inference columns report GPU device time per denoising step. Each method uses its native quantized matrix product when available for the workload and otherwise reconstructs weights on each call. Step time includes this reconstruction and averages steps 2 and 3 of a three-step timing run. It excludes prompt encoding, the first step, final image, video, or audio decoding, and MiniMax transfers between pipeline stages. 13 Preprint 
+
+Language model runtime. We time prefill and autoregressive decoding with a 32k-token context. Prefill measures one pass over the context. Autoregressive timing combines seven Next-N draft steps with a trunk pass verifying eight positions, assuming full draft acceptance. Both include weight reconstruction required by the method’s execution path. 
+
+Conversion and codec time. Conversion time sums synchronized wall-clock measurements of per-layer weight quantization and compression after warm-up. For the dtype and tile-size experi-ments, codec timings use CUDA events around complete compression or decompression calls. We report the minimum of fifteen measurements after three warm-up runs. A.2 ADDITIONAL DIFFUSION RESULTS : M INI MAX -H3 MiniMax-H3 extends the diffusion evaluation to joint video and audio generation. Table 3 compares weight compression, output fidelity, and runtime under the evaluation protocol above. Video and audio outputs are compared with BF16 generations using matched prompts and seeds. EntroPack achieves weight reconstruction close to the tested entropy-coded baselines while requir-ing less conversion time. At the 4 bpp target, it stores 4.03 bpp with 7.11% weight error, compared with HRTN and HyperQuant at 4.17 and 4.21 bpp. These baselines provide higher video and audio fidelity at substantially higher conversion costs. At targets of 7 and 8 bpp, EntroPack’s weight error falls to 0.97% and 0.53%, with corresponding audio log-mel errors of 14.48% and 11.39%. The longer denoising steps also make reconstruction a smaller fraction of runtime than on Z-Image-Turbo. EntroPack adds 0.5–0.8% to BF16 step time across these targets. Model conversion takes 4.9–14.2 s, between the tested fixed-width methods and the HRTN and HyperQuant configurations.                                                                                                                               
+
+> method bpp weights video audio inference conversion rel. L2(%) ↓PSNR ↑SSIM ↑log-mel rel. L2(%) ↓step (ms) ↓(s) ↓
+> BF16 reference 16.00 0.00 99.00 1.00 0.00 26209.4 0.0 NF4 (bitsandbytes) 4.50 9.14 15.86 ±2.34 0.60 ±0.10 34.14 ±3.26 26269.1 0.4 FP4 (bitsandbytes) 4.50 12.03 14.05 ±2.45 0.52 ±0.10 29.94 ±5.10 26274.0 0.5 NVFP4 (torchao) 4.50 9.77 16.79 ±2.04 0.67 ±0.07 28.66 ±2.24 27785.9 2.7 MXFP4 (torchao) 4.25 11.51 15.19 ±2.27 0.59 ±0.08 27.42 ±4.40 27739.9 2.7 INT8 (torchao) 8.01 0.98 24.98 ±1.84 0.89 ±0.05 13.98 ±6.49 26864.5 0.9 FP8 (torchao) 8.07 2.60 20.27 ±1.48 0.80 ±0.06 21.79 ±2.56 26599.5 0.7 INT8 convrot (comfy-kitchen) 8.01 0.89 25.25 ±0.28 0.91 ±0.02 15.67 ±7.83 24285.8 0.3 FP8 (comfy-kitchen) 8.00 2.65 18.95 ±2.48 0.76 ±0.08 20.43 ±5.17 21232.1 0.2 HyperQuant (4 bpp) 4.21 7.31 17.28 ±2.08 0.70 ±0.10 24.91 ±1.85 32312.4 201.1 SDNQ (4 bpp) 4.50 10.24 14.00 ±0.33 0.52 ±0.03 25.03 ±1.49 26350.6 1.3 HRTN (4 bpp) 4.17 6.84 17.51 ±1.94 0.72 ±0.03 25.92 ±2.73 26581.3 139.6 EntroPack (4 bpp) 4.03 7.11 15.94 ±3.35 0.63 ±0.13 26.66 ±2.40 26338.5 4.9 EntroPack (7 bpp) 7.10 0.97 25.10 ±1.89 0.91 ±0.03 14.48 ±7.85 26421.9 10.8 EntroPack (8 bpp) 8.08 0.53 24.68 ±4.29 0.89 ±0.06 11.39 ±4.40 26431.4 14.2
+
+Table 3: Weight compression, video and audio fidelity, and runtime on MiniMax-H3. Fidelity metrics are reported as mean ± standard deviation over three seeds. A.3 ENTROPY -MODEL ABLATION 
+
+Coset conditioning captures differences between the two cosets’ coordinate distributions, while par-ity reduction exploits the constraint on the eighth coordinate. We isolate their storage contributions by comparing coding configurations with identical reconstructed weights. For each target of 2, 4, and 8 bpp, we compress Z-Image-Turbo’s reference linear layer with En-troPack. We decode its integer fields and re-encode the lattice points under three configurations, retaining the row scales and output dtype. Tile capacity is 16,384 symbols, and probability-table precision is 11, 11, and 12 bits at the three targets, respectively. The variants reuse the baseline quantization scale s without a new search, so reconstruction is identical within each column. Col-umn labels give the baseline’s target rate, while actual stored rates may differ. EntroPack uses the parity-reduced fields (c, z 1, . . . , z 7, m ) and seventeen probability tables: one for 
+
+c and two for each coordinate field. The 9 pooled tables variant keeps these fields but merges the two coset-specific tables for each coordinate, removing coset conditioning. The direct z8 variant 14 Preprint keeps coset conditioning but replaces m with z8, removing the parity reduction in equation 4. Each variant preserves the lattice points and builds probability tables from its own fields. We verify exact recovery of the input fields from all nine encoded rANS streams. Table 4 reports bpp calculated from each representation’s actual storage, including coding metadata. At fixed reconstruction error, coset conditioning gives its largest saving at the 2 bpp target, reducing stored rate from 2.07 to 2.02 bpp. Parity reduction saves 0.10–0.13 bpp across the evaluated targets by coding m instead of the eighth integer coordinate z8.
+
+source model target 2 bpp target 4 bpp target 8 bpp 9 pooled tables (no coset conditioning) 2.07 4.03 8.01 direct z8 (no parity reduction) 2.12 4.15 8.13 EntroPack (17 tables + parity reduction) 2.02 4.02 8.00 
+
+Table 4: Measured stored rates for coding ablations on Z-Image-Turbo’s reference linear layer. Each column uses the same quantized points and row reconstruction scales. A.4 OPTIONAL PER -ROW RATE –DISTORTION REFINEMENT 
+
+Per-row refinement seeks lower weight error through additional encoding work. Candidate count controls the available row resolutions, while sweep count controls updates to the row allocation and shared probability model. We vary these settings separately on Z-Image-Turbo’s linear weights at a 3 bpp target. Allocations use the single-scale baseline’s estimated storage budget, and we compare reconstruction error and encoding time at similar stored rates. With five candidates per row, Figure 3 varies the number of allocation sweeps from the single-scale baseline at zero sweeps. Most of the observed improvement occurs in the first sweep: weight error falls from 14.35% to about 14.11%, with little change thereafter. Additional sweeps continue to increase encoding time, reaching 26.3 s at eight sweeps. 0 1 2 3 4 5 6 7 8allocation sweeps T           
+
+> 14.10 14.15 14.20 14.25 14.30 14.35 network weight rel.  L2 (%)
+> K= 5
+> 012345678allocation sweeps T
+> 510 15 20 25 total encoding time (s)
+> K= 5
+
+Figure 3: RDO sweep count on Z-Image-Turbo at a target of 3 bpp with five candidate scales. Left: network weight error. Right: total model encoding time. We then hold the sweep count at one and vary the number of candidates in Figure 4. Candidate scale ratios form nested sets within the fixed empirical range [0 .70 , 1.45] relative to the baseline scale. Larger sets reduce error in this experiment, with diminishing gains: K = 5 gives 14.11% error and 
+
+K = 20 gives 14.01%. Encoding time rises from 4.2 s at K = 1 to 17.5 s at K = 20 .15 Preprint 0 2 4 6 8 10 12 14 16 18 20 candidate scales per row K           
+
+> 14.00 14.05 14.10 14.15 14.20 14.25 14.30 14.35 network weight rel.  L2 (%)
+> 0246810 12 14 16 18 20 candidate scales per row K
+> 46810 12 14 16 18 total encoding time (s)
+
+Figure 4: RDO candidate count on Z-Image-Turbo at a target of 3 bpp with one allocation sweep. Left: network weight error. Right: total encoding time. A.5 RECONSTRUCTION COST AND TILE OVERHEAD 
+
+Inference overhead depends on decoder speed and the computation that reuses each weight. Figure 5 uses the reference layer compressed at a 4 bpp target. The left panel of Figure 5 measures how tile size affects decoding throughput and stored rate. Throughput counts reconstructed BF16 bytes per second, and stored rate includes all metadata. Over this sweep, smaller tiles decode faster but use more storage for terminal states and offsets, reflecting the cost of exposing more independent decoding work. The right panel of Figure 5 holds the compressed weights fixed and varies the number of input tokens processed in one linear-layer call. For each input size, we compare a BF16 matrix product using resident, uncompressed weights with a call that first reconstructs the weights and then performs the same matrix product. The vertical axis reports the percentage increase in total call time relative to the uncompressed case. This overhead falls from 132% at 256 tokens to 9.4% at 4096 tokens and 2.6% at 16,384 tokens. Larger matrix products amortize reconstruction over more computation. 22 23 24 25 26 27 28      
+
+> tile capacity (Ki symbols) 50 100 150 200 250 300 350 decode throughput (GiB/s)
+> decode throughput stored bitrate
+> 2829210 211 212 213 214
+> tokens in the batch 020 40 60 80 100 120 overhead of decode-on-every-call (%)
+> 4.01 4.02 4.03 4.04 4.05 4.06 4.07 stored bitrate (bpp)
+
+Figure 5: Reconstruction cost on the reference layer at a 4 bpp target. Left: decode throughput and stored rate versus tile size. Right: linear-layer latency overhead relative to resident BF16 weights, versus the number of input tokens processed together. Table 5 quantifies the tile metadata cost under the default configurations. Each tile stores terminal rANS states and a payload offset so that decoding can start independently. The table reports this tile metadata storage in bytes and as a fraction of total compressed size. It occupies 1.80–3.60% of storage across the displayed targets and is included in every reported bitrate. 16 Preprint                               
+
+> target bpp tile (symbols) tile (vectors) tiles btile metadata (bytes) tile metadata (%) 232,768 3,640 1,351 11 178,336 1.80 416,384 1,820 2,701 11 356,536 1.80 78,192 910 5,402 11 713,068 2.06 84,096 455 10,803 12 1,426,000 3.60
+
+Table 5: Tile configurations and metadata storage on the reference layer. Tile metadata comprises rANS states and payload offsets, with percentages relative to total stored bytes. A.6 NUMERICAL DTYPE MEASUREMENTS 
+
+EntroPack controls storage bitrate separately from the dtype of the reconstructed weights. To eval-uate this property, Table 6 reports compression of seven dtype versions of the reference layer. FP8 inputs use per-row scaling, and integer inputs use per-tensor scaling before casting, with an offset for unsigned values. Each tensor is reconstructed in its input dtype and compared with that input, so the reported error measures compression after the initial format conversion. Stored rates remain close to targets across these containers. Encoding takes 11.0–36.3 ms and de-coding 0.23–0.41 ms on this layer.                                                             
+
+> container target bpp stored bpp rel. L2(%) ↓encode (ms) ↓decode (ms) ↓
+> FP32 4.00 4.02 7.19 11.7 0.31 FP32 8.00 8.05 0.51 35.5 0.41 FP16 4.00 4.02 7.19 11.7 0.31 FP16 8.00 8.05 0.51 36.3 0.40 BF16 4.00 4.02 7.19 11.5 0.23 BF16 8.00 8.05 0.53 36.2 0.34 FP8 E4M3FN 4.00 4.02 7.54 11.7 0.32 FP8 E5M2 4.00 4.02 7.15 11.8 0.31 INT8 4.00 4.02 8.17 11.3 0.32 UINT8 4.00 4.02 7.76 11.0 0.32
+
+Table 6: Stored rate, reconstruction error, and codec time for seven dtypes on the reference layer. Errors use each dtype’s input as the reference, with the UINT8 offset removed. 
+
+## B ADDITIONAL APPLICATIONS 
+
+EntroPack can combine compressed storage with low-precision computation and can assign different rates to individual layers. We evaluate these two uses on Z-Image-Turbo, first retaining FP8 or INT8 matrix products and then reallocating a fixed storage budget among layers. B.1 FP8 AND INT8 COMPUTATION WITH COMPRESSED STORAGE 
+
+The dtype measurements above concern reconstruction of individual tensors. Here we evaluate whether compressed FP8 and INT8 weights retain the runtime benefits of low-precision computation during image generation. We first convert Z-Image-Turbo’s linear weights to row-scaled FP8 or INT8, then compress them with EntroPack. During inference, weights are reconstructed in those formats for low-precision matrix products. Table 7 compares these routes with uncoded FP8 and INT8, direct BF16 compression, and the uncompressed BF16 model. Both compressed low-precision routes reduce weight storage while preserving faster denoising than the BF16 reference. At the 4 bpp target, they store 4.02 bpp, approximately half the 8.01 bpp of their uncoded counterparts. Denoising steps take 392 and 393 ms, compared with 506 ms for BF16 and 343 ms for uncoded FP8. These times include weight reconstruction and matrix multiplication. Weight error uses the original BF16 weights as its reference. For FP8 and INT8, it includes initial format conversion and compression. At the 6 bpp target, direct BF16 compression has 1.89% weight error, compared with 3.11% for the FP8 route and 2.37% for the INT8 route. 17 Preprint                                              
+
+> route stored bpp rel. L2(%) ↓PSNR ↑step (ms) ↓
+> BF16 reference 16.00 0.00 99.00 505.7 FP8 e4m3 container, uncoded 8.01 2.65 22.21 343.1 INT8 container, uncoded 8.01 1.07 20.10 342.5 EntroPack (4 bpp), FP8 container 4.02 7.98 19.52 391.7 EntroPack (4 bpp), INT8 container 4.02 7.34 18.88 392.5 EntroPack (4 bpp), direct BF16 4.02 7.18 19.62 544.7 EntroPack (6 bpp), FP8 container 6.06 3.11 22.31 392.2 EntroPack (6 bpp), INT8 container 6.06 2.37 20.12 392.0 EntroPack (6 bpp), direct BF16 6.06 1.89 26.34 548.0
+
+Table 7: Storage, weight error, image fidelity, and runtime with compressed FP8 and INT8 weights on Z-Image-Turbo. Fidelity uses the uncompressed BF16 model as the reference. B.2 AGGRESSIVE NETWORK -WIDE WEIGHT COMPRESSION 
+
+At very low bitrates, a uniform target may spend too little storage on layers that strongly affect image structure. Table 8 compares uniform and mixed allocations of the same budget to Z-Image-Turbo’s linear weights. The mixed allocation assigns 3 bpp to modulation, embedding, and output layers and approximately 2.47 bpp to the remaining layers. Both use approximately 2.5 stored bpp overall. At this matched storage, the mixed allocation raises mean SSIM from 0.64 to 0.67.                  
+
+> allocation network bpp rel. L2(%) ↓PSNR ↑SSIM ↑
+> uniform 2.5 bpp 2.50 20.64 16.82 0.64 sensitive@3 + rest@2.47 2.50 20.76 16.42 0.67
+
+Table 8: Uniform and mixed per-layer rate allocation on Z-Image-Turbo at approximately 2.5 stored bpp. Both allocations are evaluated against the same BF16 reference. Figure 6 illustrates the effect of the allocation with generations using the same prompt and seed. In this example, the mixed allocation produces more consistent illumination on the face and raised hand, improving the visual coherence of the generated image.  
+
+> (a) Uniform allocation (b) Mixed allocation
+
+Figure 6: Z-Image-Turbo generations with uniform and mixed rate allocation at 2.50 stored bpp, using the same prompt, random seed, and denoising settings. 18 Preprint 
+
+## C ADDITIONAL METHODOLOGICAL DETAILS 
+
+We specify the search settings, per-row allocation algorithm, and GPU coding implementation. C.1 SCALE -SEARCH SETTINGS 
+
+The scale search in Algorithm 1 uses twelve geometric-bisection steps on [10 −3, 8] and a nominal sample budget of 218 eight-dimensional vectors. To compare candidate scales on the same data, we sample complete rows with a shape-dependent seed, holding them fixed throughout the search. Probability-table precision b determines the number of distinct symbols that can receive positive frequencies. We start at 11 bits for targets up to 7 bpp and at 12 bits above that. If a full-tensor field alphabet exceeds 2b, we increase b and repeat scale selection, up to 15 bits. If the alphabet still exceeds this capacity, we coarsen the scale by setting s ← 1.05 s A max /2b and requantizing until the alphabets fit, where Amax is the largest coordinate alphabet. C.2 RDO ALLOCATION ALGORITHM 
+
+Algorithm 2 details the refinement in §3.5 under the baseline’s estimated storage budget. Candidate fields, fitted row scales, and distortions are precomputed. Each sweep updates the shared probability model and selects row candidates through a common rate-penalty search. 
+
+Algorithm 2 Per-row refinement using the baseline storage budget. 
+
+Require: Weights W , baseline (s, b ), ratios {ρk} including 1, sweeps T 
+
+> 1:
+
+For each ρk, quantize at ρks and fit row scales by equation 13  
+
+> 2:
+
+Record candidate fields, scales σr,k , and squared errors Dr,k  
+
+> 3:
+
+Initialize all k(r) to the baseline; let B be its estimated stored bytes  
+
+> 4:
+
+for t = 1 , . . . , T do  
+
+> 5:
+
+Fit the shared model qθ to the current row selections  
+
+> 6:
+
+Rr,k ← − P 
+
+> v∈r
+
+log 2 qθ (c(k) 
+
+> v
+
+, a (k) 
+
+> v
+
+) for every (r, k ) 
+
+> 7:
+
+Estimate the current mixture’s stored bytes bBmix  
+
+> 8:
+
+Rbudget ← P 
+
+> r
+
+Rr,k (r) + 8( B − bBmix ) 
+
+> 9:
+
+Define κλ(r) = arg min k[Dr,k + λR r,k ], L(λ) = P 
+
+> r
+
+Rr,κ λ(r) 
+
+> 10:
+
+bk ← κ0 
+
+> 11:
+
+if L(0) > R budget then  
+
+> 12:
+
+Set λlo = 0 and bracket λ by doubling a positive upper bound  
+
+> 13:
+
+for j = 1 , . . . , 20 do  
+
+> 14:
+
+λ ← λhi /2 if λlo = 0 , otherwise √λlo λhi  
+
+> 15:
+
+Raise λlo to λ if L(λ) > R budget ; otherwise lower λhi to λ and retain bk ← κλ 
+
+> 16:
+
+end for  
+
+> 17:
+
+end if  
+
+> 18:
+
+k ← bk 
+
+> 19:
+
+end for  
+
+> 20:
+
+return the selected fields and row scales {σr,k (r)}
+
+C.3 TILED RANS IMPLEMENTATION 
+
+Tile layout and storage. Independent tile decoding requires a saved set of rANS states and a location in the payload. Each tile has J = 32 32-bit terminal states and a 32-bit payload offset, requiring 4J + 4 = 132 bytes of tile metadata. For a configured size of S symbols, a tile holds 
+
+V = max(32 , ⌊S/ 9⌋) eight-dimensional vectors. Table 5 lists the defaults, from S = 32768 at 2 bpp to S = 4096 at 8 bpp. The tensor also stores a final boundary offset and FP32 row scales. 
+
+State normalization. The implementation uses 32-bit rANS states maintained in [2 15 , 231 ) and 16-bit payload words. Renormalization transfers words between the state and payload to preserve 19 Preprint this range. The supported probability precisions b ∈ { 9, . . . , 15 } give table frequencies M = 2 b ≤
+
+215 , so at most one payload word is needed per symbol. 
+
+Decoder lookup tables. Lookup tables recover a symbol and its frequency interval from the low bits of the current rANS state. They reside in shared memory or packed global memory, depending on alphabet size and available device resources. 
+
+## D LIMITATIONS AND FUTURE WORK 
+
+EntroPack’s flexible storage rates require additional work during model conversion and inference. Scale search, probability modeling, and entropy coding increase conversion cost relative to a single fixed-width quantization pass. Reducing repeated data passes could lower this cost. During infer-ence, the decoder materializes a dense weight tensor before each matrix product, making reconstruc-tion harder to amortize in small workloads. Fusing entropy decoding and weight reconstruction with matrix multiplication could avoid this intermediate tensor and reduce memory traffic. Activations and key–value caches are produced during inference and would require online compres-sion. Extending EntroPack beyond static weights to these tensors would therefore require probability modeling and rate selection to track changing distributions with low latency. 20
