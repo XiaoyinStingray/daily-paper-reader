@@ -1,0 +1,867 @@
+IDM-Net: A Lightweight Illumination-Decoupled Modulation
+Network for Low-Light Image Enhancement
+Cheng-Yen Hsiao
+Jing-Ming Guo∗
+Department of Electrical Engineering
+National Taiwan University of Science and Technology
+Taipei, Taiwan
+Abstract
+Low-light image enhancement (LLIE) remains challenging for lightweight models because
+illumination restoration and color fidelity are difficult to optimize simultaneously in the RGB
+color space. Although recent color-decoupled methods separate luminance and chrominance
+representations, they primarily optimize luminance as an enhancement target, leaving its potential
+as an explicit guidance prior largely unexplored during feature reconstruction. To address this
+limitation, we propose IDM-Net, a lightweight Illumination-Decoupled Modulation Network
+for low-light image enhancement.
+IDM-Net adopts a dual-encoder architecture consisting
+of a structure encoder that extracts multi-scale appearance features from the RGB image
+and a lightweight illumination encoder that learns illumination priors from the decoupled
+luminance (Y) channel.
+To effectively exploit these priors, we introduce an Illumination-
+Guided Modulation (IGM) module that injects multi-scale illumination cues into the decoder
+through spatially adaptive affine modulation, enabling accurate brightness restoration while
+preserving natural color consistency. Furthermore, we design a lightweight Feature Refinement
+Block (FRB) to progressively suppress degradation artifacts and recover fine-grained image
+details during reconstruction. Extensive experiments on multiple standard low-light image
+enhancement benchmarks demonstrate that IDM-Net achieves competitive performance among
+lightweight LLIE methods while maintaining an excellent balance between restoration quality
+and computational efficiency.
+1
+Introduction
+Low-light image enhancement (LLIE) plays a critical role in numerous real-world applications,
+including mobile photography, intelligent surveillance, autonomous driving, and medical imaging.
+Images captured under insufficient illumination often suffer from low brightness, severe noise con-
+tamination, and color distortion, leading not only to degraded visual quality but also to performance
+deterioration in downstream vision tasks such as object detection and semantic segmentation. With
+the increasing demand for deployment on resource-constrained devices, developing LLIE models
+that simultaneously achieve high restoration quality and computational efficiency has become an
+important research challenge.
+Existing LLIE methods can be broadly categorized into three paradigms. Retinex-based methods
+[1, 2, 3] explicitly model image formation by decomposing an image into illumination and reflectance
+components for separate enhancement.
+Although physically interpretable, the decomposition
+process is inherently illposed and often requires complex multi-branch architectures to ensure stable
+optimization, limiting their applicability in lightweight scenarios. End-to-end RGB-based methods
+[4, 5, 6, 7, 8, 9] directly learn the mapping from low-light images to normal light images using
+1
+arXiv:2609.30962v1  [cs.CV]  25 Sep 2026
+
+
+deep neural networks. While these methods have demonstrated impressive restoration performance,
+the entanglement of luminance and chrominance information in the RGB color space makes it
+challenging to simultaneously optimize brightness restoration and color fidelity.
+To address this limitation, recent studies have explored color-space-based enhancement frame-
+works that explicitly disentangle illumination and color information. For instance, LYT-Net [10]
+transforms images into the YUV color space to separately process luminance and chrominance
+components, while CIDNet [11] introduces the HVI color space to decouple illumination intensity
+from color representation. These methods demonstrate that color-space transformation can simplify
+optimization and improve restoration quality by reducing the interference between brightness and
+color restoration. Nevertheless, existing color-decoupled methods primarily treat luminance as
+an enhancement target, leaving its role as an illumination prior largely unexplored. As a result,
+illumination cues cannot effectively guide the restoration process, limiting brightness recovery
+under complex lighting conditions. Motivated by this observation, we propose IDM-Net, which
+explicitly exploits luminance priors to guide RGB feature reconstruction through illumination-guided
+modulation.
+The main contributions of this work are summarized as follows:
+• We revisit the role of luminance in lightweight LLIE by exploiting it as an explicit illumination
+guidance prior for feature reconstruction.
+• We propose IDM-Net, a lightweight illumination-decoupled modulation network with a dual-
+encoder architecture and an Illumination-Guided Modulation (IGM) module for illumination-
+aware restoration.
+• We introduce a lightweight Feature Refinement Block (FRB) to enhance detail recovery.
+Extensive experiments demonstrate that IDM-Net achieves highly competitive performance
+with an effective quality-efficiency trade-off.
+2
+Related Works
+Recent advances in deep learning have significantly advanced low-light image enhancement (LLIE),
+leading to the development of diverse enhancement paradigms and network architectures. This
+section reviews related work on LLIE, illumination and color decoupling strategies, and lightweight
+enhancement networks.
+2.0.1
+Low-light Image Enhancement
+Low-light image enhancement (LLIE) aims to improve image visibility and perceptual quality under
+insufficient illumination. With the advancement of deep learning, numerous LLIE methods have
+been proposed to address low contrast, noise amplification, and detail degradation. Early approaches
+relied on convolutional neural networks (CNNs) to learn direct low-to-normal-light mappings,
+significantly outperforming traditional techniques. To handle coupled degradations, Bread [12]
+decouples luminance from chrominance and sequentially performs illumination adjustment, noise
+suppression, and color restoration to alleviate color distortion from brightening, while DDNet [13]
+adopts a lightweight encoder-decoder that decomposes enhancement into color and gradient subtasks
+for real-time efficiency. To further improve restoration quality, researchers explored paradigms
+beyond CNNs.
+2
+
+
+EnlightenGAN [14] introduces an unsupervised adversarial framework removing the need for
+paired data, and LLFlow [15] formulates enhancement as a distribution transformation via nor-
+malizing flow. GLARE [16] further derives a codebook prior from normal light images via vector
+quantization and uses an invertible latent normalizing flow to align low-light features for accurate
+code retrieval, demonstrating the effectiveness of generative modeling.
+Transformer-based architectures have shown strong capability in capturing long-range depen-
+dencies. LLFormer [9] incorporates illumination-aware attention and adaptive exposure fusion,
+but the quadratic complexity of self-attention incurs substantial overhead. To improve efficiency,
+MambaLLIE [17] introduces a selective state-space mechanism modeling long-range dependencies
+with linear complexity. In parallel, diffusion-based methods such as GSAD [18] progressively restore
+illumination through iterative denoising, showing strong detail recovery and natural reconstruction.
+Despite this progress, accurately restoring illumination while preserving natural color and fine
+structural details remains challenging, especially under complex low-light conditions.
+2.0.2
+Illumination Modeling and Color-Decoupled Enhancement
+Illumination modeling plays a crucial role in low-light image enhancement, as insufficient lighting is
+one of the primary causes of visibility degradation. Inspired by Retinex theory, many LLIE methods
+explicitly model illumination information to facilitate image restoration. LIME [19] estimates
+illumination maps for brightness enhancement, while RetinexNet [1]and KinD [2] incorporate
+Retinex decomposition into deep networks by separating reflectance and illumination components.
+More recently, Retinexformer [3] integrates illumination priors into a transformer framework to
+better capture global contextual information for low-light enhancement.
+Despite the success of illumination modeling, directly enhancing images in the RGB color space
+remains challenging due to the strong coupling between luminance and chrominance information,
+which often leads to color distortion. To alleviate this issue, several studies perform enhancement in
+alternative color spaces. Bread [12] exploit YCbCr decomposition for illumination enhancement,
+LYT-Net [10] processes luminance and chrominance separately in the YUV space, and Zhou et al.
+[20] perform enhancement in the HSV domain to better preserve color appearance. These methods
+demonstrate that color-space decoupling can improve illumination restoration while maintaining
+color fidelity.
+Recent CIDNet [11] further introduces a learnable color space and adopts a dual-branch ar-
+chitecture to separately restore illumination and chromatic information, highlighting the benefits
+of luminance–chrominance disentanglement. Nevertheless, existing illumination-aware and color-
+decoupled methods mainly focus on independent illumination and color modeling, resulting in
+limited interaction between illumination cues and feature reconstruction. Consequently, illumination
+information cannot be fully exploited throughout the restoration process. To address this limitation,
+we propose IDM-Net, which employs a dedicated illumination encoder and an Illumination-Guided
+Modulation (IGM) module to inject multi-scale illumination priors into RGB feature decoding. By
+explicitly guiding feature reconstruction with illumination information, IDM-Net achieves accurate
+brightness restoration while preserving natural color appearance.
+2.0.3
+Lightweight LLIE Networks
+Although recent LLIE methods have achieved impressive performance through illumination modeling,
+color-space decomposition, and advanced network architectures, many approaches rely on increasingly
+complex designs, resulting in high computational and memory costs. This limits their deployment
+on resource-constrained and real-time applications. Consequently, developing lightweight LLIE
+3
+
+
+Figure 1: Overview of IDM-Net. Instead of directly restoring luminance, the proposed framework exploits
+luminance features as illumination priors to guide multi-scale RGB feature reconstruction.
+networks that maintain enhancement quality while reducing computational complexity has become
+an important research direction.
+Existing lightweight LLIE methods address this challenge from different perspectives. Zero-
+DCE [5] formulates enhancement as a curve estimation problem with non-reference learning, while
+RUAS [6] incorporates illumination priors into a lightweight architecture discovered through neural
+architecture search. IAT [21] combines lightweight local modeling and global adjustments for efficient
+enhancement, whereas PairLIE [22] and Multinex [23] improve representation capability through
+self-supervised learning and efficient luminance-reflectance decomposition, respectively. In addition,
+CPGA-Net [24] and CPGA-Net+ [25] integrate handcrafted priors to enhance restoration quality
+within compact network architectures.
+Despite these advances, lightweight LLIE methods often face a trade-off between computational
+efficiency and restoration quality. Accurately restoring illumination while preserving color consistency
+and fine details remains challenging under limited computational budgets. Moreover, illumination
+information is often processed independently or insufficiently integrated into feature reconstruction,
+restricting effective illumination-aware enhancement. To address these limitations, we propose IDM-
+Net, which introduces illumination-guided feature modulation and lightweight feature refinement
+for efficient and color-consistent low-light image enhancement.
+3
+Methodology
+As shown in Figure 1, IDM-Net employs a dual encoder–decoder architecture to separately learn
+structural and illumination features.
+Illumination priors guide structural restoration through
+the Illumination-Guided Modulation (IGM) module, while the Feature Refinement Block (FRB)
+enhances feature representation and detail recovery. This design enables effective low-light image
+4
+
+
+enhancement with low computational cost.
+3.0.1
+The Illumination-Decoupled Dual Encoder
+To explicitly decouple illumination from appearance information, IDM-Net adopts a dual-encoder
+architecture that processes the input RGB image and its luminance component in parallel. This
+design is motivated by the observation that enhancing illumination directly in the RGB space often
+alters the original color relationships, leading to color shifts and visual artifacts. By separating
+illumination modeling from appearance representation, our network can restore brightness without
+distorting structural and chromatic information.
+Given a low-light RGB image Iin ∈R3×H×W , we first extract its luminance component Y ∈
+R1×H×W via the standard BT.601 luma transform:
+Y = 0.299 · R + 0.587 · G + 0.114 · B
+(1)
+which provides an explicit, noise-robust representation of scene illumination. The original RGB image
+and the extracted luminance channel are then fed into two parallel encoders. The Structural Encoder
+extracts multi-scale appearance features that preserve structural details and chromatic information,
+while the Illumination Encoder focuses on learning illumination-aware representations from the
+decoupled luminance component. Formally, the two encoders progressively extract multi-scale
+feature representations through sequential downsampling:
+F l
+S = εl
+S(F l−1
+S
+),
+F 0
+S = Iin,
+(2)
+F l
+Y = εl
+Y (F l−1
+Y
+),
+F 0
+Y = Y,
+(3)
+For l ∈{1, 2, . . . , L}, where εl
+S and εl
+Y denote the l-th encoder block of the Structural Encoder and
+Illumination Encoder, respectively. After L stages, the dual encoder produces two complementary
+sets of multi-scale features: {F l
+S}L
+l=1 encoding structural and chromatic information, and {F l
+Y }L
+l=1
+encoding illumination priors at corresponding scales. These features are subsequently utilized by
+the decoder for illumination-guided reconstruction.
+Both encoders are constructed using lightweight convolutional Residual Blocks followed by
+strided downsampling operations. The Residual Blocks enhance feature extraction capability while
+maintaining efficient information propagation, whereas the downsampling layers progressively reduce
+spatial resolution to capture higher-level contextual information. Through multi-scale feature
+extraction, the Structural Encoder focuses on preserving scene structures and edge details, while the
+Illumination Encoder learns illumination-aware representations for subsequent brightness restoration.
+Unlike conventional RGB-only feature extraction, the proposed dual-encoder architecture gener-
+ates two complementary representations. The structural features preserve scene content and texture
+details, while the illumination features provide explicit illumination priors that are less affected by
+chromatic variations. Such decoupling facilitates more effective illumination-aware reconstruction in
+subsequent decoding stages and helps alleviate color distortions commonly observed in RGB-based
+enhancement methods.
+3.0.2
+Illumination-Guided Modulation (IGM)
+While simple fusion strategies such as concatenation or element-wise addition can combine structural
+and illumination features, they treat illumination priors as ordinary feature responses and provide
+only passive guidance. Since illumination priors may gradually dilute after successive convolution
+operations, such implicit fusion is insufficient for spatially non-uniform brightness restoration. To
+5
+
+
+address this, we propose the Illumination-Guided Modulation (IGM) module, which explicitly injects
+illumination priors into the reconstruction process through spatially adaptive affine transformation.
+Given the structural feature F l
+S and the corresponding illumination feature F l
+Y at the l-th
+decoder scale, the illumination feature is first resized to match the spatial resolution of F l
+S when
+necessary. Since illumination degradation is typically spatially non-uniform, directly estimating
+modulation parameters from the entire illumination feature map may introduce irrelevant responses
+from well-exposed regions.
+A spatial attention mechanism is therefore applied to emphasize
+illumination-sensitive regions:
+Al = σ
+
+Conv7×7
+
+F l
+Y
+
+(4)
+where σ(·) denotes the sigmoid activation.
+A large-kernel convolution (7 × 7) is adopted as
+illumination transitions tend to be spatially smooth and span larger spatial regions. The attention
+map recalibrates the illumination feature as:
+˜F l
+Y = Al ⊙F l
+Y
+(5)
+where ⊙denotes element-wise multiplication. Through this operation, the network focuses on
+regions requiring illumination correction while suppressing less informative responses.
+To capture broader illumination context, ˜F l
+Y is subsequently processed by an illumination
+projection network comprising a standard 3 × 3 convolution followed by a dilated convolution
+(dilation rate d), which expands the effective receptive field to model large-scale illumination
+variations such as global exposure differences and spatial lighting gradients. The projection network
+generates two spatially adaptive affine parameters:
+[γl, βl] = ϕ
+
+˜F l
+Y
+
+(6)
+where ϕ(·) denotes the learnable projection function, and γl, βl represent the scale and shift
+parameters, respectively.
+Finally, the affine parameters modulate the structural feature in a SPADE-like spatially adaptive
+manner [26]:
+˜F l
+S = GN(F l
+S) ⊙(1 + γl) + βl
+(7)
+where GN(·) denotes Group Normalization. Here, γl adaptively controls the response intensity
+of structural features according to local illumination conditions, while βl provides illumination-
+dependent bias compensation.
+By replacing passive feature fusion with explicit adaptive modulation, IGM ensures that illu-
+mination priors persistently guide structural feature reconstruction at each decoder scale. The
+combination of spatial attention, which highlights illumination-sensitive regions, and dilated context
+modeling, which captures large-scale lighting distributions, enables the network to perform spatially
+adaptive brightness restoration while preserving chromatic consistency.
+3.0.3
+Feature Refinement Block (FRB)
+Although the IGM module effectively injects illumination priors into the reconstruction process,
+the decoder features may still contain residual noise and structural artifacts introduced during
+the low-light capture process. To address this, we propose the Feature Refinement Block (FRB),
+which progressively suppresses noise while preserving fine-grained structural details throughout
+the decoding stages. As show in Figure 2, FRB consists of two complementary components: a
+Multi-Scale Adaptive Excitation (MSAE) module for multi-scale noise localization, and a Gated
+Feature Modulation (GFM) for selective feature refinement.
+6
+
+
+GroupNorm
+DWConv
+DWConv
+DWConv
+Conv
+Sigmoid
+GroupNorm
+Conv
+DWConv
+Chuck2
+Chunk1
+GELU
+Conv
+Feature Refinement Block 
+MSAE
+GFM
+Figure 2: Architecture of the proposed Feature Refinement Block (FRB), consisting of a Multi-Scale
+Adaptive Excitation (MSAE) module and a Gated Feature Modulation (GFM) module.
+Multi-Scale Adaptive Excitation (MSAE): Noise in low-light images exhibits spatially irregular
+distributions that span multiple scales, making it difficult to suppress with a fixed receptive field.
+To capture noise patterns at different scales simultaneously, MSAE employs three parallel depthwise
+dilated convolutions with different dilation rates:
+xi = DWConvdi(x),
+i ∈{1, 2, 3},
+(8)
+where DWConvdi(·) denotes a depthwise convolution with dilation rate di. The multi-scale responses
+are concatenated and projected through a 1 × 1 convolution to generate a spatial attention map:
+F = σ (Conv1×1 ([x1; x2; x3]))
+(9)
+where σ(·) denotes the sigmoid activation and [·; ·] denotes channel-wise concatenation. The attention
+map F recalibrates the input feature:
+x = x ⊙F
+(10)
+where ⊙denotes element-wise multiplication. Through this operation, MSAE suppresses noisy
+responses while preserving spatially coherent structural features.
+The dilation rates are dataset-dependent: for real-world datasets (LOL-v1 and LOL-v2-real), we
+adopt {d1, d2, d3} = {1, 2, 4} to capture fine-grained local noise patterns; for the synthetic dataset
+(LOL-v2-synthetic), we use {1, 4, 9} to model larger-scale structured noise patterns, reflecting the
+different noise characteristics between real and synthetic data.
+Gated Feature Modulation (GFM): After spatial noise suppression by MSAE, GFM further
+refines the features through a gating mechanism that selectively amplifies informative responses
+while suppressing redundant ones. Given the input feature x, GFM first expands the channel
+dimension via a 1 × 1 convolution followed by a depthwise convolution, then splits the output
+into two equal halves along the channel dimension. A gating operation is applied by element-wise
+multiplying the GELU-activated first half with the second half, allowing the network to selectively
+pass informative activations while suppressing noise-corrupted ones. The gated output is finally
+projected back to the original channel dimension through a 1 × 1 convolution. This design enables
+expressive feature selection without introducing additional parameters beyond the projection layers.
+7
+
+
+Figure 3: Visual comparison on the LOL datasets. Zoomed-in regions highlight the superior detail restoration
+and texture preservation achieved by the proposed IDM-Net.
+4
+Experimental Results
+This section evaluates the proposed method on paired and unpaired low-light image enhancement
+benchmarks. We compare it with state-of-the-art methods in terms of quantitative performance,
+visual quality, and computational efficiency.
+4.0.1
+Datasets and Evaluation Metrics
+Experiments are conducted on both paired and unpaired low-light image enhancement benchmarks.
+For paired evaluation, LOLv1, LOLv2-real, and LOLv2-synthetic are adopted, while LIME [19],
+MEF [27], NPE [28], VV [29], and DICM [30] are used for unpaired evaluation. As ground-truth
+references are unavailable for the unpaired datasets, performance is evaluated using the no-reference
+NIQE metric, which assesses the naturalness and perceptual quality of the enhanced results.
+4.0.2
+Implementation Details
+All experiments are conducted on a workstation equipped with a single NVIDIA GeForce RTX
+5060 Ti GPU. The proposed IDM-Net employs a base channel width of 16, resulting in only 0.79M
+parameters and 5.47 GFLOPs. The LightBottleneck module is implemented using depth-wise
+separable convolutions, which significantly reduce the parameter count and computational cost while
+preserving feature representation capability. Unless otherwise specified, three Feature Refinement
+Blocks (FRBs) are stacked at each decoder scale.
+During training, images are used at their original resolutions with random flipping and rotation
+for data augmentation. The network is trained for 800 epochs using AdamW with an initial learning
+rate of 2 × 10−4, followed by cosine annealing and a 10-epoch warm-up. The batch size is set to
+4 for LOL-v1 and LOL-v2-Real, and 1 for LOL-v2-Synthetic. Following standard LLIE protocols,
+PSNR, SSIM, and LPIPS are adopted for evaluation.
+4.0.3
+Quantitative Results
+Table 1 reports the quantitative results on LOL-v1, LOL-v2-Real, and LOL-v2-Synthetic, while
+Figure 3 provides visual comparisons with representative LLIE methods. For visual comparison, we
+select several state-of-the-art lightweight approaches as baselines. As highlighted in the zoomed-
+in regions of Figure 3, IDM-Net recovers more faithful colors and finer structural details than
+competing methods. In particular, our method better preserves texture information while avoiding
+color distortion and over-enhancement artifacts, resulting in more natural and visually pleasing
+restoration results.
+8
+
+
+Table 1: Comparison with state-of-the-art methods on LOL benchmarks. The best and second-best results
+are highlighted in bold and underlined, respectively.
+Size
+Method
+LOLv1
+LOLv2-real
+LOLv2-syn
+Efficiency
+PSNR↑
+SSIM↑
+LPIPS↓
+PSNR↑
+SSIM↑
+PSNR↑
+SSIM↑
+#P(M)↓
+GFLOPs↓
+Heavy
+(> 10M)
+EnGAN
+17.54
+0.664
+0.326
+18.23
+0.617
+16.49
+0.771
+54.41
+22.19
+LLFormer
+23.65
+0.816
+0.169
+27.75
+0.860
+17.16
+0.784
+24.55
+39.05
+GLARE
+23.55
+0.863
+0.086
+22.51
+0.871
+18.21
+0.842
+59.48
+508.42
+LLFlow
+21.15
+0.854
+0.116
+17.43
+0.831
+24.81
+0.919
+17.42
+358.40
+GSAD
+22.77
+0.852
+0.102
+20.15
+0.846
+24.47
+0.929
+17.36
+442.02
+Mid Size
+(1–10M)
+KinD
+17.65
+0.771
+0.175
+14.74
+0.641
+17.28
+0.758
+8.02
+63.68
+DDNet
+21.82
+0.798
+0.186
+23.02
+0.834
+24.63
+0.917
+5.39
+111.47
+Bread
+22.96
+0.838
+0.155
+20.83
+0.847
+17.63
+0.919
+2.02
+19.85
+CIDNet
+23.81
+0.857
+0.086
+24.11
+0.871
+25.71
+0.942
+1.88
+7.57
+Retinexformer
+25.15
+0.846
+0.131
+22.79
+0.840
+25.67
+0.930
+1.53
+15.85
+Lightweight
+(< 1M)
+Retinex-Net
+16.77
+0.425
+0.474
+18.37
+0.723
+17.14
+0.756
+0.56
+79.61
+PairLIE
+19.56
+0.730
+0.248
+19.89
+0.778
+19.07
+0.794
+0.34
+81.84
+IAT
+23.38
+0.809
+0.210
+23.50
+0.824
+15.37
+0.710
+0.09
+5.27
+Zero-DCE
+14.86
+0.562
+0.335
+14.32
+0.511
+17.76
+0.814
+0.08
+4.83
+LYT-Net
+22.38
+0.826
+0.134
+20.97
+0.840
+23.50
+0.914
+0.05
+8.04
+CPGA-Net
+20.94
+0.748
+0.260
+20.79
+0.759
+20.68
+0.833
+0.03
+6.03
+CPGA-Net+
+22.53
+0.812
+0.205
+20.90
+0.800
+23.07
+0.907
+0.06
+9.36
+Multinex
+23.19
+0.843
+0.129
+23.04
+0.860
+25.04
+0.930
+0.05
+2.50
+IDM-Net
+24.15
+0.845
+0.129
+23.01
+0.858
+25.11
+0.935
+0.79
+5.48
+Among lightweight methods, IDM-Net achieves the best overall performance. On LOL-v1, IDM-
+Net attains 24.15 dB PSNR and 0.845 SSIM, outperforming all other lightweight approaches and
+approaching the performance of substantially larger models. On LOL-v2-Real, IDM-Net achieves
+competitive results with 23.01 dB PSNR and 0.858 SSIM, ranking among the top lightweight
+methods. The relatively smaller improvement on this dataset may be attributed to real sensor
+noise and photometric inconsistencies. Since IDM-Net utilizes the luminance map derived from
+the Y channel of the input image as an illumination prior, noise-corrupted luminance information
+may reduce the reliability of illumination-guided modulation and consequently limit enhancement
+performance. Nevertheless, IDM-Net maintains favorable reconstruction quality while preserving its
+lightweight design. On LOL-v2-Synthetic, IDM-Net achieves the best performance among lightweight
+methods, reaching 25.11 dB PSNR and 0.935 SSIM. Furthermore, IDM-Net consistently delivers
+strong perceptual quality, achieving one of the lowest LPIPS scores on LOL-v1, demonstrating its
+ability to generate visually pleasing and perceptually faithful enhancement results.
+In terms of efficiency, IDM-Net requires only 0.79M parameters and 5.48 GFLOPs, which is
+substantially lower than most heavy and mid-size models while maintaining competitive enhancement
+performance. Compared with representative lightweight approaches such as LYT-Net, CPGA-Net+,
+and Multinex, IDM-Net provides a better balance between restoration quality and computational
+complexity, demonstrating the effectiveness of the proposed illumination-decoupled modulation
+framework.
+Table 2 reports the NIQE results on five unpaired low-light datasets, including MEF, LIME,
+NPE, VV, and DICM. Lower NIQE values indicate better perceptual image quality.
+As shown in Table 2, IDM-Net achieves the best average NIQE score of 3.191 among all compared
+lightweight methods. Specifically, IDM-Net obtains the best results on NPE, VV, and DICM, and
+9
+
+
+Table 2: Image quality comparison on unpaired datasets using the NIQE metric, where lower values indicate
+better performance. The best and second-best results are highlighted in bold and underlined, respectively.
+Method
+Unpaired Datasets (NIQE↓)
+MEF
+LIME
+NPE
+VV
+DICM
+Avg
+Retinex-Net
+4.081
+4.907
+4.457
+2.619
+4.737
+4.160
+PairLIE
+4.357
+4.312
+4.093
+3.155
+3.240
+3.831
+IAT
+4.169
+4.174
+3.290
+3.174
+3.032
+3.568
+Zero-DCE
+3.507
+3.791
+3.508
+2.752
+3.102
+3.332
+IDM-Net
+3.651
+3.966
+3.152
+2.452
+2.732
+3.191
+Table 3: Ablation study of different components in the proposed network. The best and second-best results
+are highlighted in bold and underlined, respectively.
+Combination
+PSNR↑
+SSIM↑
+LPIPS↓
+(a)
+Base UNet
+21.45
+0.798
+0.199
+(b)
+(a) + LightBottleck
+22.06
+0.812
+0.169
+(c)
+(b) + Y branch + concat
+23.26
+0.836
+0.133
+(d)
+(b) + Y branch + IGM
+23.86
+0.840
+0.130
+(e)
+(d) + FRB (Full IDM-Net)
+24.15
+0.845
+0.129
+achieves the second-best performance on MEF and LIME. These results indicate that the proposed
+illumination-decoupled design and illumination-guided modulation strategy generalize well beyond
+paired training datasets and can effectively enhance real-world low-light images. Furthermore,
+as shown in Fig. 4, IDM-Net generally produces more natural restoration results compared with
+the other methods, with balanced illumination, realistic color reproduction, and well-preserved
+image details. The superior average NIQE score, together with the qualitative comparison, further
+demonstrates that IDM-Net is capable of producing visually natural and perceptually pleasing
+enhancement results under diverse imaging conditions.
+4.0.4
+Ablation Study
+To evaluate the contribution of each component in the proposed Network, ablation studies are
+conducted on the LOL-v1 dataset. Starting from a baseline network, components are progressively
+introduced to analyze their individual and cumulative effects on restoration performance. The
+quantitative results are summarized in Table 3. The baseline model achieves a PSNR of 21.45 dB,
+an SSIM of 0.798, and an LPIPS score of 0.199. Replacing the standard convolution blocks with
+the proposed LightBottleneck, which is built upon depthwise convolutions (DWConv) combination,
+improves the performance to 22.06 dB PSNR and 0.812 SSIM while reducing LPIPS to 0.169.
+These results demonstrate that the lightweight DWConv-based design effectively enhances feature
+representation while maintaining low computational complexity.
+Building upon the LightBottleneck backbone, introducing the illumination branch and directly
+fusing illumination features through concatenation further improves the performance to 23.26 dB
+PSNR and 0.836 SSIM. The significant gain demonstrates the importance of explicitly incorporating
+illumination information into the enhancement process.
+To verify the effectiveness of the proposed Illumination-Guided Modulation (IGM), the concate-
+nation operation is replaced by the proposed adaptive modulation mechanism. As shown in Table 3,
+the PSNR increases from 23.26 dB to 23.86 dB, while SSIM improves from 0.836 to 0.840 and
+10
+
+
+Figure 4: Qualitative comparison of different low-light image enhancement methods on representative images
+from the unpaired low-light datasets.
+LPIPS decreases from 0.133 to 0.130. These results suggest that explicitly modulating structural
+features with illumination priors is more effective than passive feature fusion, enabling the network
+to better adapt to spatially varying illumination conditions.
+Finally, incorporating the Feature Refinement Block (FRB) leads to the full IDM-Net and further
+boosts performance to 24.15 dB PSNR, 0.845 SSIM, and 0.129 LPIPS. Compared with the baseline,
+the complete model achieves gains of 2.70 dB in PSNR and 0.047 in SSIM while reducing LPIPS by
+0.07. These results demonstrate that each proposed component contributes positively to the overall
+performance, and their combination yields the best restoration quality.
+5
+Conclusion, Limitation and Future Works
+In this paper, we present IDM-Net, a lightweight Illumination-Decoupled Modulation Network for
+low-light image enhancement. Rather than relying on explicit illumination-reflectance decomposition
+as in conventional Retinex-based approaches, IDM-Net reformulates illumination guidance as a
+feature modulation process: a dedicated Illumination Encoder extracts multi-scale luminance priors,
+which guide the Structure Encoder’s content features through the proposed Illumination-Guided
+Modulation (IGM) module. Combined with the Feature Refinement Block (FRB), this architectural
+decoupling enables effective brightness restoration while preserving structural and chromatic fidelity.
+Experimental results on LLIE benchmark datasets demonstrate that IDM-Net achieves highly
+competitive performance among lightweight LLIE methods. Nevertheless, the model may still be
+11
+
+
+affected by photometric inconsistencies in real-world datasets, and the fixed illumination prior may
+not fully capture the complex characteristics of diverse camera imaging pipelines, which could limit
+its generalization capability in certain scenarios.
+In future work, we plan to investigate learnable illumination priors to further improve enhance-
+ment quality and robustness, and explore an ultra-lightweight version of IDM-Net for real-time
+deployment on resource-constrained devices.
+References
+[1] C. Wei, W. Wang, W. Yang, and J. Liu, “Deep retinex decomposition for low-light enhancement,”
+in British Machine Vision Conference (BMVC), 2018.
+[2] Y. Zhang, J. Zhang, and X. Guo, “Kindling the darkness: A practical low-light image enhancer,”
+in Proceedings of the 27th ACM International Conference on Multimedia, 2019, pp. 1632–1640.
+[3] Y. Cai, H. Bian, J. Lin, H. Wang, R. Timofte, and L. Van Gool, “Retinexformer: One-stage
+retinex-based transformer for low-light image enhancement,” in Proceedings of the IEEE/CVF
+International Conference on Computer Vision (ICCV), 2023, pp. 12 504–12 513.
+[4] W. Ren, S. Liu, L. Ma, Q. Xu, X. Xu, X. Cao, J. Du, and M.-H. Yang, “Low-light image
+enhancement via a deep hybrid network,” IEEE Transactions on Image Processing, vol. 28,
+no. 9, pp. 4364–4375, 2019.
+[5] C. Guo, C. Li, J. Guo, C. C. Loy, J. Hou, S. Kwong, and R. Cong, “Zero-reference deep curve
+estimation for low-light image enhancement,” in Proceedings of the IEEE/CVF Conference on
+Computer Vision and Pattern Recognition (CVPR), 2020, pp. 1780–1789.
+[6] R. Liu, L. Ma, J. Zhang, X. Fan, and Z. Luo, “Retinex-inspired unrolling with cooperative
+prior architecture search for low-light image enhancement,” in Proceedings of the IEEE/CVF
+Conference on Computer Vision and Pattern Recognition (CVPR), 2021, pp. 10 561–10 570.
+[7] C. Li, C. Guo, and C. C. Loy, “Learning to enhance low-light image via zero-reference deep
+curve estimation,” IEEE Transactions on Pattern Analysis and Machine Intelligence, vol. 44,
+no. 8, pp. 4225–4238, 2022.
+[8] L. Ma, T. Ma, R. Liu, X. Fan, and Z. Luo, “Toward fast, flexible, and robust low-light image
+enhancement,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern
+Recognition (CVPR), 2022, pp. 5637–5646.
+[9] T. Wang, K. Zhang, W. Shen, W. Luo, B. Stenger, and T. Lu, “Llformer: A transformer
+architecture for low-light image enhancement,” in Proceedings of the AAAI Conference on
+Artificial Intelligence, 2023.
+[10] A. Brateanu, R. Balmez, A. Avram, C. Orhei, and C. Ancuti, “Lyt-net: Lightweight yuv
+transformer-based network for low-light image enhancement,” IEEE Signal Processing Letters,
+vol. 32, pp. 2065–2069, 2025.
+[11] Q. Yan, Y. Feng, C. Zhang, G. Pang, K. Shi, P. Wu, W. Dong, J. Sun, and Y. Zhang, “Hvi: A
+new color space for low-light image enhancement,” in Proceedings of the IEEE/CVF Conference
+on Computer Vision and Pattern Recognition (CVPR), 2025.
+12
+
+
+[12] Q. Hu and X. Guo, “Low-light image enhancement via breaking down the darkness,” Interna-
+tional Journal of Computer Vision, 2023.
+[13] J. Qu, R. W. Liu, Y. Gao, Y. Guo, F. Zhu, and F.-Y. Wang, “Double domain guided
+real-time low-light image enhancement for ultra-high-definition transportation surveillance,”
+Trans. Intell. Transport. Sys., vol. 25, no. 8, p. 9550–9562, Aug. 2024. [Online]. Available:
+https://doi.org/10.1109/TITS.2024.3359755
+[14] Y. Jiang, X. Gong, D. Liu, Y. Cheng, C. Fang, X. Shen, J. Yang, P. Zhou, and Z. Wang,
+“Enlightengan: Deep light enhancement without paired supervision,” IEEE Transactions on
+Image Processing, vol. 30, pp. 2340–2349, 2021.
+[15] Y. Wang, R. Wan, W. Yang, H. Li, L.-P. Chau, and A. C. Kot, “Low-light image enhancement
+with normalizing flow,” in Proceedings of the AAAI Conference on Artificial Intelligence, vol. 36,
+no. 3, 2022, pp. 2604–2612.
+[16] H. Zhou, W. Dong, X. Liu, S. Liu, X. Min, G. Zhai, and J. Chen, “Glare: Low light image
+enhancement via generative latent feature based codebook retrieval,” in European Conference
+on Computer Vision.
+Springer, 2024, pp. 36–54.
+[17] J. Weng, Z. Yan, Y. Tai, J. Qian, J. Yang, and J. Li, “Mamballie: Implicit retinex-aware
+low light enhancement with global-then-local state space,” in Advances in Neural Information
+Processing Systems (NeurIPS), vol. 37, 2024.
+[18] J. Hou, Z. Zhu, J. Hou, H. Liu, H. Zeng, and H. Yuan, “Global structure-aware diffusion process
+for low-light image enhancement,” in Advances in Neural Information Processing Systems
+(NeurIPS), vol. 36, 2023.
+[19] X. Guo, Y. Li, and H. Ling, “Lime: Low-light image enhancement via illumination map
+estimation,” IEEE Transactions on Image Processing, vol. 26, no. 2, pp. 982–993, 2017.
+[20] L. Zhou, X. Chen, B. Ye, X. Jiang, S. Zou, L. Ji, Z. Yu, J. Wei, Y. Zhao, and T. Wang, “A
+low-light image enhancement method based on hsv space,” The Imaging Science Journal, vol. 73,
+no. 1, pp. 16–29, 2025. [Online]. Available: https://doi.org/10.1080/13682199.2023.2266308
+[21] Z. Cui, K. Li, L. Gu, S. Su, P. Gao, Z. Jiang, Y. Qiao, and T. Harada, “You only need 90k
+parameters to adapt light: A light weight transformer for image enhancement and exposure
+correction,” in British Machine Vision Conference (BMVC), 2022.
+[22] Z. Fu, Y. Yang, X. Tu, Y. Huang, X. Ding, and K.-K. Ma, “Learning a simple low-light image
+enhancer from paired low-light instances,” in Proceedings of the IEEE/CVF Conference on
+Computer Vision and Pattern Recognition (CVPR), 2023, pp. 22 252–22 261.
+[23] A. Brateanu, T. Mu, C. Ancuti, and C. Ancuti, “Multinex: Lightweight low-light image
+enhancement via multi-prior retinex,” in Proceedings of the IEEE/CVF Conference on Computer
+Vision and Pattern Recognition (CVPR), 2026.
+[24] S.-E. Weng, S.-G. Miaou, and R. Christanto, “A lightweight low-light image enhancement
+network via channel prior and gamma correction,” International Journal of Pattern Recognition
+and Artificial Intelligence, vol. 39, no. 12, p. 2554013, 2025.
+[25] S.-E. Weng, C.-Y. Hsiao, L.-W. Lu, Y.-S. Huang, T.-H. Chen, S.-G. Miaou, and R. Christanto,
+“Rethinking theoretical illumination for efficient low-light image enhancement,” 2025.
+13
+
+
+[26] T. Park, M.-Y. Liu, T.-C. Wang, and J.-Y. Zhu, “Semantic image synthesis with spatially-
+adaptive normalization,” in Proceedings of the IEEE/CVF Conference on Computer Vision
+and Pattern Recognition (CVPR), 2019, pp. 2337–2346.
+[27] K. Ma, K. Zeng, and Z. Wang, “Perceptual quality assessment for multi-exposure image fusion,”
+IEEE Transactions on Image Processing, vol. 24, no. 11, pp. 3345–3356, 2015.
+[28] S. Wang, J. Zheng, H.-M. Hu, and B. Li, “Naturalness preserved enhancement algorithm for
+non-uniform illumination images,” IEEE Transactions on Image Processing, vol. 22, no. 9, pp.
+3538–3548, 2013.
+[29] V. Vonikakis, R. Kouskouridas, and A. Gasteratos, “On the evaluation of illumination com-
+pensation algorithms,” Multimedia Tools and Applications, vol. 77, no. 8, pp. 9211–9231, Apr.
+2018.
+[30] C. Lee, C. Lee, and C.-S. Kim, “Contrast enhancement based on layered difference representation
+of 2d histograms,” IEEE Transactions on Image Processing, vol. 22, no. 12, pp. 5372–5384,
+Dec. 2013.
+14
