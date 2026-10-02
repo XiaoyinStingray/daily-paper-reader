@@ -1,0 +1,2445 @@
+Atomizer-IO: Beyond pixels, patches and grids
+ATOMIZER-IO:
+BEYOND
+PIXELS,
+PATCHES
+AND
+GRIDS
+Hugo Riffaud de Turckheim1, Sylvain Lobry2, Nicolas Houdr´e2,
+Damien Robert3, Roberto Interdonato4, Diego Marcos1
+1INRIA, Montpellier, France
+2LIPADE, Universit´e Paris Cit´e, Paris, France
+3DM3L, University of Zurich, Zurich, Switzerland
+4CIRAD, Montpellier, France
+hugo.riffaud--de-turckheim@inria.fr
+ABSTRACT
+Most vision architectures assume that observations lie on a regular grid, an ef-
+fective abstraction for natural images but a restrictive one for sensing data whose
+channels, temporal sampling, spatial resolution, and geometry can vary. Generic
+set-based architectures remove the grid, but also remove useful spatial inductive
+biases. We introduce Atomizer-IO, an architecture that places observations first
+and derives structure from their physical relationships. Building on top of an
+atomic representation of the data, each observation is described by its measure-
+ment and acquisition metadata, while local cross-attention maps observations to
+anchor points that can be arbitrarily placed. We evaluate this design by progres-
+sively relaxing the grid assumption, from varying input raster configurations and
+incomplete channel sets to flexible output density and, ultimately, inputs without
+a raster grid. Atomizer-IO is competitive with flexible EO-specific architectures
+on most tasks, while offering post-training control over inference cost and com-
+petitive compute–performance trade-offs. The same formulation extends without
+architectural redesign to unordered 3D point clouds, showing that the atomic in-
+terface generalizes beyond regular raster inputs. These results suggest that pixels,
+patches, and grids do not need to define the interface of a sensing architecture.
+1
+INTRODUCTION
+Most computer vision models, including convolutional neural networks (CNN) (LeCun et al., 1989)
+and vision transformers (ViT) (Dosovitskiy et al., 2020), see the world as a regular grid. They oper-
+ate on tensors whose channels and spatial organization are known in advance. Natural images fit this
+interface well: RGB channels have fixed semantics, pixels lie on a regular lattice, and neighboring
+entries have a constant spatial offset. Convolutions exploit this structure explicitly, while ViTs retain
+the same regular input organization even as they relax locality. In many sensing domains, however,
+spectral content, spatial sampling, acquisition time, and even geometry vary, making a fixed tensor
+overly restrictive.
+Earth observation (EO) is an acute instance of this mismatch. Data in this field is heterogeneous by
+nature, since different sensors observe different physical quantities, at different resolutions, and at
+different times. Channel position therefore provides no stable physical identity across sensors. A
+short-wave infrared measurement sensitive to moisture and a SAR backscatter measurement sensi-
+tive to surface roughness may occupy analogous tensor positions while representing fundamentally
+different physical quantities. In standard architectures, measurement identity is therefore encoded
+implicitly through channel position rather than explicitly through physical characteristics (Jakubik
+et al., 2025). Measurement identity is only one axis: resolution, acquisition time, channel availabil-
+ity, and geometry vary too.
+Recent EO architectures increasingly accommodate these sources of variation through dedicated
+mechanisms. Rather than changing the underlying representation, they typically adapt a tensor- or
+patch-based interface to each source of variation. Within this fixed interface, a missing channel must
+be padded (Sumbul et al., 2025) with values the model cannot distinguish from real measurements,
+1
+arXiv:2609.40320v1  [cs.CV]  30 Sep 2026
+
+
+Atomizer-IO: Beyond pixels, patches and grids
+Multichannel raster
+Multimodal raster
+Multitemporal multimodal raster
+S2
+S1
+t
+t n
+0
+Time
+Sen1Floods11
+Pastis
+C
+Cashew
+Raster + point cloud
+FRACTAL
+Point cloud
+DALES
+Figure 1: Sensing configurations considered in this work. All are processed through the same atomic
+interface, without rasterization, resampling, or modality-specific branches.
+differing resolutions resampled or handled by resolution-aware processing (Marsocci et al., 2024),
+and irregular observations forced onto a grid before entering the model (Weinstein et al., 2021).
+Each mechanism compensates for an assumption introduced by the representation itself.
+Our proposed Atomizer-IO reverses this order: observations come first, structure second. Each
+observation is represented independently by its measurement and acquisition metadata, without re-
+quiring a fixed channel count, tensor shape, or neighboring measurement. Structure is introduced
+afterwards from physical relationships between observations: locality and relative geometry are de-
+fined directly in physical coordinates rather than inherited from tensor position.
+Atomizer-IO implements this principle through an atomic encoder–processor–decoder architecture.
+Following Atomizer (de Turckheim et al., 2025), each observation is represented as an atom; for
+raster data, one atom corresponds to one measurement from one spectral band, at one pixel location
+and one acquisition time. The encoder aggregates atoms into spatially anchored latent vectors, the
+processor lets these latents interact, and a query-based decoder maps local latent neighborhoods
+to requested output locations. Because atomic granularity can produce millions of observations
+per scene, each latent attends only to a local neighborhood in physical space, while the number of
+spatial latents scales with the number of input observations. The same local aggregation serves as
+both input and output interface, allowing channel sets, input resolution, and output density to vary
+while extending the same architecture from regular rasters to unordered 3D point clouds.
+We evaluate this design by progressively relaxing the assumptions of a fixed grid. We first assess
+competitiveness on conventional raster EO tasks, then vary available channels and output-query
+density, and finally remove the raster assumption with unordered LiDAR and joint image–point
+observations.
+Our main contributions are:
+• A physically grounded atomic representation in which measurement identity is de-
+scribed explicitly rather than tied to tensor position. A single trained model spans sensor
+configurations that a fixed-channel architecture can only reach by padding or redesign.
+• A scalable, structured set-to-latent architecture that uses the same local geometric op-
+eration to encode observations and decode arbitrary query locations, removing the need for
+a fixed grid on either side.
+• A single architecture across raster and irregular sensing geometries, spanning classifi-
+cation, regression, 2D and 3D segmentation, and optical, radar, and LiDAR observations.
+All models are trained from scratch under matched conditions, isolating architectural dif-
+ferences from pretraining.
+2
+RELATED WORK
+Regular grids supply useful spatial structure, including locality, stable neighborhoods, and regular
+geometric relationships, that grid-based architectures can exploit directly. In Earth observation, the
+representation must additionally accommodate several physical axes: spatial resolution determines
+how space is sampled, spectral bands sample the electromagnetic spectrum, and acquisition times
+sample an evolving scene.
+Recent EO models increasingly expose these physical properties to grid-based architectures through
+dedicated mechanisms. DOFA (Xiong et al., 2024), SenPa-MAE (Prexl & Schmitt, 2024), and
+Panopticon (Waldmann et al., 2025) primarily address spectral variation, while FlexiMo (Li et al.,
+2025) additionally handles spatial variation but does not natively model temporal sequences. Scale-
+MAE (Reed et al., 2023) incorporates ground sampling distance, AnySat (Astruc et al., 2024) defines
+2
+
+
+Atomizer-IO: Beyond pixels, patches and grids
+K,V
+Processor
+Q: Queries
+K,V: Keys, Values
+RPE: relative Fourier features per axis
+RoPE: positions per axis
+Output Queries
+(M,D)
+K,V
+Q
+Output
+Spatial
+Sampler
+Attention
+Attention
+Attention
+Attention
+Decoder
+(N,C)
+Latents
+(L,D)
+Q
+Input Atoms
+Spatial
+Sampler
+Encoder
+Global Latents
+(L,D)
+(G,D)
+x Depth
+Self
+Attention
+Attention
+Attention
+Attention
+(M,E)
+Figure 2: The Atomizer-IO architecture. Atoms are locally aggregated into a compact spatial rep-
+resentation, processed globally in latent space, and decoded through spatial output queries. The
+same local context-to-query operation is used for encoding and decoding, with spatial relationships
+defined in physical coordinates rather than by a fixed input grid.
+patches in physical rather than pixel units, and Galileo (Tseng et al., 2025) and Prithvi (Szwarcman
+et al., 2025) introduce temporal structure. RAMEN (Houdr´e et al., 2026) and UniverSat (Perron
+et al., 2026) jointly accommodate spectral, spatial, and temporal variation within a single architec-
+ture, making them the closest flexible EO baselines to our framework.
+A separate line of work relaxes this requirement by changing the unit on which the model operates.
+Presto (Tseng et al., 2023) discards image structure entirely, modeling individual pixel time series
+and relying on temporal and multimodal signal instead, while Atomizer (de Turckheim et al., 2025)
+retains atomic measurements as the input representation and processes them as an unordered set.
+More generally, Set Transformer (Lee et al., 2019) showed that attention can operate directly on
+unordered sets, while Perceiver (Jaegle et al., 2021b) introduced cross-attention to a compact latent
+bottleneck and Perceiver IO (Jaegle et al., 2021a) extended this paradigm to query-defined outputs.
+Moving beyond grids does not mean abandoning spatial structure. 3D point-cloud methods routinely
+operate on unordered, sparsely distributed points that do not fit the dense tensor representations
+common in 2D vision (Guo et al., 2019). Various alternatives have been proposed: PointNet (Qi
+et al., 2017a) operates on sets, PointNet++ (Qi et al., 2017b) and KPConv (Thomas et al., 2019) on
+multi-scale Euclidean neighborhoods, and Superpoint Transformer (Robert et al., 2023), not unlike
+our work, on geometric graphs over 3D partitions. However, these approaches are not designed
+to jointly accommodate multi-spectral, multi-temporal, and multi-resolution data. This creates a
+tension: grid-based models preserve useful spatial structure but require observations to conform to a
+fixed layout, while set-based models gain flexibility but provide no geometry by default. Atomizer-
+IO resolves this by enabling reasoning over an arbitrary Voronoi tessellation of space. Sensor-
+specific gridded structures are confined to the interfaces, where input observations are either read in,
+or output predictions are queried out.
+3
+METHODOLOGY
+Atomizer-IO builds on Atomizer (de Turckheim et al., 2025), which decomposes an input into an
+unordered set of atoms. Where Atomizer lets non-spatial latents cross-attend to all atoms, and
+only for image classification, Atomizer-IO introduces locality. Each latent corresponds to a spatial
+anchor and attends only to nearby atoms, while still exchanging information with every other latent.
+Spatially dense outputs are produced by querying the latents near any requested location.
+This section follows one observation through the model (Figure 2): token construction (Section 3.1),
+neighborhood assignment (Section 3.2), aggregation into a spatial latent (Section 3.3), latent inter-
+action (Section 3.4), and output queries (Section 3.5). Notation is summarized in Appendix 18.
+3
+
+
+Atomizer-IO: Beyond pixels, patches and grids
+3.1
+TOKEN CONSTRUCTION
+[
+[
+Measurement Wavelength & Bandwidth Time Resolution
+Input atom for 2D images
+[
+[
+Z coordinates
+LIDAR identiﬁer
+Echo
+Input atom for LiDAR
+[
+[
+Shared learned initialization
+Latents
+[
+[
+Learned embedding per latent
+Global Latents
+Output Queries
+[
+[
+Shared learned initialization
+(1,C)
+(1,C)
+(1,D)
+(1,D)
+(1,D)
+Figure 3: Token construction in Atomizer-IO. 2D imagery and LiDAR share the same atomic in-
+terface of measurements and acquisition metadata; spatial latents, global latents, and output queries
+use learned initializations.
+Atomizer-IO represents an input as a set of elementary observations, or atoms. Each atom holds a
+measured value v ∈R (e.g. reflectance) and metadata u1, . . . , uJ describing its acquisition. We
+combine these into tokens f = [ϕ0(v), ϕ1(u1), . . . , ϕJ(uJ)], where ϕ0, . . . , ϕJ are encoders for
+each metadata field (e.g. wavelength and resolution). The input is represented as F = {(fi, pi)}N
+i=1,
+pairing each token with its spatial position pi ∈R2. Appendix B.4 further specifies our encoding
+schemes. To prevent the model from learning position-specific features, pi is not included in fi and
+is used only by the spatial sampler (Section 3.2). An atom’s metadata fields follow from the sensor,
+and the architecture is indifferent to which ones it receives (Figure 3). For 2D rasters, v is the value
+measured at one pixel, in one spectral band, at one acquisition time, and the metadata describe that
+context: ground sampling distance, spectral support, and acquisition date. For 3D point clouds, v
+is the elevation, with a sensor identifier, the position of the return within the LiDAR pulse, and the
+return intensity when available as metadata. Nothing in the representation depends on a channel
+count or a grid, and atoms of different kinds can coexist in the same input set, as when LiDAR
+returns and co-registered image pixels are processed together.
+3.2
+SPATIAL SAMPLER
+The spatial sampler (Figure 4) operates on two sets: a query set Q = {(qj, pj)}|Q|
+j=1 seeking infor-
+mation from a context set C = {(ci, pi)}|C|
+i=1. It proceeds in two steps: first, it establishes which
+context elements belong to the receptive field of each query; then, information flows from each re-
+ceptive field to its query. In the encoder, input atoms form the context set and spatial latents the
+query set; in the decoder, spatial latents form the context set and output locations the query set.
+Query and context Sets
+Context Set 
+= {(c ,p )}
+i
+i
+Query Set 
+= {(q ,p )}
+j
+j
+Euclidean Distance
+Local assignment
+Fourier features
+RPE
+Local information aggregation
+Q
+K
+V
+A
+A Attention
+Information ﬂow
+Q,K,V : Queries, Keys, Values
+Query-centered coordinates
+(encoder)
+Figure 4: Spatial sampler. From left to right: query and context sets; construction of a local receptive
+field from spatial proximity, illustrated by the encoder’s nearest-latent assignment and resulting
+Voronoi partition; query-centered relative coordinates; local cross-attention.
+Assignment.
+We denote by A(C, Q) = {Vj}|Q|
+j=1 the spatial assignment, where Vj is the index set
+of context elements in the local receptive field of query qj. Receptive fields are built by nearest-
+neighbor search in the horizontal plane, which suits bird’s-eye-view reasoning in Earth observation
+and applies to both rasters and 3D point clouds. In the encoder, each context element is assigned to
+its nearest query, inducing a Voronoi partition, which we denote by Aenc. In the decoder, each query
+instead gathers its k nearest context elements, which we denote by Adec. Implementation details are
+given in Appendix B.8.
+Information flow.
+Cross-attention defines a one-way flow: each query gathers information from
+its receptive field, while context elements themselves are not updated. Geometry is therefore ex-
+pressed from the perspective of the receiving query. For a context element i ∈Vj, we use the
+4
+
+
+Atomizer-IO: Beyond pixels, patches and grids
+relative offset δij = pi −pj and encode it as ϕδ(δij) using Fourier features, analogous to the po-
+sitional encoding used in NeRF (Mildenhall et al., 2021). The encoded offset is concatenated to the
+context feature before information is passed to the query through cross-attention (Appendix B.5).
+3.3
+ENCODER
+In the encoder, spatial latents form the query set and input atoms form the context set of the spatial
+sampler.
+Figure 5:
+Example spatial latent partition on
+DALES (Section 4.4). Colors show the local re-
+ceptive fields induced by assigning each input
+atom to its nearest spatial latent.
+Adaptive latent allocation.
+No operation in
+the architecture requires a fixed number or lay-
+out of spatial latents. In practice, we scale the
+number L of spatial latents with the number
+of input observations and place them uniformly
+over the spatial extent of the input. The values
+of L and the layouts used in our experiments
+are given in Appendix D.2. Each latent has an
+anchor position pℓ∈R2 and shares the same
+learned initialization hinit ∈RD, where D is the
+latent embedding dimension. We denote the ini-
+tialized latent set by Hinit = {(hinit, pℓ)}L
+ℓ=1.
+Figure 5 illustrates the one instance of a spatial
+partition on a DALES scene.
+Local encoding.
+For the encoder, the spatial sampler returns the assigned atoms for each anchored
+latent {Vℓ}L
+ℓ=1 = Aenc(F, Hinit). For an atom i ∈Vℓ, we compute the relative offset δiℓ= pi−pℓ,
+concatenate its Fourier encoding to the atom feature, and process the result with a shared MLP: ziℓ=
+MLP([fi; ϕδ(δiℓ)]). Each spatial latent is then updated by local cross-attention over its processed
+context, h(0)
+ℓ
+= CrossAttnenc(hinit, {ziℓ: i ∈Vℓ}). The MLP and cross-attention weights are
+shared across latents, so the parameter count is independent of L. The resulting encoded latent set
+is H(0) = {(h(0)
+ℓ, pℓ)}L
+ℓ=1.
+For dense local contexts, we randomly sample at most m indices from each Vℓbefore cross-attention,
+bounding the attention cost per latent. On Sen1Floods11 (Section 4.1), where inputs contain 15
+channels at 512×512 resolution, a global cross-attention mechanism would need to discard 99.987%
+of the input atoms to match the same number of query–context interactions. Local sampling instead
+distributes this budget across the spatial partition and exposes the model to different subsets of each
+local context over training (Appendix B.7).
+3.4
+PROCESSOR
+The processor operates on the encoded spatial latent set H(0) = {(h(0)
+ℓ, pℓ)}L
+ℓ=1 together with G
+learned global latents G(0) = {g(0)
+r }G
+r=1, with g(0)
+r
+∈RD, similar in spirit to register tokens (Darcet
+et al., 2024). A processor of depth B stacks global multi-head self-attention blocks over the spatial
+and global latents, (H(b), G(b)) = Blockb(H(b−1), G(b−1)) for b = 1, . . . , B, allowing information
+gathered from different local neighborhoods to propagate across the latent representation. The final
+processed spatial latent set is H(B).
+Latent spatial processing.
+While the encoder introduces atom–latent geometry through relative
+positional encoding in the spatial sampler, spatial relationships between latents are represented us-
+ing two-dimensional rotary positional encoding (RoPE) (Heo et al., 2024) based on their anchor
+positions pℓ. Because the distance between anchors depends on how they are distributed over the
+input extent, no single compression scale suits every input; we therefore use a learned scale sp > 0,
+initialized to a reference scale s0 (Appendix B.6). Coordinates are compressed with sp before ap-
+plying RoPE to the queries and keys of the spatial latents. Global latents have no associated spatial
+position and are therefore left unrotated.
+Temporal processing.
+Multitemporal inputs require no dedicated temporal module: atoms from
+all acquisitions can be encoded jointly in the same input set, with acquisition time provided as
+metadata. When explicit temporal aggregation is preferred, the encoder instead processes each
+timestep independently, with shared weights and identical spatial anchor positions, producing
+H(0)
+t
+= {(h(0)
+tℓ, pℓ)}L
+ℓ=1 for each timestep t. The processor is then applied independently within
+5
+
+
+Atomizer-IO: Beyond pixels, patches and grids
+each timestep, yielding H(B)
+t
+= {(h(B)
+tℓ, pℓ)}L
+ℓ=1. For each spatial anchor ℓ, the T representa-
+tions {h(B)
+tℓ}T
+t=1 are aggregated along the temporal axis by a small transformer with a learned
+aggregation token, using temporal RoPE with the same coordinate compression and a dedicated
+learned scale. This produces a temporally aggregated representation ¯hℓfor each anchor, defining
+¯H(B) = {(¯hℓ, pℓ)}L
+ℓ=1. When temporal aggregation is used, this set replaces H(B) as decoder
+context. Its contribution is evaluated in Appendix B.1.
+3.5
+DECODER
+The decoder predicts at a set of requested spatial positions {pj}M
+j=1. Each output query shares the
+same learned initialization qinit ∈RD, giving the initialized query set Qinit = {(qinit, pj)}M
+j=1.
+Below, H(B) denotes the decoder context, replaced by ¯H(B) when explicit temporal aggrega-
+tion is used. The spatial sampler returns {Vj}M
+j=1 = Adec(H(B), Qinit). For a latent ℓ∈Vj,
+we compute the relative offset δℓj = pℓ−pj and concatenate its Fourier encoding to the la-
+tent feature. Each output query is then obtained by local cross-attention over this context, qj =
+CrossAttndec(qinit, {[h(B)
+ℓ
+; ϕδ(δℓj)] : ℓ∈Vj}), and passed to a task-specific prediction head; for
+dense prediction, the input qinit is replaced by the input-conditioned query ˜qj defined below. Be-
+cause output locations are queried explicitly, the decoder does not need to evaluate every spatial
+position uniformly. We exploit this property in Section 4.3.
+For dense prediction, we additionally condition each output query on the observations at its tar-
+get location before it attends to the latent representation, a local pathway analogous to the skip
+connections of U-Net (Ronneberger et al., 2015). Let Sj ⊆{1, . . . , N} be the indices of atoms
+co-located with query j: the atoms at the pixel being predicted for a 2D raster, and the atoms at
+the queried point for a point cloud. The query is first updated by cross-attention over their features,
+˜qj = CrossAttnobs(qinit, {fi : i ∈Sj}), combining observations at the target location with the
+processed information its surroundings provide through the latent cross-attention above.
+4
+EXPERIMENTS
+We evaluate Atomizer-IO by progressively relaxing the assumptions of a regular grid. We begin
+with conventional raster Earth observation tasks, then vary input composition and output density,
+remove the input grid entirely with irregular 3D point clouds, and finally test spatial reasoning under
+unseen input geometries.
+4.1
+PERFORMANCE ACROSS DIVERSE EO TASKS
+Architectures that relax fixed input structure for greater generality may give up useful task- or sensor-
+specific priors, requiring more of the task structure to be learned from data. Before relaxing the grid,
+we therefore verify that Atomizer-IO is competitive when it is fully present, across a deliberately
+heterogeneous suite of eight datasets spanning different sensing modalities, channel counts, tempo-
+ral lengths, spatial resolutions, input sizes, and prediction problems (Table 1). Each dataset is treated
+as an independent task and a separate model is trained from scratch.
+Table 1: Datasets used for evaluation, spanning raster Earth observation and irregular LiDAR inputs.
+T: timesteps; C: input channels; Geometry: spatial structure of the input; GSD: ground sampling
+distance, undefined for point clouds; Out. C: output classes or regression targets.
+Dataset
+Sensor
+T
+C
+Geometry
+GSD
+Problem Out. C
+ForestNet (Irvin et al., 2020)
+Landsat-8
+1
+6
+3322
+15 m
+cls
+12
+BurnScars (Jakubik et al., 2023)
+HLS
+1
+6
+5122
+30 m
+seg
+2
+EuroSAT (Helber et al., 2019)
+Sentinel-2
+1 13 642
+10 m
+cls
+10
+Cashew (Jin et al., 2021)
+Sentinel-2
+1 13 2562
+10 m
+seg
+7
+Sen1Floods11 (Rambour et al., 2020) S1 + S2
+1 15 5122
+10 m
+seg
+2
+xView2 (Gupta et al., 2019)
+RGB (VHR)
+2
+3
+5122
+0.5 m
+seg
+5
+BioMassters (Nascetti et al., 2023)
+S1 + S2
+3 14 2562
+10 m
+reg
+1
+PASTIS (Garnot & Landrieu, 2021)
+S1 + S2
+6 10 1282
+10 m
+seg
+19
+DALES (Varney et al., 2020)
+LiDAR
+1
+1
+point set
+–
+3D seg
+8
+FRACTAL (Gaydon et al., 2024)
+LiDAR + VHR 1
+4
+points + image –
+3D seg
+7
+6
+
+
+Atomizer-IO: Beyond pixels, patches and grids
+Table 2: Single-task performance. Best in bold, second best underlined. Classification uses macro
+F1, segmentation mIoU, and BioMassters RMSE (Mg/ha, ↓).
+Model
+EuroSAT ForestNet BurnScars Sen1Floods PASTIS xView2 Cashew BioMassters ↓
+ResNet50
+90.9
+43.8
+82.8
+87.8
+30.0
+53.8
+69.9
+46.3
+ViT
+90.7
+39.1
+87.5
+85.0
+35.1
+52.4
+47.5
+52.7
+RAMEN
+92.1
+40.4
+88.2
+89.1
+45.5
+53.3
+64.2
+44.7
+UniverSat
+90.8
+44.3
+88.1
+86.8
+42.9
+56.3
+62.4
+46.0
+Perceiver-IO
+90.9
+35.4
+83.4
+92.2
+17.9
+43.8
+26.2
+52.2
+Atomizer-IO
+90.2
+35.8
+88.8
+93.2
+44.1
+54.6
+72.0
+42.4
+We compare Atomizer-IO with grid-based baselines (ResNet50 (He et al., 2016) and ViT ), flex-
+ible EO-specific models (RAMEN and UniverSat), and Perceiver-IO as a generic set-based latent
+architecture. All models are trained from scratch under matched conditions (Appendix D.2).
+Across the eight tasks, Atomizer-IO excels at spatially-explicit tasks, ranking first on four and sec-
+ond on two (Table 2), matching or exceeding grid-based and flexible EO architectures on their own
+terms, on raster data. This establishes the baseline for the relaxations that follow. These tasks
+rely on different sources of information. PASTIS benefits strongly from reasoning across acquisi-
+tions, Sen1Floods11 from local spectral and radar measurements, while Cashew shows a stronger
+dependence on spatial context. Appendix B examines these differences directly by ablating tem-
+poral aggregation, spatial reasoning, and local observation conditioning across representative tasks.
+As expected, we also observe that Atomizer-IO does not have an edge over Perceiver-IO for non
+spatially explicit classification tasks, such as EuroSAT and ForestNet.
+4.2
+FLEXIBLE INPUT COMPOSITION: HANDLING MISSING CHANNELS
+In Earth observation, available channels can change with sensor availability, weather conditions or
+spectral coverage. Models built around a fixed channel layout must preserve that layout when obser-
+vations are missing, whereas flexible representations can omit unavailable observations directly. We
+evaluate this setting on Sen1Floods11 and BioMassters, both combining Sentinel-1 and Sentinel-2
+observations. In this experiment, all models use the same band-dropout augmentation, so variation
+in channel availability is anticipated during training. Atomizer-IO and UniverSat omit unavailable
+observations, whereas fixed-channel models are zero-padded at the corresponding positions. The
+same trained model is evaluated under six input configurations, from the full observation set to
+single-sensor and restricted spectral subsets.
+Table 3:
+Performance under flexible input composition on Sen1Floods11 (mIoU, %) and
+BioMassters (RMSE, Mg/ha). All models are trained under the same band-dropout protocol.
+Sen1Floods11 ↑
+BioMassters ↓
+Test Configuration Atom. Res. ViT Perc. RAM. Uni. Atom. Res. ViT Perc. RAM. Uni.
+All bands
+92.9
+88.1 84.5
+92.1
+87.0
+88.7
+41.5
+47.6 52.9
+52.0
+43.4
+45.7
+S2 only
+92.8
+86.4 84.4
+92.2
+87.8
+88.6
+45.8
+55.9 55.5
+57.7
+48.4
+49.1
+S1 only
+80.0
+66.4 75.3
+77.2
+75.1
+79.4
+48.1
+52.1 55.5
+58.6
+49.2
+49.1
+RGB only
+44.8
+43.7 43.8
+43.8
+44.5
+43.8
+71.0
+73.8 71.4
+70.4
+71.9
+70.8
+No SWIR
+87.8
+49.0 75.1
+81.8
+63.7
+85.2
+43.0
+49.1 54.0
+53.4
+46.0
+46.7
+No red-edge
+92.9
+85.3 80.5
+89.1
+85.9
+88.0
+42.2
+49.8 53.8
+54.0
+45.4
+46.4
+Average
+81.9
+69.8 73.9
+79.4
+74.0
+78.9
+48.6
+54.7 57.2
+57.7
+50.7
+51.3
+Atom.: Atomizer-IO; Res.: ResNet50; Perc.: Perceiver-IO; RAM.: RAMEN; Uni.: UniverSat.
+Table 3 shows that Atomizer-IO achieves the best average performance on both datasets and leads
+in most configurations. Its advantage is largest when specific bands or an entire sensor are removed,
+but nearly disappears under RGB only, where much of the discriminative information is lost. More
+broadly, architectures that relax the fixed channel layout tend to handle changes in input composition
+better than conventional fixed-layout baselines, supporting the value of decoupling representation
+from a prescribed channel structure.
+7
+
+
+Atomizer-IO: Beyond pixels, patches and grids
+100
+1 000
+10 000
+100
+1 000
+10 000
+82
+84
+86
+88
+90
+90
+92
+94
+82
+84
+88
+86
+Compute cost (GFLOPS) vs performance (mIoU) - Sen1Flood11
+Compute cost (GFLOPS) vs performance (mIoU) - BurnScars
+mIoU
+GFLOPS
+GFLOPS
+RAMEN
+Atomizer IO - Quadtree
+Atomizer IO - Zone probe
+Atomizer IO - Dense
+ViT
+ResNet50
+Perceiver-IO
+UniverSat
+Figure 6: Compute cost (GFLOPs) versus segmentation performance (mIoU). Dense, Zone-probe,
+and Quadtree decoding vary inference cost through different output query strategies, using the same
+Atomizer-IO checkpoint without retraining.
+4.3
+FLEXIBLE OUTPUT DECODING: INFERENCE-TIME COMPUTE CONTROL
+Here we study various relaxations of the output grid. Atomizer-IO predicts at explicitly requested
+spatial locations, so dense segmentation corresponds simply to placing one query at every pixel
+(Dense decoding). Because the decoder does not require all locations to be queried uniformly,
+output density can instead be adapted to the spatial complexity of the prediction.
+We exercise this property by approximating dense predictions while querying fewer locations. For
+each region, we first probe a small number of locations. If all probes predict the same class, that class
+is assigned to the remaining locations without querying them; otherwise, additional computation is
+allocated to the region. Zone-probe applies this rule to regions associated with individual latents,
+while Quadtree recursively subdivides disagreeing regions and probes them at finer spatial scales.
+All strategies use the same trained checkpoint and differ only in how densely the output space is
+queried. Details and complexity are given in Appendix C.1. Figure 6 shows that a single trained
+checkpoint spans a broad range of inference costs, with Dense decoding being competitive with the
+flexible EO baselines at the high-compute end. The two adaptive strategies reduce cost differently:
+Zone-probe couples output regions to the model’s latent partition, while Quadtree adapts output
+density independently of that partition through recursive refinement.
+Atomizer-IO therefore exposes complementary inference-time controls: like RAMEN and Univer-
+Sat, compute can be reduced through a coarser latent representation, while the query-based decoder
+additionally allows output density to vary after training. Probe agreement is a heuristic rather than
+a guarantee, reflecting the trade-off between exact dense evaluation and reduced inference cost.
+Table 4: DALES and FRACTAL segmentation
+results (mIoU, %).
+DALES
+Method
+mIoU
+KPConv (Thomas et al., 2019)
+81.1
+SPT (Robert et al., 2023)
+79.6
+PointNet++ (Qi et al., 2017b)
+68.3
+ConvPoint (Boulch, 2020)
+67.4
+Atomizer-IO
+66.7
+SPG (Landrieu & Simonovsky, 2018)
+60.6
+PointCNN (Li et al., 2018)
+58.4
+ShellNet (Zhang et al., 2019)
+57.4
+Perceiver-IO (Jaegle et al., 2021a)
+48.7
+FRACTAL
+Atomizer-IO
+78.4
+Perceiver-IO (Jaegle et al., 2021a)
+78.1
+RandLA-Net (Hu et al., 2020)
+77.5
+4.4
+FLEXIBLE INPUT GEOMETRY:
+UNORDERED LIDAR POINT CLOUDS
+We break free of the input grid for semantic seg-
+mentation of 3D point clouds. Our goal is not
+to outperform 3D-specific architectures, but to
+demonstrate the flexibility of our framework. On
+DALES and FRACTAL (Table 1), each LiDAR
+point becomes an atom (Appendix D). On FRAC-
+TAL, RGB pixels from co-registered orthophotos
+are additionally encoded as atoms, allowing both
+modalities to be jointly processed. Training and
+inference tiling, point sampling, and batching de-
+tails are given in Appendix D.4.
+Atomizer-IO is competitive on both datasets
+without 3D-specific design beyond its tokenizer,
+ahead of three of the DALES 3D baselines and
+best on FRACTAL (Table 4). Perceiver-IO per-
+forms poorly on DALES, highlighting the impor-
+tance of geometric structure in the latent reason-
+ing, but both models outperform RandLA-Net on
+FRACTAL, suggesting the image modality alone may already be a strong predictor for this bench-
+mark. Our gap to KPConv and SPT on DALES suggests opportunities for geometry-adaptive 3D
+8
+
+
+Atomizer-IO: Beyond pixels, patches and grids
+latent partitions, hierarchical reasoning, and finer local 3D modeling. We leave these extensions to
+future work.
+4.5
+CONTROLLED ANALYSIS OF SPATIAL STRUCTURE
+Table 5:
+RoPE ablation.
+Ac-
+curacy on MNIST and mIoU on
+Sen1Floods11.
+MNIST
+Sen1Fl11
+No RoPE
+29.48
+92.42
+RoPE
+99.37
+93.17
+Removing the input grid does not remove the need for spa-
+tial structure. In remote-sensing tasks, however, this is dif-
+ficult to isolate because individual observations can already
+be highly informative: a local spectral signature may indicate
+water, vegetation, or other materials without requiring much
+spatial context. We therefore use MNIST as a controlled set-
+ting. Because MNIST images are nearly binary, individual
+pixel intensities carry little information in isolation, and clas-
+sification depends primarily on their spatial arrangement.
+Atomizer-IO’s spatial latents share the same learned initialization and attention weights and are dis-
+tinguished by the observations they aggregate and their relative geometry. On MNIST, each latent
+carries only local intensity information; removing RoPE therefore prevents the processor from re-
+covering their spatial arrangement and reduces accuracy from 99.37 to 29.48. On Sen1Floods11, in
+contrast, removing RoPE only reduces mIoU from 93.17 to 92.42, consistent with the strong predic-
+tive content already present in the local multispectral and radar observations. Broader ablations in
+Appendix B further examine how different tasks rely on local observation content, spatial reasoning,
+and temporal structure.
+Table 6:
+MNIST accuracy (%) under
+unseen input geometries.
+Digit pixels
+are always retained; both models use the
+same checkpoint trained on complete in-
+puts.
+Background
+kept (%)
+Atomizer-IO
+ViT
+100
+99.26
+98.11
+75
+98.72
+97.65
+50
+98.37
+94.85
+25
+94.93
+72.17
+10
+74.36
+37.24
+We finally test whether the same model can process in-
+put geometries not seen during training. Atomizer-IO
+and a parameter-matched ViT with 1 × 1 pixel patches
+are trained only on complete MNIST images. At test
+time, the same background pixels are removed entirely
+from both models while all digit pixels are retained, so
+both receive exactly the same surviving observations. As
+the background becomes increasingly sparse and irreg-
+ular, Atomizer-IO degrades more gracefully, retaining
+94.93% accuracy when only 25% of the background pix-
+els are kept, compared with 72.17% for ViT (Table 6).
+This suggests that Atomizer-IO better preserves its abil-
+ity to exploit task-relevant observations under substantial
+changes in input geometry.
+5
+CONCLUSION
+Computing on a regular grid is not required for competitive performance under a competitive com-
+pute budget. Across eight Earth-observation benchmarks and two LiDAR datasets spanning classifi-
+cation, regression, and 2D/3D segmentation, Atomizer-IO remains competitive with grid-based and
+flexible EO architectures while progressively relaxing assumptions on input and output structure.
+To our knowledge, no other EO architecture has been evaluated on both multispectral rasters and
+unordered LiDAR point clouds through the same encoder and without modality-specific processing
+branches.
+Unlike architectures whose structure reflects assumptions about the data, Atomizer-IO encodes sens-
+ing information explicitly in its input tokens. Each atom represents a measurement at a particular
+place, time, and sensor, without requiring a fixed shape, channel count, or neighboring measurement;
+locality and geometry are introduced afterwards from physical relationships between observations.
+As future work, we expect this perspective to be particularly relevant to large-scale pretraining,
+where a central challenge is reconciling observations that differ in what they measure and how
+they are sampled. Existing architectures typically begin from a tensor representation and introduce
+dedicated mechanisms to accommodate each axis of variation. Atomizer-IO starts from the opposite
+premise: the observation itself is the common unit. The results in this paper, in which the exact same
+architecture provides competitive results across a wide range of modalities, suggest that Atomizer-
+IO could make a good candidate architecture for a multi-modal EO foundation model.
+9
+
+
+Atomizer-IO: Beyond pixels, patches and grids
+Our results allow us to conclude that pixels, patches, and grids need not define the interface of
+a sensing architecture. They can instead be treated as particular discretizations of observations,
+introduced when useful rather than assumed from the start.
+10
+
+
+Atomizer-IO: Beyond pixels, patches and grids
+AI USE STATEMENT
+In this work, we used generative AI tools to implement the methods, correct grammar, and edit the
+research paper to improve readability. We have not used generative AI tools to generate synthetic
+data sets, develop theoretical models, formulate or prove mathematical claims, propose hypotheses,
+design experiments, translate text, clean data sets, or interpret results, and all other required disclo-
+sure tasks are not applicable to this work. We have reviewed all AI-assisted work. Specifically, all
+AI-generated code and text suggestions were thoroughly reviewed, manually verified for correct-
+ness, and substantially modified by the authors. We take responsibility for the final content of this
+work, including text, claims, or artifacts produced with the aid of generative AI.
+11
+
+
+Atomizer-IO: Beyond pixels, patches and grids
+REFERENCES
+Guillaume Astruc, Nicolas Gonthier, Clement Mallet, and Loic Landrieu. Anysat: An earth ob-
+servation model for any resolutions, scales, and modalities. arXiv preprint arXiv:2412.14123,
+2024.
+Alexandre Boulch. Convpoint: Continuous convolutions for point cloud processing. Computers &
+Graphics, 88:24–34, 2020.
+Timoth´ee Darcet, Maxime Oquab, Julien Mairal, and Piotr Bojanowski. Vision transformers need
+registers. In International conference on learning representations, volume 2024, pp. 2632–2652,
+2024.
+Hugo Riffaud de Turckheim, Diego Marcos, Roberto Interdonato, and Sylvain Lobry.
+Atom-
+izer: Generalizing to unseen modalities by breaking images down to a set of scalars.
+In
+36th British Machine Vision Conference 2025, BMVC 2025, Sheffield, UK, November 24-27,
+2025. BMVA, 2025.
+URL https://bmva-archive.org.uk/bmvc/2025/assets/
+papers/Paper_1058/paper.pdf.
+Alexey Dosovitskiy, Lucas Beyer, Alexander Kolesnikov, Dirk Weissenborn, Xiaohua Zhai, Thomas
+Unterthiner, Mostafa Dehghani, Matthias Minderer, Georg Heigold, Sylvain Gelly, et al. An
+image is worth 16x16 words: Transformers for image recognition at scale.
+arXiv preprint
+arXiv:2010.11929, 2020.
+Vivien Sainte Fare Garnot and Loic Landrieu. Lightweight temporal self-attention for classifying
+satellite image time series, 2020. URL https://arxiv.org/abs/2007.00586.
+Vivien Sainte Fare Garnot and Loic Landrieu. Panoptic segmentation of satellite image time series
+with convolutional temporal attention networks. In 2021 IEEE/CVF International Conference on
+Computer Vision (ICCV), pp. 4852–4861. IEEE, 2021.
+Charles Gaydon, Michel Daab, and Floryne Roche. Fractal: An ultra-large-scale aerial lidar dataset
+for 3d semantic segmentation of diverse landscapes. arXiv preprint arXiv:2405.04634, 2024.
+Yulan Guo, Hanyun Wang, Qingyong Hu, Hao Liu, Li Liu, and Mohammed Bennamoun. Deep
+learning for 3d point clouds: A survey. arXiv preprint arXiv:1912.12033, 2019.
+Ritwik Gupta, Richard Hosfelt, Sandra Sajeev, Nirav Patel, Bryce Goodman, Jigar Doshi, Eric Heim,
+Howie Choset, and Matthew Gaston. xbd: A dataset for assessing building damage from satellite
+imagery. arXiv preprint arXiv:1911.09296, 2019.
+Kaiming He, Xiangyu Zhang, Shaoqing Ren, and Jian Sun. Deep residual learning for image recog-
+nition. In Proceedings of the IEEE conference on computer vision and pattern recognition, pp.
+770–778, 2016.
+Patrick Helber, Benjamin Bischke, Andreas Dengel, and Damian Borth. Eurosat: A novel dataset
+and deep learning benchmark for land use and land cover classification. IEEE Journal of Selected
+Topics in Applied Earth Observations and Remote Sensing, 12(7):2217–2226, 2019.
+Byeongho Heo, Song Park, Dongyoon Han, and Sangdoo Yun. Rotary position embedding for vision
+transformer. In European Conference on Computer Vision, pp. 289–305. Springer, 2024.
+Nicolas Houdr´e, Diego Marcos, Hugo Riffaud de Turckheim, Dino Ienco, Laurent Wendling,
+Camille Kurtz, and Sylvain Lobry. Ramen: Resolution-adjustable multimodal encoder for earth
+observation. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recog-
+nition (CVPR), pp. 27838–27848, June 2026.
+Qingyong Hu, Bo Yang, Linhai Xie, Stefano Rosa, Yulan Guo, Zhihua Wang, Niki Trigoni, and
+Andrew Markham. Randla-net: Efficient semantic segmentation of large-scale point clouds. In
+2020 IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), pp. 11105–
+11114. IEEE, 2020.
+12
+
+
+Atomizer-IO: Beyond pixels, patches and grids
+Jeremy Irvin, Hao Sheng, Neel Ramachandran, Sonja Johnson-Yu, Sharon Zhou, Kyle Story,
+Rose Rustowicz, Cooper Elsworth, Kemen Austin, and Andrew Y Ng. Forestnet: Classifying
+drivers of deforestation in indonesia using deep learning on satellite imagery. arXiv preprint
+arXiv:2011.05479, 2020.
+Andrew Jaegle, Sebastian Borgeaud, Jean-Baptiste Alayrac, Carl Doersch, Catalin Ionescu, David
+Ding, Skanda Koppula, Daniel Zoran, Andrew Brock, Evan Shelhamer, et al. Perceiver io: A
+general architecture for structured inputs & outputs. arXiv preprint arXiv:2107.14795, 2021a.
+Andrew Jaegle, Felix Gimeno, Andy Brock, Oriol Vinyals, Andrew Zisserman, and Joao Carreira.
+Perceiver: General perception with iterative attention. In International conference on machine
+learning, pp. 4651–4664. PMLR, 2021b.
+Johannes Jakubik, Sujit Roy, CE Phillips, Paolo Fraccaro, Denys Godwin, Bianca Zadrozny, Daniela
+Szwarcman, Carlos Gomes, Gabby Nyirjesy, Blair Edwards, et al. Foundation models for gener-
+alist geospatial artificial intelligence. arXiv preprint arXiv:2310.18660, 2023.
+Johannes Jakubik, Felix Yang, Benedikt Blumenstiel, Erik Scheurer, Rocco Sedona, Stefano Mau-
+rogiovanni, Jente Bosmans, Nikolaos Dionelis, Valerio Marsocci, Niklas Kopp, et al. Terramind:
+Large-scale generative multimodality for earth observation. In 2025 IEEE/CVF International
+Conference on Computer Vision (ICCV), pp. 7383–7394. IEEE, 2025.
+Z Jin, C Lin, C Weigl, J Obarowski, and D Hale. Smallholder cashew plantations in benin. Radiant
+MKHub, 2021.
+Loic Landrieu and Martin Simonovsky. Large-scale point cloud semantic segmentation with su-
+perpoint graphs. In 2018 IEEE/CVF Conference on Computer Vision and Pattern Recognition,
+2018.
+Yann LeCun, Bernhard Boser, John S Denker, Donnie Henderson, Richard E Howard, Wayne Hub-
+bard, and Lawrence D Jackel. Backpropagation applied to handwritten zip code recognition.
+Neural Computation, 1989.
+Juho Lee, Yoonho Lee, Jungtaek Kim, Adam Kosiorek, Seungjin Choi, and Yee Whye Teh. Set
+transformer: A framework for attention-based permutation-invariant neural networks. In Interna-
+tional conference on machine learning, pp. 3744–3753. PMLR, 2019.
+Xuyang Li, Chenyu Li, Pedram Ghamisi, and Danfeng Hong. Fleximo: A flexible remote sensing
+foundation model. arXiv preprint arXiv:2503.23844, 2025.
+Yangyan Li, Rui Bu, Mingchao Sun, Wei Wu, Xinhan Di, and Baoquan Chen. Pointcnn: Convolu-
+tion on x-transformed points. Advances in neural information processing systems, 31, 2018.
+Valerio Marsocci, Yuru Jia, Georges Le Bellier, David Kerekes, Liang Zeng, Sebastian Hafner,
+Sebastian Gerard, Eric Brune, Ritu Yadav, Ali Shibli, et al. Pangaea: A global and inclusive
+benchmark for geospatial foundation models. arXiv preprint arXiv:2412.04204, 2024.
+Ben Mildenhall, Pratul P Srinivasan, Matthew Tancik, Jonathan T Barron, Ravi Ramamoorthi, and
+Ren Ng. Nerf: Representing scenes as neural radiance fields for view synthesis. Communications
+of the ACM, 65(1):99–106, 2021.
+Andrea Nascetti, Ritu Yadav, Kirill Brodt, Qixun Qu, Hongwei Fan, Yuri Shendryk, Isha Shah,
+and Christine Chung. Biomassters: A benchmark dataset for forest biomass estimation using
+multi-modal satellite time-series. Advances in Neural Information Processing Systems, 36:20409–
+20420, 2023.
+Yohann Perron, Guillaume Astruc, Nicolas Gonthier, Clement Mallet, and Loic Landrieu. Universat:
+Resolution- and modality-agnostic transformers for earth observation. In Advances in Neural
+Information Processing Systems, 2026. To appear.
+Jonathan Prexl and Michael Schmitt. Senpa-mae: Sensor parameter aware masked autoencoder for
+multi-satellite self-supervised pretraining. In DAGM German Conference on Pattern Recognition,
+pp. 317–331. Springer, 2024.
+13
+
+
+Atomizer-IO: Beyond pixels, patches and grids
+Charles R Qi, Hao Su, Kaichun Mo, and Leonidas J Guibas. Pointnet: Deep learning on point sets
+for 3d classification and segmentation. In Proceedings of the IEEE conference on computer vision
+and pattern recognition, 2017a.
+Charles Ruizhongtai Qi, Li Yi, Hao Su, and Leonidas J Guibas. Pointnet++: Deep hierarchical fea-
+ture learning on point sets in a metric space. Advances in neural information processing systems,
+30, 2017b.
+Cl´ement Rambour, Nicolas Audebert, E Koeniguer, Bertrand Le Saux, Michel Crucianu, and Mihai
+Datcu. Flood detection in time series of optical and sar images. The International Archives of the
+Photogrammetry, Remote Sensing and Spatial Information Sciences, 43(B2):1343–1346, 2020.
+Colorado J Reed, Ritwik Gupta, Shufan Li, Sarah Brockman, Christopher Funk, Brian Clipp, Kurt
+Keutzer, Salvatore Candido, Matt Uyttendaele, and Trevor Darrell. Scale-mae: A scale-aware
+masked autoencoder for multiscale geospatial representation learning.
+In Proceedings of the
+IEEE/CVF International Conference on Computer Vision, pp. 4088–4099, 2023.
+Damien Robert, Hugo Raguet, and Loic Landrieu. Efficient 3d semantic segmentation with su-
+perpoint transformer. In 2023 IEEE/CVF International Conference on Computer Vision (ICCV),
+2023.
+Olaf Ronneberger, Philipp Fischer, and Thomas Brox. U-net: Convolutional networks for biomedi-
+cal image segmentation. In International Conference on Medical image computing and computer-
+assisted intervention, pp. 234–241. Springer, 2015.
+Gencer Sumbul, Chang Xu, Emanuele Dalsasso, and Devis Tuia. Smarties: Spectrum-aware multi-
+sensor auto-encoder for remote sensing images. In 2025 IEEE/CVF International Conference on
+Computer Vision (ICCV), pp. 5569–5578. IEEE, 2025.
+Daniela Szwarcman, Sujit Roy, Paolo Fraccaro, Orsteinn El´ı G´ıslason, Benedikt Blumenstiel, Rinki
+Ghosal, Pedro Henrique De Oliveira, Joao Lucas de Sousa Almeida, Rocco Sedona, Yanghui
+Kang, et al. Prithvi-eo-2.0: A versatile multi-temporal foundation model for earth observation
+applications. IEEE Transactions on Geoscience and Remote Sensing, 2025.
+Hugues Thomas, Charles R Qi, Jean-Emmanuel Deschaud, Beatriz Marcotegui, Franc¸ois Goulette,
+and Leonidas J Guibas.
+Kpconv: Flexible and deformable convolution for point clouds.
+In
+Proceedings of the IEEE/CVF international conference on computer vision, pp. 6411–6420, 2019.
+Gabriel Tseng, Ruben Cartuyvels, Ivan Zvonkov, Mirali Purohit, David Rolnick, and Hannah
+Kerner.
+Lightweight, pre-trained transformers for remote sensing timeseries.
+arXiv preprint
+arXiv:2304.14065, 2023.
+Gabriel Tseng, Anthony Fuller, Marlena Reil, Henry Herzog, Patrick Beukema, Favyen Bastani,
+James R Green, Evan Shelhamer, Hannah Kerner, and David Rolnick. Galileo: Learning global
+and local features in pretrained remote sensing models. arXiv preprint arXiv:2502.09356, 2025.
+Nina Varney, Vijayan K Asari, and Quinn Graehling. Dales: A large-scale aerial lidar data set
+for semantic segmentation.
+In 2020 IEEE/CVF Conference on Computer Vision and Pattern
+Recognition Workshops (CVPRW), pp. 717–726. IEEE, 2020.
+Leonard Waldmann, Ando Shah, Yi Wang, Nils Lehmann, Adam Stewart, Zhitong Xiong, Xiao Xi-
+ang Zhu, Stefan Bauer, and John Chuang. Panopticon: Advancing any-sensor foundation models
+for earth observation. In Proceedings of the Computer Vision and Pattern Recognition Confer-
+ence, pp. 2204–2214, 2025.
+Ben G Weinstein, Sarah J Graves, Sergio Marconi, Aditya Singh, Alina Zare, Dylan Stewart,
+Stephanie A Bohlman, and Ethan P White. A benchmark dataset for canopy crown detection
+and delineation in co-registered airborne rgb, lidar and hyperspectral imagery from the national
+ecological observation network. PLoS computational biology, 17(7):e1009180, 2021.
+Tete Xiao, Yingcheng Liu, Bolei Zhou, Yuning Jiang, and Jian Sun. Unified perceptual parsing for
+scene understanding. In European conference on computer vision, pp. 432–448. Springer, 2018.
+14
+
+
+Atomizer-IO: Beyond pixels, patches and grids
+Zhitong Xiong, Yi Wang, Fahong Zhang, Adam J Stewart, Jo¨elle Hanna, Damian Borth, Ioannis Pa-
+poutsis, Bertrand Le Saux, Gustau Camps-Valls, and Xiao Xiang Zhu. Neural plasticity-inspired
+multimodal foundation model for earth observation. arXiv preprint arXiv:2403.15356, 2024.
+Zhiyuan Zhang, Binh-Son Hua, and Sai-Kit Yeung. Shellnet: Efficient point cloud convolutional
+neural networks using concentric shells statistics. In 2019 IEEE/CVF International Conference
+on Computer Vision (ICCV), pp. 1607–1616. IEEE, 2019.
+15
+
+
+Atomizer-IO: Beyond pixels, patches and grids
+A
+SUPPLEMENTARY MATERIAL
+Processor
+T
+(L,D)
+Latents
+Global Latents
+(G,D)
+RoPE: positions per axis
+x Depth
+Self
+Attention
+T
+Self
+Attention
+Self
+Attention
+Self
+Attention
+Self
+Attention
+T
+T
+(L,D)
+Latents
+Temporal aggregation module
+Self
+Attention
+Self
+Attention
+Self
+Attention
+(L,D)
+RoPE: temporal axis only
+temporal CLS token
+The temporal aggregation module is optional. When used, latent grids share the same spatial geometry across timesteps, 
+so corresponding latent positions are temporally aligned and processed independently across time.
+x Depth t
+applied independently 
+at each timestep
+Encoder
+Latents 
+Input Atoms 
+(L,D)
+(L,D)
+(N,C)
+K,V
+Q
+MLP
+K,V
+Q
+MLP
+Cross Attention
+Cross Attention
+K,V
+Q: Queries K,V: Keys and Values
+Q
+MLP
+Cross Attention
+RPE: fourier features per axis
+The same MLP and cross-attention weights are shared across all latent neighborhoods.
+spatial
+sampler
+Decoder
+Latents 
+(L,D)
+(M,D)
+K,V
+Q
+Input Atoms 
+(N,C)
+Output queries
+(M,D)
+Output queries
+Local
+Cross
+Attention
+K,V
+Q
+K,V
+Q
+K,V
+Q
+(M,E)
+Optional local Cross Attention
+RPE: fourier features per axis
+Local cross-attention follows the same query-context principle as the spatial sampler, 
+but restricts the context of each output query to atoms at the same spatial location (the same pixel for raster inputs).
+spatial
+sampler
+MLP
+MLP
+MLP
+MLP
+Cross 
+Attention
+Cross 
+Attention
+Cross 
+Attention
+Cross 
+Attention
+Q: Queries K,V: Keys and Values
+Figure 7: Detailed Atomizer-IO architecture. The encoder aggregates local neighborhoods of input
+atoms into spatial latents through the spatial sampler; the processor applies latent self-attention
+with optional temporal aggregation; and the decoder maps local latent neighborhoods to spatial
+output queries, optionally conditioning first on raw observations at the target location. Relative
+positional information is introduced locally, and MLP and attention weights are shared across spatial
+neighborhoods.
+B
+ABLATION STUDIES
+We examine three complementary sources of structure in Atomizer-IO: temporal organization across
+acquisitions, spatial relationships between latents, and direct target-local observations in the de-
+coder. These ablations are evaluated across tasks with different sensing characteristics to assess how
+strongly each source of information contributes to prediction.
+B.1
+TEMPORAL AGGREGATION
+The temporal aggregation module changes how observations across time are organized in the latent
+representation. Without it, atoms from all acquisitions are encoded jointly into a single temporally
+mixed latent set, with acquisition time provided as metadata. With temporal aggregation, each
+acquisition is encoded independently into its own spatial latent set, and corresponding latents are
+merged across time by a temporal transformer.
+Both conditions process the same total number of atoms; the difference is how the resulting latent
+capacity is organized. In the joint formulation, each latent receives information from observations
+16
+
+
+Atomizer-IO: Beyond pixels, patches and grids
+spanning both space and time. With temporal aggregation, spatial encoding is performed indepen-
+dently within each acquisition before aligned latent representations are combined temporally.
+We evaluate this structural difference on PASTIS by varying the number of input acquisitions while
+keeping the remaining training setup fixed.
+12
+6
+39.25
+27.41
+3
+30
+55.04
+35
+40
+45
+50
+55
+Timesteps
+mIoU
+Without temporal aggregation
+With temporal aggregation
+Temporal aggregation ablation on PASTIS
+27.88
+44.10
+46.46
+Figure 8: Temporal aggregation ablation on PASTIS as the
+number of input timesteps increases.
+Explicit temporal aggregation be-
+comes increasingly beneficial as the
+number of acquisitions grows. With
+three timesteps, it improves PASTIS
+by only 0.47 mIoU, compared with
+4.85 mIoU at six timesteps and 8.58
+mIoU at twelve. Since both condi-
+tions process the same observations
+and the latent capacity scales with the
+number of input atoms, the growing
+gap is better explained by how that
+capacity is structured than by its over-
+all size.
+Encoding each acquisition
+spatially before aggregating aligned
+latents across time provides an in-
+creasingly useful inductive bias as the
+temporal context grows.
+B.2
+SPATIAL ROPE ABLATION
+We ablate the two-dimensional rotary positional encoding used in the latent processor while keeping
+the remaining architecture unchanged. This isolates the contribution of explicit spatial structure
+within latent self-attention.
+Table 7: Effect of spatial RoPE across tasks. MNIST reports accuracy (%), while the EO datasets
+report mIoU (%).
+MNIST
+Cashew
+PASTIS
+BurnScars
+Sen1Floods11
+No RoPE
+29.48
+62.65
+40.65
+86.16
+92.42
+RoPE
+99.37
+72.01
+44.10
+88.81
+93.17
+MNIST
+Cashew
+Pastis
+Sen1Floods11
+Peformance degradation (%)
+70.3
+13.0
+7.8
+0.8
+80
+70
+60
+50
+40
+30
+20
+10
+0
+RoPE Ablation
+Figure 9:
+Relative degradation when spatial
+RoPE is removed, computed as 100(RoPE −
+No RoPE)/RoPE.
+The contribution of spatial RoPE depends
+strongly on how informative the local obser-
+vations already are. On MNIST, individual
+pixel values carry little semantic information
+in isolation, so the model must rely heavily on
+spatial relationships between latents; remov-
+ing RoPE therefore causes a 70.3% relative
+performance drop.
+On Cashew, multispec-
+tral measurements provide useful local cues,
+but spatial context remains important, lead-
+ing to a substantial 13.0% degradation with-
+out RoPE. The effect is more moderate on
+PASTIS (7.8%) and BurnScars (3.0%), and
+small on Sen1Floods11 (0.8%), where local
+spectral and radar observations already pro-
+vide strong evidence for the prediction.
+PASTIS provides an additional contrast: spa-
+tial RoPE gives a moderate gain, while the temporal aggregation ablation in Appendix B.1 shows a
+much larger dependence on temporal structure. Together, these results suggest that the usefulness
+of explicit positional structure depends on which physical relationships are most informative for the
+task.
+17
+
+
+Atomizer-IO: Beyond pixels, patches and grids
+B.3
+LOCAL OBSERVATION CONDITIONING
+For dense prediction, Atomizer-IO can condition each output query directly on the raw observations
+at its target location before attending to the latent representation. We ablate this pathway while
+keeping the remainder of the architecture unchanged.
+Table 8: Effect of conditioning output queries on the raw observations at their target location. All
+values are mIoU (%).
+Sen1Floods11
+Cashew
+PASTIS
+BurnScars
+Without local observations
+89.26
+70.58
+43.30
+88.20
+Full model
+93.17
+72.01
+44.10
+88.81
+BurnScars
+Cashew
+Pastis
+Sen1Floods11
+Local content Ablation
+4.2
+2.0
+1.8
+0.7
+Peformance degradation (%)
+0
+1
+2
+3
+4
+Figure 10:
+Relative degradation when local ob-
+servation conditioning is removed, computed as
+100(Full −No Local)/Full.
+The contribution of direct local observations
+varies across tasks.
+Removing this path-
+way reduces Sen1Floods11 by 3.91 mIoU
+points and Cashew by 1.43 points.
+The
+reductions are smaller on PASTIS (0.80
+points) and BurnScars (0.61 points). Thus,
+Sen1Floods11 shows the greatest depen-
+dence on target-local evidence among these
+datasets.
+Together with the spatial and temporal ab-
+lations, these results show that the relative
+importance of target-local evidence, spatial
+relationships, and temporal organization is
+task dependent. PASTIS provides a comple-
+mentary example: it benefits strongly from
+explicit temporal aggregation while showing
+only a modest dependence on direct target-
+local observations.
+B.4
+ATOMIC FEATURE ENCODING
+We detail the feature encodings used to build the atomic representation f introduced in Section 3.1.
+For a raster atom, (ϕ0, ϕ1, ϕ2, ϕ3) are the encoders (ϕv, ϕg, ϕλ, ϕt) defined below. Unless stated
+otherwise, continuous quantities are encoded with Fourier features. For a scalar w, we define
+fourier(w; F, νmax) = [ w, sin(πν1w), cos(πν1w), . . . , sin(πνF w), cos(πνF w) ] ,
+where the F frequencies νi are linearly spaced between 1 and νmax. The encoding has dimension
+2F + 1.
+Measurement.
+The measured value v is encoded as
+ϕv(v) = fourier(v; Fv, νv
+max).
+Spatial scale.
+For raster observations, spatial scale is represented by the ground sampling distance
+(GSD) g. We first compress it as
+˜g = compress(g, sg),
+where sg is a reference GSD, and then encode
+ϕg(g) = fourier(˜g; Fg, νg
+max).
+Spectral configuration.
+Following Atomizer (de Turckheim et al., 2025), optical channels are
+represented from their physical spectral support rather than a discrete channel index. For a band
+with central wavelength λ and bandwidth ∆λ,
+ϕλ(λ, ∆λ)i =
+Z λ+∆λ/2
+λ−∆λ/2
+N(λ′; µi, σi) dλ′,
+i = 1, . . . , K,
+18
+
+
+Atomizer-IO: Beyond pixels, patches and grids
+where µi and σi are the center and width of the i-th Gaussian basis function. The resulting vector
+depends on both central wavelength and bandwidth. Channels without meaningful spectral support,
+such as SAR polarizations or elevation, use learned embeddings of the same dimensionality.
+Acquisition time.
+Acquisition time is represented by day of year t using periodic Fourier features,
+ϕt(t) =
+
+sin
+2πkt
+365
+
+, cos
+2πkt
+365
+Kt
+k=1
+.
+This gives a 2Kt-dimensional encoding with annual periodicity. When acquisition time is unavail-
+able, a zero vector is used.
+B.5
+RELATIVE POSITION ENCODING
+Horizontal spatial coordinates are kept separate from f and enter through the offset δ between a
+context element and its query. Each component δ is encoded as
+ϕδ(δ) = fourier
+ compress(δ, s0); , Fδ, , νδ
+max
+
+,
+and the component encodings are concatenated. The reference scale s0 is the cross-attention spatial
+scale of Table 14, and Fδ, νδ
+max are in Table 15.
+B.6
+PROPERTIES OF THE COMPRESSION FUNCTION
+For physical quantities spanning a large range, we use
+compress(w, s) =
+w
+s + |w|,
+where s > 0 is a reference scale. The function maps signed inputs to (−1, 1) and non-negative inputs
+to [0, 1). Near zero, compress(w, s) ≈w/s, and its magnitude saturates toward one for large |w|.
+In particular, |compress(w, s)| = 0.5 when |w| = s. Thus, s sets the characteristic physical scale
+before Fourier encoding. Separate reference scales are used for GSD and relative spatial positions.
+B.7
+SCALABILITY OF THE SPATIAL SAMPLER
+We analyze the encoder instantiation of the spatial sampler, where each input atom is assigned to
+its nearest spatial latent. This Voronoi assignment replaces global input-to-latent cross-attention
+with local cross-attention, reducing the number of query–context interactions. During training, the
+context available to each latent can additionally be subsampled to a user-defined budget m, providing
+direct control over cross-attention cost.
+Table 9 compares this local formulation with global cross-attention for the Sen1Floods11 configu-
+ration used in our experiments: 15 channels at 512 × 512 resolution (N ≈3.9 × 106 atoms) and
+L = 2000 spatial latents.
+Without subsampling, every atom participates in exactly one encoder cross-attention neighborhood,
+so the Voronoi assignment reduces the number of input-to-latent interactions from LN to N. With
+a per-latent budget m, the number of interactions becomes PL
+ℓ=1 min(m, |Vℓ|) and is therefore
+bounded by min(N, Lm).
+For comparison, we report the equivalent global drop rate, 1 −m/N: the fraction of atoms that
+would need to be removed from the context of each global latent for global cross-attention to use at
+most m context elements per latent. For m = 500, this corresponds to 99.987%: each latent in a
+global formulation would retain only approximately 500 atoms out of 3.9 million. The spatial sam-
+pler instead distributes interactions spatially: every atom remains assigned to a local cell, although
+dense cells may be subsampled at a given training step.
+The budget m is not an architectural limit on local context. The complete context available to latent
+ℓis its Voronoi cell Vℓ. If |Vℓ| ≤m, the full cell is used; otherwise, m controls how much of that
+context is processed at a given training step. For L = 2000, spatial latent self-attention contributes
+L2 = 4 × 106 pairwise interactions, compared with 7.86 × 109 for global input-to-latent cross-
+attention.
+19
+
+
+Atomizer-IO: Beyond pixels, patches and grids
+Table 9: Cross-attention complexity for global and local spatial sampling on Sen1Floods11 (N ≈
+3.9×106 atoms, L = 2000 spatial latents). The equivalent global drop rate is 1−m/N, the fraction
+of atoms that global cross-attention would need to discard to match a budget of m context elements
+per latent.
+Interaction bound
+Equiv. global drop
+Context/query
+Global
+LN ≈7.86 × 109
+0%
+N
+Local (m=500)
+≤Lm = 1.0 × 106
+99.987%
+≤500
+Local (m=1000)
+≤Lm = 2.0 × 106
+99.975%
+≤1000
+Local (m=2000)
+≤min(N, Lm) ≈3.93 × 106
+99.949%
+≤2000
+When a cell contains more atoms than the selected budget m, atoms are sampled uniformly without
+replacement at each training step. This controls training cost without permanently restricting a
+latent to a fixed subset of its local context. Implementation details are given in Appendix B.8, and
+sensitivity to m is reported in Appendix 11.
+When the input and latent geometries are fixed, the Voronoi assignment depends only on their spatial
+positions and can be precomputed and cached. The only per-step operation is then the optional
+subsampling of each local cell.
+B.8
+IMPLEMENTATION DETAILS OF THE SPATIAL SAMPLER
+We detail three implementation steps for the encoder: Voronoi assignment, per-step subsampling,
+and masking of variable-size local contexts.
+Voronoi partitioning.
+For each atom i at position pi ∈R2, we store its nearest spatial latent,
+ℓ(i) = kNNk=1 (pi, {µℓ′}ℓ′) ,
+where µℓ′ ∈R2 denotes the position of latent ℓ′. We then invert this assignment to obtain the
+complete cell associated with latent ℓ,
+Vℓ= {i : ℓ(i) = ℓ}.
+The complete local context available to latent ℓis therefore determined by Vℓ. Any subsequent
+subsampling is performed from this full cell.
+Variable latent layouts.
+Because no learned parameter depends on the number or placement of
+spatial latents, both can be varied on the fly during training. We precompute the Voronoi assignments
+for several latent layouts, corresponding to different values of κ (Appendix D.2), and randomly
+assign one layout to each batch. Since assignments are computed in advance, varying the layout
+adds no cost to the training step. At test time, we evaluate a single configuration (κ, m), selected on
+the validation set.
+Per-step random subsampling.
+During training, the local context can be limited to a user-defined
+budget m. At step t, we sample uniformly without replacement,
+S(t)
+ℓ
+⊆Vℓ,
+|S(t)
+ℓ| = min(m, |Vℓ|).
+When m ≥|Vℓ|, the complete cell is used. Otherwise, m directly controls the number of local
+query–context interactions processed at that step. Repeated sampling exposes the model to different
+subsets of dense cells rather than permanently restricting each latent to a fixed subset of atoms.
+Masking.
+Because local contexts can contain different numbers of atoms, they are batched to a
+common capacity and invalid slots are suppressed with an attention bias,
+βℓi =
+0,
+if position i is valid,
+−∞,
+otherwise.
+After the attention softmax, invalid positions receive zero weight. When a cell is empty, a dummy
+token is inserted so that the softmax remains well defined. The cardinality of Vℓdetermines the
+available local context, while m controls how much of that context is processed when subsampling
+is used.
+20
+
+
+Atomizer-IO: Beyond pixels, patches and grids
+C
+GFLOPS
+C.1
+ADAPTIVE DECODING STRATEGIES
+As in the encoder, Atomizer-IO uses cross-attention in the decoder so that predictions can be pro-
+duced at explicitly specified spatial locations. For dense segmentation, this can mean querying every
+pixel, while other output layouts can be queried without changing the architecture.
+Dense decoding processes every output query independently. For each of the O output queries,
+the decoder gathers a local neighborhood of k latents, computes their relative positional encoding,
+and applies cross-attention. The resulting cost therefore scales linearly with the number of decoded
+locations.
+We exploit the spatial redundancy of dense predictions with two adaptive decoding strategies (Zone-
+probe, Quadtree) that reduce the number of locations receiving a full decode. Both operate on the
+same trained checkpoint as (Dense) decoding; they differ only in where output queries are evaluated
+and where predictions are propagated spatially.
+Both strategies use agreement between a small number of probes as a proxy for local label homo-
+geneity. In Zone-probe, the regions are the Voronoi cells associated with the spatial latents. A small
+number of locations is sampled within each cell; if all probes predict the same class, that class is
+assigned to the remaining locations, whereas disagreeing cells are fully decoded. In Quadtree de-
+coding, the same principle is applied hierarchically. Disagreeing regions are recursively subdivided
+and probed at finer spatial scales, while homogeneous regions terminate early and broadcast their
+predicted class. A full per-pixel decode is recovered at the finest scale smin = 1.
+Probe agreement is a heuristic rather than a guarantee: small or thin objects may be missed if no
+probe falls on them. The resulting approximation is evaluated empirically on Sen1Floods11 and
+BurnScars in Figure 11.
+Both adaptive strategies recover the dense prediction wherever a full
+Table 10: Decode cost of the three inference strategies. M is the number of output queries, L the
+number of spatial latents, kp the number of probes per region, and sstart the initial quadtree cell size.
+Both adaptive strategies reduce to dense decoding in the worst case when no region can be treated
+as homogeneous.
+Full decode calls
+Best case
+Worst case
+Dense
+M
+M
+M
+Zone-probe
+kpL + P
+ℓ∈hard |Wℓ|
+O(kpL)
+M
+Quadtree
+≲kp × (levels × active cells)
+O
+kpHW
+s2
+start
+
+M
+decode is issued. Their savings therefore depend on prediction homogeneity at the scale of a latent’s
+Voronoi cell for zone-probe and an image-plane cell for quadtree.
+C.2
+COMPUTE–PERFORMANCE SENSITIVITY
+Figure 11 examines how the main architectural and decoding parameters affect both computational
+cost and segmentation performance on Sen1Floods11 and BurnScars. We vary the number of atoms
+per latent, the encoder cross-attention budget, and the decoder spatial neighborhood size for dense,
+zone-probe, and quadtree decoding. For all strategies we use the same trained checkpoint.
+21
+
+
+Atomizer-IO: Beyond pixels, patches and grids
+1 000
+88
+89
+90
+91
+92
+93
+1000
+10000
+5 000
+1 000
+84
+86
+88
+90
+92
+1
+2
+3
+4
+5
+6
+7
+8
+9
+6 000
+Decoder Spatial Neighbors
+1 000
+84
+86
+88
+90
+92
+1
+10
+100
+1000
+4 000
+Encoder Cross-Attention Tokens
+ Tokens per Latent
+GFLOPS
+mIoU
+Sen1Floods11
+200
+200
+600
+GFLOPS - Quad Tree
+GFLOPS - Zone Probe
+GFLOPS - Dense 
+mIoU - Quad Tree
+mIoU - Zone Probe
+mIoU - Dense 
+100
+1 000
+78
+80
+82
+84
+86
+88
+1 000
+1 0000
+70.0
+72.5
+75.0
+77.5
+80.0
+82.5
+85.0
+87.5
+100
+1 000
+1 000
+3 000
+3 000
+85.5
+86.0
+86.5
+87.0
+87.5
+88.0
+88.5
+1 000
+5 000
+2
+1
+3
+5
+9
+4
+6
+8
+7
+Decoder Spatial Neighbors
+Encoder Cross-Attention Tokens
+ Tokens per Latent
+GFLOPS
+mIoU
+BurnScars
+200
+500
+Figure 11: Sensitivity of segmentation performance and inference cost to three architectural param-
+eters: atoms per latent, encoder cross-attention budget, and decoder neighborhood size. Results are
+shown on Sen1Floods11 and BurnScars for Dense, Zone-probe, and Quadtree decoding.
+Increasing the number of atoms per latent reduces the number of spatial latents and eventually de-
+grades mIoU across all three decoding strategies. Because the same trend appears independently
+of the decoding policy, the loss reflects reduced representational capacity in the latent representa-
+tion rather than a decoder-specific approximation. Increasing the encoder cross-attention budget
+improves performance until saturation, while increasing the decoder neighborhood size increases
+computation once sufficient local context is available.
+The two adaptive decoders also have different computational floors. Zone-probe is coupled to the
+number of spatial latents L: reducing its cost through a lower latent density eventually also reduces
+encoder capacity. Quadtree instead controls how densely the existing latent representation is read
+out through sstart, leaving the representation itself unchanged. It can therefore reach more aggressive
+low-cost operating points before representational quality is affected. The two strategies are thus
+complementary: zone-probe covers the regime closest to dense decoding, while quadtree extends
+toward stronger compute reduction.
+D
+ECHO ENCODING FOR LIDAR TOKENS
+Airborne LiDAR sensors may record multiple returns from a single emitted pulse as it interacts with
+structures along its path. Each return stores two integer attributes: the return number r, indicating its
+order within the pulse, and the number of returns R, indicating the total number of returns associated
+with that pulse, with 1 ≤r ≤R. Together, (r, R) describes the position of an observation within
+the return sequence. This provides useful information for semantic interpretation: surfaces such as
+buildings or ground often produce isolated returns, while vegetation canopies can produce several
+returns at different depths along the beam path.
+22
+
+
+Atomizer-IO: Beyond pixels, patches and grids
+D.1
+ENCODING
+We encode each return using two normalized quantities,
+a = r −1
+R
+,
+(preceding returns)
+(1)
+b = R −r
+R
+,
+(subsequent returns).
+(2)
+Both lie in [0, 1). The first measures the normalized number of returns preceding the current obser-
+vation, while the second measures those following it.
+Single Return
+First of 2
+Pulse 1
+Pulse 2
+First of 5
+The pulse 
+encountered 
+substantial 
+structure 
+below. 
+Typical of dense
+canopy tops.
+Pulse 5
+Last of 2
+Pulse 3
+Middle of 3
+Pulse 4
+Echo being tokenized
+Echoes below
+Echoes Above
+The pulse hit a single 
+surface with nothing 
+above or below. 
+Typical for buildings,
+water surfaces, and 
+bare ground.
+The pulse penetrated 
+a thin upper layer 
+with one surface 
+below.
+Could be the top of 
+a sparse canopy
+Could be ground 
+beneath a thin 
+canopy.
+An echo with 
+structure both 
+above and 
+below it.
+Could be 
+mid-canopy
+return 
+Figure 12: LiDAR return encoding. The pair (a, b) describes the relative position of each observa-
+tion within its pulse’s return sequence. Normalization by the per-pulse return count R makes the
+representation independent of the sensor-specific maximum number of returns while preserving the
+original (r, R) attributes.
+Unlike normalization by a fixed sensor-specific maximum return count, this encoding depends only
+on the returns observed for the current pulse. The same representation can therefore be used for
+sensors supporting different maximum numbers of returns without changing the architecture.
+The transformation is also invertible on its valid domain. Since
+a + b = R −1
+R
+,
+the original attributes can be recovered as
+R =
+1
+1 −(a + b),
+r = aR + 1.
+Thus, the transformation preserves all information contained in the original (r, R) pair.
+D.2
+TRAINING DETAILS
+All models are trained from scratch under matched, task-specific training protocols. Hyperparam-
+eters such as batch size and training duration are selected at the dataset level and shared across all
+architectures evaluated on that dataset. Architecture-specific settings required by individual methods
+are reported below.
+Model capacity.
+Model sizes are selected so that the compared architectures operate in a similar
+parameter regime within each task family. We use the ViT-Small configuration for all Vision Trans-
+former baselines. Table 11 reports the number of trainable parameters used in the 2D experiments.
+For Atomizer-IO, the dense single-temporal model contains 33.5M parameters. Adding the temporal
+aggregation module increases this to 34.8M, while the model without temporal aggregation remains
+at 33.5M. The number of spatial latents scales with the number of input atoms, but this changes the
+size of the intermediate representation rather than the number of learned parameters, since the same
+weights are shared across latents.
+23
+
+
+Atomizer-IO: Beyond pixels, patches and grids
+Table 11: Number of trainable parameters for the architectures used in the 2D experiments. Values
+are given in millions of parameters. ViT refers to ViT-Small.
+Architecture
+Classification
+Segmentation
+Multitemporal seg.
+ResNet50
+23.6
+37.3
+37.3
+ViT-Small
+21.7
+30.3
+31.5
+Perceiver IO
+19.7
+34.5
+34.5
+RAMEN
+23.1
+33.7
+33.7
+UniverSat
+36.1
+36.1
+36.1
+Atomizer-IO
+19.2
+33.5
+34.8
+For context, EO-specific models evaluated in PANGAEA (Marsocci et al., 2024) typically use ap-
+proximately 30–47M trainable parameters. Our dense-prediction models contain approximately 30–
+37M parameters and therefore operate in a comparable capacity regime.
+Decoders, temporal aggregation, and classification heads.
+For dense prediction, we follow the
+PANGAEA protocol (Marsocci et al., 2024) and equip ResNet50 and ViT with a UPerNet de-
+coder (Xiao et al., 2018). RAMEN natively uses a UPerNet decoder, while Perceiver-IO and Univer-
+Sat use their native decoders. For multitemporal inputs, we also follow PANGAEA: ResNet50 ap-
+plies a convolution before temporal aggregation, and ViT aggregates timesteps with an L-TAE (Gar-
+not & Landrieu, 2020). RAMEN, UniverSat, Perceiver-IO, and Atomizer-IO natively handle the
+temporal dimension. For classification, Atomizer-IO and UniverSat use mean pooling over their
+latent representations, ViT uses a CLS token, and ResNet50 and RAMEN use their native classifi-
+cation heads.
+Baseline-specific hyperparameters.
+RAMEN and UniverSat require a small number of
+architecture-specific spatial hyperparameters. We contacted the authors of both methods to inform
+the choice of these settings. For RAMEN, we set the encoding resolution to four times the na-
+tive ground sampling distance, except for ForestNet, where we use 40 m. UniverSat uses the same
+encoding resolutions and a one-pixel subpatch size for all datasets.
+For UniverSat, we follow the authors’ recommendation to use the smallest decoder stride that is
+computationally tractable. We use a stride of one pixel for Cashew and PASTIS and a stride of four
+pixels for the remaining dense-prediction datasets; for BioMassters in particular, the substantially
+larger training set makes the one-pixel configuration computationally impractical. Classification
+tasks do not use a decoder. The resulting configurations are summarized in Table 12.
+For Perceiver-IO, we use 512 latents, one cross-attention layer, and six self-attention layers. Its
+metadata encodings use the same dimensions as those of Atomizer-IO.
+Table 12: Architecture-specific spatial hyperparameters used for RAMEN and UniverSat. Encoding
+resolutions are expressed in physical units.
+RAMEN
+UniverSat
+Dataset
+Enc. res. (m)
+Enc. res. (m)
+Subpatch (px)
+Dec. stride (px)
+ForestNet
+40
+40
+1
+–
+BurnScars
+120
+120
+1
+4
+EuroSAT
+40
+40
+1
+–
+Cashew
+40
+40
+1
+1
+Sen1Floods11
+40
+40
+1
+4
+xView2
+2
+2
+1
+4
+BioMassters
+40
+40
+1
+4
+PASTIS
+40
+40
+1
+1
+Training protocol.
+All models are optimized with AdamW using a learning rate of 10−4, β1 =
+0.9, β2 = 0.999, and ϵ = 10−8. We use a cosine annealing learning-rate schedule with a lin-
+ear warm-up over the first 5% of training steps. Models are trained for 100 epochs by default.
+24
+
+
+Atomizer-IO: Beyond pixels, patches and grids
+Sen1Floods11 and BioMassters are trained for 150 epochs, as preliminary experiments showed that
+several architectures had not fully converged after 100 epochs. The 3D experiments on DALES
+and FRACTAL are trained for 100 epochs. Within each dataset, the same batch size, learning-rate
+schedule, and epoch budget are used for all architectures.
+Table 13: Batch size used for each
+dataset.
+The same batch size is
+used across architectures within a
+dataset.
+Dataset
+Batch size
+ForestNet
+8
+BurnScars
+8
+EuroSAT
+8
+Cashew
+8
+Sen1Floods11
+4
+xView2
+8
+BioMassters
+16
+PASTIS
+4
+DALES
+32
+FRACTAL
+20
+Atomizer-IO hyperparameters.
+For the 2D benchmarks,
+Atomizer-IO uses a latent dimension of 512, 128 global la-
+tents, and eight attention heads in both cross-attention and self-
+attention. Each decoder query attends to its nine nearest spa-
+tial latents. Relative positions used in local cross-attention are
+normalized with a fixed spatial scale of 100 m. For latent self-
+attention, the learned spatial scale is initialized to half the phys-
+ical extent of the input,
+sp = g n
+2 ,
+where g is the ground sampling distance in meters per pixel and
+n is the image size along one spatial dimension. The scale is
+then optimized jointly with the rest of the model.
+Given N input atoms and a target number of atoms per spatial
+latent k, we use L = ⌈N/k⌉spatial latents. Their anchors are
+placed on a hexagonal lattice covering the horizontal spatial ex-
+tent of the input. The density of the spatial latent representation
+and the local encoder cross-attention budget can be randomized jointly during training. For each
+batch, we sample one configuration (k, m), where m is the maximum number of atoms sampled
+from each latent neighborhood for cross-attention. For PASTIS, the configurations are
+(k, m) ∈{(100, 100), (250, 250), (350, 350)};
+for the other 2D benchmarks, they are
+(k, m) ∈{(1000, 1000), (1500, 1500), (2000, 2000)}.
+Varying k changes the number and density of spatial latents without changing the learned parame-
+ters, while varying m changes the local encoder attention budget.
+For dense prediction, we follow the query-subsampling strategy of Perceiver IO and supervise at
+most 100,000 spatial output queries per training sample.
+When an output contains more than
+100,000 locations, the supervised queries are sampled uniformly at random; otherwise, all loca-
+tions are supervised. A 512 × 512 prediction map therefore uses 100,000 sampled queries during
+training, whereas a 128 × 128 output is supervised densely.
+Table 14: Main Atomizer-IO architectural hyperparameters used for the 2D and 3D experiments.
+Here, k denotes the target number of atoms per spatial latent and m the maximum number of atoms
+sampled per latent for local cross-attention.
+Hyperparameter
+2D
+3D
+Latent dimension
+512
+768
+Global latents
+128
+128
+Attention heads
+8
+8
+Decoder neighbors
+9
+9
+Latent layout
+Hexagonal
+Hexagonal
+(k, m)
+Other 2D: {(1000, 1000), (1500, 1500), (2000, 2000)}
+PASTIS: {(100, 100), (250, 250), (350, 350)}
+(1000, 1000)
+Cross-attention spatial scale
+100 m
+100 m
+Maximum supervised queries
+100,000
+100,000
+For the 3D experiments on DALES and FRACTAL, we increase the latent dimension to 768 and
+use six self-attention layers. The model retains 128 global latents, eight attention heads, and nine
+decoder neighbors. Both 3D datasets use the fixed configuration (k, m) = (1000, 1000), with spatial
+latent anchors placed on the same hexagonal lattice over the horizontal extent of each input.
+25
+
+
+Atomizer-IO: Beyond pixels, patches and grids
+Fourier feature encoding.
+The continuous metadata used by Atomizer-IO are encoded with
+Fourier features using the parameters reported in Table 15. The same encoding and hyperparameters
+are used for Perceiver IO, so both models receive the same continuous metadata representation.
+Table 15: Fourier feature parameters used by Atomizer-IO and Perceiver IO.
+Feature
+Frequency bands
+Maximum frequency / period
+Position
+16
+16
+Resolution
+2
+2
+Acquisition time
+12
+365 days
+Measurement value
+8
+8
+D.3
+MNIST SPARSIFICATION PROTOCOL
+Information removal experiment
+pixels dropped
+Figure 13: MNIST sparsification proto-
+col. Models are trained on complete im-
+ages.
+At evaluation, pixels with value
+v ≤0.5 are progressively removed, while
+pixels with value v > 0.5 are always re-
+tained.
+MNIST is used as a controlled test of spatial reasoning
+under changes in input geometry. To control for model
+capacity on this relatively simple dataset, we com-
+pare a 7.40M-parameter Atomizer-IO with a parameter-
+matched 7.44M-parameter ViT. The ViT operates on
+1 × 1 patches, giving both models the same pixel-level
+spatial granularity.
+Atomizer-IO uses a latent dimension of 256, four global
+latents, four cross-attention heads, and eight latent
+self-attention heads. The encoder contains one cross-
+attention layer, followed by a processor with four self-
+attention layers. Each retained input pixel is associated
+with one spatial latent centered at the same location.
+Spatial RoPE is used only in latent self-attention; en-
+coder cross-attention receives no relative positional en-
+coding. Pixel coordinates are expressed in units of one
+per pixel, and the learned RoPE scale is initialized to 14 coordinate units, corresponding to half the
+width of the 28 × 28 image.
+Both models are trained for 50 epochs with batch size 64 using AdamW with a learning rate of 10−4
+and weight decay 10−3. Training uses complete MNIST images with no input sparsification.
+At evaluation, we progressively remove only pixels with value v ≤0.5, while pixels with v > 0.5
+are always retained (Figure 13). The same pixels are removed for both architectures, and removed
+pixels are absent from the input rather than replaced by zero-valued tokens. For the ViT, retained
+tokens keep the learned absolute positional embeddings associated with their original pixel locations,
+so removing pixels does not re-index the remaining observations. Neither model is retrained or fine-
+tuned for the resulting sparse input geometries.
+D.4
+LIDAR TRAINING AND INFERENCE PROTOCOL
+FRACTAL.
+We follow the RandLA-Net training protocol used in the FRACTAL benchmark for
+the LiDAR stream. For each sample, all atoms generated from the co-registered VHR image are
+retained, and 40,000 LiDAR points are sampled and converted to LiDAR atoms. The VHR and
+LiDAR atoms are concatenated into a single input set before being passed to Atomizer-IO. No
+modality-specific processing branch is used: both modalities are processed jointly through the same
+atomic encoder.
+DALES.
+DALES scenes are cropped into 50 m×50 m tiles for training, and atom-to-latent assign-
+ments are precomputed for each tile. At evaluation, each scene is covered by 50 m × 50 m sliding
+windows with a 25 m stride. For each window, the encoder context contains up to the prescribed
+LiDAR-point budget, with subsampling when necessary, while every point in the window is used as
+an output query.
+26
+
+
+Atomizer-IO: Beyond pixels, patches and grids
+Table 16: Architecture and training hyperparameters for the capacity-matched Atomizer-IO and ViT
+models used in the MNIST sparsification experiment.
+Parameter
+Atomizer-IO
+ViT
+Parameters (total)
+7.40M
+7.44M
+Hidden / latent dimension
+256
+224
+Encoder / processor depth
+1 cross-attn + 4 self-attn
+12 transformer blocks
+Attention heads
+4 (cross) / 8 (self)
+4
+MLP dimension
+768
+896 (4×)
+Positional encoding
+Relative (RoPE, self-attn)
+Absolute (learned)
+Tokens / latents
+1 spatial latent per retained pixel + 4 global
+1 token per retained pixel + CLS
+Attention dropout
+0.05
+0.05
+FF dropout
+0.10
+0.10
+Optimizer
+AdamW
+AdamW
+Learning rate
+1 × 10−4
+1 × 10−4
+Weight decay
+1 × 10−3
+1 × 10−3
+Batch size
+64
+64
+Epochs
+50
+50
+Because adjacent windows overlap, a physical point may receive predictions from multiple windows.
+We average the softmax class probabilities over all windows covering that point and apply a single
+argmax afterwards, yielding exactly one prediction per physical point. Predictions and ground-truth
+labels from all scenes are then accumulated into a global confusion matrix from which per-class IoU
+and mean IoU are computed.
+Table 17 reports the resulting per-class IoU together with the point-cloud baselines reported for
+DALES. Atomizer-IO reaches 66.7% mIoU, substantially above Perceiver IO in the same evaluation
+setting, while remaining below the strongest task-specific point-cloud methods.
+Table 17: Per-class IoU on DALES. Values are reported as fractions. Baseline values are those
+reported for the corresponding methods on DALES.
+Method
+Mean
+Ground
+Buildings
+Cars
+Trucks
+Poles
+Power lines
+Fences
+Vegetation
+KPConv
+0.811
+0.971
+0.966
+0.853
+0.419
+0.750
+0.955
+0.635
+0.941
+PointNet++
+0.683
+0.941
+0.891
+0.754
+0.303
+0.400
+0.799
+0.462
+0.912
+ConvPoint
+0.674
+0.969
+0.963
+0.755
+0.217
+0.403
+0.867
+0.296
+0.919
+Atomizer-IO
+0.667
+0.962
+0.941
+0.670
+0.095
+0.549
+0.829
+0.395
+0.895
+SuperPoint
+0.606
+0.947
+0.934
+0.629
+0.187
+0.285
+0.652
+0.336
+0.879
+PointCNN
+0.584
+0.975
+0.957
+0.406
+0.048
+0.576
+0.267
+0.526
+0.917
+ShellNet
+0.574
+0.960
+0.954
+0.322
+0.396
+0.200
+0.274
+0.600
+0.884
+Perceiver IO
+0.487
+0.944
+0.895
+0.362
+0.032
+0.144
+0.453
+0.228
+0.840
+27
+
+
+Atomizer-IO: Beyond pixels, patches and grids
+Table 18: Notation used throughout the methodology.
+Stage
+Symbol
+Meaning
+Input
+N
+Number of input atoms
+vi
+Measured value of atom i
+J
+Number of metadata fields of an atom
+ui1, . . . , uiJ
+Metadata fields of atom i
+ϕ0(·)
+Encoder of the measured value
+ϕ1(·), . . . , ϕJ(·)
+Encoders of the metadata fields
+fi
+Token (feature vector) of atom i
+pi
+Horizontal position of atom i, pi ∈R2
+F
+Input set {(fi, pi)}N
+i=1
+Sampler
+C
+Context set {(ci, pi)}|C|
+i=1
+ci
+Feature of context element i
+Q
+Query set {(qj, pj)}|Q|
+j=1
+qj
+Feature of query element j
+Aenc
+Encoder assignment: each context element to its nearest query
+Adec
+Decoder assignment: k nearest context elements per query
+Vj
+Index set of the local receptive field of query j
+δij
+Relative offset pi −pj of context element i from query j
+ϕδ(·)
+Fourier encoding of a relative spatial offset
+Encoder
+L
+Number of spatial latents
+D
+Latent embedding dimension
+pℓ
+Spatial anchor of latent ℓ
+hinit
+Shared spatial-latent initialization
+Hinit
+Initialized spatial latent set
+δiℓ
+Offset of atom i relative to latent ℓ
+ziℓ
+Atom feature processed relative to latent ℓ
+h(0)
+ℓ
+Latent ℓafter encoder cross-attention
+H(0)
+Encoder output / processor input
+Processor
+G
+Number of global latents
+B
+Processor depth (number of blocks)
+b
+Processor block index, b = 0, . . . , B (0: before the first block)
+g(b)
+r
+Global latent r after processor block b
+G(b)
+Global latent set after processor block b
+h(b)
+ℓ
+Spatial latent ℓafter processor block b
+H(b)
+Spatial latent set after processor block b
+H(B)
+Final processed spatial latent set (decoder context)
+sp
+Learned spatial RoPE scale
+s0
+Reference scale used to initialize sp
+Temporal
+T
+Number of acquisition timesteps
+t
+Timestep index
+h(0)
+tℓ
+Encoded latent ℓat timestep t
+H(0)
+t
+Encoder output at timestep t
+h(B)
+tℓ
+Processed latent ℓat timestep t
+H(B)
+t
+Processed spatial latent set at timestep t
+¯hℓ
+Temporally aggregated latent at anchor ℓ
+¯
+H(B)
+Temporally aggregated set; replaces H(B) as decoder context
+Decoder
+M
+Number of output queries
+pj
+Position of output query j
+k
+Number of nearest spatial latents gathered per output query
+qinit
+Shared output-query initialization
+Qinit
+Initialized output-query set
+δℓj
+Offset of latent ℓrelative to output query j
+Sj
+Indices of input atoms co-located with output query j
+˜qj
+Query conditioned on co-located observations
+qj
+Decoded representation at output query j
+Budgets
+κ
+Target number of atoms per spatial latent
+m
+Maximum number of atoms sampled per Voronoi cell
+28

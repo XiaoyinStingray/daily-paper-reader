@@ -48,17 +48,17 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-10-01</span>
+      <span class="dpr-home-dashboard-kicker">2026-10-02</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 6 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 14 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
     <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>0</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>6</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>2</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>12</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-10-01 22:55:44 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-10-02 23:12:20 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -69,7 +69,9 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>日报成功落地：6篇全速读、0篇精读，Gen2-VC以7.0分领跑。最值得看的是生成先验用于视频压缩，以及视觉Token通信、低光增强这两个6分方向。普通读者可先读Gen2-VC，再按兴趣扫其余速读。</p>
+<p>今天扫完14篇视觉压缩论文，精读2篇、速读12篇，焦点落在极低码率图像压缩。</p>
+<p>最值得看的是两篇9.0精读：《Rethinking Generative Image Compression at Extremely Low Bitrates》和《ResARC: Residual-Aware AutoRegressive Coding for Ultra-Low Bitrate Image Compression》，都指向生成式/自回归在超低码率下的潜力。</p>
+<p>普通读者可先读这两篇精读摘要，再顺带浏览速读里的视频压缩与视觉Token通信方向。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -78,12 +80,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">精读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">0 篇</strong>
+    <strong class="dpr-home-dashboard-count">2 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p class="dpr-home-dashboard-empty">今日暂无推荐。</p>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Rethinking Generative Image Compression at Extremely Low Bitrates">Rethinking Generative Image Compression at Extremely Low Bitrates</span></li><li><span class="dpr-home-dashboard-paper-title" title="ResARC: Residual-Aware AutoRegressive Coding for Ultra-Low Bitrate Image Compression">ResARC: Residual-Aware AutoRegressive Coding for Ultra-Low Bitrate Image Compression</span></li></ul>
   </div>
-
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">compress <strong>2</strong></span></div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -91,12 +93,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">速读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">6 篇</strong>
+    <strong class="dpr-home-dashboard-count">12 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Gen2-VC: Unlocking Generative Priors for Video Compression">Gen2-VC: Unlocking Generative Priors for Video Compression</span></li><li><span class="dpr-home-dashboard-paper-title" title="Selective Amortization of Full-Budget Counterfactual Reasoning for Visual Token Communication">Selective Amortization of Full-Budget Counterfactual Reasoning for Visual Token Communication</span></li><li><span class="dpr-home-dashboard-paper-title" title="IDM-Net: A Lightweight Illumination-Decoupled Modulation Network for Low-Light Image Enhancement">IDM-Net: A Lightweight Illumination-Decoupled Modulation Network for Low-Light Image Enhancement</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Selective Amortization of Full-Budget Counterfactual Reasoning for Visual Token Communication">Selective Amortization of Full-Budget Counterfactual Reasoning for Visual Token Communication</span></li><li><span class="dpr-home-dashboard-paper-title" title="Gen2-VC: Unlocking Generative Priors for Video Compression">Gen2-VC: Unlocking Generative Priors for Video Compression</span></li><li><span class="dpr-home-dashboard-paper-title" title="Task-Oriented Visual Feature Compression via Residual Vector Quantization for Device-Edge Multimodal Inference">Task-Oriented Visual Feature Compression via Residual Vector Quantization for Device-Edge Multimodal Inference</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">compress <strong>3</strong></span><span class="dpr-home-dashboard-tag">neural-arch <strong>3</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">compress <strong>6</strong></span><span class="dpr-home-dashboard-tag">neural-arch <strong>6</strong></span></div>
 </section>
 </div>
 
