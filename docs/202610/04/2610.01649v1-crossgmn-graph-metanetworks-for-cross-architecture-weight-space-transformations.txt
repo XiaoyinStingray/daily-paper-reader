@@ -1,0 +1,2776 @@
+Title: CrossGMN: Graph Metanetworks for Cross-Architecture Weight-Space Transformations
+
+URL Source: https://arxiv.org/pdf/2610.01649v1
+
+Published Time: Fri, 02 Oct 2026 01:41:44 GMT
+
+Number of Pages: 43
+
+Markdown Content:
+# CrossGMN: Graph Metanetworks for Cross-Architecture Weight-Space Transformations 
+
+Adir Dayan 1 Yam Eitan 1 Haggai Maron 1,2 
+
+> 1
+
+Technion – Israel Institute of Technology 2NVIDIA Research 
+
+## Abstract 
+
+Weight-space networks operate directly on parameters of other neural networks, enabling tasks such as predicting model properties, editing trained models, and generating weights. Equivariance has emerged as a key design principle for these networks, owing to weight-space symmetries such as neuron permutations. How-ever, existing equivariant weight-space architectures have primarily been studied for transformations that preserve the network architecture. In contrast, many prac-tical transformations, including model compression and upscaling, map a trained source network into a target network with a different architecture. In this setting, the source and target permutation symmetries act on different parameter spaces, making equivariance less straightforward to formulate. Our key idea for address-ing this mismatch is to reformulate cross-architecture operators with two inputs: a trained source network and an initialization of the target network. This lets us define equivariant cross-architecture operators that refine the initialization of the target network using information from the source network, while being invariant to source-network permutations and equivariant to target-network permutations. Based on this formulation, we introduce CrossGMN, a graph metanetwork that jointly processes both networks through symmetry-preserving cross-network mes-sage passing. We prove CrossGMN is universal for continuous cross-architecture operators on compact sets under a general-position assumption. We further eval-uate CrossGMN for model compression, where it predicts the parameters of a smaller network to accelerate subsequent knowledge distillation. Across 2-D and 3-D INRs and image classification with MLPs, CNNs, and Vision Transformers, CrossGMN speeds up distillation by up to 8.89×, transfers across datasets without retraining (3.78×), and a single model can accelerate compression from heteroge-neous source architectures into a common target architecture. 
+
+## 1 Introduction 
+
+Weight-space learning studies neural architectures that operate directly on the parameters of other neural networks, enabling tasks such as predicting model properties, editing trained models, and gen-erating weights (Unterthiner et al., 2020; Eilertsen et al., 2020; Sch¨ urholt et al., 2021; 2022a; 2024). A central property of weight spaces is their permutation symmetries, resulting in many different model parameterizations that represent the same function. This has motivated the development of permutation-equivariant weight-space architectures (Navon et al., 2023; Zhou et al., 2023a;b; 2024; Lim et al., 2024; Kofinas et al., 2024; Tran et al., 2024; 2025; Vo et al., 2025), which represent the current state of the art for learning over weights in many tasks. Many practical transformations of neural network weights do not preserve the network architec-ture. Model compression maps a trained network into a smaller one for deployment under memory, latency, or compute constraints, through structured pruning (Li et al., 2017) or knowledge distil-lation (Hinton et al., 2015; Gou et al., 2021). Cross-architecture knowledge transfer moves the behavior of a trained network into a structurally different one (Ahn et al., 2019; Liu et al., 2024; Czyzewski, 2021). Model upscaling initializes a wider or deeper network from a trained smaller one, allowing training to continue from the transferred parameters rather than from scratch (Chen et al., 2016; Wei et al., 2016; Chen et al., 2022; Wang et al., 2023; Pham et al., 2024). All of these map the weights of one architecture into the parameter space of another, and most of them are real-ized today by a separate optimization process run from scratch for every source network. Learning such a transformation instead would replace this per-network optimization with a single feedforward 1arXiv:2610.01649v1 [cs.LG] 1 Oct 2026 pass: one weight-space model is trained once, and every new source network is then transformed in a fraction of a second. Existing equivariant weight-space architectures, however, have exclusively addressed mappings whose input and output lie in the same weight space. The cross-architecture setting is fundamentally different: the source and target networks carry distinct symmetry groups acting on distinct parameter spaces, so it is not even clear what equivariance should mean. Design-ing equivariant cross-architecture weight-space models is thus a central yet overlooked challenge in weight-space learning. Our key observation is that cross-architecture transformations typically come with a natural second input. Whether the target is smaller or larger than the source, the procedure always begins from an initialized target network, which is then optimized against the trained source network, as in knowledge distillation and its variants (Hinton et al., 2015; Gou et al., 2021; Nasser et al., 2024). The transformation is therefore a function of two arguments: the trained source network and an initialization of the target. Importantly, taking both as input resolves the difficulty above. The initialization specifies the target architecture and carries the target symmetry group, so the operator has a well-defined action on each of its arguments: it should be invariant to symmetries of the source network and equivariant to symmetries of the target. This leads us to study equivariant cross-architecture operators F : Vsrc × V tgt → V tgt .
+
+With the right class of operators in place, the remaining question is how to parameterize it. We introduce CrossGMN , a graph metanetwork for learning such operators. CrossGMN represents each of the two networks as a parameter graph, joins them with cross edges, and performs message passing over the resulting joint graph. Information can thus flow between the source and the target while the two permutation symmetries are respected independently. We prove that CrossGMN is a universal approximator of continuous equivariant cross-architecture operators on compact sets under a general-position assumption, and extend this result to finite collections of source architectures mapping into a common target weight space. We evaluate CrossGMN for model compression through knowledge distillation. Given a trained teacher (source network) and an initialization for a smaller student (target network), CrossGMN predicts refined student parameters intended to reduce the number of distillation steps needed to match the teacher. We evaluate width, depth, and combined compressions across 2-D and 3-D INRs (Sitzmann et al., 2020) and MNIST (LeCun et al., 1998)/CIFAR-10 (Krizhevsky, 2009) classifiers, on architectures including MLPs, CNNs, and Vision Transformers (Dosovitskiy et al., 2021). Across these settings, CrossGMN accelerates subsequent distillation for initializing compressed students, achieving speedups of up to 8.89 × on MNIST INRs and 6.85 × on ModelNet (Wu et al., 2015) INRs. CrossGMN also generalizes out of distribution: a model trained on MNIST INRs transfers to FashionMNIST (Xiao et al., 2017), achieving up to 3.78 × speedup without retraining. More-over, a single CrossGMN can compress heterogeneous CIFAR-10 MLP teacher architectures into a common smaller student architecture and generalize to unseen teacher architectures. In summary, our contributions are: (1) formulating cross-architecture weight-space learning as learn-ing equivariant operators on a source network and a target initialization, which makes the problem’s symmetry structure well-defined; (2) introducing CrossGMN, a graph metanetwork for learning equivariant transformations between different neural-network weight spaces; (3) establishing its universality for continuous cross-architecture operators, including settings with multiple source ar-chitectures; and (4) demonstrating its effectiveness for model compression, where it accelerates knowledge distillation across diverse architectures and out-of-distribution settings. 
+
+## 2 Preliminaries 
+
+We introduce the notation and background required to define cross-architecture weight-space op-erators. For the remainder of the manuscript, we focus our theoretical analysis on fully connected MLPs, while evaluating our method empirically on a broader range of architectures, including CNNs and Transformers. The corresponding formal treatment for these architectures is provided in Ap-pendix B.2.3–B.2.4. 
+
+Weight spaces. An MLP architecture A = ( d, σ ) with L layers is specified by layer widths d =(d0, . . . , d L) and an activation function σ. Its parameters are 
+
+v = ( W1, b1, . . . , WL, bL), Wℓ ∈ Rdℓ×dℓ−1 , bℓ ∈ Rdℓ .
+
+2The corresponding realized function fv : Rd0 → RdL is 
+
+fv (x) = WLσ(· · · σ(W1x + b1) · · · ) + bL.
+
+Definition 1 (Weight space) . For an architecture A = (d, σ ), its weight space is VA := 
+
+LLℓ=1 
+
+ Rdℓ×dℓ−1 ⊕ Rdℓ
+
+ , where, ⊕ denotes a direct sum. Throughout the paper, we consider a source architecture Asrc and a target architecture Atgt , with corresponding weight spaces Vsrc and Vtgt . Their hidden widths and depths may differ, but we assume the same input and output dimensions. 
+
+Permutation symmetries. Permuting hidden neurons changes the parameterization of an MLP while preserving its realized function. We formalize these transformations through the following group action. 
+
+Definition 2 (Permutation action on weight space) . For an architecture A = ( d, σ ), let GA := 
+
+Sd1 × · · · × SdL−1 be its hidden-neuron permutation group. For g = ( τ1, . . . , τ L−1) ∈ GA, set 
+
+τ0, τ L = e and let Pτℓ denote the corresponding permutation matrix. The action ρA(g) : VA → V A
+
+is defined by W ′ 
+
+> ℓ
+
+= P ⊤ 
+
+> τℓ
+
+WℓPτℓ−1 and b′ 
+
+> ℓ
+
+= P ⊤ 
+
+> τℓ
+
+bℓ for 1 ≤ ℓ ≤ L. By construction, fρA(g)v = fv
+
+for every g ∈ GA.
+
+Definition 3 (Permutation-invariant and equivariant weight-space networks) . Let A be an architec-ture, and let GA act on its weight space VA through ρA as in Definition 2. A weight-space network is a parameterized map Ψθ : VA → Y, where GA acts on Y through a representation ρY . The network is GA-equivariant if Ψθ (ρA(g)v) = ρY (g)Ψ θ (v) for all g ∈ GA and v ∈ V A. It is GA-invariant if 
+
+Ψθ (ρA(g)v) = Ψ θ (v) for all g ∈ GA and v ∈ V A.In the next section, we consider the cross-architecture setting in which the source and target networks belong to different weight spaces with independent permutation symmetries. 
+
+## 3 Cross-Architecture Weight-Space Transformations 
+
+Let Asrc and Atgt be two architectures with weight spaces Vsrc and Vtgt , and permutation groups 
+
+Gsrc and Gtgt .
+
+Limitations of predicting the target directly from the source. One could directly map source parameters to target parameters, T : Vsrc −→ V tgt . However, this formulation has two difficulties. First, its equivariance structure is unclear: because the source and target have different permutation groups acting on different weight spaces, T must be invariant to source permutations while selecting a representative among equivalent target parameterizations. Second, natural source-to-target maps may be discontinuous and thus cannot be uniformly approximated arbitrarily well by continuous neural networks. Appendix C.1 gives a simple setting of model compression where mapping each larger network to an optimal smaller one is discontinuous. Instead, we formulate the problem as refinement from an initialization of the target network; this gives rise to more natural continuous cross-architecture operators. This leads to the following defi-nition. 
+
+Definition 4 (Cross-architecture weight-space operator) . A cross-architecture weight-space operator is a map 
+
+F : Vsrc × V tgt −→ V tgt , (vsrc , vinit ) 7 −→ F (vsrc , vinit ). (1) The second input vinit both specifies a concrete parameterization in the target weight space and provides the parameters that the operator can refine. We say that F is equivariant with respect to the source and target permutations if 
+
+F (gsrc · vsrc , g tgt · vinit ) = gtgt · F (vsrc , vinit ) ∀(gsrc , g tgt ) ∈ Gsrc × Gtgt (2) A natural and practically important instance of the operator class above is knowledge distilla-tion (Hinton et al., 2015). In its simplest setting, a target network, called the student , is trained 3to match the outputs of a source network, called the teacher . In our setting, we denote their archi-tectures by AT = Asrc and AS = Atgt , their weight spaces by VT and VS , the trained teacher by 
+
+vT , and the student by vS . Distillation then minimizes 
+
+L(vT , vS ) := Ex∼D [ℓ(fvT (x), f vS (x))] , (3) where ℓ measures the discrepancy between teacher and student outputs. Let Φk(vT , v0) denote the student parameters obtained after k distillation steps initialized at v0. For SGD (Bottou, 2012) and Adam (Kingma & Ba, 2015) with fixed hyperparameters and minibatches, 
+
+Φk is a continuous equivariant cross-architecture operator in the sense of Definition 4 for every fixed 
+
+k, provided the student loss gradient is jointly continuous. Appendix C.2 gives the formal statement and proof. 
+
+## 4 CrossGMN 
+
+To learn the cross-architecture operators defined in the previous section (Definition 4), we introduce CrossGMN. Section 4.1 presents its architecture, and Section 4.2 establishes its universality for continuous cross-architecture operators. 
+
+4.1 Architecture 
+
+For parameters v, let P(v) = ( V, E ) denote the parameter graph constructed as in GMN (Lim et al., 2024). For an MLP, neurons form the nodes, weights are represented as directed edges between consecutive layers, and biases as node features. The full graph construction and feature specification are given in Appendix B.2.2. Given source and target MLP architectures, let vsrc denote the source-network parameters and vinit 
+
+an initialization of the target network. Let P(vsrc ) = ( V src , E src ) and P(vinit ) = ( V tgt , E tgt )
+
+denote their parameter graphs. We define the joint graph as 
+
+J (vsrc , vinit ) :=  V src ⊔ V tgt , E src ⊔ Etgt ⊔ E×
+
+, (4) where E× denotes the set of cross edges. For the joint graph to respect both symmetries, E×
+
+must be invariant under the joint action of Gsrc × Gtgt on neurons: whenever (u, v ) ∈ E×, also 
+
+(g · u, h · v) ∈ E× for all g ∈ Gsrc and h ∈ Gtgt . We construct E× in two steps. We first determine how the neurons of a source layer are joined to those of a target layer, which is dictated by this invariance requirement. We then choose which pairs of layers to join, which is a free design choice. 
+
+Joining two layers. Consider a source hidden layer and a target hidden layer. Since the neurons of each can be permuted independently, the only nonempty set of edges between them that is invariant to both permutations is the complete bipartite one, connecting every source neuron to every target neuron. We call this a layerwise join , following the graph join of two disjoint graphs (Cardoso et al., 2013). Input and output neurons, in contrast, are indexed by the coordinates of the realized function’s input and output, and are not permuted. Since the source and target share input and output dimensions, we join them with the sparser positionwise join : the i-th source input neuron is connected only to the i-th target input neuron, and likewise for output neurons. 
+
+Choosing which layers to join. Because each layerwise join is invariant on its own, any choice of which source and target hidden layers to join yields a symmetry-preserving E×. We call this choice a cross-edge policy . The most permissive policy, all-to-all , joins every source hidden layer to every target hidden layer, giving nm layerwise joins for networks with n and m hidden layers. To avoid this quadratic growth with depth, we use the following strided policy. 
+
+Definition 5 (Strided cross-edge policy) . For two networks with n ≥ m hidden layers, the strided 
+
+policy partitions the n hidden layers of the deeper network into m consecutive blocks of near-equal size, and joins the k-th hidden layer of the shallower network to every layer in the k-th block. Each hidden layer of the deeper network is thus joined to exactly one hidden layer of the shallower network, for a total of n layerwise joins. For example, with n = 10 and m = 5 , the k-th hidden layer of the shallower network is joined to layers 2k − 1 and 2k of the deeper network, giving 10 
+
+joins instead of the 50 required by all-to-all. The formal construction is given in Appendix B.2.1. 4Source network vsrc          
+
+> Target initialization vinit
+> Joint graph J(vsrc , v init )
+> cross edges E×(bidirectional): positionwise (input / output) layerwise join (hidden)
+> GNN Parameter Update ∆θ
+> target side only
+> +
+> residual base vinit
+> Predicted output
+> vinit +s∆θ
+
+Figure 1: CrossGMN. The source parameters vsrc and an initialization vinit of the target network are represented as parameter graphs and combined into the joint graph J (vsrc , v init ). A GNN operates on the joint graph, and its outputs corresponding to the target network form the parameter update 
+
+∆θ , yielding the CrossGMN output defined in Definition 6. Importantly, the strided policy retains the benefits of all-to-all connectivity while using fewer cross edges. In Section 4.2, we establish universality for the strided construction, and our experiments later show that it performs comparably to all-to-all connectivity in practice (Table 6). We now have all the components needed to define CrossGMN. 
+
+Definition 6 (CrossGMN) . Given the joint graph J (vsrc , vinit ), let GMN θ denote a graph metanet-work with learnable parameters θ operating on the joint graph, and let Πtgt denote the map that extracts the target-side parameters and arranges them into a vector in the target weight space. We define the resulting parameter update as 
+
+∆θ (vsrc , vinit ) = Π tgt (GMN θ (J (vsrc , vinit ))) .
+
+The CrossGMN operator is then CrossGMN θ (vsrc , vinit ) = vinit + s ∆θ (vsrc , vinit ), (5) where s > 0 is a fixed residual-scale hyperparameter. Figure 1 illustrates CrossGMN. By construction, CrossGMN is invariant to source permutations and equivariant to target permu-tations, as required by Definition 4. Message passing on the joint graph preserves both symmetry actions, while Πtgt discards the source and retains the target, yielding the desired invariance and equivariance. A formal statement and proof are given in Proposition 2 in Appendix B.2.5. 
+
+4.2 Expressivity 
+
+Symmetry-preserving architectures restrict the hypothesis space and may therefore limit approxi-mation power, making expressivity analysis particularly important in this setting. We establish that CrossGMN is universal for arbitrary continuous cross-architecture operators satisfying the symme-try in equation 2. Our result applies whenever the cross-edge connectivity contains all edges of the strided policy in Definition 5. 
+
+Theorem 1 (Universality of CrossGMN) . Let Asrc and Atgt be fixed MLP architectures, and let 
+
+Ksrc ⊂ V Asrc and Ktgt ⊂ V Atgt be compact sets of weights in general position. 1 Let F : Ksrc ×
+
+Ktgt → V tgt be a continuous cross-architecture operator in the sense of Definition 4. Then, for every ε > 0, there exists a CrossGMN θ such that 
+
+sup 
+
+> (vsrc ,vinit )∈Ksrc ×Ktgt
+
+∥CrossGMN θ (vsrc , vinit ) − F (vsrc , vinit )∥ < ε. 
+
+In particular, this theorem provides an approximation guarantee for CrossGMN applied to the knowl-edge distillation operator Φk introduced in Section 3. 
+
+> 1
+
+We use the same general-position assumption as Dayan et al. (2026); for an MLP, this means that within each hidden layer, no two neurons have the same bias value. 
+
+5Table 1: INR compression. We report median speedup + IQR (in brackets) relative to the best pruning-based anchor initialization. The last two columns report the percentage of held-out teachers for which CrossGMN accelerates distillation, and the percentage for which CrossGMN fails to reach the target within the budget.                                                                                                                                      
+
+> Dataset Reduction axis Architecture change Speedup >1×(%) Failed (%) MNIST Width [2 ,32 ,32 ,1] →[2 ,16 ,16 ,1] 2.20 ×[1 .2,3.9] 83 2Width [2 ,32 ,32 ,1] →[2 ,8,8,1] 5.20 ×[1 .1,12 .5] 76 18 Width [2 ,32 ,32 ,1] →[2 ,4,4,1] 4.10 ×[0 .0,14 .1] 62 35 Depth [2 ,32 ,32 ,1] →[2 ,32 ,1] 4.07 ×[2 .2,6.6] 90 7Width+depth [2 ,32 ,32 ,1] →[2 ,16 ,1] 8.89 ×[3 .6,16 .8] 86 13 ModelNet40 Width [3 ,48 ,48 ,48 ,48 ,1] →[3 ,24 ,24 ,24 ,24 ,1] 1.11 ×[0 .9,1.7] 57 18 Depth [3 ,48 ,48 ,48 ,48 ,1] →[3 ,48 ,48 ,1] 6.85 ×[1 .0,19 .8] 74 12 Depth [3 ,48 ,48 ,48 ,48 ,1] →[3 ,48 ,1] 2.88 ×[2 .0,4.0] 96 0Width+depth [3 ,48 ,48 ,48 ,48 ,1] →[3 ,24 ,24 ,1] 2.46 ×[0 .4,4.8] 68 23
+
+Proof idea. The proof reduces the cross-architecture setting to the fixed-architecture universality results of Dayan et al. (2026), who showed that prominent permutation-equivariant weight-space architectures, including DWSNets (Navon et al., 2023) and GMNs (Lim et al., 2024), have equivalent expressive power and are universal on compact general-position sets for invariant functionals and equivariant operators. Specifically, fixing vinit makes vsrc 7 → F (vsrc , vinit ) source-invariant, while fixing vsrc makes vinit 7 → F (vsrc , vinit ) target-equivariant. We approximate these components using the corresponding invariant and equivariant universality results and combine them through the cross edges. The full proof is given in Appendix C.3. 
+
+A single CrossGMN for heterogeneous architectures. The universality result extends to any finite collection of source architectures A(1) src , . . . , A (m)src sharing a common target architecture Atgt ,provided the source architecture is identifiable from the joint graph. The formal statement and proof are given in Appendix C.4, and we evaluate this setting empirically in Section 5.2. 
+
+## 5 Experiments 
+
+We evaluate CrossGMN for model compression through knowledge distillation, a practical instance of the cross-architecture operators discussed in Section 3. Following that example, we refer to the source network as the teacher and the target network as the student. We measure whether student ini-tializations predicted by CrossGMN accelerate subsequent distillation toward their teachers. Our ex-periments cover several model families and compression settings, including transfer across datasets and to unseen source architectures. Full experimental details are provided in Appendix D.1–D.7. 
+
+5.1 Experimental setup and evaluation Training and evaluation protocol. For each compression setting, we train CrossGMN on a pop-ulation of trained teachers and student initializations using the distillation objective in equation 3. Given a teacher vT , CrossGMN predicts ˆvS = CrossGMN θ (vT , v0), where v0 is an initializa-tion of the target network as defined in Section 3, which we refer to as the anchor throughout the compression experiments. We initialize the anchor v0 by applying structured pruning methods to the teacher vT , as this pro-vides a stronger starting point for knowledge distillation than random initialization with little addi-tional compression overhead (Xu et al., 2024). For each experiment, we select the structured-pruning method that yields the lowest loss at initialization among the evaluated methods, providing a strong anchor for CrossGMN to improve upon. We compare CrossGMN with the selected anchor itself and with other structured-pruning baselines, including magnitude-based (Xu et al., 2024), activation-based (Hu et al., 2016), and OBS/OBC pruning (Hassibi & Stork, 1992; Frantar & Alistarh, 2022). Appendix D.2 details the anchor and baseline initialization methods. At evaluation, we measure the distillation speedup of CrossGMN relative to the anchor separately for each held-out teacher. We first distill the anchor v0 until its relevant validation metric plateaus, 2
+
+> 2
+
+We define a plateau as no improvement greater than ϵ = 10 −4 for P = 50 consecutive evaluations, following the standard early-stopping principle (Prechelt, 1998). 
+
+6reach distillation budget (steps)                 
+
+> 10 210 3
+> 00.5 1(a) fidelity to the teacher
+> T= 30 dB
+> 10 210 3
+> (b) performance retention
+> = 1 dB
+> Width compression [2,32,32,1] [2,16,16,1]
+> CrossGMN (ours) anchor: magnitude random init OBS / OBC activation random neuron
+> 10 110 210 310 4
+> (a) fidelity to the teacher
+> T= 20 dB
+> 10 110 210 310 4
+> (b) performance retention
+> = 7 dB
+> Depth compression [2,32,32,1] [2,32,1]
+> CrossGMN (ours) anchor: layer fold random init keep first + last
+
+Figure 2: Reach-budget plots for MNIST INRs. Fraction of 1,000 held-out teachers whose stu-dents reach a prescribed performance threshold defined relative to the teacher as a function of distillation budget (log scale), comparing CrossGMN with its anchor and other baselines (Ap-pendix D.3). Each compression setting includes two panels: (a) Fidelity to the teacher , mea-sured by PSNR( student , teacher ) ≥ T dB, and (b) Student performance retention , measured by 
+
+PSNR( student , image ) ≥ PSNR( teacher , image ) − ε. The thresholds T and ε are chosen sepa-rately for each compression setting to account for differences in student architecture capacity. See Section 5.1 for the full description of the reach-budget plots. and denote the attained value by q⋆ 
+
+> vT
+
+. We then distill the CrossGMN prediction ˆvS toward the same teacher under a fixed budget. The per-teacher speedup SvT is the ratio between the numbers of distillation steps required by v0 and ˆvS to reach q⋆ 
+
+> vT
+
+. Thus, SvT > 1 indicates that CrossGMN accelerates distillation relative to the anchor. If ˆvS does not reach q⋆ 
+
+> vT
+
+within the budget, we count the teacher as a failure and set SvT = 0 . We report the median speedup over all held-out teachers together with two complementary statistics: the acceleration rate, defined as the fraction of teachers with SvT > 1, and the failure rate, defined as the fraction of teachers with SvT = 0 . We additionally report wall-clock speedup, including the cost of the CrossGMN forward pass. 
+
+Reach–budget plots. A speedup metric relative to an anchor may be less informative when the anchor itself is weak. We therefore complement speedup metrics with reach–budget plots , which evaluate whether the student reaches prescribed performance defined relative to the teacher. Each plot shows the fraction of teachers whose students reach a fixed target as the distillation budget increases. We report two measures: fidelity reach , which tracks how quickly students match their teachers’ functions, and performance-retention reach , which tracks how quickly they attain a pre-scribed level of their teachers’ task performance. Figure 2 shows both measures for representative settings; Appendices D.2 and D.9 provide the full protocol and plots for all settings. 
+
+Teacher model families. We evaluate compression on trained-model populations 3, including 2-D SIREN implicit neural representations (INRs) (Sitzmann et al., 2020) fitted to MNIST images (LeCun et al., 1998), 3-D SIREN INRs fitted to ModelNet40 shapes (Wu et al., 2015), MLP and Vision Transformer (ViT) classifiers (Dosovitskiy et al., 2021) on CIFAR-10 (Krizhevsky, 2009), and CNN classifiers on MNIST from the model zoo of Sch¨ urholt et al. (2022b). 
+
+5.2 CrossGMN distillation speedup across model families and datasets INR datasets. For MNIST, we use the dataset of Navon et al. (2023), containing one SIREN INR per image with teacher architecture [2 , 32 , 32 , 1] (1,185 parameters). For ModelNet40, we use the SIREN dataset of 3-D shape distance fields from Shamsian et al. (2024), with teacher architecture 
+
+[3 , 48 , 48 , 48 , 48 , 1] (7,297 parameters). CrossGMN is trained and evaluated on disjoint teacher sub-sets for each dataset; Appendix D.3–D.4 provides full details. Table 1 reports distillation speedups across compression settings, and Figure 2 shows reach–budget curves for representative MNIST width and depth reductions, with wall-clock speedups reported below. 
+
+Wall-clock speedup. We additionally report wall-clock speedup, including graph construction and the CrossGMN forward pass. For the MNIST INR settings in Table 1, CrossGMN inference takes 
+
+> 3
+
+To justify amortization, each model population should span diverse functions; classifier diversity is quan-tified in Appendix D.11. 
+
+7Table 2: Classifier compression. Median distillation speedup + IQR (in brackets) relative to the best pruning-based anchor initialization; columns as defined in Table 1.                                                                                                      
+
+> Family Reduction axis Architecture change Speedup >1×(%) Failed (%) MLP Width [3072 ,64 ,64 ,64 ,64 ,10] →[3072 ,32 ,32 ,32 ,32 ,10] 1.04 ×[0 .8,1.4] 54 5Depth [3072 ,64 ,64 ,64 ,64 ,10] →[3072 ,64 ,64 ,10] 1.25 ×[0 .7,2.3] 60 3Width+depth [3072 ,64 ,64 ,64 ,64 ,10] →[3072 ,32 ,32 ,10] 1.18 ×[0 .8,1.8] 59 3ViT Depth blocks 4→21.21 ×[1 .1,1.3] 95 0Attention dimension 48 →24 0.74 ×[0 .6,0.9] 75Head count heads 2→10.86 ×[0 .8,1.0] 16 0Head count+depth heads 2→1, blocks 4→21.18 ×[1 .1,1.3] 92 0CNN Width conv [8 ,6,4] →[4 ,3,2] 1.17 ×[0 .9,1.4] 68 1
+
+18 –20 ms per teacher on an NVIDIA A100, compared with 1.8–2.4 ms per distillation step. This overhead is small relative to the overall distillation budget: width compression from [2 , 32 , 32 , 1] to 
+
+[2 , 8, 8, 1] , with a budget of 2,480 steps, achieves a 4.99 × wall-clock speedup versus 5.20 × in distil-lation steps, while joint width–depth compression to [2 , 16 , 1] , with a budget of 2,750 steps, achieves 
+
+8.36 × versus 8.89 ×. Full timing details and results are provided in Appendices D.2 and D.10. 
+
+Classifier datasets. We conduct separate compression experiments on MLP, ViT, and CNN model zoos. For MLPs and ViTs, we construct separate datasets of models trained on CIFAR-10, with 5,000 training and 1,000 test models per dataset. The MLPs have architecture 
+
+[3072 , 64 , 64 , 64 , 64 , 10] (209 ,802 parameters), while the ViTs have four Transformer blocks, two attention heads, hidden dimension 48 , and FFN width 192 (115 ,930 parameters). For CNNs, we use the existing model zoo of Sch¨ urholt et al. (2022b), containing 2,560 MNIST classifiers with three convolutional layers of widths [8 , 6, 4] (2,464 parameters). Table 2 reports the compression settings and results; Appendix D.5–D.7 provides dataset construction and training details. 
+
+Heterogeneous-architecture compression. When a model collection spans multiple architec-tures, training a separate compression operator for each reduces the benefits of amortization. To evaluate this setting, we train a single CrossGMN on four CIFAR-10 MLP teacher architectures, all mapped to a common student architecture. Table 3 reports results for held-out teachers from each architecture and for the pooled population. Table 3: Heterogeneous-architecture com-pression. A single CrossGMN maps all four source architectures to [3072 , 8, 10] .
+
+Teacher Speedup > 1× (%) Failed (%) 
+
+[3072 , 16 , 10] 1.28 ×[0 .7, 1.9] 60 12 
+
+[3072 , 16 , 16 , 10] 1 .07 ×[0 .7, 1.6] 55 14 
+
+[3072 , 32 , 10] 1.40 ×[0 .8, 3.4] 65 6
+
+[3072 , 32 , 32 , 10] 1 .54 ×[0 .7, 2.9] 66 10 Pooled 1.28 ×[0 .7, 2.3] 62 10 
+
+Discussion. As seen in Table 1, CrossGMN consistently accelerates distillation across INRs, achieving significant speedups. For classifiers, Table 2 shows more modest gains that depend on the compression setting: CrossGMN improves distillation for MLPs, CNNs and the ViT depth reductions, while reducing the ViT attention di-mension or head count does not yield a speedup. The results in Table 3 show that CrossGMN achieves positive speedups across heterogeneous architectures. Taken together, the results provide evidence that model compression can be learned and amortized directly in weight space, and suggest that CrossGMN is a suitable architecture for studying such learned cross-architecture transformations. 
+
+5.3 Out-of-Distribution Generalization 
+
+A desirable property of weight-space models is to become increasingly agnostic to the underlying network architecture, rather than requiring retraining for each specific model family. We therefore evaluate CrossGMN under two out-of-distribution shifts: cross-dataset transfer and unseen source architectures. Table 4 reports cross-dataset transfer, while Table 5 evaluates unseen architectures. These results support CrossGMN’s ability to transfer across datasets and provide evidence of partial generalization to unseen architectures. 8Table 4: Transfer across datasets. The Cross-GMN models trained on the MNIST INR set-tings of Table 1 are applied unchanged to Fash-ionMNIST INRs of the same architectures.                                       
+
+> Architecture change Speedup >1×(%) Failed (%)
+> [2 ,32 ,32 ,1] →[2 ,8,8,1] 2.18 ×[0 .0,5.8] 61 33
+> [2 ,32 ,32 ,1] →[2 ,32 ,1] 3.09 ×[1 .5,6.1] 86 6
+> [2 ,32 ,32 ,1] →[2 ,16 ,1] 3.78 ×[1 .1,10 .3] 76 17
+
+Table 5: Generalization to unseen architec-tures. The CrossGMN checkpoint used in Sec-tion 5.2 is applied without retraining to unseen wider and deeper teacher architectures.                       
+
+> Source architecture Speedup >1×(%) Failed (%)
+> [3072 ,64 ,10] 1.38 ×[0 .5,3.2] 61 11
+> [3072 ,16 ,16 ,16 ,16 ,10] 0 .87 ×[0 .4,1.3] 41 17 Pooled 1.06 ×[0 .5,1.8] 51 14
+
+5.4 Ablations: the role of cross edges 
+
+Table 6: Teacher–student communication. 
+
+CrossGMN ablations on MNIST INR width re-duction [2 , 32 , 32 , 1] → [2 , 8, 8, 1] , same com-pression setting as in Table 1.                     
+
+> Variant Speedup >1×(%) Failed (%) Strided (Definition 5) 5.20 ×[1 .1,12 .5] 76 18 All-to-all (Section 4.1) 5.13 ×[0 .9,11 .6] 75 18 No cross edges 3.18 ×[0 .4,8.6] 67 24 FiLM conditioning 3.22 ×[0 .4,9.1] 68 24
+
+We ablate the main architectural and training choices of CrossGMN, including teacher– student communication, cross-edge policy, student initialization, supervision objective, teacher-population size, weight-space backbone, and operator capacity. Table 6 focuses on the communication ablation, which highlights two main findings: removing cross edges or replacing them with FiLM conditioning on a pooled teacher summary (Perez et al., 2018) reduces distillation speedup, supporting direct equivariant neuron-level communication; and the strided policy of Definition 5 performs comparably to all-to-all connectivity while using fewer cross edges. The remaining ablations are reported in Appendix D.8. 
+
+## 6 Related Work 
+
+Weight-space learning treats neural-network parameters as structured data (Han et al., 2026). The pioneering works that started exploring this direction are Eilertsen et al. (2020); Unterthiner et al. (2020); Sch¨ urholt et al. (2021). Later approaches use symmetry considerations and include equiv-ariant weight-space networks (Navon et al., 2023; Zhou et al., 2023a;b; Tran et al., 2025) and graph-based models (Lim et al., 2024; Kofinas et al., 2024), with extensions to additional sym-metries (Kalogeropoulos et al., 2024; Tran et al., 2024). Importantly, these symmetry-aware archi-tectures operate within a single weight space, whereas we study transformations between distinct source and target weight spaces. Related parameter-generation methods either condition on a target architecture (Zhang et al., 2019; Knyazev et al., 2021; Liu et al., 2019) or learn distributions over trained-model populations (Sch¨ urholt et al., 2022a; 2024; Erkoc ¸ et al., 2023; Wang et al., 2024; Soro et al., 2025). They generate new weights rather than transforming a particular trained network into another weight space. An extended discussion is provided in Appendix A. 
+
+## 7 Conclusion 
+
+We explored learning transformations between the weight spaces of different neural architectures and introduced CrossGMN, an equivariant framework for learning such cross-architecture operators. CrossGMN is a graph metanetwork that operates jointly over the source and target weight spaces, using a trained source network to refine an initialization of the target network. We proved universal-ity for continuous cross-architecture operators and evaluated the framework on model compression with knowledge distillation. Across INRs and classifiers, CrossGMN reduces subsequent distilla-tion steps for both width and depth compression, while supporting reuse across source architectures, transfer across datasets, and partial generalization to unseen source architectures. These results show that equivariant models can learn architecture-changing transformations directly in weight space. 
+
+Limitations and future work. Our current setting requires access to source parameters, assumes compatible input and output spaces, and is evaluated only at moderate scale (up to roughly 200 k pa-rameters). Scaling to larger models may require sparse or blockwise joint graphs and more efficient cross-network communication. Future work could also extend the operator view beyond compres-sion to settings such as model upscaling and cross-family transfer. 9Acknowledgments 
+
+HM is supported by the Israel Science Foundation through a personal grant (ISF 264/23) and an equipment grant (ISF 532/23), and by the Career Advancement Chairs in Artificial Intelligence – Schmidt Futures. 
+
+## References 
+
+Sungsoo Ahn, Shell Xu Hu, Andreas C. Damianou, Neil D. Lawrence, and Zhenwen Dai. Variational information distillation for knowledge transfer. In IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , pp. 9155–9163, 2019. Guy Bar-Shalom, Fabrizio Frasca, Yaniv Galron, Yftah Ziser, and Haggai Maron. Beyond token probes: Hallucination detection via activation tensors with act-vit. In Advances in Neural Infor-mation Processing Systems , volume 38, pp. 95218–95248, 2025. doi: 10.52202/085713-2865. L´ eon Bottou. Stochastic gradient descent tricks. In Neural networks: tricks of the trade: second edition , pp. 421–436. Springer, 2012. L´ eon Bottou, Frank E. Curtis, and Jorge Nocedal. Optimization methods for large-scale machine learning. SIAM Review , 60(2):223–311, 2018. doi: 10.1137/16M1080173. URL https:// doi.org/10.1137/16M1080173 .Domingos M Cardoso, Maria Aguieiras A de Freitas, Enide Andrade Martins, and Mar´ ıa Robbiano. Spectra of graphs obtained by a generalization of the join graph operation. Discrete Mathematics ,313(5):733–741, 2013. Cheng Chen, Yichun Yin, Lifeng Shang, Xin Jiang, Yujia Qin, Fengyu Wang, Zhi Wang, Xiao Chen, Zhiyuan Liu, and Qun Liu. bert2bert: Towards reusable pretrained language models. In 
+
+Proceedings of the 60th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , pp. 2134–2148, 2022. Tianqi Chen, Ian Goodfellow, and Jonathon Shlens. Net2net: Accelerating learning via knowledge transfer. In International Conference on Learning Representations , 2016. Jacob Cohen. A coefficient of agreement for nominal scales. Educational and psychological mea-surement , 20(1):37–46, 1960. G. Cybenko. Approximation by superpositions of a sigmoidal function. Mathematics of Control, Signals, and Systems , 2(4):303–314, 1989. doi: 10.1007/BF02551274. URL https://doi. org/10.1007/BF02551274 .Maciej A Czyzewski. Transfer learning between different architectures via weights injection. arXiv preprint arXiv:2101.02757 , 2021. Adir Dayan, Yam Eitan, and Haggai Maron. On the expressive power of permutation-equivariant weight-space networks. In International Conference on Machine Learning (ICML) , 2026. Alexey Dosovitskiy, Lucas Beyer, Alexander Kolesnikov, Dirk Weissenborn, Xiaohua Zhai, Thomas Unterthiner, Mostafa Dehghani, Matthias Minderer, Georg Heigold, Sylvain Gelly, Jakob Uszko-reit, and Neil Houlsby. An image is worth 16x16 words: Transformers for image recognition at scale. In International Conference on Learning Representations , 2021. Gabriel Eilertsen, Daniel J¨ onsson, Timo Ropinski, Jonas Unger, and Anders Ynnerman. Classifying the classifier: dissecting the weight space of neural networks. In ECAI 2020: 24th European Con-ference on Artificial Intelligence, 29 August–8 September 2020, Santiago de Compostela, Spain– Including 10th Conference on Prestigious Applications of Artificial Intelligence (PAIS 2020) , pp. 1119–1126. SAGE Publications 1 Oliver’s Yard, 55 City Road, London, EC1Y 1SP, 2020. Ziya Erkoc ¸, Fangchang Ma, Qi Shan, Matthias Nießner, and Angela Dai. Hyperdiffusion: Generat-ing implicit neural fields with weight-space diffusion. In 2023 IEEE/CVF International Confer-ence on Computer Vision (ICCV) , pp. 14254–14264. IEEE, 2023. 10 Elias Frantar and Dan Alistarh. Optimal brain compression: A framework for accurate post-training quantization and pruning. In Advances in Neural Information Processing Systems , 2022. Yoav Gelberg, Yam Eitan, Aviv Navon, Aviv Shamsian, Theo Putterman, Michael M. Bronstein, and Haggai Maron. Gradmetanet: An equivariant architecture for learning on gradients. In Advances in Neural Information Processing Systems , volume 38, 2025. doi: 10.52202/085713-5155. Jianping Gou, Baosheng Yu, Stephen J Maybank, and Dacheng Tao. Knowledge distillation: A survey. International journal of computer vision , 129(6):1789–1819, 2021. Xiaolong Han, Zehong Wang, Bo Zhao, Binchi Zhang, Jundong Li, Damian Borth, Rose Yu, Haggai Maron, Yanfang Ye, Lu Yin, et al. A survey of weight space learning: Understanding, represen-tation, and generation. arXiv preprint arXiv:2603.10090 , 2026. Babak Hassibi and David G. Stork. Second order derivatives for network pruning: Optimal brain surgeon. In Advances in Neural Information Processing Systems , volume 5, pp. 164–171, 1992. Geoffrey Hinton, Oriol Vinyals, and Jeff Dean. Distilling the knowledge in a neural network. arXiv preprint arXiv:1503.02531 , 2015. Kurt Hornik. Approximation capabilities of multilayer feedforward networks. Neural Networks ,4(2):251–257, 1991. doi: 10.1016/0893-6080(91)90009-T. URL https://doi.org/10. 1016/0893-6080(91)90009-T .Hengyuan Hu, Rui Peng, Yu-Wing Tai, and Chi-Keung Tang. Network trimming: A data-driven neuron pruning approach towards efficient deep architectures. arXiv preprint arXiv:1607.03250 ,2016. Ioannis Kalogeropoulos, Giorgos Bouritsas, and Yannis Panagakis. Scale equivariant graph metanetworks. In A. Globerson, L. Mackey, D. Belgrave, A. Fan, U. Pa-quet, J. Tomczak, and C. Zhang (eds.), Advances in Neural Information Processing Sys-tems , volume 37, pp. 106800–106840. Curran Associates, Inc., 2024. doi: 10.52202/ 079017-3391. URL https://proceedings.neurips.cc/paper_files/paper/ 2024/file/c13d5a10028586fdc15ee7da97b7563f-Paper-Conference.pdf .Diederik P. Kingma and Jimmy Ba. Adam: A method for stochastic optimization. In International Conference on Learning Representations , 2015. Boris Knyazev, Michal Drozdzal, Graham W. Taylor, and Adriana Romero-Soriano. Parameter prediction for unseen deep architectures. In Advances in Neural Information Processing Systems ,2021. Miltiadis Miltos Kofinas, Boris Knyazev, Yan Zhang, Yunlu Chen, Gertjan J Burghouts, Efstratios Gavves, Cees G Snoek, and David Zhang. Graph neural networks for learning equivariant repre-sentations of neural networks. In International Conference on Learning Representations , volume 2024, pp. 45363–45381, 2024. Alex Krizhevsky. Learning multiple layers of features from tiny images. Technical re-port, University of Toronto, 2009. URL https://www.cs.toronto.edu/˜kriz/ learning-features-2009-TR.pdf .Yann LeCun, L´ eon Bottou, Yoshua Bengio, and Patrick Haffner. Gradient-based learning applied to document recognition. Proceedings of the IEEE , 86(11):2278–2324, 1998. Hao Li, Asim Kadav, Igor Durdanovic, Hanan Samet, and Hans Peter Graf. Pruning filters for efficient ConvNets. In International Conference on Learning Representations , 2017. Derek Lim, Haggai Maron, Marc T Law, Jonathan Lorraine, and James Lucas. Graph metanetworks for processing diverse neural architectures. In B. Kim, Y. Yue, S. Chaudhuri, K. Fragkiadaki, M. Khan, and Y. Sun (eds.), International Confer-ence on Learning Representations , volume 2024, pp. 11430–11458, 2024. URL 
+
+https://proceedings.iclr.cc/paper_files/paper/2024/file/ 2feafd84b23a52b3fa434bc6d7682256-Paper-Conference.pdf .11 Yewei Liu, Xiyuan Wang, and Muhan Zhang. Meta pruning via graph metanetworks: A meta learning framework for network pruning. arXiv preprint arXiv:2506.12041 , 2025. URL https: //arxiv.org/abs/2506.12041 .Yufan Liu, Jiajiong Cao, Bing Li, Weiming Hu, Jingting Ding, Liang Li, and Stephen Maybank. Cross-architecture knowledge distillation. International Journal of Computer Vision , 132(8): 2798–2824, 2024. doi: 10.1007/s11263-024-02002-0. URL https://doi.org/10.1007/ s11263-024-02002-0 .Zechun Liu, Haoyuan Mu, Xiangyu Zhang, Zichao Guo, Xin Yang, Kwang-Ting Cheng, and Jian Sun. Metapruning: Meta learning for automatic neural network channel pruning. In 2019 IEEE/CVF international conference on computer vision (ICCV) , pp. 3295–3304. IEEE, 2019. Sahar Almahfouz Nasser, Nihar Gupte, and Amit Sethi. Reverse knowledge distillation: Training a large model using a small one for retinal image matching on limited data. In Proceedings of the IEEE/CVF Winter Conference on Applications of Computer Vision (WACV) , pp. 7778–7787, 2024. doi: 10.1109/WACV57701.2024.00760. Aviv Navon, Aviv Shamsian, Idan Achituve, Ethan Fetaya, Gal Chechik, and Haggai Maron. Equiv-ariant architectures for learning in deep weight spaces. In International Conference on Machine Learning , pp. 25790–25816. PMLR, 2023. Ethan Perez, Florian Strub, Harm De Vries, Vincent Dumoulin, and Aaron Courville. Film: Visual reasoning with a general conditioning layer. In Proceedings of the AAAI conference on artificial intelligence , volume 32, 2018. Chau Pham, Piotr Teterwak, Soren Nelson, and Bryan A. Plummer. Mixturegrowth: Growing neural networks by recombining learned parameters. In IEEE/CVF Winter Conference on Applications of Computer Vision (WACV) , pp. 2788–2797, 2024. B. T. Polyak. Some methods of speeding up the convergence of iteration methods. U.S.S.R. Compu-tational Mathematics and Mathematical Physics , 4(5):1–17, 1964. doi: 10.1016/0041-5553(64) 90137-5. URL https://doi.org/10.1016/0041-5553(64)90137-5 .Lutz Prechelt. Automatic early stopping using cross validation: quantifying the criteria. Neural networks , 11(4):761–767, 1998. Adriana Romero, Nicolas Ballas, Samira Ebrahimi Kahou, Antoine Chassang, Carlo Gatta, and Yoshua Bengio. FitNets: Hints for thin deep nets. In International Conference on Learning Representations (ICLR) , 2015. Konstantin Sch¨ urholt, Dimche Kostadinov, and Damian Borth. Self-supervised representation learn-ing on neural network weights for model characteristic prediction. In Advances in Neural Infor-mation Processing Systems , volume 34, 2021. Konstantin Sch¨ urholt, Boris Knyazev, Xavier Gir´ o-i Nieto, and Damian Borth. Hyper-representations as generative models: Sampling unseen neural network weights. In Advances in Neural Information Processing Systems , volume 35, pp. 27906–27920, 2022a. Konstantin Sch¨ urholt, Diyar Taskiran, Boris Knyazev, Xavier Gir´ o-i Nieto, and Damian Borth. Model zoos: A dataset of diverse populations of neural network models. In Advances in Neu-ral Information Processing Systems (NeurIPS) Datasets and Benchmarks Track , 2022b. Konstantin Sch¨ urholt, Michael W. Mahoney, and Damian Borth. Towards scalable and versatile weight space learning. In Proceedings of the 41st International Conference on Machine Learning ,volume 235 of Proceedings of Machine Learning Research , pp. 43947–43966, 2024. Aviv Shamsian, Aviv Navon, David W. Zhang, Yan Zhang, Ethan Fetaya, Gal Chechik, and Haggai Maron. Improved generalization of weight space networks via augmentations. In Proceedings of the 41st International Conference on Machine Learning , volume 235 of Proceedings of Machine Learning Research , pp. 44378–44393, 2024. 12 Vincent Sitzmann, Julien N. P. Martel, Alexander W. Bergman, David B. Lindell, and Gordon Wet-zstein. Implicit neural representations with periodic activation functions. In Advances in Neural Information Processing Systems , 2020. Bedionita Soro, Bruno Andreis, Hayeon Lee, Wonyong Jeong, Song Chong, Frank Hutter, and Sung Ju Hwang. Diffusion-based neural network weights generation. In International Conference on Learning Representations , volume 2025, pp. 99644–99675, 2025. Tijmen Tieleman and Geoffrey Hinton. Lecture 6.5—RMSProp: Divide the gradient by a running average of its recent magnitude. Neural Networks for Machine Learning, Coursera, 2012. URL https://www.cs.toronto.edu/˜tijmen/csc321/slides/ lecture_slides_lec6.pdf . Lecture notes. Viet-Hoang Tran, Thieu N. Vo, Tho Tran-Huu, An T. Nguyen, and Tan M. Nguyen. Monomial ma-trix group equivariant neural functional networks. In Advances in Neural Information Processing Systems , volume 37, 2024. Viet-Hoang Tran, Thieu N. Vo, An Nguyen, Tho-Huu Tran, Minh-Khoi Nguyen-Nhat, Thanh Tran, Duy-Tung Pham, and Tan Nguyen. Equivariant neural functional networks for transformers. In 
+
+International Conference on Learning Representations , 2025. Thomas Unterthiner, Daniel Keysers, Sylvain Gelly, Olivier Bousquet, and Ilya Tolstikhin. Predict-ing neural network accuracy from weights. arXiv preprint arXiv:2002.11448 , 2020. Thieu Vo, Hoang V. Tran, Tho Tran Huu, An Nguyen The, Thanh Tran, Minh-Khoi Nguyen-Nhat, Duy-Tung Pham, and Tan Minh Nguyen. Equivariant polynomial functional networks. In Pro-ceedings of the 42nd International Conference on Machine Learning , volume 267 of Proceedings of Machine Learning Research , pp. 61689–61744, 2025. Kai Wang, Dongwen Tang, Boya Zeng, Yida Yin, Zhaopan Xu, Yukun Zhou, Zelin Zang, Trevor Darrell, Zhuang Liu, and Yang You. Neural network diffusion. arXiv preprint arXiv:2402.13144 ,2024. Peihao Wang, Rameswar Panda, Lucas Torroba Hennigen, Philip Greengard, Leonid Karlinsky, Rogerio Feris, David D. Cox, Zhangyang Wang, and Yoon Kim. Learning to grow pretrained models for efficient transformer training. In International Conference on Learning Representa-tions , 2023. Tao Wei, Changhu Wang, Yong Rui, and Chang Wen Chen. Network morphism. In International conference on machine learning , pp. 564–572. PMLR, 2016. Zhirong Wu, Shuran Song, Aditya Khosla, Fisher Yu, Linguang Zhang, Xiaoou Tang, and Jianxiong Xiao. 3d shapenets: A deep representation for volumetric shapes. In Proceedings of the IEEE conference on computer vision and pattern recognition , pp. 1912–1920, 2015. Han Xiao, Kashif Rasul, and Roland Vollgraf. Fashion-mnist: a novel image dataset for benchmark-ing machine learning algorithms. arXiv preprint arXiv:1708.07747 , 2017. Zhiqiu Xu, Yanjie Chen, Kirill Vishniakov, Yida Yin, Zhiqiang Shen, Lingjie Liu, Zhuang Liu, et al. Initializing models with larger ones. In International Conference on Learning Representations ,volume 2024, pp. 14336–14351, 2024. Zhuoqian Yang, Mathieu Salzmann, and Sabine S¨ usstrunk. Weight space representation learning via neural field adaptation. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pp. 17734–17743, 2026. Chris Zhang, Mengye Ren, and Raquel Urtasun. Graph hypernetworks for neural architecture search. In International Conference on Learning Representations , 2019. Allan Zhou, Kaien Yang, Kaylee Burns, Adriano Cardace, Yiding Jiang, Samuel Sokota, J. Zico Kolter, and Chelsea Finn. Permutation equivariant neural functionals. In Advances in Neural Information Processing Systems , volume 36, 2023a. 13 Allan Zhou, Kaien Yang, Yiding Jiang, Kaylee Burns, Winnie Xu, Samuel Sokota, J. Zico Kolter, and Chelsea Finn. Neural functional transformers. In Advances in Neural Information Processing Systems , volume 36, 2023b. Allan Zhou, Chelsea Finn, and James Harrison. Universal neural functionals. In Advances in Neural Information Processing Systems , volume 37, 2024. 14 Appendix Contents 
+
+A Extended Related Work 16 B Notation and Architecture-Specific Symmetries 16 
+
+B.1 Notation . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 16 B.2 Parameter graphs and induced permutation actions . . . . . . . . . . . . . . . . . . . . . . . 17 B.2.1 Joint graphs and cross-edge policies . . . . . . . . . . . . . . . . . . . . . . . . . . 17 B.2.2 Multilayer perceptrons . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 18 B.2.3 Convolutional networks . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 19 B.2.4 Transformers . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 20 B.2.5 Equivariance of the joint graph . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 22 
+
+C Theoretical Results 23 
+
+C.1 Discontinuity of mapping a larger network to an optimal smaller one . . . . . . . . . . . . . . 23 C.2 Finite-step distillation is a cross-architecture operator . . . . . . . . . . . . . . . . . . . . . . 25 C.3 Universal approximation of cross-architecture operators . . . . . . . . . . . . . . . . . . . . 27 C.4 One CrossGMN for finitely many source architectures . . . . . . . . . . . . . . . . . . . . . 30 C.5 Scope for CNN and Transformer weight spaces . . . . . . . . . . . . . . . . . . . . . . . . . 31 
+
+D Experimental Details 31 
+
+D.1 CrossGMN implementation . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 31 D.2 Evaluation protocol . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 32 D.3 MNIST and FashionMNIST INR compression . . . . . . . . . . . . . . . . . . . . . . . . . 35 D.4 ModelNet40 3-D INR compression . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 35 D.5 CIFAR-10 MLP compression . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 36 D.6 CIFAR-10 Vision Transformer compression . . . . . . . . . . . . . . . . . . . . . . . . . . . 36 D.7 MNIST CNN compression . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 37 D.8 Ablations . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 37 D.9 Reach–budget plots . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 37 D.10 Complete results . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 42 D.11 Classifier teacher-population diversity . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 43 
+
+15 A Extended Related Work 
+
+Weight-space learning. Weight-space learning treats neural-network parameters as structured data for learning, representation, and manipulation (Han et al., 2026). DWSNets (Navon et al., 2023) and Neural Functional Networks (Zhou et al., 2023a) construct permutation-equivariant layers di-rectly in weight space, while Neural Functional Transformers (Zhou et al., 2023b) use attention. Graph Metanetworks (Lim et al., 2024) and Neural Graph models (Kofinas et al., 2024) instead rep-resent networks as graphs and apply message passing. Related work also considers additional sym-metries (Kalogeropoulos et al., 2024; Tran et al., 2024), structured parameterizations such as LoRA weights (Yang et al., 2026), and related neural artifacts such as gradients (Gelberg et al., 2025) and activations (Bar-Shalom et al., 2025). Universal Neural Functionals extend equivariant weight-space models to general architectures (Zhou et al., 2024), while related approaches extend neural function-als to Transformers and polynomial weight-space features (Tran et al., 2025; Vo et al., 2025). These models have also been used to learn operators on trained networks, including optimization (Kofinas et al., 2024) and pruning-oriented editing (Liu et al., 2025). Existing expressivity results compare such architectures over a single weight space (Dayan et al., 2026). In contrast, CrossGMN studies learned operators between distinct source and target weight spaces with independent permutation actions. 
+
+Parameter generation. Parameter-generation methods amortize weight generation across archi-tectures, tasks, or model populations. Graph HyperNetworks (Zhang et al., 2019; Knyazev et al., 2021) and MetaPruning (Liu et al., 2019) take a target architecture as input and predict its weights. Hyper-representations (Sch¨ urholt et al., 2022a; 2024) and diffusion-based generators (Erkoc ¸ et al., 2023; Wang et al., 2024; Soro et al., 2025) instead learn a distribution over a population of trained models and sample new weights, optionally conditioned on the task or dataset. These methods gen-erate weights for an architecture or population rather than transforming a particular trained source network from one weight space into another. 
+
+Source-conditioned architecture changes. Net2Net provides analytic function-preserving trans-formations that widen or deepen a network (Chen et al., 2016), and model-growth methods extend this approach to pretrained Transformers (Chen et al., 2022). LiGO (Wang et al., 2023) learns a structured linear map from a smaller pretrained model to an initialization of a larger one. While these methods use analytic growth rules or optimize a growth map for a given pretrained source model, CrossGMN learns a shared operator across a population of source networks and reuses it on unseen sources without fitting a new operator for each model. 
+
+Compression and distillation. Structured pruning constructs a smaller network by removing en-tire units or channels and reusing the retained weights (Li et al., 2017). Knowledge distillation trains a student to match a teacher’s outputs (Hinton et al., 2015; Gou et al., 2021). FitNets addi-tionally uses intermediate teacher representations as hints to train thinner, deeper students (Romero et al., 2015). Distillation can also start from weights selected from the teacher (Xu et al., 2024). CrossGMN fits between these stages: it jointly processes the teacher and the structured-pruning ini-tialization (the anchor) to predict a refined student initialization, from which distillation proceeds toward the same teacher. The refinement is learned across a population of teachers to accelerate this subsequent optimization. 
+
+## B Notation and Architecture-Specific Symmetries 
+
+This section records the notation shared by the theoretical and experimental appendices and makes precise which permutation actions are respected by the parameter graphs used for MLPs, CNNs, and Transformers. The main universality theorem is stated for MLPs; the final paragraph of Appendix C explains what transfers to the other families. 
+
+B.1 Notation 
+
+The theoretical sections use the terms source and target , whereas the compression with knowledge distillation experiments use teacher and student . Table 7 fixes the correspondence. We write g·v for 16 the action ρA(g)v of Definition 2. In the experiments, the anchor is simply the target initialization supplied to the operator. Table 7: Correspondence between the theoretical and experimental notation.                                  
+
+> Object Theory Compression experiments Architectures Asrc , A tgt teacher AT, student AS
+> Weight spaces Vsrc ,Vtgt VT,VS
+> Trained input vsrc teacher vT
+> Target initialization vinit anchor v0
+> Operator output F(vsrc ,vinit )predicted student ˆvS
+> Symmetry groups Gsrc , G tgt GT, G S
+> Fixed-step optimizer Φk(vsrc ,vinit )Φk(vT,v0)
+
+B.2 Parameter graphs and induced permutation actions Parameter graph. CrossGMN uses the parameter-graph construction of Lim et al. (2024). We state only the structure needed for the symmetry arguments and for reproducing the implementation. 
+
+Definition 7 (Parameter graph) . For parameters v ∈ V A, the parameter graph PA(v) = ( V, E )
+
+is a typed directed multigraph. Unit nodes represent neurons, channels, or attention coordinates. Auxiliary nodes represent parameter vectors not indexed by two units, such as biases and the gain and shift parameters of normalization layers. Every learnable scalar is stored on either a node or an edge: a matrix entry [W ]ij is carried by the edge j → i; the entries of a convolutional kernel give parallel edges between its input and output channels; and bias or normalization entries are stored on their unit node or on an edge from the corresponding auxiliary node. A fixed parameter-to-graph encoding specifies this assignment and the correspondence used to decode graph outputs into network parameters (Appendix D.1). Nodes carry layer and source/target labels; classifier nodes also carry node type, canonical input/output indices, and optional architecture-family and activation-type labels. Edges carry their scalar value, layer index, and role (source-internal, target-internal, source-to-target, or target-to-source in the joint graph), with an optional architecture-family label for classifiers. Following Lim et al. (2024, Section 2.2 and Appendix C.2), a neural DAG automorphism preserves edge incidence, fixes input, output, and bias nodes, and preserves weight-sharing constraints. We use the term neural graph automorphism for the corresponding relabelings of our parameter and joint graphs, which may include reciprocal edges. We require these relabelings to fix auxiliary nodes and preserve all structural node and edge features, as in Lim et al. (2024, Appendix C.6). Parameter values are permuted with their nodes or edges, rather than held numerically fixed. Message passing with shared functions is equivariant to these relabelings. The layerwise joins of Section 4.1 are pre-served under independent relabelings of their two endpoint layers, while positionwise joins connect only canonically indexed boundary nodes. Hence the joint graph preserves the source and target actions independently. For an MLP, the automorphisms of the standard parameter graph are precisely the hidden-neuron permutations in Definition 2 (Lim et al., 2024, Proposition 5). We first specify the shared cross-edge policy, then give the full definitions for MLPs, CNNs, and Transformers. 
+
+B.2.1 Joint graphs and cross-edge policies Joint graph and layerwise joins. For source and target parameter graphs Psrc (vsrc ) =(V src , E src ) and Ptgt (vinit ) = ( V tgt , E tgt ), the joint graph is 
+
+J (vsrc , vinit ) =  V src ⊔ V tgt , E src ⊔ Etgt ⊔ E×
+
+, (6) as in Equation 4. For node sets U, W on opposite sides, write 
+
+Join( U, W ) = ( U × W ) ∪ (W × U )
+
+for the bidirectional layerwise join of Section 4.1, with each ordered pair representing a directed cross edge. Cross-edge structural features are constant within each directed join. For CNNs and Transformers, cross edges have scalar value 0 and their direction role; auxiliary nodes retain only their internal connections, as in Appendix D.1. 17 Positionwise boundary joins. For canonically indexed node sets U = {ui : i ∈ [q]} and W =
+
+{wi : i ∈ [q]}, where [q] = {1, . . . , q }, define 
+
+Pos( U, W ) = {(ui, w i), (wi, u i) : i ∈ [q]}.
+
+Source and target share input and output dimensions. Following Section 4.1, their boundary cross edges are 
+
+E×,∂ = Pos( U src in , U tgt in ) ∪ Pos( U src out , U tgt out ). (7) These nodes are fixed by the permutation actions, so positionwise joins preserve the required sym-metries. Internal layer and block boundaries remain hidden-unit sets and use layerwise joins. 
+
+Strided cross-edge policy. We give the indexed construction of Definition 5. Let n, m ≥ 0 be the numbers of source and target hidden layers, indexed from 0. For n ≥ m ≥ 1, define 
+
+ai = round 
+
+ in m
+
+
+
+, bi = max 
+
+
+
+round 
+
+ (i + 1) nm
+
+
+
+, a i + 1 
+
+
+
+,
+
+Mn,m =
+
+> m−1
+
+[
+
+> i=0
+
+ {ai, . . . , b i − 1} × { i},
+
+(8) where round denotes nearest-integer rounding with a fixed tie convention. Each target layer i is paired with the source layers in the nonempty block {ai, . . . , b i − 1}; these blocks partition the source hidden layers. For n < m , set Mn,m = {(i, j ) : ( j, i ) ∈ M m,n }, so pairs always list the source index first. If either network has no hidden layers, set Mn,m = ∅. In particular, Mn,n =
+
+{(i, i ) : 0 ≤ i < n } gives the shared-index policy for width-only compression. For Transformers, the same matching rule is applied to blocks, with joins defined below by submodule type. 
+
+B.2.2 Multilayer perceptrons Weight space. Let A = ( d, σ ) have widths d = ( d0, . . . , d L) and entrywise activation σ. As in Definition 1, its parameters v = ( W1, b1, . . . , WL, bL) lie in 
+
+VA =
+
+> L
+
+M
+
+> ℓ=1
+
+ Rdℓ×dℓ−1 ⊕ Rdℓ
+
+ .
+
+Realized function. For x ∈ Rd0 , set 
+
+h0 = x, hℓ = σ(Wℓhℓ−1 + bℓ) (1 ≤ ℓ < L ), fv (x) = WLhL−1 + bL.
+
+Thus hidden layers apply σ and the output layer is affine, as in Section 2. 
+
+Permutation symmetries. The group GA = QL−1 
+
+> ℓ=1
+
+Sdℓ acts as in Definition 2. For g =(τ1, . . . , τ L−1), set Pτ0 = Id0 and PτL = IdL , and define 
+
+W ′ 
+
+> ℓ
+
+= P ⊤ 
+
+> τℓ
+
+WℓPτℓ−1 , b′ 
+
+> ℓ
+
+= P ⊤ 
+
+> τℓ
+
+bℓ, 1 ≤ ℓ ≤ L. 
+
+Since σ commutes with permutations, the transformed hidden states satisfy h′ 
+
+> ℓ
+
+= P ⊤ 
+
+> τℓ
+
+hℓ, giving 
+
+fρA(g)v = fv . The same permutations relabel the hidden nodes and their incident edges, while fixing input, output, and auxiliary nodes. Each layerwise join and positionwise boundary edge is preserved under independent source and target actions. 
+
+Parameter graph. The node-bias encoding used in Section 4.1 has one node per neuron and one directed edge per weight: 
+
+Uℓ = {uℓ,i : i ∈ [dℓ]}, V =
+
+> L
+
+G
+
+> ℓ=0
+
+Uℓ,E =
+
+> L
+
+G
+
+> ℓ=1
+
+{eℓ,ij : uℓ−1,j → uℓ,i | i ∈ [dℓ], j ∈ [dℓ−1]}.
+
+18 The parameter graph PA(v) = ( V, E ) carries scalar features 
+
+ωv (eℓ,ij ) = ( Wℓ)ij , ωv (uℓ,i ) = 
+
+0, ℓ = 0 ,
+
+(bℓ)i, 1 ≤ ℓ ≤ L. 
+
+For the classifier encoding, replace node-stored biases by edges ebℓ,i : ηℓ → uℓ,i of value (bℓ)i,adding one fixed auxiliary node ηℓ per affine layer. Both encodings use the structural features of Definition 7; their feature dimensions and reciprocal message-passing edges are specified in Ap-pendix D.1. 
+
+Joint graph. For source and target MLPs with n = Lsrc − 1 and m = Ltgt − 1 hidden layers, use the strided pairs Mn,m from Equation 8 and the positionwise boundary edges of Equation 7: 
+
+EMLP  
+
+> ×
+
+= E×,∂ ∪ [
+
+> (j,i )∈M n,m
+
+Join( U src 
+
+> j+1
+
+, U tgt 
+
+> i+1
+
+). (9) Here U α 
+
+> in
+
+= U α 
+
+> 0
+
+and U α 
+
+> out
+
+= U αLα for α ∈ {src , tgt }. The joint graph is Equation 6 with 
+
+E× = EMLP  
+
+> ×
+
+; auxiliary bias nodes receive no cross edges. The all-to-all policy replaces Mn,m 
+
+by {0, . . . , n − 1} × { 0, . . . , m − 1}.
+
+B.2.3 Convolutional networks Weight space. Let a convolutional stack have channel counts c = ( c0, . . . , c L), kernel sizes k =(k1, . . . , k L), and pointwise nonlinearity σ. Its weight space is 
+
+VA =
+
+> L
+
+M
+
+> ℓ=1
+
+ Rcℓ×cℓ−1×kℓ×kℓ ⊕ Rcℓ
+
+ .
+
+Realized function. For v = ( K1, b1, . . . , K L, bL), define the affine convolution maps Cℓ(X) = 
+
+Kℓ ∗ X + bℓ, where ∗ denotes spatial convolution with the architecture’s fixed stride and padding, and biases are broadcast over spatial positions. The realized function is: 
+
+fv (x) =  CL ◦ σ ◦ C L−1 ◦ · · · ◦ σ ◦ C 1
+
+(x).
+
+Fixed channelwise pooling maps may be inserted between layers. Any dense layers following the convolutional stack use the MLP parameterization above. 
+
+Permutation symmetries. The hidden-channel group is GA = QL−1 
+
+> ℓ=1
+
+Scℓ . For g =(τ1, . . . , τ L−1), with τ0 and τL the identity, ρA(g) applies P ⊤ 
+
+> τℓ
+
+to the output-channel axis and Pτℓ−1
+
+to the input-channel axis of the ℓ-th kernel, and sets b′ 
+
+> ℓ
+
+= P ⊤ 
+
+> τℓ
+
+bℓ. Channelwise nonlinearities and pooling commute with this action; flattening induces the corresponding permutation of the input coordinates of any following dense layer. Thus fρA(g)v = fv . In the parameter graph, the same action relabels the hidden channel nodes and their incident kernel and bias edges. 
+
+Parameter graph. The corresponding parameter graph PA(v) = ( V, E ) has one node per channel and one auxiliary bias node per convolutional layer: 
+
+Uℓ = {uℓ,i : i ∈ [cℓ]}, V =
+
+> L
+
+G
+
+> ℓ=0
+
+Uℓ ⊔ { ηℓ : ℓ ∈ [L]},
+
+Its edge set is 
+
+E =
+
+> L
+
+G
+
+> ℓ=1
+
+
+
+{eℓ,ijrs : uℓ−1,j → uℓ,i | i ∈ [cℓ], j ∈ [cℓ−1], r, s ∈ [kℓ]}⊔ { ebℓ,i : ηℓ → uℓ,i | i ∈ [cℓ]}
+
+
+
+,
+
+with scalar edge values 
+
+ωv (eℓ,ijrs ) = ( Kℓ)ijrs , ωv (ebℓ,i ) = ( bℓ)i.
+
+19 Thus each input/output channel pair has k2 
+
+> ℓ
+
+parallel kernel edges. Spatial reuse of a kernel entry does not create additional parameter edges (Lim et al., 2024, Section 2.1.2). Edge indices specify the parameter-to-edge correspondence; structural features are those of Definition 7. Channelwise activations and pooling reuse the channel nodes. If a dense readout follows the stack, continue the layer-node notation as UL+1 , . . . , U Lnet using the MLP construction, where Lnet is the total number of convolutional and dense layers. For the stack alone, Lnet = L.
+
+Joint graph for width compression. Our CNN experiments change widths only, so source and target have the same sequence of Lnet layers. Using the node sets U src  
+
+> ℓ
+
+and U tgt  
+
+> ℓ
+
+of their parameter graphs, join corresponding hidden layers: 
+
+ECNN  
+
+> ×
+
+= E×,∂ ∪
+
+> Lnet −1
+
+[
+
+> ℓ=1
+
+Join( U src  
+
+> ℓ
+
+, U tgt  
+
+> ℓ
+
+). (10) This is the equal-depth matching Mn,n of Equation 8, with n = Lnet − 1. The boundary edges 
+
+E×,∂ follow Equation 7, with U α 
+
+> in
+
+= U α 
+
+> 0
+
+and U α 
+
+> out
+
+= U αLnet for α ∈ { src , tgt }. The CNN joint graph is Equation 6 with E× = ECNN  
+
+> ×
+
+.
+
+B.2.4 Transformers Weight space. Let a Transformer have L blocks, residual width d, H heads of dimension dh,attention width da = Hd h, and feed-forward width df . For blocks with biases and two affine LayerNorms, its weight space is 
+
+VA = Vemb ⊕
+
+> L−1
+
+M
+
+> ℓ=0
+
+h Rda×d ⊕ Rda ⊕3 ⊕  Rd×da ⊕ Rd
+
+⊕  Rdf ×d ⊕ Rdf
+
+ ⊕  Rd×df ⊕ Rd ⊕ R4di
+
+⊕ V out .
+
+The block factors contain the query, key, and value projections, the attention output projection, the two feed-forward maps, and the LayerNorm gains and shifts, respectively. The spaces Vemb and 
+
+Vout contain the trainable input and positional embeddings (including any class token), and the output head and any final normalization, respectively. 
+
+Realized function. To specify the realized function, store tokens as columns of X ∈ Rd×n and write 1n for the all-ones vector. Suppressing the block index, the projections for head h are 
+
+Qh = Wq,h X + bq,h 1⊤ 
+
+> n
+
+, Kh = Wk,h X + bk,h 1⊤ 
+
+> n
+
+, Vh = Wv,h X + bv,h 1⊤ 
+
+> n
+
+.
+
+Here Wq,h , W k,h , W v,h are the dh-row blocks of Wq , W k, W v . With softmax applied rowwise, define 
+
+Th(X) = Vh softmax 
+
+
+
+Q⊤ 
+
+> h
+
+Kh/pdh
+
+⊤
+
+,
+
+MHA( X) = Wo concat Hh=1 Th(X) + bo1⊤ 
+
+> n
+
+,
+
+FF( X) = W2 σ W1X + b11⊤
+
+> n
+
+ + b21⊤ 
+
+> n
+
+,
+
+where concatenation is along the feature dimension and σ acts entrywise. In the pre-normalization convention, block ℓ is 
+
+Y = X + MHA ℓ(LN ℓ, 1(X)) , Bℓ(X) = Y + FF ℓ(LN ℓ, 2(Y )) ,
+
+where each LayerNorm acts separately on each token, with learned gain and shift and a fixed positive stabilizer. The realized function is 
+
+fv (x) =  Rv ◦ BL−1 ◦ · · · ◦ B0 ◦ Ev
+
+(x),
+
+where Ev embeds the input and adds positional representations, and Rv applies the architecture’s readout and any final normalization. 20 Permutation symmetries. We use permutations of coordinates within each head, permutations of heads, and permutations of feed-forward units, while fixing residual-stream coordinates: 
+
+GA =
+
+> L−1
+
+Y
+
+> ℓ=0
+
+ (Sdh ≀ SH ) × Sdf
+
+ .
+
+For (τℓ, κ ℓ) in the ℓ-th factor, the attention action applies P ⊤ 
+
+> τℓ
+
+to the rows and biases of Wq , W k, W v
+
+and Pτℓ to the columns of Wo; the feed-forward action applies P ⊤ 
+
+> κℓ
+
+to the rows and bias of W1
+
+and Pκℓ to the columns of W2. Joint query–key permutations preserve the attention logits, value permutations are absorbed by Wo, and feed-forward permutations are the usual one-hidden-layer MLP symmetry. Thus this action preserves the realized function. This subgroup is compatible with the shared-coordinate attention graph of Lim et al. (2024, Sec-tion 2.1.2 and Figure 3). They describe attention edges as “a set that corresponds to the query, key, and value maps”; the shared intermediate nodes for these three projections are explicit in their released graph construction. 4 The subgroup does not exhaust the functional symmetries of Trans-formers. For example, standard dot-product attention also permits independent permutations of query–key and value coordinates within each head, as well as compensating invertible changes of basis in the query and key projections. The symmetry implemented by a graph metanetwork is determined by the typed parameter graph, not only by the computational architecture. We therefore distinguish the chosen function-preserving group GA above from 
+
+bGA := {g ∈ GA : ρA(g) is induced by a neural graph automorphism of PA}.
+
+Whether bGA = GA depends on the structural labels preserved by the graph encoding; fixed head-index labels, for example, can restrict head permutations. Our implementation and all formal claims about the deployed Transformer operator use this represented subgroup bGA, without claiming equiv-ariance to every functional symmetry. 
+
+Parameter graph. The parameter graph is built by joining the parameter subgraphs of these mod-ules. For block ℓ, let 
+
+Rsℓ = {rsℓ,i : i ∈ [d]} (s = 0 , 1, 2) , Aℓ = {aℓ,p : p ∈ [da]}, Fℓ = {fℓ,j : j ∈ [df ]}.
+
+The sets R0 
+
+> ℓ
+
+, R 1 
+
+> ℓ
+
+, R 2 
+
+> ℓ
+
+index the residual coordinates at the block input, after attention, and at the block output. The nodes in Aℓ jointly index query, key, and value coordinates, with p = ( h − 1) dh + r for coordinate r of head h; Fℓ indexes the feed-forward hidden units. Add bias nodes Bℓ = {ηℓ,t : t ∈{q, k, v, o, 1, 2}} and normalization nodes Nℓ = {νγℓ,s , ν βℓ,s : s = 1 , 2}. The block node set is 
+
+Vℓ =
+
+ 2G
+
+> s=0
+
+Rsℓ
+
+
+
+⊔ Aℓ ⊔ Fℓ ⊔ B ℓ ⊔ N ℓ.
+
+Writing u α
+
+−→ v for an edge whose scalar value is ωv (e) = α, the matrix edges are precisely 
+
+r0
+
+> ℓ,i
+> (Wℓ,t )pi
+
+−−−−−→ aℓ,p (t ∈ { q, k, v }, i ∈ [d], p ∈ [da]) ,aℓ,p 
+
+> (Wℓ,o )ip
+
+−−−−−→ r1 
+
+> ℓ,i
+
+(p ∈ [da], i ∈ [d]) ,r1
+
+> ℓ,i
+> (Wℓ, 1)ji
+
+−−−−−→ fℓ,j (i ∈ [d], j ∈ [df ]) ,fℓ,j 
+
+> (Wℓ, 2)ij
+
+−−−−−→ r2 
+
+> ℓ,i
+
+(j ∈ [df ], i ∈ [d]) .
+
+In particular, each pair (r0
+
+> ℓ,i
+
+, a ℓ,p ) has three parallel edges, one for each of Wq , W k, W v . For every affine map t, connect ηℓ,t to each output-coordinate node of that map with the corresponding entry of bℓ,t . LayerNorm s adds two edge families for its gain γℓ,s ∈ Rd and shift βℓ,s ∈ Rd:
+
+νγℓ,s 
+
+> (γℓ,s )i
+
+−−−−→ rs−1 
+
+> ℓ,i
+
+, νβℓ,s 
+
+> (βℓ,s )i
+
+−−−−→ rs−1 
+
+> ℓ,i
+
+(i ∈ [d], s = 1 , 2) .
+
+> 4
+
+The function self attention to graph uses the same middle neuron idx for the query, key, and value projections and the input of the output projection; see the released implementation. 
+
+21 The remaining block edges are the parameter-free residual edges r0
+
+> ℓ,i
+> 1
+
+−→ r1 
+
+> ℓ,i
+
+and r1
+
+> ℓ,i
+> 1
+
+−→ r2
+
+> ℓ,i
+
+. These matrix, bias, normalization, and residual edges together define Eℓ. As in Lim et al. (2024, Sec-tion 2.1.2 and Appendix B), activations, attention softmax, and tokenwise reuse of the projections introduce no additional parameter nodes or edges. The full graph PA(v) = ( V, E ) is the union of these block graphs and the embedding and readout graphs, identifying r2 
+
+> ℓ,i
+
+= r0 
+
+> ℓ+1 ,i
+
+at consecutive block boundaries. Patch embeddings use the con-volutional construction above, and linear embeddings and readouts use the MLP edge rule. Denote their layer-node sets by U emb  
+
+> k
+
+and U out  
+
+> k
+
+, with depths Lemb and Lout , and identify 
+
+U emb  
+
+> Lemb
+
+= R00, U out 0 = R2
+
+> L−1
+
+.
+
+The network’s input and output node sets are Uin = U emb 0 and Uout = U out  
+
+> Lout
+
+. Any trainable posi-tional or class-token vector is represented by an auxiliary node with one edge per entry to the cor-responding embedding coordinate; final normalization uses the same gain/shift construction. Fixed positional representations introduce no learnable edges. The node indices above specify parameter locations; structural labels and any reciprocal edges used for message passing follow Definition 7 and Appendix D.1. 
+
+Joint graph. Apply the strided matching Mn,m of Equation 8 to whole Transformer blocks, with 
+
+n = Lsrc and m = Ltgt . Within each matched block pair, join corresponding unit sets: 
+
+E×,blocks = [
+
+> (j,i )∈M n,m
+
+h 2[
+
+> s=0
+
+Join( Rs, src  
+
+> j
+
+, R s, tgt  
+
+> i
+
+)
+
+∪ Join( Asrc  
+
+> j
+
+, A tgt  
+
+> i
+
+) ∪ Join( F src  
+
+> j
+
+, F tgt  
+
+> i
+
+)
+
+i
+
+.
+
+(11) Thus joins match attention coordinates, feed-forward hidden units, and residual coordinates at cor-responding submodule boundaries. Attention joins include all coordinates on both sides, allowing different head counts. For matching embedding and readout depths on the two sides, join their corresponding internal node sets U t,α k defined above, where t ∈ { emb , out } and α ∈ { src , tgt }. With the positionwise input/output edges of Equation 7, the full cross-edge set is 
+
+ETr  
+
+> ×
+
+= E×,∂ ∪ E×,blocks ∪ [
+
+> t∈{ emb ,out }
+> Lt−1
+
+[
+
+> k=1
+
+Join( U t, src  
+
+> k
+
+, U t, tgt  
+
+> k
+
+),
+
+which defines the Transformer joint graph through Equation 6. The embedding–block and block– readout interfaces are already included through R0,α  
+
+> 0
+
+and R2,α Lα−1. For a single patch-embedding layer and linear classifier, Lemb = Lout = 1 , so the last union is empty. Set unions include each cross edge once, even when joins overlap after the block-boundary identifications. 
+
+B.2.5 Equivariance of the joint graph Proposition 2 (Equivariance induced by the joint graph) . Let J be the joint graph of Equation 4, with the cross-edge construction of Section 4.1 (and Appendix B.2.2) for MLPs, Appendix B.2.3 for CNNs, or Appendix B.2.4 for Transformers. Let GMN θ be a graph metanetwork as defined by Lim et al. (2024, Section 2.3), and let Hsrc and Htgt be parameter-permutation groups induced by neural graph automorphisms of the respective parameter graphs. Then the CrossGMN operator of Definition 6 satisfies, for every choice of parameters θ,
+
+CrossGMN θ (gsrc · vsrc , g tgt · vinit ) = gtgt · CrossGMN θ (vsrc , vinit )
+
+for all gsrc ∈ Hsrc and gtgt ∈ Htgt and all source and target parameters. For MLPs, we may take 
+
+Hsrc = Gsrc and Htgt = Gtgt , so this is exactly the symmetry required by Definition 4. Proof. Fix (gsrc , g tgt ) ∈ Hsrc × Htgt and write J = J (vsrc , vinit ). Let γ be the disjoint union of inducing automorphisms of the two parameter graphs. Each layerwise join is preserved because its endpoint sets are preserved; any positionwise boundary edges are fixed. Cross-edge features are 22 unchanged within each directed join. Thus γ preserves the joint graph’s structure and structural features, and 
+
+J (gsrc · vsrc , g tgt · vinit ) = γ · J .
+
+Graph metanetworks commute with such relabelings (Lim et al., 2024, Appendix C.6), so GMN θ (γ·J ) = γ · GMN θ (J ). Moreover, the target projection satisfies Πtgt (γ · Z) = gtgt · Πtgt (Z) for every joint output Z: it discards source entries and decodes target entries into their corresponding parameter coordinates. Consequently, 
+
+∆θ (gsrc · vsrc , g tgt · vinit ) = Π tgt (GMN θ (γ · J )) = Π tgt (γ · GMN θ (J )) = gtgt · ∆θ (vsrc , vinit ).
+
+Since gtgt acts linearly on target parameters, adding the transformed initialization and applying the fixed residual scale s in Equation 5 gives the claimed identity. Taking gtgt = e gives source invariance, and taking gsrc = e gives target equivariance. 
+
+## C Theoretical Results 
+
+This appendix proves the three claims used in the main text. First, mapping each larger network to an optimal smaller one can be discontinuous (Appendix C.1). Second, any fixed number of standard distillation steps does define a continuous cross-architecture operator (Appendix C.2). Third, Cross-GMN is universal for continuous source-invariant, target-equivariant operators on compact general-position sets (Appendix C.3), including a finite collection of source architectures (Appendix C.4). 
+
+C.1 Discontinuity of mapping a larger network to an optimal smaller one 
+
+In model compression, mapping each larger network to an optimal smaller one can be discontin-uous. Following Section 3, we call the larger source network the teacher and the smaller target network the student , with parameters vT ∈ V T and vS ∈ V S . We consider compressing a ReLU MLP with one hidden layer from width 2 to width 1. The optimal student switches between the teacher’s two spatially separated ReLU components as their coefficients cross. Figure 3 illustrates this discontinuity. 
+
+Formal construction. Take AT = ((1 , 2, 1) , ReLU) and AS = ((1 , 1, 1) , ReLU) . On I =[−11 , 10] , define 
+
+u(x) = ReLU( −x − 10) , v(x) = ReLU( x − 9) . (12) All norms and inner products below are on I. The supports of u and v are disjoint, and 
+
+∥u∥22 = ∥v∥22 = 13 , ⟨u, v ⟩ = 0 , ∥u − v∥∞ = 1 . (13) For t ∈ [− 12 , 12 ], choose teacher parameters vT (t) realizing 
+
+ft := fvT (t) = (1 − t)u + (1 + t)v. 
+
+An explicit continuous parameter path is 
+
+WT, 1 =
+
+−11
+
+
+
+, bT, 1 =
+
+−10 
+
+−9
+
+
+
+, WT, 2(t) = [1 − t 1 + t] , bT, 2 = 0 . (14) Restrict the student to zero output bias: 
+
+V0 
+
+> S
+
+= {(w, b, a, 0) : w, b, a ∈ R} ⊂ V S , fvS (x) = a ReLU( wx + b).
+
+Its realized function class is S = {fvS |I : vS ∈ V 0 
+
+> S
+
+}, as in Figure 3. Use squared functional error, 
+
+L(vT (t), vS ) = Lt(fvS ), Lt(g) := 
+
+Z
+
+> I
+
+|ft(x) − g(x)|2 dx, (15) 23 Width-2 → 1                         
+
+> counterexample for functional distillation
+> Teacher (width 2)
+> xuvy
+> u(x) = ReLU( −x−10)
+> v(x) = ReLU( x−9)
+> ft(x) = (1 −t)u(x) + (1 + t)v(x)
+> Student class S(width 1)
+> xgy
+> S={g(x) = aReLU( wx +b)}
+> u(x)v(x)
+> −11 −10 910
+> uand vhave disjoint supports.
+
+t < 0               
+
+> Teacher function ft(x)
+> x
+> −11 −10 910 01−t
+> 1 + t
+> Optimal width-1 student
+> arg min
+> g∈S Lt(g)
+> x
+> −11 −10 910 01−t
+> (1 −t)u
+> unique minimizer
+
+t = 0             
+
+> Teacher function f0(x)
+> x
+> −11 −10 910 011
+> Optimal width-1 students
+> arg min
+> g∈S L0(g)
+> x
+> −11 −10 910 011
+> uv
+> both optimal
+> arg min = {u, v }
+
+t > 0                               
+
+> Teacher function ft(x)
+> x
+> −11 −10 910 01−t
+> 1 + t
+> Optimal width-1 student
+> arg min
+> g∈S Lt(g)
+> x
+> −11 −10 910 01 + t
+> (1 + t)v
+> unique minimizer
+> No continuous selection of the optimal width-1 student at t=0
+> Selected optimizer
+> t
+> uv
+> −0+
+> jump discontinuity at t=0
+> Global minimizers
+> arg min
+> g∈S Lt(g)
+> {(1 −t)u}t < 0
+> {u, v }t= 0
+> {(1 + t)v}t > 0
+
+Figure 3: Mapping a teacher to an optimal student can be discontinuous. The width-2 teacher parameters vT (t) in Equation 14 vary continuously and realize ft = (1 − t)u + (1 + t)v. By Lemma 3, the optimal width-1 student realizes (1 − t)u for t < 0 and (1 + t)v for t > 0; at t = 0 ,both u and v are optimal. These one-sided limits differ, so no continuous parameter map can select an optimal student for every teacher along the path (Proposition 4). which is the loss of Equation 3 for uniform inputs on I, up to a constant factor. The optimal student parameters are 
+
+Opt( vT (t)) = arg min 
+
+vS ∈V 0
+
+> S
+
+L(vT (t), vS ). (16) 
+
+Lemma 3 (Best one-hinge approximation) . The functions realized by the optimal students are 
+
+{fvS |I : vS ∈ Opt( vT (t)) } =
+
+
+
+{(1 − t)u}, t < 0,
+
+{u, v }, t = 0 ,
+
+{(1 + t)v}, t > 0.
+
+(17) 
+
+Proof. On I, every student in V0
+
+S realizes a scalar multiple of either the constant function, a right-facing hinge h+
+
+c (x) = ReLU( x − c), or a left-facing hinge h−
+
+c (x) = ReLU( c − x). For a nonzero candidate shape h, optimizing its scalar coefficient gives 
+
+min 
+
+λ∈R ∥ft − λh ∥22 = ∥ft∥22 − Γt(h), Γt(h) = ⟨ft, h ⟩2
+
+∥h∥22
+
+. (18) Thus Γt(h) is the reduction in squared error obtained by fitting the best scalar multiple of h, relative to the zero function. Minimizing the student’s error is therefore equivalent to maximizing Γt(h).For the teacher’s two ReLU components, 
+
+Γt(u) = (1 − t)2
+
+3 , Γt(v) = (1 + t)2
+
+3 .
+
+For the constant function h(x) ≡ 1, we have R
+
+I ft(x) dx = (1 − t)/2 + (1 + t)/2 = 1 and 
+
+∥h∥22 = |I| = 21 . Hence 
+
+Γt(1) = 121 < 112 ≤ min {Γt(u), Γt(v)},
+
+where the last inequality follows from |t| ≤ 1/2. Thus the best constant student has strictly larger error than either optimally scaled component and cannot be optimal. Consider a nonzero right-facing hinge h+
+
+c . If c ≥ − 10 , it does not overlap the support of u, and Cauchy–Schwarz gives Γt(h+
+
+c ) ≤ Γt(v), with equality only when h+
+
+c is proportional to v, i.e. only when c = 9 . If c < −10 , put τ = −10 − c > 0 and Mt = max {1 − t, 1 + t}. Direct integration gives 
+
+∥h+
+
+c ∥22 ≥ 8000 + 1200 τ + 60 τ 2
+
+3 , ⟨ft, h +
+
+c ⟩ ≤ Mt
+
+ 59 6 + τ
+
+
+
+,
+
+24 and hence 
+
+Γt(h+ 
+
+> c
+
+) ≤ 3M 2 
+
+> t
+
+(59 /6 + τ )2
+
+8000 + 1200 τ + 60 τ 2 < M 2
+
+> t
+
+3 .
+
+The last inequality is equivalent to 51 τ 2 + 1023 τ + 28519 /4 > 0. Reflecting the interval by 
+
+x 7 → − 1 − x exchanges u and v and gives the same conclusion for every left-facing hinge other than 
+
+u. Therefore the maximizing shape is u for t < 0, v for t > 0, and both for t = 0 . The minimizing scalar in equation 18 is respectively 1 − t or 1 + t, proving equation 17. 
+
+Proposition 4 (Discontinuity of mapping teachers to optimal students) . Let KT = {vT (t) : t ∈
+
+[− 12 , 12 ]} ⊂ V T . There is no continuous map T : KT → V S such that T (vT (t)) ∈ Opt( vT (t)) for every t. More strongly, for any continuous T : KT → V S and any selection T ⋆ : KT → V 0 
+
+> S
+
+with 
+
+T ⋆(vT (t)) ∈ Opt( vT (t)) ,
+
+sup 
+
+> t∈[−1/2,1/2]
+
+∥fT (vT (t)) − fT ⋆(vT (t)) ∥∞ ≥ 12 . (19) 
+
+Proof. The realization map vS 7 → fvS |I is continuous into C(I) with the supremum norm. Hence a continuous T induces a continuous path φ(t) = fT (vT (t)) |I . If the supremum in Equation 19 were 
+
+ε < 1/2, then Lemma 3 and the limits t ↑ 0 and t ↓ 0 would give 
+
+∥φ(0) − u∥∞ ≤ ε, ∥φ(0) − v∥∞ ≤ ε. 
+
+The triangle inequality would imply 1 = ∥u − v∥∞ ≤ 2ε < 1, a contradiction. A continuous map selecting optimal students would have zero gap, so none exists. 
+
+Remark 1 (The counterexample is in general position) . General position, as defined in Equation 23, requires distinct biases within each hidden layer. Along the entire teacher path vT (t), the hidden biases are −10 and −9, including at t = 0 . The width-1 student satisfies this condition vacuously. Hence KT ⊂ V T \ EAT and EAS = ∅. The approximation lower bound in Proposition 4 therefore holds even in general position: the obstruction is the discontinuous choice of an optimal student. 
+
+Remark 2 (Refinement from a student initialization) . The proposition concerns mapping each teacher to a globally optimal student. A cross-architecture operator F (vT , v0) instead refines a supplied student initialization v0, without requiring global optimality. Appendix C.2 proves that a fixed number of distillation steps gives a continuous equivariant operator under the stated assump-tions. 
+
+C.2 Finite-step distillation is a cross-architecture operator 
+
+Recall from Section 3 that knowledge distillation trains a student with parameters vS to match a teacher with parameters vT by minimizing 
+
+L(vT , vS ) = Ex∼D [ℓ(fvT (x), f vS (x))] ,
+
+where ℓ measures the discrepancy between their outputs (Equation 3). Starting from a student initial-ization v0, this loss can be optimized with standard first-order methods, including gradient descent (GD) (Bottou et al., 2018), stochastic gradient descent (SGD) (Bottou, 2012), momentum (Polyak, 1964), RMSProp (Tieleman & Hinton, 2012), and Adam (Kingma & Ba, 2015). These methods operate coordinatewise : after computing the gradient, they apply the same scalar update rule to each parameter, using its own value and its current or past gradient components. The gradient itself may depend on all teacher and student parameters. For full-batch optimization, set Lj = L at every step. For SGD, fix the sequence of sampled mini-batches and let Lj be the average distillation loss over the minibatch at step j; the same convention applies to minibatch versions of the other methods. Assume each Lj is differentiable in the student parameters and ∇vS Lj (vT , vS ) is jointly continuous in (vT , vS ). Write GT and GS for the teacher and student permutation groups, and dS = dim VS .25 Proposition 5 (Finite-step distillation) . Starting from v(0) = v0, suppose the optimizer has the coordinatewise form 
+
+q(j) = ∇vS Lj (vT , v(j)),v(j+1)  
+
+> i
+
+= uj
+
+ (v0)i, q (0)  
+
+> i
+
+, . . . , q (j)
+
+> i
+
+, 1 ≤ i ≤ dS , (20) 
+
+where each uj : Rj+2 → R is a fixed continuous function shared across all coordinates. Then, for every fixed integer k ≥ 0, the map Φk(vT , v0) := v(k) is continuous and satisfies 
+
+Φk(gT · vT , g S · v0) = gS · Φk(vT , v0) (gT ∈ GT , g S ∈ GS ).
+
+Thus Φk is a continuous equivariant cross-architecture operator in the sense of Definition 4. Func-tionally equivalent teachers produce identical trajectories from the same initialization. Proof. Each Lj depends only on the realized teacher and student functions, so 
+
+fvT = fv′ 
+
+> T
+
+=⇒ Lj (vT , ·) = Lj (v′ 
+
+> T
+
+, ·), Lj (vT , P g vS ) = Lj (vT , vS ), (21) where Pg is the permutation matrix of g ∈ GS . Differentiating the second identity and using 
+
+Pg P ⊤ 
+
+> g
+
+= I gives 
+
+∇vS Lj (vT , P g vS ) = Pg ∇vS Lj (vT , vS ). (22) Differentiating Lj (vT , ·) = Lj (v′ 
+
+> T
+
+, ·) likewise shows that functionally equivalent teachers give identical student gradients. Continuity follows by induction: v(0) = v0 is continuous in (vT , v0), and the jointly continuous gradients and continuous uj make each subsequent iterate continuous by composition. For symmetry, compare runs initialized at (vT , v0) and (v′ 
+
+> T
+
+, P g v0), where fv′ 
+
+> T
+
+= fvT . Denote their student parameters at step r by v(r) and ev(r), respectively. Their student-loss gradient vectors are 
+
+q(r) = ∇vS Lr (vT , v(r)), eq(r) = ∇vS Lr (v′ 
+
+> T
+
+, ev(r)).
+
+Assume inductively that ev(r) = Pg v(r) for 0 ≤ r ≤ j. Substituting this relation, replacing the teacher using Equation 21, and applying the gradient transformation in Equation 22 gives 
+
+eq(r) = ∇vS Lr (v′ 
+
+> T
+
+, P g v(r))= ∇vS Lr (vT , P g v(r))= Pg ∇vS Lr (vT , v(r)) = Pg q(r) (0 ≤ r ≤ j).
+
+Writing (Pg x)i = xπg (i), the shared update rule in Equation 20 therefore yields 
+
+ev(j+1)  
+
+> i
+
+= uj
+
+ (Pg v0)i, eq(0)  
+
+> i
+
+, . . . , eq(j)
+
+> i
+
+
+
+= uj
+
+ (v0)πg (i), q (0)  
+
+> πg(i)
+
+, . . . , q (j) 
+
+> πg(i)
+
+ = v(j+1)   
+
+> πg(i)
+
+.
+
+Since ev(0) = Pg v0, induction gives ev(k) = Pg v(k) for every fixed k. Taking v′ 
+
+> T
+
+= gT·vT proves the claimed equivariance, and taking g to be the identity proves equality of trajectories for functionally equivalent teachers. 
+
+Lemma 6 (Standard gradient methods) . Gradient descent, SGD, momentum, RMSProp, and Adam have the form in equation 20, with fixed scalar hyperparameter schedules, decay factors in [0 , 1) ,the usual zero initialization of running averages, and ϵ > 0 in the denominators of RMSProp and Adam. Proof. Gradient descent and SGD subtract a scalar multiple of the current gradient. Unrolling mo-mentum expresses each update as a weighted sum of the gradients computed so far. Likewise, the running averages in RMSProp and Adam are weighted sums of gradients or squared gradients, with coefficients independent of the parameter coordinate. Their remaining operations are coordinatewise square roots and division; Adam’s bias corrections are fixed scalars at each step. All these operations are continuous, since the squared-gradient averages are nonnegative and ϵ > 0 keeps denominators positive. Unrolling the parameter updates therefore gives a continuous function uj of the initial coordinate and its gradient history, identical across coordinates, as required by equation 20. 26 C.3 Universal approximation of cross-architecture operators 
+
+We now prove Theorem 1. The proof has two conceptual ingredients. First, every continuous source-invariant, target-equivariant map can be approximated by a finite sum of a source-invariant scalar times a target-equivariant operator. Second, CrossGMN can realize such finite mixtures: it computes the two factors on their respective parameter graphs, communicates the scalar through a cross edge, and multiplies them on the target side. 
+
+General position and the fixed-architecture theorem. For an MLP architecture A = ( d, σ ), let 
+
+EA = {v : two neurons in some hidden layer have equal biases } . (23) The complement is the general-position set used by Dayan et al. (2026). We use the following result. 
+
+Theorem 7 (Fixed-architecture universality; Dayan et al. (2026)) . On every compact K ⊂ V A \EA,GMNs uniformly approximate every continuous GA-invariant functional and every continuous GA-equivariant operator K → V A.
+
+We may assume that each compact set contains every hidden-neuron permutation of each of its elements. To obtain this property, enlarge the sets to 
+
+eKα = {g· v : v ∈ Kα, g ∈ Gα}, α ∈ { src , tgt }.
+
+Each enlarged set is a finite union of permuted copies of a compact set, so it remains compact. It also remains in general position, since permuting neurons only reorders the distinct biases within each hidden layer. Extend F to the enlarged sets by 
+
+eF (gsrc · vsrc , g tgt · vinit ) = gtgt · F (vsrc , vinit ).
+
+The symmetry condition in Equation 2 ensures that different ways of writing the same permuted input pair give the same output. The extension is continuous on each permuted copy of Ksrc × Ktgt ;since these are finitely many closed sets and the definitions agree on their overlaps, it is continuous on their union. Uniform approximation on the enlarged sets implies the same guarantee on the original sets. We therefore use the enlarged sets below, retaining the notation Ksrc , K tgt , and F .
+
+Lemma 8 (Invariant–equivariant finite mixture) . Let F : Ksrc × Ktgt → V tgt be continuous, source invariant, and target equivariant. For every η > 0, there are continuous source-invariant functions a1, . . . , a M : Ksrc → [0 , 1] with P 
+
+> i
+
+ai ≡ 1 and continuous target-equivariant maps 
+
+h1, . . . , h M : Ktgt → V tgt such that 
+
+sup 
+
+> (vsrc ,vinit )
+
+F (vsrc , vinit ) −
+
+> M
+
+X
+
+> i=1
+
+ai(vsrc )hi(vinit ) < η. (24) 
+
+Proof. Let Q = Ksrc /G src be the source orbit space. Because the group is finite and acts by isometries, 
+
+dQ([ v], [v′]) = min 
+
+> g∈Gsrc
+
+∥g· v − v′∥
+
+makes Q a compact metric space. Source invariance lets F factor through a continuous map F :
+
+Q × Ktgt → V tgt , and every F (q, ·) remains target equivariant. Uniform continuity implies that 
+
+q 7 → F (q, ·) is continuous in the supremum norm. Choose a finite cover U1, . . . , U M of Q and points qi ∈ Ui such that 
+
+q ∈ Ui =⇒ ∥F (q, ·) − F (qi, ·)∥∞ < η. 
+
+Let {αi} be a continuous partition of unity subordinate to this cover, set ai(v) = αi([ v]) , and set hi(vinit ) = F (qi, vinit ). Then the ai are invariant, the hi are equivariant, and the convex-combination bound gives equation 24. 
+
+Lemma 9 (CrossGMN realizes finite mixtures) . Let Ksrc and Ktgt be compact general-position sets for fixed source and target MLP architectures. For i = 1 , . . . , M , let ai : Ksrc → R be a continuous source-invariant functional, and let hi : Ktgt → V tgt be continuous and target equivariant. For 
+
+27 every ε > 0, there exists a CrossGMN θ whose joint graph uses the positionwise boundary joins of Section 4.1 and the strided cross-edge policy of Definition 5 such that 
+
+sup 
+
+> (vsrc ,vinit )∈Ksrc ×Ktgt
+
+CrossGMN θ (vsrc , vinit ) −
+
+> M
+
+X
+
+> i=1
+
+ai(vsrc )hi(vinit ) < ε. (25) 
+
+The same conclusion holds if further symmetry-preserving cross edges are added. Proof. Approximate the factors. Let eout ∈ V src have value 1 in the first output-bias coordinate and 
+
+0 elsewhere, and define Ψi(vsrc ) = ai(vsrc )eout . This map is continuous and source equivariant because ai is invariant and hidden-neuron permutations fix eout . For any η > 0, Theorem 7 gives source and target GMNs Si, H i satisfying 
+
+sup 
+
+> Ksrc
+
+∥Si − Ψi∥ < η, sup 
+
+> Ktgt
+
+∥Hi − hi∥ < η. 
+
+Store and compute the factors in node and edge features. Let xv , x uv be the original node and edge features, including the parameter values and structural labels. At step j, use 
+
+z(j) 
+
+> v
+
+=  xv , (w(j) 
+
+> v,i
+
+)Mi=1 , c (j)
+
+> v
+
+, z(j) 
+
+> uv
+
+=  xuv , (w(j)
+
+> uv,i
+
+)Mi=1 , c (j)
+
+> uv
+
+.
+
+The block w·,i stores the working state of Si on the source side and of Hi on the target side; add zero coordinates and identity layers to match their dimensions and depths. The vectors cv , c uv ∈ RM
+
+will store the source scalars and are initially zero. Keep xv , x uv unchanged throughout. Set χα(v) = 1{v∈V α} and χα(u, v ) = χα(u)χα(v), where α ∈ { src , tgt }. Initialize each working block with its side’s GMN encoder applied to x. For block i, suppress i and the step index on its message, node-update, and edge-update maps ϕα, U α, E α, and use 
+
+m(j) 
+
+> uv,i
+
+= X
+
+> α
+
+χα(u, v ) ϕα(w(j) 
+
+> u,i
+
+, w (j) 
+
+> v,i
+
+, w (j)
+
+> uv,i
+
+),w(j+1)  
+
+> v,i
+
+= X
+
+> α
+
+χα(v) U α w(j) 
+
+> v,i
+
+, X
+
+> u:u→v
+
+m(j)
+
+> uv,i
+
+!
+
+,w(j+1)  
+
+> uv,i
+
+= X
+
+> α
+
+χα(u, v ) Eα(w(j) 
+
+> u,i
+
+, w (j) 
+
+> v,i
+
+, w (j)
+
+> uv,i
+
+).
+
+Thus each side performs its own GMN computation, and cross edges send zero messages in this stage. Apply the local readouts and replace the working blocks by their scalar outputs. Let λ(p) be the node or edge storing target parameter p, as in Appendix B.2.2, and let osrc be the first source output node. The resulting features contain 
+
+wosrc ,i = bai := [ Si(vsrc )] out , wλ(p),i = [ bhi]p, bhi := Hi(vinit ).
+
+Here [·]out selects the first output-bias coordinate. Consequently |bai − ai| < η and ∥bhi − hi∥ < η 
+
+uniformly on the corresponding input sets. 
+
+Copy the source scalars to the target features. Write ba = ( ba1, . . . , baM ). On the positionwise cross edge from osrc to the first target output node otgt , send the message (wosrc ,i )Mi=1 = ba to the c field. Set all other messages in this step to zero, so that 
+
+c(0)  
+
+> v
+
+= 1{v=otgt } ba (v ∈ V tgt ).
+
+We now update only c, keeping the computed factors and original features fixed. Use the bidirec-tional internal message passing of Appendix D.1. Let d(v) be the distance from otgt in the target graph, and let N−(v) consist of its target neighbors at distance d(v) − 1. For v̸ = otgt , this set is nonempty. Apply 
+
+c(j+1)  
+
+> v
+
+=
+
+
+
+c(j) 
+
+> v
+
+, v = otgt ,
+
+1
+
+|N−(v)|
+
+X
+
+> u∈N−(v)
+
+c(j) 
+
+> u
+
+, v̸ = otgt .
+
+28 The required neighbor masks and normalization constants are determined by the fixed MLP archi-tecture, layer labels, and canonical output indices. Induction on d(v) gives c(j) 
+
+> v
+
+= ba for j ≥ d(v).After D = max v d(v) steps, set cuv = cv on each target edge. Every target parameter location now has the features 
+
+zλ(p) =  xλ(p), ([ bhi]p)Mi=1 , (bai)Mi=1 
+
+.
+
+Multiply the stored factors and read out the parameters. Multiplication is continuous on [−R, R ]2.Hence, by the classical universal approximation theorems (Cybenko, 1989; Hornik, 1991), for every 
+
+R > 0 and κ > 0 there is an MLP μR,κ : R2 → R such that 
+
+sup 
+
+> (x,y )∈[−R,R ]2
+
+μR,κ (x, y ) − xy < κ. (26) Let B = max i{∥ ai∥∞, ∥hi∥∞} and P = dim Vtgt . Choose 
+
+0 < η < min 
+
+
+
+1, ε
+
+3M (2 B + 1) 
+
+
+
+, 0 < κ < ε
+
+3M √P , R = B + 1 .
+
+Then |bai|, |[bhi]p| < R . Using the values stored at λ(p), define the local readout 
+
+[ bFκ]p =
+
+> M
+
+X
+
+> i=1
+
+μR,κ (cλ(p),i , w λ(p),i ), [∆]p = [ bFκ]p − [vinit ]p
+
+s .
+
+The initialization coordinate is available in xλ(p). Thus the residual update of Definition 6 returns 
+
+bFκ. In the Euclidean norm, uniformly on the input sets, 
+
+bFκ − X
+
+> i
+
+aihi ≤ M √P κ + X
+
+> i
+
+
+
+|bai − ai| ∥ hi∥ + |bai| ∥ bhi − hi∥
+
+
+
+≤ M √P κ + M η (2 B + η) < 2ε
+
+3 .
+
+All local rules above are continuous on compact neighborhoods of the feature ranges, and their structural masks preserve the source and target permutations. Uniform MLP approximation of these rules and uniform continuity of their finite composition give a choice of θ such that 
+
+sup 
+
+> Ksrc ×Ktgt
+
+CrossGMN θ − bFκ < ε
+
+3 .
+
+The triangle inequality proves Equation 25. Additional cross edges are assigned zero messages in this construction. 
+
+Theorem 1 (Universality of CrossGMN, restated) . Let Asrc and Atgt be fixed MLP architectures, and let 
+
+Ksrc ⊂ V Asrc \ EAsrc , Ktgt ⊂ V Atgt \ EAtgt 
+
+be compact sets, where EA is defined in Equation 23. Let F : Ksrc × Ktgt → V tgt be a continuous cross-architecture operator in the sense of Definition 4. For joint graphs containing the position-wise boundary joins and strided hidden-layer joins of Section 4.1, and every ε > 0, there exists a CrossGMN θ such that 
+
+sup 
+
+> (vsrc ,vinit )∈Ksrc ×Ktgt
+
+∥CrossGMN θ (vsrc , vinit ) − F (vsrc , vinit )∥ < ε. 
+
+Proof of Theorem 1. Apply Lemma 8 with error ε/ 2 and write Fmix = P 
+
+> i
+
+aihi. Lemma 9 gives a CrossGMN within ε/ 2 of Fmix . The triangle inequality with equation 24 gives the desired uniform 
+
+ε approximation of F .29 C.4 One CrossGMN for finitely many source architectures 
+
+The same argument applies when the source population contains finitely many architectures and all map to one target architecture. The only additional requirement is that the source architecture be identifiable from the graph. 
+
+Definition 8 (Architecture-identifiable family) . A finite family A(1) src , . . . , A (m)src is architecture iden-tifiable if a finite message-passing block can write the one-hot architecture tag er on every node of a joint graph whose source has architecture A(r)src . An explicit family feature is sufficient. For finite MLP families, graph depth, layer types, and layer cardinalities are also sufficient. 
+
+Theorem 10 (Finite heterogeneous source families) . Let Atgt be a fixed MLP architecture and let 
+
+A(1) src , . . . , A (m)src be an architecture-identifiable finite family of MLP architectures. Let 
+
+Kr ⊂ V A(r)src 
+
+\ EA(r)src 
+
+(r = 1 , . . . , m ), Ktgt ⊂ V Atgt \ EAtgt 
+
+be compact sets, with EA as in Equation 23. For each r, let Fr : Kr × Ktgt → V tgt be contin-uous, source invariant, and target equivariant. Then one CrossGMN, with one parameter set, can approximate all Fr uniformly to any prescribed accuracy. Proof. Fix ε > 0. For each r, Theorem 1 gives bFr = CrossGMN θr with 
+
+sup  
+
+> Kr×Ktgt
+
+∥ bFr − Fr ∥ < ε
+
+2 .
+
+Add zero hidden coordinates and identity layers so that these networks have common hidden-state dimensions and depth. Let xv and xuv denote the original node and edge features, including their parameter values and structural labels. On a joint graph with source architecture A(r)src , the identification block of Defini-tion 8 writes the tag er ∈ Rm on every source and target node; its r-th entry is 1 and all other entries are 0. Copy this tag to each edge from either endpoint. At step j, use node and edge features 
+
+z(j) 
+
+> v
+
+= ( xv , e r , h (j) 
+
+> v
+
+), z(j) 
+
+> uv
+
+= ( xuv , e r , h (j) 
+
+> uv
+
+),
+
+where h(j) 
+
+> v
+
+and h(j) 
+
+> uv
+
+are the working hidden states. Initialize these states to zero. The original features and tags remain unchanged throughout; the first encoding step fills the working states. For each encoding, message, node-update, edge-update, or readout operation j, let Φ(q) 
+
+> j
+
+be the corresponding rule of network q, with inputs padded to common dimensions. If τ is the stored tag and z collects the operation’s other inputs, use the shared rule 
+
+Φj (τ, z ) = 
+
+> m
+
+X
+
+> q=1
+
+τq Φ(q) 
+
+> j
+
+(z).
+
+A message uses the tag at its receiving node; node and edge operations use their own stored tags. Since all tags equal er , Φj (er , z ) = Φ (r) 
+
+> j
+
+(z) at every operation. Induction over the encoding, message-passing steps, and readout therefore shows that these rules return exactly bFr on Kr × Ktgt .The rules Φj are continuous and can be uniformly approximated by MLPs on compact neighbor-hoods of the local feature ranges (Cybenko, 1989; Hornik, 1991). There are finitely many rules, layers, and graph sizes, and each input set is compact. Uniform continuity of the resulting finite compositions therefore lets us choose their approximation accuracies so that one assembled Cross-GMN satisfies 
+
+max  
+
+> 1≤r≤m
+
+sup  
+
+> Kr×Ktgt
+
+∥CrossGMN θ − bFr ∥ < ε
+
+2 .
+
+The triangle inequality gives 
+
+max  
+
+> 1≤r≤m
+
+sup  
+
+> Kr×Ktgt
+
+∥CrossGMN θ − Fr ∥ < ε. 
+
+All local rules are shared across architectures, so θ is a single parameter set, as required. 30 C.5 Scope for CNN and Transformer weight spaces 
+
+Proposition 2 establishes equivariance for CNNs and Transformers directly from their implemented parameter graphs. The universality proof extends to these families as long as the fixed-architecture invariant and equivariant universality for GMNs on their parameter graphs still hold. The extension applies with respect to the neural graph automorphism groups defined in Appendix B.2. 
+
+## D Experimental Details 
+
+Throughout, CrossGMN denotes the operator in Equation 5, and the anchor is the target initialization 
+
+v0 that it refines. As in Section 5.1, the source network is the teacher vT and the target network is the student, whose predicted initialization is ˆvS .
+
+D.1 CrossGMN implementation 
+
+All experiments use the joint graph of the teacher vT and anchor v0. An equivariant graph metanet-work processes this graph, and the target-side readout predicts the residual in Equation 5. In the classifier experiments, node features concatenate a scalar, an 8-dimensional layer embedding, a 4-dimensional source/target-role embedding, a 4-dimensional node-type embedding, and optional 
+
+4-dimensional family and activation embeddings. Edge features concatenate the parameter value, the layer embedding, a 4-dimensional edge-role embedding, and an optional family embedding. In the INR experiments, node and edge inputs both have dimension 1 + 4 + 4 = 9 : scalar value, layer embedding, and role embedding. Parameter values are not normalized. The four edge roles are source-internal, target-internal, source-to-target, and target-to-source. 
+
+Cross edges. Cross edges use the layerwise joins and matching notation of Appendix B.2.1. The formal joint graphs in Appendices B.2.2–B.2.4 use positionwise input/output joins. The CNN and ViT classifier encoding uses dense boundary joins, replacing Pos by Join in Equation 7; MLP boundaries remain positionwise. Both choices preserve the stated symmetries because input and output nodes are fixed. 
+
+Backbone and readout. We use a bidirectional S CALE GMN backbone (Kalogeropoulos et al., 2024), motivated by its better empirical performance than plain GMN in most experiments. Our universality results are established for plain GMN. The backbone uses skip connections, edge updates, and dropout 0.1 during operator training. Message and update functions are two-layer SiLU MLPs with layer normalization. The classifier families use scale-equivariant message pass-ing; the SIREN families use sign-equivariant message passing, except for the parameter-matched permutation-equivariant ModelNet40 width+depth operator. Table 8 gives the configuration for each model family. Table 8: CrossGMN configurations. dv /d e are node/edge input widths and |θ| is the metanetwork parameter count; s is the residual scale in Equation 5.                                                                                        
+
+> Family / operator group Symmetry dhid Layers Agg. dv/d e|θ|s
+> MNIST SIREN (all; depth and width+depth use s=.01 )sign 128 4mean 9/92,647,895 .005 ModelNet40 depth 4→2sign 192 4add 9/95,937,947 .02 ModelNet40 depth 4→1sign 192 4add 9/95,937,907 .02 ModelNet40 width sign 192 4add 9/95,937,907 .005 ModelNet40 width+depth permutation 324 4add 9/96,010,354 .01 ViT depth scale 64 4mean 25 /17 405,587 .1 ViT attention dimension, head count, head count+depth scale 128 6mean 25 /17 2,438,163 .1 CNN width scale 64 6mean 21 /13 620,607 .4 MLP width / depth / width+depth scale 128 8mean 17 /13 3,293,663 .1 MLP heterogeneous architectures scale 128 4mean 17 /13 1,579,487 .1
+
+Operator objective. We train CrossGMN directly on teacher–student outputs, without an inner distillation loop. For a minibatch of B teachers, write 
+
+ˆvS,i = CrossGMN θ (vT,i , v0,i ) = v0,i + s ∆θ (vT,i , v0,i ), i = 1 , . . . , B, 
+
+31 where v0,i is the corresponding anchor. For classifiers, a shared image batch X gives the objective 
+
+L(θ) = 1
+
+B|X|
+
+> B
+
+X
+
+> i=1
+
+X
+
+> x∈X
+
+KL  softmax( fvT ,i (x)) softmax( fˆvS,i (x))  . (27) The temperature is 1; operator training uses neither a cross-entropy term nor logit clipping. For INRs, we minimize the MSE between teacher and predicted-student outputs. Let G ⊂ R2 be the full 28 × 28 pixel grid and Pi ⊂ R3 the fixed set of uniformly sampled query points for ModelNet40 teacher i. The respective objectives are 
+
+Lrender (θ) = 1
+
+B|G| 
+
+> B
+
+X
+
+> i=1
+
+X
+
+> x∈G
+
+fˆvS,i (x) − fvT ,i (x) 2 , (28) 
+
+Lfield (θ) = 1
+
+B
+
+> B
+
+X
+
+> i=1
+
+1
+
+|P i|
+
+X
+
+> x∈P i
+
+fˆvS,i (x) − fvT ,i (x) 2 . (29) The scalar outputs represent pixel intensities for MNIST and distance-field values for ModelNet40. Table 9 gives the training hyperparameters and number of query points. Table 9: Operator training.                                       
+
+> ViT CNN MLP MNIST INR ModelNet40 INR Objective Eq. 27 Eq. 27 Eq. 27 Eq. 28 Eq. 29 Optimizer / decay AdamW / 10 −3AdamW / 10 −3AdamW / 10 −3AdamW / 10 −3AdamW / 10 −3
+> Learning rate 3·10 −4or 10 −310 −410 −4/10 −35·10 −4–2·10 −33–5·10 −4
+> Warmup (steps) none 200 200 none none Functional inputs 128 images 128 images 128 images 784 coordinates 4096 or 2048 points
+
+All runs use global gradient clipping at 1.
+
+D.2 Evaluation protocol Teacher, anchor, and predicted student. We follow the notation of Section 5.1. For each held-out teacher vT , we construct the anchor v0 using the corresponding method in Table 10 and predict 
+
+ˆvS = CrossGMN θ (vT , v0). Let vaS (k) denote the student parameters after k distillation steps, where a ∈ { anchor , CrossGMN } identifies the initialization: 
+
+vanchor  
+
+> S
+
+(0) = v0, vCrossGMN  
+
+> S
+
+(0) = ˆ vS .
+
+Both students are distilled toward the same teacher with the same optimizer, minibatches, data order, and evaluation steps. The comparison therefore measures the benefit of refining the anchor with CrossGMN. Additional structured-pruning baselines and random initialization appear in the reach– budget plots. Table 10: Anchor initializations used for the distillation comparisons. 
+
+Family Reduction axis Anchor MNIST SIREN width / depth / width+depth magnitude pruning / layer fold / fold, then prune ModelNet40 SIREN width / depth / width+depth magnitude pruning / strided layer transfer / strided prune CIFAR-10 MLP width / depth or width+depth magnitude pruning / layer fold (scale 0.1)Heterogeneous MLPs all layer fold (scale 0.1)CIFAR-10 ViT attention dimension /head count / depth / head count+depth top-k attention dimensions / head drop / strided block transfer / strided blocks + head drop CNN channel width magnitude pruning 
+
+Student initializations. We define the structured initializations used as anchors and comparison baselines below; Table 10 identifies the anchor for each setting. Write the teacher’s affine layers as 
+
+(Wℓ, bℓ)LT
+
+> ℓ=1
+
+, with hidden widths dℓ, and let LS be the student’s number of affine layers. Retained unit indices are kept in increasing order. 32 Width reduction. When LS = LT , selecting mℓ units in each hidden layer gives index sets 
+
+Sℓ ⊆ { 1, . . . , d ℓ} with |Sℓ| = mℓ. With S0 and SLT containing all input and output indices, the student parameters are 
+
+W 0 
+
+> ℓ
+
+= Wℓ[Sℓ, S ℓ−1], b0 
+
+> ℓ
+
+= bℓ[Sℓ].
+
+Magnitude-based pruning (Xu et al., 2024; Li et al., 2017) and activation-based pruning (Hu et al., 2016) motivate the following variants. For each hidden layer, our implementations keep the mℓ units with the largest scores: 
+
+smagnitude  
+
+> ℓi
+
+= P 
+
+> j
+
+|(Wℓ)ij | + P 
+
+> j
+
+|(Wℓ+1 )ji |, (30) 
+
+sℓ1-outgoing  
+
+> ℓi
+
+= P 
+
+> j
+
+|(Wℓ+1 )ji |, (31) 
+
+smagnitude -sum  
+
+> ℓi
+
+= P 
+
+> j
+
+|(Wℓ)ij |, (32) 
+
+sactivation  
+
+> ℓi
+
+= 1
+
+ncal 
+
+> ncal
+
+X
+
+> r=1
+
+[σ(Wℓxℓ−1,r + bℓ)] i . (33) The magnitude anchor uses a two-sided ℓ1 score, summing incoming and outgoing weight magni-tudes. Here xℓ−1,r is the input to layer ℓ for calibration example r, and σ is its activation. Two baselines use no score: uniform selection retains 
+
+Sℓ =
+
+
+
+1 + round 
+
+ r(dℓ − 1) 
+
+mℓ − 1
+
+
+
+: r = 0 , . . . , m ℓ − 1
+
+
+
+for mℓ > 1 (and Sℓ = {1} for mℓ = 1 ); random-neuron selection samples mℓ distinct indices using a fixed seed per teacher. 
+
+CNN magnitude pruning. For the CNN kernels Kℓ of Appendix B.2.3, the anchor uses the con-volutional analogue of the MLP magnitude score. For output channel c of layer ℓ, followed by another convolution, this is 
+
+smagnitude  
+
+> ℓc
+
+= X
+
+> i,r,t
+
+|(Kℓ)cirt | + X
+
+> o,r,t
+
+|(Kℓ+1 )ocrt |,
+
+where i, o index channels and r, t index spatial kernel entries. For the final convolution, the outgoing term uses the first dense layer’s weights associated with that channel. We retain the highest-scoring channels in increasing index order and slice biases and adjacent weights consistently. Thus the anchor uses structured magnitude pruning with a two-sided ℓ1 score; the incoming term alone is the filter criterion of Li et al. (2017). For ViTs, structured selection acts on heads or attention coordinates and slices the corresponding projection blocks. 
+
+Structured OBS/OBC. This baseline removes units sequentially while correcting the surviving weights using a quadratic layer-reconstruction objective (Hassibi & Stork, 1992; Frantar & Alistarh, 2022). For hidden layer ℓ, let A ∈ Rncal ×dℓ contain its calibration activations as rows, and define 
+
+H0 = A⊤A
+
+ncal 
+
+, ¯h = tr( H0)
+
+dℓ
+
+, H = H0 + 10 −2¯hI.
+
+Starting from W = Wℓ+1 and K = H−1, each iteration selects and compensates for a removed unit by 
+
+p = arg min 
+
+> i
+
+∥W [: , i ]∥22
+
+Kii 
+
+, W ← W − W [: , p ]K[p, :] 
+
+Kpp 
+
+. (34) Delete column p of W and the corresponding row and bias entry in the preceding affine map, and update the inverse on the remaining indices: 
+
+K ←
+
+
+
+K − K[: , p ]K[p, :] 
+
+Kpp 
+
+
+
+> −p, −p
+
+.
+
+Repeat until mℓ units remain. 33 Depth and joint reduction. For 2 ≤ LS < L T , strided layer transfer copies student layer j from teacher layer 
+
+π(j) = 1 + round 
+
+ (j − 1)( LT − 1) 
+
+LS − 1
+
+
+
+, j = 1 , . . . , L S . (35) 
+
+Layer fold instead replaces each contiguous group ℓ1, . . . , ℓ 2 by the affine composition obtained by omitting its intermediate nonlinearities: 
+
+W 0 = c Wℓ2 · · · Wℓ1 , b0 = c bℓ2 +
+
+> ℓ2−1
+
+X
+
+> r=ℓ1
+
+Wℓ2 · · · Wr+1 br
+
+!
+
+. (36) At c = 1 these are exactly the parameters of that affine composition; the scale controls its magnitude. Folded classifier maps use c = 0 .1, whereas INRs use c = 1 . Keep-first copies the first LS −1 teacher layers and initializes a new output layer; keep-last copies the last LS − 1 layers and initializes a new input layer; keep-first+last retains layers at both ends and drops intermediate ones. For width+depth reduction, fold-then-prune applies magnitude pruning after folding, and strided-prune applies it after strided layer selection. Fresh random initialization uses the corresponding model family’s initialization rule. Family-specific choices are given below. 
+
+Quality and target. Write qa 
+
+> vT
+
+(k) for the quality of vaS (k), with larger values indicating better agreement with the teacher. For classifiers, this is the fraction of test inputs on which teacher and student predict the same label, measured on the full test set for ViTs and CNNs and a fixed 1,000 -image subset for MLPs. For INRs, it is the negative MSE between student and teacher renders or fields. Both initializations are evaluated on the step grid G = {0, 10 , 20 , . . . }, without interpolation. For each teacher, we determine the anchor’s plateau step pvT using the improvement threshold 
+
+ϵ = 10 −4 and patience P = 50 evaluations from Section 5.1. Its target quality is 
+
+q⋆ 
+
+> vT
+
+= max 
+
+> k∈G
+> k≤pvT
+
+qanchor  
+
+> vT
+
+(k).
+
+Thus each predicted student is evaluated against the quality attained by its own teacher’s anchor. 
+
+Budget and per-teacher speedup. Let T be the set of N held-out teachers in a compression setting. The setting’s budget is the empirical 95 th percentile of the anchor plateau steps, rounded up to the next evaluation step: 
+
+B = 10 
+
+ Q0.95 ({pvT : vT ∈ T } )10 
+
+
+
+. (37) The CrossGMN distillation budget is H = 1 .5B. For a ∈ { anchor , CrossGMN }, define the first recorded step reaching the target by 
+
+ka 
+
+> vT
+
+= min k ∈ G : k ≤ ha 
+
+> vT
+
+, q a 
+
+> vT
+
+(k) ≥ q⋆ 
+
+> vT
+
+, hanchor  
+
+> vT
+
+= pvT , hCrossGMN  
+
+> vT
+
+= H, 
+
+where the minimum is over recorded evaluations and min ∅ = + ∞. The anchor reaches its target by construction. Following the main paper, the per-teacher speedup is 
+
+SvT = kanchor 
+
+> vT
+
+kCrossGMN 
+
+> vT
+
+.
+
+If no recorded CrossGMN evaluation reaches the target by H, we count a failure and set SvT = 0 .
+
+Reported metrics. We report the median and interquartile range of {SvT : vT ∈ T } , together with the acceleration and failure rates defined in the main paper: 
+
+racc = 1
+
+N
+
+X 
+
+> vT∈T
+
+1[SvT > 1] , rfail = 1
+
+N
+
+X 
+
+> vT∈T
+
+1[SvT = 0] .
+
+All N teachers, including failures, contribute to these statistics; tables express the rates as percent-ages. The additional > 2× column in Table 17 uses the same definition with threshold 2. The reach–budget plots instead track fidelity to the teacher and performance retention against teacher-relative thresholds, as described in Section 5.1 and Appendix D.9. 34 Wall-clock speedup. We include the time needed to construct each student initialization. Let 
+
+canchor be the anchor-construction time, cCrossGMN the complete CrossGMN initialization time (in-cluding anchor construction, graph construction, and the forward pass), and danchor , d CrossGMN the measured distillation time per step. The per-teacher wall-clock speedup is 
+
+Swall  
+
+> vT
+
+= canchor + danchor kanchor 
+
+> vT
+
+cCrossGMN + dCrossGMN kCrossGMN 
+
+> vT
+
+. (38) Table 17 reports the median over all teachers, assigning wall-clock speedup 0 to failures. All timing constants were measured with device synchronization and batch size one on NVIDIA A100-SXM4-40GB (A100-SXM4-80GB for ViT). The ModelNet40 width+depth setting has no recorded runtime profile. Table 11: Evaluation-time distillation. Classifiers use pure KL at temperature 1 and no learning-rate schedule; all evaluation loops record every 10 steps.                                  
+
+> ViT CNN MLP MNIST INR ModelNet40 INR Optimizer AdamW AdamW AdamW Adam Adam Learning rate 10 −310 −310 −310 −210 −2
+> Batch 256 images 256 images 256 images full 28 ×28 grid 4096 points Augmentation none none crop + flip ––Cohort 1,000 400 1,000 (500 OOD) 1,000 1,000
+
+D.3 MNIST and FashionMNIST INR compression Population and splits. We use the pre-fit MNIST SIREN population of Navon et al. (2023): one INR per 28 × 28 image, with teacher architecture [2 , 32 , 32 , 1] (1,185 parameters), two sine hidden layers with ω0 = 30 , and a linear output. Of 70 ,000 INRs, 55 ,000 are used for operator training, 
+
+5,000 for validation, and a fixed 1,000 -INR subset of the test split for every reported evaluation. The FashionMNIST transfer population has the same architecture and 55 ,000 /5,000 /10 ,000 split. The MNIST-trained operators are applied to its 1,000 -INR test cohort without retraining. Table 12: MNIST SIREN configurations. Compression is the teacher-to-student parameter-count ratio; s is the CrossGMN residual scale. 
+
+Reduction axis Student Params Compression Anchor Operator lr s
+
+Width [2 , 16 , 16 , 1] 337 3.52 × magnitude pruning 10 −3 .005 Width [2 , 8, 8, 1] 105 11 .29 × magnitude pruning 2·10 −3 .005 Width [2 , 4, 4, 1] 37 32 .03 × magnitude pruning 10 −3 .005 Depth [2 , 32 , 1] 129 9.19 × layer fold 5·10 −4 .01 Width+depth [2 , 16 , 1] 65 18 .23 × fold, then prune 5·10 −4 .01 
+
+Anchors and comparator initializations. Table 12 specifies the anchors; their formulas and the comparison baselines are defined in Appendix D.2. For MNIST depth reduction, layer folding retains the first affine map and composes the final two, omitting the intermediate sine activation. The reach–budget plots compare CrossGMN with these anchors, the width or depth baselines appropriate to each setting, and fresh SIREN initialization, all distilled with the same optimizer and minibatches. Width reductions use strided cross edges; depth and width+depth reductions use all-to-all cross edges. 
+
+Operator training and evaluation. The five operators use the MNIST row of Tables 8 and 9. One epoch contains 1,719 optimizer steps over the 55 ,000 training teachers; validation render MSE selects the checkpoint. The selected checkpoints are from epochs 29 , 142 , 30 , 12 , and 40 in the order of Table 12. Evaluation distills the complete 1,000 -teacher cohort as a batch of independent student parameter vectors and records per-INR render MSE every ten steps. 
+
+D.4 ModelNet40 3-D INR compression Population and splits. We use the pre-fit SIREN distance-field population of Shamsian et al. (2024), with teacher architecture [3 , 48 , 48 , 48 , 48 , 1] (7,297 parameters) and ω0 = 30 . The dataset contains 12 ,311 objects, each fit ten times; we use view 0 and the object-disjoint 7,874 /1,969 /2,468 
+
+train/validation/test split. 35 Table 13: ModelNet40 configurations. Columns follow Table 12.                                            
+
+> Reduction axis Student Params Compression Anchor Operator lr s
+> Width [3 ,24 ,24 ,24 ,24 ,1] 1,921 3.80 ×magnitude pruning 3·10 −4.005
+> Depth [3 ,48 ,48 ,1] 2,593 2.81 ×strided layer transfer 3·10 −4.02
+> Depth [3 ,48 ,1] 241 30 .28 ×strided layer transfer 5·10 −4.02
+> Width+depth [3 ,24 ,24 ,1] 721 10 .12 ×strided prune 3·10 −4.01
+
+Anchors, training, and evaluation. We use magnitude pruning for width reduction, strided layer transfer for depth reduction, and strided-prune for width+depth reduction, as defined in Ap-pendix D.2. Three operators use the sign-equivariant dhid = 192 backbone. The width+depth operator uses the parameter-matched permutation-equivariant dhid = 324 backbone. Each is trained for 30 epochs with a fixed set of uniformly sampled points and the final epoch is evaluated. All settings are evaluated on 4,096 points. 
+
+D.5 CIFAR-10 MLP compression Teacher populations. For fixed-architecture compression, we construct a model zoo of 6,100 
+
+ReLU MLP teachers of architecture [3072 , 64 , 64 , 64 , 64 , 10] (209 ,802 parameters), trained for 100 
+
+epochs with varied learning rates, weight decay, label smoothing, dropout, and seeds. The split contains 5,000 training, 100 validation, and 1,000 test teachers. For heterogeneous-architecture compression, we construct a second ReLU MLP model zoo with four training architectures: [3072 , 16 , 10] , [3072 , 16 , 16 , 10] , [3072 , 32 , 10] , and [3072 , 32 , 32 , 10] ,all mapped to the common student [3072 , 8, 10] as in Section 5.2. We hold out the wider architecture 
+
+[3072 , 64 , 10] and the deeper architecture [3072 , 16 , 16 , 16 , 16 , 10] to test generalization to unseen source architectures. The respective splits contain 5,000 training, 100 validation, 1,000 test teachers from the training architectures, and 500 teachers from unseen architectures, balanced across the architectures in each split. These model zoos and their fixed splits can also serve as benchmarks for other weight-space methods, supporting evaluation within an architecture and generalization to unseen architectures. Table 14: MLP compression configurations.                                               
+
+> Reduction axis Student Params Compression Anchor Operator lr s
+> Depth [3072 ,64 ,64 ,10] 201,482 1.04 ×layer fold (scale 0.1)10 −4.1
+> Width [3072 ,32 ,32 ,32 ,32 ,10] 101,834 2.06 ×magnitude pruning 10 −4.1
+> Width+depth [3072 ,32 ,32 ,10] 99,722 2.10 ×layer fold (scale 0.1)10 −4.1
+> Heterogeneous architectures [3072 ,8,10] 24,674 2.00 –4.04 ×layer fold (scale 0.1)10 −3.1
+
+Anchors. We use the magnitude-pruning and layer-fold initializations defined in Appendix D.2, with the choices in Table 14. Layer folding partitions the teacher’s affine layers into contiguous groups, composes each group, and scales folded interior maps by 0.1.
+
+Operator training and evaluation. The fixed-architecture operators use eight message-passing layers and learning rate 10 −4. The heterogeneous-architecture operator uses four layers and learning rate 10 −3. The test cohorts contain 1,000 teachers from training architectures or 500 teachers from unseen architectures. 
+
+D.6 CIFAR-10 Vision Transformer compression Teacher population. We construct a model zoo of 6,100 ViTs with patch size 4, residual width 
+
+48 , four blocks, two heads of dimension 24 , FFN width 192 , and a ten-class head ( 115 ,930 param-eters). Teachers vary in optimizer hyperparameters and seed. The splits contain 5,000 training, 100 
+
+validation, and 1,000 test teachers. Like the MLP zoos, this population and its fixed splits can serve as a benchmark for learning from model parameters, extending evaluation to the Transformer family. Operator configurations and checkpoints are chosen using only the validation split. 
+
+Anchors, training, and evaluation. Attention-dimension and head-count anchors use two-sided 
+
+ℓ1 magnitude pruning. Each attention coordinate is scored by summing the absolute weights in its value-projection row and output-projection column. Attention-dimension reduction retains the 36 Table 15: ViT compression configurations. All four settings use the strided cross-edge policy of Definition 5; when the teacher and student block counts agree it reduces to shared-index matching. Here d is the residual width, L the number of blocks, H the number of heads, and da the total attention dimension across heads.                                                
+
+> Reduction axis Student Params Compression Anchor Operator lr s
+> Attention dimension d= 48 , L = 4 , H = 2 , d a= 24 97,210 1.19 ×top-kattention dimensions 3·10 −4.1
+> Head count d= 48 , L = 4 , H = 1 , d a= 24 97,210 1.19 ×head drop 10 −3.1
+> Depth d= 48 , L = 2 , H = 2 , d a= 48 59,386 1.95 ×strided block transfer 3·10 −4.1
+> Head count+depth d= 48 , L = 2 , H = 1 , d a= 24 50,026 2.32 ×strided blocks + head drop 10 −3.1
+
+twelve highest-scoring coordinates in each head; head-count reduction retains the head with the largest sum of coordinate scores. The retained indices are applied to the query, key, and value rows and output columns, preserving their original order. Depth reduction uses strided block selection, retaining the first and third teacher blocks; head count+depth reduction first selects these blocks and then prunes their heads. Parameters outside the reduced modules are copied unchanged. Each operator is trained for 10 ,000 steps at three candidate learning rates; mean validation agreement selects the run and checkpoint. The selected checkpoints are from steps 10 ,000 , 9,500 , 9,000 , and 
+
+10 ,000 , in the order of Table 15. 
+
+D.7 MNIST CNN compression 
+
+The public zoo of Sch¨ urholt et al. (2022b) contains 2,560 classifiers with three convolutional stages of widths [8 , 6, 4] , kernel sizes 5, 5, 2, pooling after the first two stages, a 20 -unit fully connected layer, and a ten-class head ( 2,464 parameters). The population spans tanh, ReLU, sigmoid, and GELU models; the activation-type embedding is therefore enabled. We reduce only convolutional width, [8 , 6, 4] → [4 , 3, 2] , leaving the head unchanged and retaining 
+
+41 .5% of the parameters. The anchor uses the two-sided ℓ1 magnitude-pruning criterion in Ap-pendix D.2. The operator uses the CNN row of Tables 8 and 9, with residual scale s = .4, and is trained for 100 ,000 steps on 1,407 teachers. Evaluation uses a fixed 400 -teacher cohort. 
+
+D.8 Ablations 
+
+All rows in Table 16 use the MNIST INR reduction [2 , 32 , 32 , 1] → [2 , 8, 8, 1] and the same 1,000 
+
+held-out teachers as the corresponding main result. Each row changes one choice from the reference CrossGMN configuration and follows the per-teacher speedup protocol in Appendix D.2. The communication rows isolate the role of the joint graph: direct neuron-level cross edges out-perform removing communication or replacing it by a pooled FiLM summary, while strided and all-to-all cross-edge policies yield similar speedups. The remaining rows show that performance de-pends more strongly on the training population, message-passing depth, and width than on choosing ScaleGMN rather than a parameter-matched GMN. Direct teacher matching is also more effective here than supervising the initialization toward a student obtained after a fixed number of distillation steps. These are single operator runs; the table should not be read as an estimate of seed variance. 
+
+D.9 Reach–budget plots 
+
+The speedup tables use the target q⋆ 
+
+> vT
+
+attained by each teacher’s anchor. To show progress indepen-dently of that relative target, the following figures plot the fraction of teachers that have reached a fixed teacher-dependent criterion by distillation budget b. They cover exactly the 22 settings reported in the main tables: all rows of Tables 1, 2 and 4, and the pooled rows of Tables 3 and 5. For INRs, fidelity reach requires PSNR( student , teacher ) ≥ T , while performance-retention reach 
+
+requires PSNR( student , data ) ≥ PSNR( teacher , data ) − ε. For classifiers, fidelity is test agreement at least T , and retention is student accuracy at least (1 − ε) times that teacher’s accuracy. For ModelNet40, we record only error to the teacher field and therefore report fidelity reach only. We choose thresholds to make the reach–budget plots informative: overly easy or difficult thresholds can produce nearly flat curves near one or zero, respectively, obscuring how reach changes with the distillation budget. We choose a threshold separately for each setting and criterion from 
+
+TINR ∈ { 15 , 20 , 25 , 30 , 35 , 40 } dB , εINR ∈ { .5, 1, 2, 3, 5, 7, 10 , 15 , 20 } dB ,
+
+37 Table 16: CrossGMN ablations on MNIST INR compression. Median speedup and IQR relative to the corresponding anchor, including failures ( SvT = 0 ). 
+
+Ablation Variant Speedup > 1× (%) Failed (%) Communication Strided 5.20 ×[1 .1,12 .5] 76 18 No cross edges 3.18 ×[0 .4,8.6] 67 24 All-to-all 5.13 ×[0 .9,11 .6] 75 18 FiLM on pooled teacher (Perez et al., 2018) 3.22 ×[0 .4,9.1] 68 24 Initialization Structured pruning 5.20 ×[1 .1,12 .5] 76 18 Random initialization 3.76 ×[0 .5,8.5] 70 23 Supervision Teacher matching 5.20 ×[1 .1,12 .5] 76 18 Student after 50 steps 1.15 ×[0 .0,4.0] 52 35 Student after 250 steps 2.35 ×[0 .0,6.9] 61 30 Student after 2,500 steps 1.41 ×[0 .0,4.6] 55 33 Training teachers 55,000 5.20 ×[1 .1,12 .5] 76 18 1,000 1.67 ×[0 .0,5.1] 58 33 500 1.01 ×[0 .0,3.8] 50 36 100 0.00 ×[0 .0,2.1] 36 51 Backbone ScaleGMN 5.20 ×[1 .1,12 .5] 76 18 parameter-matched GMN 5.70 ×[1 .0,13 .0] 76 18 Capacity width 128, 4 layers 5.20 ×[1 .1,12 .5] 76 18 width 64, 4 layers 1.83 ×[0 .0,5.8] 58 32 width 32, 4 layers 0.69 ×[0 .0,3.4] 44 43 width 128, 3 layers 1.58 ×[0 .0,5.8] 57 32 width 128, 2 layers 0.62 ×[0 .0,3.0] 43 44 
+
+Tclf ∈ { .95 , . 9, . 85 , . 8, . 75 , . 7, . 6, . 5, . 4, . 3}, εclf ∈ { .01 , . 02 , . 05 , . 1, . 15 , . 2, . 3, . 4, . 5}.
+
+For each setting, let Hrecord be the last recorded distillation step. We choose the strictest threshold for which (i) the anchor reaches it for at least half the teachers by Hrecord , (ii) neither the anchor nor CrossGMN reaches it for half the teachers at step 0, and (iii) the anchor’s median step to reach it lies in [Hrecord /200 , H record /3] . If none qualifies, we display the most informative available level and mark it by an asterisk. Each curve is an empirical step function giving the fraction of teachers whose students have reached the threshold by budget b. A final value below one indicates that some students never reach it within the recorded horizon. Each panel shows the budget interval in which its curves change. We show all evaluated initializations: CrossGMN in solid blue, its anchor in dashed orange, random initialization in dotted gray, and additional structured baselines in thin gray. Appendix D.2 defines the baselines, and the family-specific subsections specify which ones are evaluated. In thirteen of the forty panels, both CrossGMN and its anchor eventually reach the threshold for nearly all teachers. 38 10 2 10 3
+
+0.0 0.5 1.0 
+
+> (a) fidelity
+
+Width [2,32,32,1] [2,16,16,1] 
+
+T = 30 dB 
+
+10 2 10 3
+
+0.0 0.5 1.0 
+
+> (b) retention
+
+= 1 dB 
+
+10 1 10 2 10 3
+
+Width [2,32,32,1] [2,8,8,1] 
+
+T = 20 dB 
+
+10 1 10 2 10 3
+
+= 5 dB 
+
+10 1 10 2 10 3
+
+Width [2,32,32,1] [2,4,4,1] 
+
+T = 15 dB 
+
+10 1 10 2 10 3
+
+= 10 dB 
+
+CrossGMN (ours) anchor: magnitude pruning random initialization OBS / OBC activation 
+
+> 1
+
+-outgoing 
+
+magnitude-sum uniform random-neuron 
+
+10 1 10 2 10 3 10 4
+
+0.0 0.5 1.0 
+
+> (a) fidelity
+
+Depth [2,32,32,1] [2,32,1] 
+
+T = 20 dB 
+
+10 1 10 2 10 3 10 4
+
+0.0 0.5 1.0 
+
+> (b) retention
+
+= 7 dB 
+
+CrossGMN (ours) anchor: layer fold random initialization keep first+last keep first keep last 
+
+10 1 10 2 10 3
+
+Width+depth [2,32,32,1] [2,16,1] 
+
+T = 15 dB 
+
+10 1 10 2 10 3
+
+= 10 dB 
+
+CrossGMN (ours) anchor: fold, then prune random initialization prune, then fold 
+
+distillation budget (steps) Figure 4: MNIST INR reach–budget plots (N = 1 ,000 per setting). All five reductions in Table 1; fidelity reach above and performance-retention reach below. 10 1 10 2 10 3 10 4
+
+0.0 0.5 1.0 
+
+> (a) fidelity
+
+Width [3,48,48,48,48,1] [3,24,24,24,24,1] 
+
+T = 15 dB 
+
+CrossGMN (ours) anchor: magnitude pruning random initialization OBS / OBC activation 
+
+> 1
+
+-outgoing 
+
+magnitude-sum uniform random-neuron 
+
+10 2 10 3
+
+Depth [3,48,48,48,48,1] [3,48,48,1] 
+
+T = 30 dB 
+
+10 2 10 3 10 4
+
+Depth [3,48,48,48,48,1] [3,48,1] 
+
+T = 40 dB 
+
+CrossGMN (ours) anchor: strided layer transfer random initialization keep first keep last layer fold 
+
+10 2 10 3 10 4
+
+Width+depth [3,48,48,48,48,1] [3,24,24,1] 
+
+T = 40 dB 
+
+CrossGMN (ours) anchor: strided prune random initialization Stride-then-prune 
+
+distillation budget (steps) 
+
+Figure 5: ModelNet40 INR reach–budget plots (N = 1 ,000 per setting). All four reductions in Table 1, showing fidelity to the teacher field. The asterisk marks a fallback threshold. 39 10 1 10 2 10 3
+
+0.0 0.5 1.0 
+
+> (a) fidelity
+
+Width [3072,64,64,64,64,10] [3072,32,32,32,32,10] 
+
+T = 0.6 
+
+10 2 10 3
+
+0.0 0.5 1.0 
+
+> (b) retention
+
+= 0.1 
+
+CrossGMN (ours) random initialization OBS / OBC activation 
+
+> 1
+
+-outgoing 
+
+uniform random-neuron 
+
+10 2 10 3
+
+Depth [3072,64,64,64,64,10] [3072,64,64,10] 
+
+T = 0.75 
+
+1000 200 500 2000 5000 
+
+= 0.02 
+
+CrossGMN (ours) anchor: fold (scale 0.1) random initialization keep first+last keep first keep last strided transfer 
+
+10 2 10 3
+
+Width+depth [3072,64,64,64,64,10] [3072,32,32,10] 
+
+T = 0.6 
+
+1000 200 500 2000 5000 
+
+= 0.1 
+
+CrossGMN (ours) anchor: fold (scale 0.1) random initialization prune, then fold fold, then prune strided transfer 
+
+distillation budget (steps) 
+
+anchor: magnitude pruning Figure 6: CIFAR-10 MLP reach–budget plots (N = 1 ,000 per setting). The three reductions in Table 2; fidelity reach above and performance-retention reach below. 10 3 10 4
+
+0.0 0.5 1.0 
+
+> (a) fidelity
+
+Depth blocks 4 2
+
+T = 0.8 
+
+1000 10000 2000 
+
+0.0 0.5 1.0 
+
+> (b) retention
+
+= 0.05 
+
+1000 2000 5000 
+
+Head count+depth heads 2 1, blocks 4 2
+
+T = 0.8 
+
+1000 500 5000 
+
+= 0.1 
+
+CrossGMN (ours) anchor initialization random initialization keep first+last 
+
+100 200 500 
+
+Attention dimension 48 24 
+
+T = 0.9 
+
+1000 200 5000 
+
+= 0.01 
+
+1000 200 5000 
+
+Head count heads 2 1
+
+T = 0.85 
+
+1000 500 2000 5000 
+
+= 0.02 
+
+CrossGMN (ours) anchor initialization random initialization 
+
+distillation budget (steps) 
+
+Figure 7: CIFAR-10 ViT reach–budget plots (N = 1 ,000 per setting). The four reductions in Table 2; fidelity reach above and performance-retention reach below. 40 10 1 10 2 10 3
+
+0.0 0.5 1.0 
+
+> (a) fidelity
+
+Width [2,32,32,1] [2,8,8,1] 
+
+T = 20 dB 
+
+10 1 10 2 10 3
+
+0.0 0.5 1.0 
+
+> (b) retention
+
+= 15 dB 
+
+CrossGMN (ours) anchor: magnitude pruning random initialization OBS / OBC activation 
+
+> 1
+
+-outgoing 
+
+magnitude-sum uniform random-neuron 
+
+10 1 10 2 10 3 10 4
+
+Depth [2,32,32,1] [2,32,1] 
+
+T = 15 dB 
+
+10 1 10 2 10 3 10 4
+
+= 20 dB 
+
+CrossGMN (ours) anchor: layer fold random initialization keep first+last keep first keep last 
+
+10 1 10 2 10 3 10 4
+
+Width+depth [2,32,32,1] [2,16,1] 
+
+T = 15 dB 
+
+10 1 10 2 10 3 10 4
+
+= 20 dB 
+
+CrossGMN (ours) anchor: fold, then prune random initialization prune, then fold 
+
+distillation budget (steps) Figure 8: Transfer across datasets (N = 1 ,000 per setting). MNIST-trained CrossGMN operators applied to FashionMNIST INRs without retraining (Table 4). Asterisks mark fallback thresholds. 10 3 10 4
+
+0.0 0.5 1.0 
+
+> (a) fidelity
+
+Width conv [8,6,4] [4,3,2] 
+
+T = 0.95 
+
+10 2 10 3 10 4
+
+0.0 0.5 1.0 
+
+> (b) retention
+
+= 0.02 
+
+> CrossGMN (ours) random initialization activation
+> 1-outgoing
+> uniform random-neuron
+
+distillation budget (steps) 
+
+> anchor: magnitude pruning
+
+(a) MNIST CNN classifiers 10 1 10 2 10 3
+
+0.0 0.5 1.0 
+
+> (a) fidelity
+
+Heterogeneous sources 4 archs [3072,8,10] 
+
+T = 0.5 
+
+10 1 10 2 10 3
+
+0.0 0.5 1.0 
+
+> (b) retention
+
+= 0.3 
+
+> CrossGMN (ours) anchor: fold (scale 0.1) random initialization
+
+distillation budget (steps) (b) heterogeneous MLPs 10 1 10 2 10 3
+
+0.0 0.5 1.0 
+
+> (a) fidelity
+
+Unseen architectures pooled [3072,8,10] 
+
+T = 0.5 
+
+10 1 10 2 10 3
+
+0.0 0.5 1.0 
+
+> (b) retention
+
+= 0.3 
+
+> CrossGMN (ours) anchor: fold (scale 0.1) random initialization
+
+distillation budget (steps) (c) unseen architectures 
+
+Figure 9: Reach–budget plots for CNNs and heterogeneous MLPs. (a) CNN width reduction (N = 400 , Table 2). (b) Four teacher architectures mapped to [3072 , 8, 10] (N = 1 ,000 , Table 3). (c) The same operator on unseen source architectures ( N = 500 , Table 5). 41 D.10 Complete results 
+
+Table 17 collects the complete results under the protocol in Appendix D.2. It reports each setting’s anchor and budget, the median and interquartile range of per-teacher speedups, the fractions with 
+
+SvT > 1 and SvT > 2, the failure rate, and wall-clock speedup including initialization. The final group is an anchor ablation. Table 17: Complete compression results. Budget is B from Equation 37. Speedup statistics include failures ( SvT = 0 ). Wall-clock speedup is the median per-teacher ratio from Equation 38. 
+
+∆@Budget is the median paired CrossGMN-minus-anchor quality difference at the last evaluation step not exceeding B: PSNR (dB) for INRs and test agreement for classifiers. 
+
+Setting Anchor Budget Median speedup IQR > 1 (%) > 2 (%) Failed (%) Wall-clock speedup 
+
+∆@ 
+
+Budget 
+
+MNIST SIREN INRs 
+
+width 3.5 × magnitude pruning 2,710 2.20 × [1 .24 , 3.86] 83 54 2 2.17 × +1.78 width 11.3 × magnitude pruning 2,480 5.20 × [1 .14 , 12 .48] 76 68 18 4.99 × +1.65 width 32 × magnitude pruning 3,520 4.10 × [0 .00 , 14 .10] 62 58 35 3.98 × +0.47 depth 2 →1 layer fold 4,560 4.07 × [2 .21 , 6.57] 90 78 7 4.00 × +0.65 width+depth 18.2 × fold, then prune 2,750 8.89 × [3 .56 , 16 .83] 86 83 13 8.36 × +0.44 
+
+FashionMNIST SIREN INRs (transfer across datasets) 
+
+width 3.5 × magnitude pruning 2,740 2.06 × [1 .15 , 3.16] 80 51 6 2.04 × +0.77 width 11.3 × magnitude pruning 2,250 2.18 × [0 .00 , 5.77] 61 52 33 2.13 × +0.32 depth 2 →1 layer fold 4,320 3.09 × [1 .54 , 6.09] 86 66 6 3.03 × +0.32 width+depth 18.2 × fold, then prune 2,870 3.78 × [1 .11 , 10 .27] 76 64 17 3.68 × +0.17 
+
+ModelNet40 3-D INRs 
+
+width 3.8 ×
+
+(s = 0 .005 )magnitude pruning 1,750 1.11 × [0 .88 , 1.73] 57 20 18 0.98 × +0.00 depth 4 →2 strided layer transfer 4,730 6.85 × [0 .95 , 19 .81] 74 68 12 6.09 × +3.87 depth 4 →1 strided layer transfer 1,930 2.88 × [1 .97 , 4.03] 96 74 0 2.70 × +2.61 width+depth 10.1 × strided prune 1,830 2.46 × [0 .41 , 4.76] 68 55 23 – +0.29 
+
+MLP (CIFAR-10) 
+
+width 64 →32 magnitude pruning 3,940 1.04 × [0 .75 , 1.35] 54 4 5 1.01 × +0.0050 depth 4 →2 layer fold (scale 
+
+0.1)3,290 1.25 × [0 .73 , 2.27] 60 30 3 1.15 × +0.0120 width+depth layer fold (scale 
+
+0.1)3,780 1.18 × [0 .76 , 1.84] 59 21 3 1.11 × +0.0100 
+
+MNIST CNN 
+
+conv width magnitude pruning 9,900 1.17 × [0 .93 , 1.42] 68 7 1 1.16 × +0.0008 
+
+ViT (CIFAR-10) 
+
+attention dimension 48 →24 top-k attention dimensions 3,680 0.74 × [0 .63 , 0.85] 7 0 5 0.73 × − 0.0011 head count 2 →1 head drop 4,530 0.86 × [0 .78 , 0.96] 16 0 0 0.85 × +0.0004 depth 4 →2 strided block transfer 6,960 1.21 × [1 .12 , 1.30] 95 0 0 1.20 × +0.0044 head count+depth strided blocks + head drop 7,470 1.18 × [1 .09 , 1.27] 92 0 0 1.16 × +0.0047 
+
+Heterogeneous-architecture compression 
+
+pooled (four source architectures) layer fold (scale 
+
+0.1)3,640 1.28 × [0 .71 , 2.25] 62 28 10 1.20 × +0.0040 
+
+Generalization to unseen source architectures 
+
+pooled (unseen source architectures) layer fold (scale 
+
+0.1)3,450 1.06 × [0 .49 , 1.84] 51 23 14 1.00 × +0.0030 
+
+Anchor ablation: heterogeneous-architecture compression (layer-fold reference above) 
+
+strided layer transfer strided layer transfer 4,240 1.34 × [0 .62 , 2.60] 61 35 13 1.30 × +0.0030 keep first+last keep first+last 4,190 1.23 × [0 .54 , 2.36] 60 31 15 1.20 × +0.0030 random initialization random initialization 3,730 0.82 × [0 .34 , 1.59] 42 16 21 0.80 × +0.0020 
+
+The quality difference at B complements speedup: faster distillation need not imply a better asymp-totic solution. All reported settings with median speedup above one also have nonnegative median quality differences at this budget. For ViT attention-dimension and head-count reductions, the struc-42 tured anchors already provide strong initializations, and CrossGMN does not accelerate subsequent distillation. 
+
+D.11 Classifier teacher-population diversity 
+
+As noted in Section 5.1, amortizing a learned compression operator across a model population is motivated by the population spanning diverse functions. We therefore measure diversity in classifier teachers’ outputs, which directly characterize the functions that their students must preserve. Param-eter differences alone would be insufficient, since different weights can realize the same function. 
+
+Populations and sampling. Table 18 reports averages over 10 ,000 randomly sampled pairs of distinct teachers from each classifier population, using the full held-out cohort evaluated for com-pression. Settings that share a teacher population share its diversity statistics. 
+
+Diversity metrics. For teachers vT and v′ 
+
+> T
+
+, let cT (x) = arg max j fvT (x)j and cT ′ (x) be their predicted labels on a shared test set D. Prediction agreement measures how often their decisions coincide: 
+
+po = 1
+
+|D| 
+
+X
+
+> (x,y )∈D
+
+1[cT (x) = cT ′ (x)] .
+
+Lower agreement indicates greater variation in predictions. To distinguish shared correct predictions from shared mistakes, define each teacher’s error set ET = {(x, y ) ∈ D : cT (x)̸ = y} and report 
+
+wrong-prediction intersection over union :
+
+IoU err (T, T ′) = |ET ∩ ET ′ ||ET ∪ ET ′ | .
+
+This measures whether the teachers fail on the same inputs, regardless of which incorrect labels they predict. Lower values mean less overlap in errors, although the metric also depends on accuracy. Finally, Cohen’s κ (Cohen, 1960) corrects agreement for each teacher’s predicted-label frequencies: 
+
+κ = po − pe
+
+1 − pe
+
+, pe = X
+
+> j
+
+pT (j)pT ′ (j), pT (j) = 1
+
+|D| 
+
+X
+
+> (x,y )∈D
+
+1[cT (x) = j].
+
+Here pe is the agreement expected from independent predictions with those label frequencies. Thus 
+
+κ complements raw agreement by accounting for class preferences; it does not remove all effects of accuracy or task difficulty. Together, the three metrics describe overall prediction similarity, overlap in errors, and agreement beyond the label marginals. Table 18: Classifier teacher-population diversity. Mean statistics over 10 ,000 pairs of distinct teachers. Lower agreement, error IoU, and κ indicate greater diversity in their respective aspects.                            
+
+> Teacher population Teachers Agreement ↓Error IoU ↓κ↓
+> CIFAR-10 MLP 1,000 0.715 0.694 0.682 CIFAR-10 ViT 1,000 0.792 0.556 0.769 MNIST CNN 400 0.891 0.210 0.879 CIFAR-10 MLP, four source architectures 1,000 0.643 0.683 0.602 unseen source architectures 500 0.618 0.653 0.574
+
+Findings. On CIFAR-10, fixed-architecture MLP teachers have lower agreement than ViTs ( 0.715 
+
+versus 0.792 ), also reflected in κ (0.682 versus 0.769 ). The MNIST CNNs have high agreement (0.891 ) but low error overlap ( 0.210 ): their predictions often coincide, while their mistakes are less shared. The heterogeneous MLP population and its unseen-architecture counterpart have similar statistics, with κ = 0 .602 and 0.574 , respectively. These results establish variation within each population. 43
