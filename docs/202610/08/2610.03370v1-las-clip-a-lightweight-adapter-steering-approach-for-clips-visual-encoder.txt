@@ -1,0 +1,352 @@
+Title: LAS-CLIP: A Lightweight Adapter Steering Approach for CLIP's Visual Encoder
+
+URL Source: https://arxiv.org/pdf/2610.03370v1
+
+Published Time: Mon, 05 Oct 2026 01:41:40 GMT
+
+Number of Pages: 22
+
+Markdown Content:
+# LAS-CLIP: A Lightweight Adapter Steering Approach for CLIP’s Visual Encoder 
+
+Anh-Khoa Dinh-Duc 1 , Duc-Tai Dinh 1 , Tam V. Nguyen 2 , and Minh-Triet Tran 1 
+
+> 1
+
+University of Science, Viet Nam National University, Ho Chi Minh City, Vietnam 
+
+ddakhoa@selab.hcmus.edu.vn, 23122013@student.hcmus.edu.vn, tmtriet@fit.hcmus.edu.vn  
+
+> 2
+
+University of Dayton, USA 
+
+tamnguyen@udayton.edu 
+
+Abstract. CLIP’s visual encoder produces only global image represen-tations, limiting its use in region-level tasks. Existing adaptations rely on visual prompting, input masking, or encoder fine-tuning, each compro-mising pre-trained representations. We propose LAS-CLIP, a Lightweight Adapter Steering approach that keeps every CLIP parameter frozen. A compact MaskAdapter generates per-head, per-layer attention biases from an input mask and injects them into the frozen self-attention layers, steering attention toward the target region. Crucially, because the back-bone remains strictly untouched, LAS-CLIP seamlessly reverts to vanilla CLIP when no mask is provided, preserving its foundational zero-shot capabilities. With approximately 116K to 145K trainable parameters and 100K training samples on two T4 GPUs, LAS-CLIP achieves competitive or superior results compared to Alpha-CLIP on ImageNet-S zero-shot classification and RefCOCO referring expression comprehension, despite the latter fine-tuning its entire encoder on millions of samples. Quali-tative analysis further confirms stronger representational fidelity under incorrect masks and in downstream generation. Our project page is link to https://github.com/AnhKhoa585/lasclip 
+
+Keywords: CLIP, Parameter-Efficient Fine-Tuning, Region-Aware Vi-sual Grounding, Attention Bias Adaptation 
+
+# 1 Introduction 
+
+Contrastive Language-Image Pre-training (CLIP) [19] has become a foundational building block for vision-language understanding. By training on hundreds of millions of image-text pairs, CLIP acquires a shared embedding space that en-ables strong zero-shot transfer across diverse visual recognition tasks. Subsequent work has scaled this paradigm further through larger datasets [2, 10], improved loss formulations [29], and stronger visual backbones [23], solidifying contrastive vision-language models as a core component of modern visual pipelines. Despite this progress, a fundamental limitation remains: CLIP’s visual en-coder produces a single global representation for the entire image. Many practical arXiv:2610.03370v1 [cs.CV] 2 Oct 2026 2 Dinh-Duc et al. 
+
+applications, including referring expression comprehension, open-vocabulary de-tection, and subject-driven image generation, require the model to focus on a specific region rather than the whole scene. Bridging this gap between image-level representations and region-level understanding is therefore an important research challenge. Existing approaches to equip CLIP with region awareness can be broadly grouped into three strategies detailed in Section 2.2, each carrying notable draw-backs. For instance, visual prompting [20,26] introduces a distribution gap by al-tering pixel content, input masking [14,22] destroys contextual cues, and encoder modification [24] permanently alters the pre-trained weights while demanding large-scale data and substantial computational resources. In this paper, we propose LAS-CLIP , a Lightweight Adapter Steering ap-proach that adapts CLIP to region-level understanding while keeping every pre-trained parameter frozen. The core idea is a compact MaskAdapter module that takes a binary mask as input and generates per-head, per-layer attention biases. These biases are injected directly into the multi-head self-attention layers of the frozen visual encoder, steering the model’s focus toward the mask-specified region without modifying any original weight. Because the backbone remains un-touched, LAS-CLIP seamlessly reverts to vanilla CLIP behavior when no mask is provided, a property that encoder modification methods cannot offer. An identity regularization term further controls the drift from CLIP’s original rep-resentations. Our contributions are as follows: 
+
+– We introduce LAS-CLIP, a parameter-efficient adapter that steers CLIP’s visual attention toward user-specified regions through learned attention bi-ases, requiring as few as ∼116K trainable parameters while keeping the entire backbone frozen. 
+
+– We design a gated token-mask interaction mechanism that produces atten-tion biases dynamically conditioned on both the spatial mask and current visual tokens. Unlike static or uniform biases that force all attention heads to behave identically, our dynamic gating selectively modulates each head based on its specific semantic role, preserving CLIP’s diverse feature repre-sentations while achieving precise spatial grounding. 
+
+– We demonstrate that LAS-CLIP achieves competitive or superior perfor-mance compared to Alpha-CLIP [24] on zero-shot classification and refer-ring expression comprehension benchmarks, despite using only 100K training samples and two T4 GPUs. Qualitative analysis on attention visualization and subject-driven image generation further confirms that the frozen back-bone retains stronger representational fidelity. The remainder of this paper is organized as follows. Section 2 reviews re-lated work on CLIP adaptation and parameter-efficient fine-tuning. Section 3 presents the proposed LAS-CLIP framework, including the MaskAdapter archi-tecture, gated token-mask interaction, training objective, and data preparation pipeline. Section 4 reports experimental results on zero-shot classification, refer-ring expression comprehension, ablation studies, and qualitative analysis. Sec-LAS-CLIP 3
+
+tion 5 concludes the paper and discusses current limitations and future research directions. 
+
+# 2 Related Work 
+
+2.1 Vision-Language Contrastive Pre-training 
+
+CLIP [19] and its successors [2, 10, 23, 29] have established contrastive vision-language pre-training as a foundational paradigm, yet all resulting models pro-duce global image representations without the ability to attend to user-specified regions. 
+
+2.2 Region-Aware CLIP Adaptation 
+
+Adapting CLIP to understand specific image regions has attracted considerable attention. Existing approaches can be broadly grouped into three strategies, namely, visual prompting, input masking, and encoder modification. 
+
+Visual Prompting. Shtedritski et al. [20] showed that drawing a red circle around an object serves as an effective visual prompt for CLIP, and CPT [26] explored a similar strategy using colored fills. These approaches are training-free but modify pixel content, introducing a domain gap with CLIP’s pre-training distribution. FALIP [34] instead inserts foveal attention masks into CLIP’s self-attention, though its bias is uniform across all heads, limiting fine-grained spatial steering. 
+
+Input Masking. MaskAdaptedCLIP [14] fine-tunes CLIP on masked image re-gions with the background replaced by a solid color, but this destroys contex-tual information and degrades classification performance. ReCLIP [22] instead applies Gaussian blurring to the background, preserving more context while still operating at the input level. RegionCLIP [31] pre-trains a region-text alignment objective on top of CLIP features for open-vocabulary detection. 
+
+Encoder Modification. Alpha-CLIP [24] augments CLIP’s patch embedding layer with an auxiliary alpha channel and fine-tunes the visual encoder on millions of RGBA region-text pairs from GRIT [18]. While effective, this approach perma-nently alters the pre-trained weights and demands substantial computational resources. 
+
+2.3 Parameter-Efficient Fine-Tuning 
+
+Adapting large pre-trained models without full fine-tuning has been widely stud-ied through approaches such as bottleneck adapters [8], bias-only tuning [1], and low-rank weight decomposition [9]. In the vision-language domain, prompt-based methods [11, 32, 33] optimize learnable tokens on either the textual or visual branch of CLIP, while feature-level approaches [6, 30] add lightweight residual 4 Dinh-Duc et al. 
+
+layers on top of frozen features. These methods target primarily classification tasks and modify representations in a class-agnostic manner. Notably, none pro-vides a native architectural mechanism to dynamically ingest spatial inputs, such as binary masks, and steer region-specific attention at the level of individ-ual attention heads. This leaves a gap between parameter-efficient adaptation and fine-grained spatial grounding. 
+
+# 3 Method 
+
+This section presents the proposed LAS-CLIP framework. We introduce the nec-essary preliminaries, describe the overall architecture, propose MaskAdapter for generating region-conditioned attention biases, and present the training objec-tive and the data preparation pipeline used to train the lightweight adapter while keeping the CLIP backbone entirely frozen. 
+
+3.1 Preliminary 
+
+CLIP. Contrastive Language-Image Pre-training (CLIP) [19] learns aligned vi-sual and textual representations through contrastive learning on large-scale image-text pairs. It consists of an image encoder V and a text encoder T. Given an image x and a text description c, CLIP produces ℓ2-normalized embeddings 
+
+v = V(x) and t = T(c), and measures their compatibility via cosine similarity 
+
+v⊤t since the embeddings are ℓ2-normalized. By training on millions of paired samples with a symmetric contrastive objective, CLIP acquires strong zero-shot transfer capability across diverse visual recognition tasks. 
+
+Vision Transformer. When CLIP adopts a Vision Transformer (ViT) [4] as the image encoder V, the input image x ∈ R3×H×W is divided into a grid of non-overlapping patches, each of size p × p. These patches are linearly projected into 
+
+D-dimensional token embeddings, and a learnable [CLS] token is prepended, yielding a sequence of N tokens, which includes the prepended [CLS] token. Within each transformer layer, multi-head self-attention (MSA) computes, for each attention head i, the query, key, and value projections Qi, K i, V i from the input tokens and produces the attention output as: head i = Softmax 
+
+ QiK⊤
+
+> i
+
+√d
+
+
+
+Vi, (1) where d = D/H a is the per-head dimension and Ha is the number of attention heads. The outputs of all heads are concatenated and linearly projected. The final image representation is obtained from the [CLS] token at the last layer, followed by a projection head. This attention mechanism is the site where LAS-CLIP introduces learned biases to steer the model’s focus toward mask-specified regions. LAS-CLIP 5 
+
+> Fig. 1: Overview of LAS-CLIP and the MaskAdapter architecture. The input image and a region mask are processed by the visual encoder and the MaskAdapter to produce region-aware features. The MaskAdapter consists of a mask encoder, a token encoder with layer conditioning, and a gated interaction module that computes attention biases to steer the frozen CLIP blocks.
+
+Alpha-CLIP. Alpha-CLIP [24] extends CLIP by augmenting its visual encoder with an auxiliary alpha channel. The input patch embedding convolution is ex-panded from 3 to 4 channels, accepting a binary mask as the fourth channel alongside the RGB image. The visual encoder is then fine-tuned with differ-ential learning rates on millions of RGBA region-text pairs constructed from GRIT [18], applying a higher rate to the new alpha-channel parameters and a lower rate to the original weights, enabling the model to focus on mask-specified regions while preserving global recognition ability. 
+
+3.2 Overview 
+
+As illustrated in Figure 1, given an input image x ∈ R3×H×W and a binary mask 
+
+m ∈ R1×H×W indicating the region of interest, LAS-CLIP produces region-aware visual features while keeping the original CLIP weights entirely frozen. The key idea is to inject a lightweight MaskAdapter module into the last K transformer layers of CLIP’s vision encoder V. This module generates a per-head attention bias matrix Abias ∈ RB×Ha×N ×N , where B is the batch size, Ha is the number of attention heads, and N is the number of visual tokens (including the [CLS] 
+
+token). The bias is added directly to the attention logits QK ⊤ within the frozen multi-head self-attention, steering the model to attend to mask-specified regions without modifying any pre-trained parameters. Identity regularization detailed 6 Dinh-Duc et al. 
+
+in Section 3.4 further controls how far the adapted output may drift from the original representations. In contrast to Alpha-CLIP [24], which fine-tunes the visual encoder on mil-lions of samples from GRIT [18] using multiple A100-80G GPUs, LAS-CLIP is highly parameter-efficient and can be trained in a low-resource setting. Be-cause all original weights remain strictly frozen, the model seamlessly reverts to vanilla CLIP when no mask is provided. This ensures zero degradation of the foundation model’s original capabilities, a critical advantage over methods that permanently alter the backbone’s architecture and weights. Unlike prior approaches that apply a static, uniform bias shared across all at-tention layers and heads [34], LAS-CLIP introduces a dynamic, token-conditioned interaction. In standard Vision Transformers, different attention heads specialize in distinct visual patterns, ranging from local textures to global context. A uni-form bias aggressively overrides this learned diversity. By generating per-head, per-layer biases through a gated mechanism, LAS-CLIP allows each head to inde-pendently decide the degree to which it should attend to the spatial mask, based on the current visual context. This formulation enables fine-grained and flexible steering of attention without collapsing the rich, multi-faceted representations pre-trained within CLIP. 
+
+3.3 Gated Token-Mask Interaction 
+
+The MaskAdapter detailed in Figure 1 consists of three components. These in-clude a mask encoder, a token encoder with layer conditioning, and a gated interaction module. 
+
+Mask Encoding. The binary mask m is processed by a convolutional branch that mirrors CLIP’s patch embedding. A single 2D convolutional layer with kernel size and stride equal to the patch size p converts m into patch-level mask features. These features are passed through layer normalization, GELU activation, and spatial dropout, yielding a feature map that is flattened into a sequence Fpatch ∈ RB×P ×h, where P is the number of patches and h is the hidden dimension of the adapter. A learnable [CLS] mask token fcls ∈ Rh is prepended to this sequence, producing the final mask representation: 
+
+Fmask = [ fcls ; Fpatch ] ∈ RB×N ×h. (2) This encoding is computed once and shared across all K adapter layers. 
+
+Token Encoding with Layer Conditioning. At each injected layer k ∈ { 1, . . . , K },the current visual tokens X(k) ∈ RB×N ×D from CLIP’s transformer are detached from the backbone’s computation graph and projected to the adapter’s hidden dimension via a linear layer: 
+
+f (k) 
+
+> tok
+
+= Linear hD
+
+ sg (X(k)) + e(k), (3) LAS-CLIP 7
+
+where sg (·) denotes the stop-gradient operator and e(k) ∈ Rh is a learnable layer embedding initialized to zero. The layer embedding conditions the adapter’s behavior on the depth of the current layer, allowing different layers to produce distinct steering signals. 
+
+Gate Generation and Bias Computation. The token features f (k) 
+
+> tok
+
+are transformed into per-head gate vectors through a linear projection followed by sigmoid acti-vation: 
+
+G(k) = σ Linear Ha·hh (f (k) 
+
+> tok
+
+) ∈ RB×Ha×N ×h, (4) where σ is the sigmoid function. Dropout is applied to the gate vectors during training. The attention bias is then computed by contracting the gate vectors with the mask features along the feature dimension h:
+
+A(k) 
+
+> bias , b a i j
+
+= τ (k)
+
+> ah
+
+X
+
+> c=1
+
+G(k) 
+
+> b a i c
+
+Fmask , b j c , A(k) 
+
+> bias
+
+∈ RB×Ha×N ×N , (5) where τ (k) 
+
+> a
+
+∈ R is a learnable per-head, per-layer temperature parameter ini-tialized to zero, with a ∈ { 1, . . . , H a}. This zero-initialization ensures that the adapter has no effect at the beginning of training. 
+
+Attention Steering. The computed bias is reshaped to (B · Ha, N, N ) and added to the standard attention logits inside CLIP’s multi-head self-attention: Attn i(Qi, K i, V i) = Softmax 
+
+ QiK⊤
+
+> i
+
+√d + A(k)
+
+> bias ,i
+
+
+
+Vi, (6) where d is the per-head dimension. This formulation allows each attention head to independently modulate its focus based on both the spatial mask and the current token semantics. Specifically, the sigmoid-activated gate (Eq. 4) acts as an adaptive filter that prevents the mask signal from overwhelming the heads responsible for capturing global context, thereby preserving the representational diversity of the frozen backbone. 
+
+3.4 Training Objective 
+
+As outlined in Section 3.2, only the MaskAdapter parameters are optimized, enabling efficient training on commodity hardware with a batch size of 128. 
+
+Contrastive Loss. The primary training signal is a symmetric contrastive loss following the standard CLIP formulation. Given a batch of B image-mask-text triplets {(xi, mi, t i)}Bi=1 , we compute region-aware image features vi =
+
+V(xi, mi) and text features ti = T(ti), both ℓ2-normalized. The contrastive loss is: 
+
+Lcon = 12
+
+ CE (S, y) + CE (S⊤, y), (7) where Sij = λ · v⊤ 
+
+> i
+
+tj is the scaled similarity matrix, λ is the learnable logit scale, CE is the cross-entropy loss, and y is the identity label vector. 8 Dinh-Duc et al. 
+
+Identity Regularization. To control the degree to which the adapter reshapes CLIP’s pre-trained representations, we introduce a configurable identity regu-larization term. Let ˆvi denote the feature produced by the vanilla (unmodified) CLIP encoder for the same image xi. The regularization loss encourages the adapter output to remain close to the original representation: 
+
+Lid = 1 − 1
+
+B
+
+> B
+
+X
+
+> i=1
+
+cos( vi, ˆvi), (8) where cos( ·, ·) denotes cosine similarity. The total training objective is: 
+
+L = Lcon + α · L id , (9) where α is a balancing weight. 
+
+Full-Image Augmentation. During training, with a small probability paug , the mask is replaced with an all-ones mask covering the entire image, and the text is replaced with the original image caption. This augmentation strategy prevents the model from forgetting its holistic image understanding capability. Additional optimization details and hyperparameter configurations are provided in the sup-plementary material. 
+
+3.5 Data Preparation 
+
+Training LAS-CLIP requires paired image-mask-text data. We adopt the ground-ing data pipeline introduced by Alpha-CLIP [24], which constructs region-text pairs from the GRIT dataset [18]. GRIT provides images annotated with bound-ing boxes and referring expressions. Alpha-CLIP uses the Segment Anything Model, or SAM [12], to convert these bounding boxes into segmentation masks. In our work, we replace SAM with YOLOE [25]. While SAM provides highly precise boundaries, its inference is computationally expensive and excessively slow on standard resource-constrained hardware such as T4 GPUs. By utilizing YOLOE, we establish a highly efficient data pipeline that is designed to be easily scaled up to millions of images in the future with minimal computational cost. More importantly, utilizing YOLOE demonstrates the robustness of LAS-CLIP: we show that our model can effectively learn accurate attention biases even when trained on noisy or imperfect mask annotations, eliminating the strict depen-dency on expensive, pixel-perfect masks. For each annotated bounding box, YOLOE predicts a corresponding segmen-tation mask. A common challenge for any box-prompted segmentation model, including SAM, is that when a bounding box tightly encloses multiple objects, the model may occasionally segment an unintended instance, resulting in a mask that poorly aligns with the target region. To address this general ambiguity, as well as the natural noise in high-speed segmentation pipelines, we apply an IoU-based fallback. Specifically, if the predicted mask has an Intersection-over-Union, or IoU, with the bounding box below a threshold of 0.30, which was empirically chosen based on visual inspection for optimal training stability, we fall back to using the full bounding box region as the mask. LAS-CLIP 9
+
+Quality Filtering. We apply two filtering criteria to ensure data quality. The mask area ratio relative to the image must lie within [0 .01 , 0.95] , discarding regions that are too small or cover nearly the entire image. In addition, referring expressions shorter than 3 characters are removed. After filtering, we retain 100K high-quality training samples. Further details on the mask generation process and fallback statistics can be found in the supplementary material. 
+
+# 4 Experiments 
+
+To comprehensively validate the effectiveness of our lightweight steering mecha-nism, we evaluate LAS-CLIP across three distinct paradigms of region-aware un-derstanding. We assess zero-shot image classification on ImageNet-S [7] to verify that the model retains robust global semantic recognition. We then evaluate zero-shot referring expression comprehension across three demanding datasets, Ref-COCO [28], RefCOCO+ [28], and RefCOCOg [17], to strictly test fine-grained spatial and relational reasoning. We also demonstrate the plug-and-play gener-ative utility of our frozen encoder in a downstream subject-driven image gen-eration task using BLIP-Diffusion [13]. All models are trained under the low-resource protocol described in Section 3.5. The MaskAdapter is injected into the last K = 3 transformer layers of CLIP’s vision encoder unless stated otherwise. Full training hyperparameters are provided in the supplementary material. 
+
+4.1 Experimental Setup 
+
+Datasets. For zero-shot classification, we adopt the ImageNet-S [7] dataset, which contains 919 classes selected from ImageNet-1k [3] with semantic seg-mentation annotations. The image-level segmentation masks serve as the region input, and the mean of per-class accuracy is used as the evaluation metric. For zero-shot REC, we evaluate on RefCOCO [28], RefCOCO+ [28], and Ref-COCOg [17], which are built on the MS COCO [15] dataset. Following Alpha-CLIP [24], we use object proposals from a pretrained MAttNet [27] detector and obtain masks for each proposal. The original image together with the corre-sponding mask is fed to LAS-CLIP, and the proposal with the highest similarity to the referring expression is selected. We report accuracy using an ensemble of ViT-B/16 and ViT-L/14 backbones on the standard val and test splits. 
+
+Baselines. We compare LAS-CLIP against the original CLIP [19], MaskAdapt-edCLIP [14], Red Circle [20], and Alpha-CLIP [24]. For the REC task, we ad-ditionally include CPT [26] and ReCLIP [22]. Both ViT-B/16 and ViT-L/14 backbones are evaluated. 
+
+4.2 Zero-shot Image Classification 
+
+Table 1 presents the zero-shot classification results on ImageNet-S. All attention-bias methods improve over vanilla CLIP [19], while MaskAdaptedCLIP [14] and 10 Dinh-Duc et al. 
+
+Red Circle [20] underperform it, confirming that learned biases outperform pixel-level modifications. FALIP [34] achieves moderate gains through uniform biases, but LAS-CLIP surpasses both FALIP and Alpha-CLIP [24] on ViT-B/16 and on ViT-L/14 Top-1, demonstrating the benefit of token-conditioned, per-head steering. We adopt K = 3 as the default configuration as analyzed in Section 4.4.                                 
+
+> Table 1: Zero-shot classification on ImageNet-S validation set. Mean per-class accuracy in percentage is reported. The best results are in bold and the second best results are underlined. Method B/16 L/14 Top-1 Top-5 Top-1 Top-5 Original CLIP [19] 66.5 88.9 73.5 91.6 MaskAdaptedCLIP [14] 57.9 79.1 63.5 86.3 Red Circle [20] 65.4 88.7 73.4 92.1 FALIP [34] 68.2 89.5 74.9 91.9 Alpha-CLIP [24] 68.9 90.5 77.4 94.5
+> LAS-CLIP (3 layers) 69.9 90.9 77.6 94.0
+
+4.3 Zero-shot Referring Expression Comprehension 
+
+Table 2 presents the zero-shot REC results. LAS-CLIP surpasses all baselines on RefCOCO and RefCOCO+ [28], with notable gains on the testA splits. On RefCOCOg [17], LAS-CLIP leads on val while Alpha-CLIP [24] retains a slight edge on test. FALIP [34] trails both methods by a large margin, indicating that uniform attention biases without token conditioning are insufficient for fine-grained spatial reasoning. 
+
+4.4 Ablation Study 
+
+We ablate the number of adapter layers, identity regularization, and adapter architecture. For ImageNet-S, we report per-backbone results. For RefCOCO ablations on K and Lid , we follow the ensemble protocol from Section 4.3. 
+
+Number of Adapter Layers. Table 3 shows the effect of varying K. Fewer layers preserve classification accuracy, while more layers improve grounding up to K =3, which we adopt as the default. 
+
+Effect of Identity Regularization. Table 4 compares training with K = 4 layers with and without Lid . Removing it drops classification accuracy but improves grounding, as the adapter can reshape attention more aggressively. The weight αLAS-CLIP 11 
+
+Table 2: Zero-shot referring expression comprehension accuracy in percentage on Re-fCOCO, RefCOCO+, and RefCOCOg. Following our primary baseline Alpha-CLIP, LAS-CLIP utilizes an ensemble of ViT-B/16 and ViT-L/14 backbones to ensure a strictly fair comparison, FALIP also uses the same setting. Note that prior baselines also report ensemble results using their strongest respective configurations (e.g., Re-CLIP ensembles RN50x16 and ViT-B/32, Red Circle ensembles RN50x16 and ViT-L/14@336px). The best results are in bold and the second best results are underlined. Method RefCOCO RefCOCO+ RefCOCOg val testA testB val testA testB val test CPT [26] 32.2 36.1 30.3 31.9 35.2 28.8 36.7 36.5 ReCLIP [22] 45.8 46.1 47.1 47.9 50.1 45.1 59.3 59.0 Red Circle [20] 49.8 58.6 39.9 55.3 63.9 45.4 59.4 58.9 FALIP [34] 43.8 45.6 42.4 44.1 46.5 40.0 48.8 48.7 Alpha-CLIP [24] 55.7 61.1 50.3 55.6 62.7 46.4 61.2 62.0 
+
+LAS-CLIP 57.5 64.1 50.3 57.4 66.0 46.6 61.7 61.7 
+
+Table 3: Effect of the number of adapter layers K on ImageNet-S top-1 accuracy (ViT-B/16 and ViT-L/14) and RefCOCO accuracy (ViT-B/16 + ViT-L/14 ensemble) in percentage. The best results are in bold and the second best results are underlined. Layers ImageNet-S Top-1 RefCOCO B/16 L/14 val testA testB 
+
+K = 1 70.7 78.1 54.9 60.9 49.6 
+
+K = 2 70.0 77.7 55.8 62.2 50.3 
+
+K = 3 69.9 77.6 57.5 64.1 50.3 
+
+K = 4 69.6 76.6 57.3 64.3 50.3 
+
+thus serves as a tunable knob to balance global semantics and spatial grounding without permanently altering the frozen backbone. 
+
+Adapter Architecture. Table 5 isolates each architectural component using ViT-B/16. “CLS-only” restricts token conditioning to the [CLS] token, “Head-agnostic” shares a single bias across all heads, and “No token” removes token conditioning entirely. The full design achieves the best grounding accuracy across all splits. Additional experiments in the supplementary material examine mask robust-ness under controlled perturbations, the effect of replacing YOLOE with SAM for training mask generation, and inference efficiency across batch sizes. These results confirm that LAS-CLIP degrades gracefully under imperfect masks, that the observed gains stem from the adapter design rather than the data pipeline, 12 Dinh-Duc et al.                                                
+
+> Table 4: Effect of identity regularization on ImageNet-S top-1 accuracy (per-backbone) and RefCOCO accuracy (ViT-B/16 + ViT-L/14 ensemble) in percentage, using K= 4
+> layers. Best results are in bold .
+> Lid
+> ImageNet-S Top-1 RefCOCO B/16 L/14 val testA testB w/ 69.6 76.6 57.3 64.3 50.3 w/o 66.4 76.1 58.2 65.2 50.6 Table 5: Adapter architecture ablation on ViT-B/16. Best in bold .Variant ImageNet-S RefCOCO Top-1 Top-5 val testA testB LAS-CLIP (default) 69.9 90.9 54.7 60.7 48.7
+> CLS-only 69.9 91.0 53.5 60.2 48.1 Head-agnostic 70.4 91.0 52.2 58.3 47.5 No token cond. 69.9 90.8 52.4 58.7 48.1
+
+and that the adapter introduces comparable latency to Alpha-CLIP while con-suming higher GPU memory. 
+
+4.5 Qualitative Analysis 
+
+To better understand how each model attends to the specified region, we visual-ize the attention heatmaps using the text-based decomposition method proposed by Gandelsman et al. [5]. This approach decomposes CLIP’s image representa-tion across individual patches, revealing where the model focuses given a text query. For these visualizations, we use the ViT-L/14 backbone, with LAS-CLIP operating under the 3-layer adapter configuration. We compare vanilla CLIP, Alpha-CLIP [24], and LAS-CLIP. Vanilla CLIP takes only the original image as input. For Alpha-CLIP and LAS-CLIP, which receive both the original image and a mask, we evaluate under two conditions: with the correct mask and with an incorrect mask. Figure 2 visualizes representative examples. Under the correct mask condi-tion, both Alpha-CLIP and LAS-CLIP successfully shift their attention toward the target region. However, the critical difference emerges under the wrong mask condition. When a mismatched mask is provided, Alpha-CLIP continues to at-tend strongly to the mask-indicated region even though it does not correspond to the text query, demonstrating that its fine-tuned encoder has become overly de-pendent on the mask input. In contrast, LAS-CLIP maintains attention patterns that remain closer to the text-relevant region despite the incorrect mask, sug-gesting that the frozen backbone preserves more of CLIP’s original text-image LAS-CLIP 13  
+
+> Fig. 2: Attention heatmaps visualized via text-based decomposition [5]. Each row shows a different text query. The left group shows results using correct masks, and the right group shows results using incorrect masks. LAS-CLIP maintains better text-aligned attention under incorrect mask inputs compared to Alpha-CLIP.
+
+alignment. Additional qualitative examples are provided in the supplementary material. Beyond attention analysis, we evaluate region-aware CLIP variants as vi-sual backbones for a downstream generative task. Following Alpha-CLIP [24], we adapt BLIP-Diffusion [13] by replacing its default CLIP encoder with the evaluated variants. For baseline CLIP, subject features are extracted from the original reference image alone. For Alpha-CLIP and LAS-CLIP, we feed both the reference image and its segmentation mask directly into the visual backbone. To isolate the impact of visual representations, the text prompt is left blank, forcing the models to generate the subject solely from their visual inputs. This directly tests how faithfully each method captures the target subject. All methods use the ViT-L/14 backbone. Figure 3 presents representative results. The baseline CLIP, lacking any region-awareness mechanism, often generates images that deviate from the input subject in shape, color, or structural detail. Alpha-CLIP [24] improves subject fidelity in some cases, yet its fine-tuned encoder occasionally distorts subtle vi-sual attributes or introduces artifacts that do not match the original subject. LAS-CLIP produces outputs that more closely preserve the visual identity of the input subject, maintaining consistent color, texture, and structural charac-teristics. This behavior aligns with the frozen backbone design of LAS-CLIP: because the pre-trained CLIP weights remain unmodified, the encoder retains its original capacity for fine-grained visual representation, and the MaskAdapter steers attention toward the masked region without degrading the underlying fea-ture quality. Additional subject-driven generation examples are provided in the supplementary material. 
+
+# 5 Conclusion 
+
+We have presented LAS-CLIP, a parameter-efficient approach that injects a lightweight MaskAdapter into CLIP’s frozen visual encoder, generating per-head, 14 Dinh-Duc et al.  
+
+> Fig. 3: Subject-driven image generation using BLIP-Diffusion [13] with different CLIP backbones (ViT-L/14). Each row shows an input subject with its mask and the outputs generated by the baseline CLIP, Alpha-CLIP [24], and LAS-CLIP. LAS-CLIP better preserves the visual identity of the input subject.
+
+per-layer attention biases to steer attention toward user-specified regions with-out modifying any pre-trained weight. Because the backbone remains untouched, LAS-CLIP seamlessly reverts to vanilla CLIP when no mask is provided. Exper-iments on ImageNet-S, RefCOCO, RefCOCO+, and RefCOCOg demonstrate competitive or superior performance compared to full encoder fine-tuning meth-ods, with a fraction of the trainable parameters and training data. Qualitative analysis further confirms that the frozen backbone retains stronger representa-tional fidelity for downstream tasks. Current limitations include the reliance on pre-computed segmentation masks and a higher GPU memory footprint due to dense per-head attention bias matri-ces. Future work will explore task-conditioned adaptive balancing, more flexible region specifications, and integration into dense prediction frameworks for open-vocabulary detection and semantic segmentation. 
+
+Acknowledgements This research is partially supported by the research fund-ing from the Faculty of Information Technology, University of Science, VNU-HCM, Vietnam. LAS-CLIP 15 
+
+# LAS-CLIP: Supplementary Material 
+
+# A Implementation Details 
+
+We provide additional implementation details to facilitate reproducibility. 
+
+Architecture. We initialize from the publicly available OpenAI CLIP pretrained weights and evaluate LAS-CLIP on two backbone variants. These variants are ViT-B/16 with D = 768 , Ha = 12 , L = 12 and ViT-L/14 with D = 1024 , Ha = 16 ,
+
+L = 24 . The MaskAdapter uses a hidden dimension of h = 64 for all configura-tions, resulting in only 116,004 trainable parameters for ViT-B/16 and 145,200 for ViT-L/14. Dropout with rate 0.2 is applied in both the mask encoder branch and the gate generator. 
+
+Optimization. We use AdamW [16] with a learning rate of 2 × 10 −3 for the adapter parameters. The logit scale λ is trained with a separate learning rate of 1 × 10 −5. Weight decay is set to 2 × 10 −4. Training runs for 5 epochs with a OneCycleLR [21] schedule and a 10% linear warmup phase. To ensure stable contrastive learning, we apply 16 gradient accumulation steps to a base batch size of 128, yielding an effective batch size of 2048. Gradient clipping is applied at ∥g∥max = 1 .0.
+
+Training Cost. Thanks to the compact adapter design and the small number of trainable parameters, the entire training procedure is highly efficient. On two NVIDIA T4 GPUs, training the ViT-B/16 variant completes in approximately 2 hours, while the larger ViT-L/14 variant requires roughly 6 hours. This low com-putational overhead makes LAS-CLIP straightforward to reproduce on widely accessible, consumer-grade hardware without requiring high-end GPU clusters. 
+
+Loss Configuration. The identity regularization weight is α = 0 .5. The full-image augmentation probability is paug = 0 .1.
+
+Mask Generation Details. We specifically use the YOLOE-26x-seg model for mask prediction. During this process, 12,995 out of the 100,000 training samples fell back to the bounding box mask due to the 0.30 IoU threshold, successfully filtering out ambiguous box-prompt cases to ensure optimal training stability as discussed in Section 3.5 of the main paper. 
+
+Zero-shot Classification Protocol. We follow the standard CLIP zero-shot eval-uation protocol using the 80 prompt templates provided by Radford et al. [19]. For each class, text features are computed for all 80 templates and averaged to produce a single class embedding. The cosine similarity between the image feature and each averaged class embedding determines the prediction. 16 Dinh-Duc et al. 
+
+Zero-shot REC Evaluation Protocol. Following Alpha-CLIP [24], we use object proposals predicted by a pretrained MAttNet [27] detector. For each proposal, a segmentation mask is obtained using SAM [12] with the proposal bounding box as the box prompt. The original image and the corresponding mask are fed to LAS-CLIP to produce a region-aware image feature. We also apply Gaussian blurring with standard deviation σ = 100 to the original image and compute a second feature from the blurred input paired with the same mask, following the preprocessing protocol of ReCLIP [22] and Alpha-CLIP [24]. The similarity scores from the original and blurred inputs are summed for each proposal, and the proposal with the highest total cosine similarity to the referring expression text feature is selected as the prediction. For the backbone ensemble reported in the main paper, we compute similarity scores independently from both ViT-B/16 and ViT-L/14 backbones. The final score for each proposal is the sum of scores across both backbones, and the proposal with the highest combined score is selected. 
+
+# B Additional Qualitative Results 
+
+Figure S1 provides additional attention heatmap visualizations beyond those shown in the main paper. Under the correct mask condition, all region-aware methods successfully concentrate attention on the target object. The key dis-tinctions emerge under the wrong mask condition. For example, in the “Man in USA T-shirt” row, Alpha-CLIP shifts its attention to the pizza region in-dicated by the incorrect mask, whereas LAS-CLIP tends to maintain focused activation on the person. A similar trend is visible in the “Book on left” row, where Alpha-CLIP attends heavily to the wrong mask region while LAS-CLIP maintains query-relevant attention. Across these examples, LAS-CLIP appears to degrade more gracefully under incorrect spatial guidance. This supports the observation in the main paper that the frozen backbone helps preserve the orig-inal text-image alignment compared to Alpha-CLIP’s fine-tuned encoder. We selected these cases to represent diverse challenges in object relationship and scale, though the degree of improvement varies across individual samples. 
+
+# C Additional Subject-Driven Generation Results 
+
+Figure S2 provides extended generation results using BLIP-Diffusion [13] be-yond those shown in the main paper. Across the evaluated subjects, LAS-CLIP demonstrates a strong ability to maintain subject fidelity in color, texture, and structural detail. In the neuron illustration, both the baseline and Alpha-CLIP produce outputs with less structural similarity to the original diagram, while LAS-CLIP preserves more of the branching structure. Similarly, in the spider web example, Alpha-CLIP introduces text-like artifacts, whereas LAS-CLIP re-tains both the spider and the web pattern. These qualitative observations suggest that the frozen encoder helps preserve visual representations for downstream generative tasks, consistent with the analysis in the main text. LAS-CLIP 17  
+
+> Fig. S1: Additional attention heatmap visualizations. Each row shows a different text query. The left group shows results using correct masks, and the right group shows results using incorrect masks.
+
+# D Mask Robustness Analysis 
+
+To quantitatively evaluate robustness to imperfect masks, we systematically per-turb the ground-truth segmentation masks on ImageNet-S using three strate-gies. These strategies include erosion for under-segmentation, dilation for over-segmentation, and spatial shifts. Each perturbation is calibrated to produce masks at approximate IoU levels of 0.90, 0.70, 0.50, and 0.30 relative to the ground truth. All experiments use the ViT-L/14 backbone. Figure S3 reports the results. Under erosion, both methods degrade compa-rably. Under dilation and spatial shifts, LAS-CLIP exhibits substantially smaller accuracy drops than Alpha-CLIP [24], especially at lower IoU levels. At IoU ≈ 0.30, the gap reaches 2.0% for dilation and 1.7% for spatial shifts. These results in-dicate that LAS-CLIP’s token-conditioned gating mechanism mitigates over-reliance on the spatial mask prior, consistent with the qualitative attention anal-ysis in the main paper. 
+
+# E Training Data Source Ablation 
+
+To address whether the performance gains of LAS-CLIP stem from the adapter design or from the choice of mask generation pipeline, we retrain LAS-CLIP using SAM-generated masks on the same 100K training samples and compare against the default YOLOE-based pipeline. 18 Dinh-Duc et al.  
+
+> Fig. S2: Additional subject-driven generation results using BLIP-Diffusion [13]. Each row shows an input subject, its mask, and the generated outputs.
+
+Table S1 reports ImageNet-S classification results. LAS-CLIP trained with SAM masks consistently outperforms both LAS-CLIP with YOLOE masks and Alpha-CLIP [24] across both backbones, confirming that the adapter architecture is the primary source of improvement rather than the data pipeline. Table S2 reports RefCOCO results. The SAM-trained and YOLOE-trained variants perform comparably, with YOLOE slightly ahead on most splits despite its noisier masks. This indicates that LAS-CLIP is robust to mask quality and that the observed improvements over Alpha-CLIP are not an artifact of the mask source.                                                          
+
+> Table S1: Training data source ablation on ImageNet-S. Top-1/Top-5 accuracy (%). Best in bold .Method / Mask Source ViT-B/16 ViT-L/14 Top-1 Top-5 Top-1 Top-5 Alpha-CLIP (SAM) 68.9 90.5 77.4 94.5 LAS-CLIP (YOLOE) 69.9 90.9 77.6 94.0 LAS-CLIP (SAM) 70.8 91.3 78.1 94.1 LAS-CLIP 19
+> Fig. S3: Mask robustness comparison on ImageNet-S (ViT-L/14). LAS-CLIP degrades more gracefully than Alpha-CLIP under dilation and spatial shift perturbations.
+> Table S2: Training data source ablation on RefCOCO / RefCOCO+ / RefCOCOg. Accuracy (%). Best in bold .Method / Source RefCOCO RefCOCO+ RefCOCOg val testA testB val testA testB val test Alpha-CLIP (SAM) 55.7 61.1 50.3 55.6 62.7 46.4 61.2 62.0
+> LAS-CLIP (YOLOE) 57.5 64.1 50.3 57.4 66.0 46.6 61.7 61.7 LAS-CLIP (SAM) 56.7 64.0 50.1 56.9 65.8 46.7 61.2 61.2
+
+# F Inference Efficiency 
+
+Table S3 benchmarks inference efficiency on a single NVIDIA T4 GPU using the ViT-L/14 backbone. LAS-CLIP achieves throughput and latency comparable to Alpha-CLIP across all batch sizes, with marginal differences in FPS and per-image latency. The GFLOPs overhead is negligible at 0.3% over vanilla CLIP. The primary trade-off is GPU memory. LAS-CLIP consumes approximately 2.6 ×
+
+the memory of vanilla CLIP at batch size 64, compared to 1.8 × for Alpha-CLIP. This higher footprint arises from storing dense N × N attention bias matrices for each head and adapted layer. For applications where memory is constrained, reducing the number of adapter layers K or lowering the adapter hidden dimension h can mitigate this cost. 20 Dinh-Duc et al. 
+
+Table S3: Inference efficiency on ViT-L/14 (single T4 GPU). FPS, latency, memory, and GFLOPs are reported across batch sizes. Method Batch FPS ±std Lat. (ms) ±std Mem (MB) GFLOPs CLIP 1 70.7 3.1 14.2 0.6 974 81.01 CLIP 4 85.2 0.3 46.9 0.2 1000 20.25 CLIP 16 80.4 1.1 199.1 2.8 1096 5.06 CLIP 64 82.2 1.5 778.5 14.1 1480 1.27 Alpha-CLIP 1 58.8 0.4 17.0 0.1 1925 81.06 Alpha-CLIP 4 65.6 0.4 61.0 0.4 1959 20.27 Alpha-CLIP 16 59.3 1.1 270.1 5.1 2084 5.07 Alpha-CLIP 64 64.3 1.1 995.3 17.1 2591 1.27 LAS-CLIP 1 61.7 0.4 16.2 0.1 2873 81.32 LAS-CLIP 4 68.1 1.1 58.7 1.0 2928 20.33 LAS-CLIP 16 61.5 0.4 260.4 1.9 3143 5.08 LAS-CLIP 64 69.3 1.3 923.3 17.9 3915 1.27 
+
+# References 
+
+1. Ben Zaken, E., Goldberg, Y., Ravfogel, S.: BitFit: Simple parameter-efficient fine-tuning for transformer-based masked language-models. In: ACL. pp. 1–9 (2022) 32. Cherti, M., Beaumont, R., Wightman, R., Wortsman, M., Ilharco, G., Gordon, C., Schuhmann, C., Schmidt, L., Jitsev, J.: Reproducible scaling laws for contrastive language-image learning. In: CVPR. pp. 2818–2829 (2023) 1, 3 3. Deng, J., Dong, W., Socher, R., Li, L.J., Li, K., Fei-Fei, L.: ImageNet: A large-scale hierarchical image database. In: CVPR. pp. 248–255 (2009) 9 4. Dosovitskiy, A., Beyer, L., Kolesnikov, A., Weissenborn, D., Zhai, X., Unterthiner, T., Dehghani, M., Minderer, M., Heigold, G., Gelly, S., Uszkoreit, J., Houlsby, N.: An image is worth 16x16 words: Transformers for image recognition at scale. In: ICLR (2021) 4 5. Gandelsman, Y., Efros, A.A., Steinhardt, J.: Interpreting CLIP’s image represen-tation via text-based decomposition. In: ICLR (2024) 12, 13 6. Gao, P., Geng, S., Zhang, R., Ma, T., Fang, R., Zhang, Y., Li, H., Qiao, Y.: CLIP-adapter: Better vision-language models with feature adapters. IJCV 132 (2), 581–595 (2024) 3 7. Gao, S., Li, Z.Y., Yang, M.H., Cheng, M.M., Han, J., Torr, P.: Large-scale unsu-pervised semantic segmentation. IEEE TPAMI 45 (6), 7457–7476 (2023) 9 8. Houlsby, N., Giurgiu, A., Jastrzebski, S., Morrone, B., De Laroussilhe, Q., Ges-mundo, A., Attariyan, M., Gelly, S.: Parameter-efficient transfer learning for NLP. In: ICML. pp. 2790–2799 (2019) 3 9. Hu, E.J., Shen, Y., Wallis, P., Allen-Zhu, Z., Li, Y., Wang, S., Wang, L., Chen, W.: LoRA: Low-rank adaptation of large language models. In: ICLR (2022) 3 LAS-CLIP 21 10. Jia, C., Yang, Y., Xia, Y., Chen, Y.T., Parekh, Z., Pham, H., Le, Q., Sung, Y.H., Li, Z., Duerig, T.: Scaling up visual and vision-language representation learning with noisy text supervision. In: ICML. pp. 4904–4916 (2021) 1, 3 11. Jia, M., Tang, L., Chen, B.C., Cardie, C., Belongie, S., Hariharan, B., Lim, S.N.: Visual prompt tuning. In: ECCV. pp. 709–727 (2022) 3 12. Kirillov, A., Mintun, E., Ravi, N., Mao, H., Rolland, C., Gustafson, L., Xiao, T., Whitehead, S., Berg, A.C., Lo, W.Y., Dollár, P., Girshick, R.: Segment anything. In: ICCV. pp. 3992–4003 (2023) 8, 16 13. Li, D., Li, J., Hoi, S.C.H.: BLIP-Diffusion: Pre-trained subject representation for controllable text-to-image generation and editing. In: NeurIPS (2023) 9, 13, 14, 16, 18 14. Liang, F., Wu, B., Dai, X., Li, K., Zhao, Y., Zhang, H., Zhang, P., Vajda, P., Mar-culescu, D.: Open-vocabulary semantic segmentation with mask-adapted CLIP. In: CVPR. pp. 7061–7070 (2023) 2, 3, 9, 10 15. Lin, T.Y., Maire, M., Belongie, S., Hays, J., Perona, P., Ramanan, D., Dollár, P., Zitnick, C.L.: Microsoft COCO: Common objects in context. In: ECCV. pp. 740–755 (2014) 9 16. Loshchilov, I., Hutter, F.: Decoupled weight decay regularization. In: ICLR (2019) 15 17. Mao, J., Huang, J., Toshev, A., Camburu, O., Yuille, A.L., Murphy, K.: Genera-tion and comprehension of unambiguous object descriptions. In: CVPR. pp. 11–20 (2016) 9, 10 18. Peng, Z., Wang, W., Dong, L., Hao, Y., Huang, S., Ma, S., Wei, F.: Kosmos-2: Grounding multimodal large language models to the world. In: ICLR (2024) 3, 5, 6, 8 19. Radford, A., Kim, J.W., Hallacy, C., Ramesh, A., Goh, G., Agarwal, S., Sastry, G., Askell, A., Mishkin, P., Clark, J., Krueger, G., Sutskever, I.: Learning transferable visual models from natural language supervision. In: ICML. pp. 8748–8763 (2021) 1, 3, 4, 9, 10, 15 20. Shtedritski, A., Rupprecht, C., Vedaldi, A.: What does CLIP know about a red circle? visual prompt engineering for VLMs. In: ICCV. pp. 11953–11963 (2023) 2, 3, 9, 10, 11 21. Smith, L.N., Topin, N.: Super-convergence: Very fast training of neural networks using large learning rates. arXiv preprint arXiv:1708.07120 (2017) 15 22. Subramanian, S., Merrill, W., Darrell, T., Gardner, M., Singh, S., Rohrbach, A.: ReCLIP: A strong zero-shot baseline for referring expression comprehension. In: ACL. pp. 5198–5215 (2022) 2, 3, 9, 11, 16 23. Sun, Q., Fang, Y., Wu, L., Wang, X., Cao, Y.: EVA-CLIP: Improved training techniques for CLIP at scale. arXiv preprint arXiv:2303.15389 (2023) 1, 3 24. Sun, Z., Fang, Y., Wu, T., Zhang, P., Zang, Y., Kong, S., Xiong, Y., Lin, D., Wang, J.: Alpha-CLIP: A CLIP model focusing on wherever you want. In: CVPR. pp. 13019–13029 (2024) 2, 3, 5, 6, 8, 9, 10, 11, 12, 13, 14, 16, 17, 18 25. Wang, A., Liu, L., Chen, H., Lin, Z., Han, J., Ding, G.: YOLOE: Real-time seeing anything. arXiv preprint arXiv:2503.07465 (2025) 8 26. Yao, Y., Zhang, A., Zhang, Z., Liu, Z., Chua, T.S., Sun, M.: CPT: Colorful prompt tuning for pre-trained vision-language models. AI Open 5, 30–38 (2024) 2, 3, 9, 11 27. Yu, L., Lin, Z., Shen, X., Yang, J., Lu, X., Bansal, M., Berg, T.L.: MAttNet: Modular attention network for referring expression comprehension. In: CVPR. pp. 1307–1315 (2018) 9, 16 28. Yu, L., Poirson, P., Yang, S., Berg, A.C., Berg, T.L.: Modeling context in referring expressions. In: ECCV. pp. 69–85 (2016) 9, 10 22 Dinh-Duc et al. 29. Zhai, X., Mustafa, B., Kolesnikov, A., Beyer, L.: Sigmoid loss for language image pre-training. In: ICCV. pp. 11975–11986 (2023) 1, 3 30. Zhang, R., Zhang, W., Fang, R., Gao, P., Li, K., Dai, J., Qiao, Y., Li, H.: Tip-Adapter: Training-free adaption of CLIP for few-shot classification. In: ECCV. pp. 493–510 (2022) 3 31. Zhong, Y., Yang, J., Zhang, P., Li, C., Codella, N., Li, L.H., Zhou, L., Dai, X., Yuan, L., Li, Y., Gao, J.: RegionCLIP: Region-based language-image pretraining. In: CVPR. pp. 16793–16803 (2022) 3 32. Zhou, K., Yang, J., Loy, C.C., Liu, Z.: Conditional prompt learning for vision-language models. In: CVPR. pp. 16816–16825 (2022) 3 33. Zhou, K., Yang, J., Loy, C.C., Liu, Z.: Learning to prompt for vision-language models. IJCV 130 (9), 2337–2348 (2022) 3 34. Zhuang, J., Hu, J., Mu, L., Hu, R., Liang, X., Ye, J., Hu, H.: FALIP: Visual prompt as foveal attention boosts CLIP zero-shot performance. In: ECCV. pp. 236–253 (2024) 3, 6, 10, 11
