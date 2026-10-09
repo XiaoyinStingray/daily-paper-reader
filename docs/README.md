@@ -48,17 +48,17 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-10-08</span>
+      <span class="dpr-home-dashboard-kicker">2026-10-09</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 18 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 8 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
-    <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>2 次</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
     <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>1</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>17</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>7</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-10-08 23:38:43 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-10-09 23:03:52 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -69,7 +69,7 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日精读1篇、速读17篇，重点聚焦极低码率下的生成式图像压缩新思路。最值得看的是《Rethinking Generative Image Compression at Extremely Low Bitrates》（9.0/10），以及扩散激活量化和高效视觉Transformer方向的速读工作。普通读者可优先了解极低码率压缩，再按兴趣跟进扩散模型与ViT效率优化。</p>
+<p>2026-10-09 日报完成8篇论文筛选，精读1篇、速读7篇。最值得看的是精读8.0分的《Dissecting Representation Structure in Vision Transformers》，系统剖析ViT内部表征结构；速读中7.0分的车载网络自适应语义通信也值得关注。普通读者可先从ViT表征结构这篇入手，再按兴趣浏览速读列表。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -81,9 +81,9 @@
     <strong class="dpr-home-dashboard-count">1 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Rethinking Generative Image Compression at Extremely Low Bitrates">Rethinking Generative Image Compression at Extremely Low Bitrates</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Dissecting Representation Structure in Vision Transformers: A Rigorous Architectural Study">Dissecting Representation Structure in Vision Transformers: A Rigorous Architectural Study</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">compress <strong>1</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">neural-arch <strong>1</strong></span></div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -91,12 +91,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">速读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">17 篇</strong>
+    <strong class="dpr-home-dashboard-count">7 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Joint Branch-Space Transform Coding for Diffusion Activation Quantization with Classifier-Free Guidance">Joint Branch-Space Transform Coding for Diffusion Activation Quantization with Classifier-Free Guidance</span></li><li><span class="dpr-home-dashboard-paper-title" title="REViT-v2: Hierarchical Windowed Roto-reflection Equivariant ViT for Equivariant Feature Extraction">REViT-v2: Hierarchical Windowed Roto-reflection Equivariant ViT for Equivariant Feature Extraction</span></li><li><span class="dpr-home-dashboard-paper-title" title="Hardware-aware Calibrated Clustered Attention for Efficient Visual Geometric Transformers">Hardware-aware Calibrated Clustered Attention for Efficient Visual Geometric Transformers</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Adaptive Semantic Communication with Residual Quantization for Resilient Vehicular Networks">Adaptive Semantic Communication with Residual Quantization for Resilient Vehicular Networks</span></li><li><span class="dpr-home-dashboard-paper-title" title="Binary Phase Retrieval of Cosine Transforms via Local Curvature Minimization">Binary Phase Retrieval of Cosine Transforms via Local Curvature Minimization</span></li><li><span class="dpr-home-dashboard-paper-title" title="Lightweight and Versatile Learned Optimization by Recombination of Gradient History">Lightweight and Versatile Learned Optimization by Recombination of Gradient History</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">neural-arch <strong>15</strong></span><span class="dpr-home-dashboard-tag">compress <strong>2</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">neural-arch <strong>4</strong></span><span class="dpr-home-dashboard-tag">compress <strong>3</strong></span></div>
 </section>
 </div>
 

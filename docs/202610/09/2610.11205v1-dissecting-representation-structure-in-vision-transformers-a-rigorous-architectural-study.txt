@@ -1,0 +1,248 @@
+Title: Dissecting Representation Structure in Vision Transformers: A Rigorous Architectural Study
+
+URL Source: https://arxiv.org/pdf/2610.11205v1
+
+Published Time: Fri, 09 Oct 2026 00:42:29 GMT
+
+Number of Pages: 5
+
+Markdown Content:
+# Dissecting Representation Structure in Vision Transformers: A Rigorous Architectural Study 
+
+Kim-Cuc Nguyen 
+
+Temasek Laboratories Singapore University of Technology and Design 
+
+Singapore kimcucnguyen.cs@gmail.com 
+
+Ngai-Man Cheung 
+
+Temasek Laboratories Singapore University of Technology and Design 
+
+Singapore ngaiman cheung@sutd.edu.sg 
+
+Abstract —Representation structure is crucial for understand-ing Vision Transformer (ViT) architectures and their generaliza-tion behavior. However, prior studies neither isolate nor analyze module-level features nor investigate how their interactions contribute to performance estimation. In this work, we conduct the first rigorous analysis of feature information across diverse architectural scales, empirically uncover the relationship between ViT representation and generalization behavior, and leverage these insights to guide efficient ViT design. Our contributions are fivefold: Across diverse architectural scales, 1) We identify feature collapse at initialization, which leads to redundancy, and propose a reduction scheme to mitigate this issue. 2) We quantify feature information using entropy and the minimum eigenvalue, demonstrating that these metrics serve as reliable indicators for generalization prediction. 3) We show that feature in the token space provides a more faithful representation than those in embedding space. 4) We discover an unexpected finding: features produced by linear submodules within ViT layers are critical for the prediction of generalization performance. 5) Our proposed proxy improves the correlation ranking by 18-48% over prior baselines and can effectively identify ViT architectures that achieve higher accuracy at lower or comparable computational cost. 
+
+Index Terms —Representation, Vision Transformer, Feature 
+
+I. I NTRODUCTION 
+
+The Vision Transformer (ViT) [1] has achieved promising performance in visual tasks [2]–[4]. The critical components of ViT have been considered to be multi-head self-attention and the multi-layer perceptron (MLP). These specific modules enable the ViT architecture to achieve superior performance, but also result in less interpretable representations. By under-standing the specific feature information in ViT, we can design more flexible architectures with stronger generalization ability. Generalization potential refers to a model’s inherent capac-ity to generalize prior to training, providing a way to estimate its expected performance without optimization. Although it remains a conundrum, it is a valuable concept for effectively designing ViT architectures. Moreover, to facilitate the adapta-tion and application of ViT, Neural Architecture Search (NAS) [5]–[13] has been introduced to automatically discover optimal ViT architectures within a predefined search space, aiming to achieve the best possible accuracy under computational constraints. However, existing ViT NAS methods demand extensive computational resources, as they require training a large Supernet, evaluating numerous sub-architectures, and selecting the optimal one. To mitigate this cost, training-free performance proxies [14]–[16] can be used to estimate the performance of ViT architectures without exhaustively training all candidates in the search space. 
+
+Research gap. Existing studies primarily focus on overall architectural design rather than analyzing the specific roles of individual modules. While several proxy-based methods have been proposed to predict network performance, most are adapted from CNN proxies [9], [17]–[19], which do not generalize well to ViT architectures due to their distinct struc-tural properties. Current ViT proxies [14]–[16], [20] typically operate in the weight space or treat the entire architecture as a single entity, overlooking the contribution of individual modules or features. Moreover, the high dimensionality and depth of ViT features make it challenging to quantify their information effectively. 
+
+In this paper, we address existing research gaps by propos-ing a framework and conducting the first analytical study of different types of feature information across various aspects of ViT architectural scales . To mitigate feature collapse, we introduce a reduction scheme that effectively compresses high-dimensional features and streamlines computation. Further-more, we quantitatively characterize feature information using entropy and the minimum eigenvalue, and show that the outputs of linear submodules are both critical and ubiquitous for generalization prediction. II. R ELATED WORK 
+
+Feature collapse. [21] is among the first works to explore its features in detail, explaining them through the concept of word representations. Importantly, the authors demonstrate that words belonging to the same concept receive identical representations, a phenomenon they define as feature collapse. Using ranking of embedding to represent the information without the join of label [22] has been used in self-supervised arXiv:2610.11205v1 [cs.CV] 8 Oct 2026 Fig. 1. Overview of our proposed framework for rigorous ViT representation analysis. (I) Procedure for computing feature proxies from specific modules (Sec. IV). (II) Visualization of feature locations across ViT modules, with red text indicating feature types and extraction points. (III) Analysis of various feature aspects (Sec. V). We observe feature collapse at initialization (Sec. V-A) and propose a reduction scheme to mitigate redundancy. In Tab. I, we demonstrate that entropy and the minimum eigenvalue effectively capture feature informativeness, with features output of linear submodule showing strong correlation with test accuracy , particularly in the token space. The proposed optimal feature proxies predict ViT performance without training, improving correlation ranking and achieving higher accuracy with lower computational cost (Sec. V-B, VI.) 
+
+learning. [23] introduce the concept of entropy collapse. In our work, we observe the feature collapse at the initialization of the ViT. 
+
+Feature selection in ViT. Feature selection in ViTs in-volves identifying the most informative components of the features extracted by the model. Effective feature selection can reduce computational cost, improve generalization, and enhance model interpretability. [24] proposed a method to prune redundant tokens based on the input by the design prediction module to identify the important token from current features. [25] introduced to use an adaptive token mechanism to reduce the number of token processed in ViT. [26] proposed removing uninformative patches by identifying the most effec-tive patches in the final layer and using this information for patch selection in earlier layers. 
+
+Proxy for ViT. [14] proposed measuring the estimated performance of ViT architecture via synaptic diversity and synaptic saliency. [15] proposed a method to search for a ViT proxy that is generalizable for various domains and datasets. [27] proposed ViT proxy search for tiny datasets with knowledge distillation. III. P RELIMINARIES 
+
+Definition 1 (Shannon Entropy) . The entropy H(X) of a discrete random variable X with possible outcomes 
+
+x1, x 2, . . . , x n and probability function P (X) is defined as: 
+
+H(X) = −
+
+> n
+
+X
+
+> i=1
+
+P (xi) log P (xi) (1) 
+
+Definition 2 (Pearson Correlation Matrix) . Let X ∈ RN ×D
+
+be a feature matrix, where each column Xi represents one feature vector. The Pearson correlation matrix P ∈ RD×D is defined as: 
+
+Pij = E[( Xi − E[Xi])( Xj − E[Xj ])] 
+
+σXi σXj
+
+(2) where σXi is the standard deviation of Xi.IV. V ISION TRANSFORMER FEATURE PROXIES 
+
+In our analysis, we investigate which types of feature and their combinations are the most suitable as indicators for predicting ViT performance. To address this, we first define the core concepts and introduce our proposed methods as follows: 
+
+Feature Compatibility. It refers to how features are jointly connected and how their combinations work without conflict. While previous ViT studies assume the whole network, skip connection, or later layers contain more information, table I show that this assumption does not hold for ViT generalization. 
+
+Feature axes. Given an input image X ∈ RC×H×W ,it is divided into non-overlapping patches, each flattened and linearly projected into a D dimensional embedding. A positional embedding and a learnable class token are then added, forming X ∈ Rtdim ×edim , where tdim = N + 1 is the token dimension and edim = D is the embedding dimension. For feature analysis, we treat rows as variables in the token space and columns as variables in the embedding space. 
+
+ViT Feature. ViT architecture consists of an Encoder, Patches, and MLP head, illustrated in Fig. 1. For each module type, we extract one representative feature from its output during a forward pass on a batch of data. Starting from the input, EP denotes the feature after patch embedding. In the Encoder, repeated over L layers, we obtain features from all layers within each module. LN EP in and LN EP out 
+
+represent features before and after the first LayerNorm, re-spectively. The query, key, and value features, denoted as Q,
+
+K, and V , are concatenated into QKV = XW QKV for efficiency. V ′ denotes the feature after self-attention, while 
+
+M HSA out is the multi-head attention output. SC M SA out 
+
+represents the feature after the skip connection following multi-head self-attention. Next, LN 1 SC out and LN 2 SC out 
+
+represent the features after the first and second LayerNorm operations following the skip connection, respectively. Within the MLP, M1 and M2 denote features from the first and second linear layers, and GELU out is the activation output. 
+
+SC M LP out is the feature after the skip connection following the MLP module, and LN 3 SC out denotes the feature after the subsequent LayerNorm operation. Finally, E represents the encoder output, and LN Eout is the feature before the ViT head. Feature combinations are denoted using the plus operator (e.g., M1 + M2). 
+
+Feature dimension reduction. Representation information measures are computed on X′, and the results are scaled by  
+
+> tdim
+> u
+
+in the token space or el 
+
+> dim
+> u
+
+in the embedding space to maintain consistency with the original dimensionality. This weighting compensates for dimensionality reduction and en-sures that the final information metric reflects the contribution of the entire feature space. 
+
+Entropy Proxy. Let H(xi) denote the entropy of a feature vector xi. For each row or column of the feature matrix X,we compute H(xi) and select the u vectors with the lowest entropy to form a reduced representation X′.
+
+X′ = Select u vectors from X with lowest H(xi) (3) The entropy proxy function FI is then computed from the reduced matrix X′.
+
+FI (X′) = 
+
+> u
+
+X
+
+> i=1
+
+H(xi) (4) 
+
+Minimum Eigenvalue Proxy. We compute the Pearson cor-relation matrix P (X) (Eq. 2) to measure the linear correlation between feature vector variables xi and xj . We define the row-wise correlation score si, which sum the absolute correlations in each row of P (X).
+
+Algorithm 1 Compute ViT Feature Proxy                                                                                 
+
+> Require: Feature type f;feature map X∈Rtdim ×eldim cor-responding to asingle sample in the batch, extracted from module fat layer l; reduction dimension u; proxy indicator
+> I ∈ { Entropy ,MinEigen }
+> 1: proxy ←0
+> 2: for l←0to Ldo
+> 3: if dim is token then
+> 4: X={x1, ..., x tdim },xi∈Reldim
+> 5: αl←tdim
+> u
+> 6: else
+> 7: X={x1, ..., x eldim
+> },xi∈Rtdim
+> 8: αl←eldim
+> u
+> 9: end if
+> 10: X′←Reduce (X, u, I){select uelements using I-specific rule }(see Eqs. (3), (6))
+> 11: pl←αl· F I(X′)(see Eqs. (4), (7))
+> 12: proxy ←proxy +pl
+> 13: end for
+> 14: return proxy
+
+si = X
+
+> j
+
+|P (X)ij | (5) 
+
+X′ = Select u vectors with lowest si (6) 
+
+FI (X′) = λmin 
+
+ P (X′) (7) 
+
+λmin (P ) is proportional to the degree of feature diversity and independence, where higher diversity correlates with bet-ter classification accuracy, stronger generalization, and more stable training in ViTs. V. D ISCOVERING THE IMPACT OF FEATURE INFORMATION ON VIT G ENERALIZATION PREDICTORS 
+
+Procedure. Our framework and analysis components are illustrated in Fig. 1. We meticulously designed the experimen-tal testbed across different architectural scales. Specifically, we sampled 1,000 ViT architectures within the 5–7 million parameter range from AutoFormer-Tiny [5], extracted their architectural information, and stored it as an API. Additionally, we collected the test accuracy of these 1,000 architectures using pretrained weights on the ImageNet-1K dataset [28]. The test accuracy of subnets inheriting weights from the supernet achieves comparable results to those trained independently [5], [29]–[31]. We propose a unified framework for computing ViT feature proxies, as illustrated in Algorithm 1, and introduce two measures: the Entropy Proxy and the Minimum Eigenvalue Proxy .
+
+Metrics. We computed the Spearman [32] and Kendall [33] correlations between proxy values and test accuracy to evaluate the effectiveness of representation information in capturing ViT generalization performance. 
+
+A. Investigating Feature Collapse at Initialization and Feature Information for ViT Generalization Prediction B. Comparison with State-of-the-Art Methods 
+
+We compare the top three Token-Entropy proxies with reduced dimension u = 1 : M1 + M2, M HSA out + M1 + M2,Fig. 2. Logarithm of the singular value spectrum of the feature Q in the token space (left) and embedding space (right). The x-axis denotes variable indices, and the y-axis shows the mean and standard deviation of the logarithmic singular values across all layers. Most singular values are near zero, indicating a low-rank structure and feature collapse. 
+
+TABLE I SPEARMAN ’S ρ AND KENDALL ’S τ CORRELATIONS BETWEEN TEST ACCURACY AND EACH OF THE ENTROPY AND MINIMUM EIGENVALUE 
+
+PROXIES ARE COMPUTED FOR 1,000 V IT ARCHITECTURES (5–7M 
+
+PARAMETERS ) ACROSS 26 FEATURE TYPES . T HESE PROXIES ARE CALCULATED IN BOTH TOKEN AND EMBEDDING SPACES FOR INDIVIDUAL AND COMBINED FEATURES , WITH DIMENSION REDUCTIONS u = 1 . BOLD 
+
+VALUES INDICATE CORRELATIONS HIGHER THAN THOSE OF PREVIOUS PROXIES IN TABLE II. THE ENTROPY AND MINIMUM EIGENVALUE PROXIES EFFECTIVELY QUANTIFY FEATURE INFORMATION AS INDICATORS OF VIT GENERALIZATION . F EATURES OUTPUT BY LINEAR SUBMODULES (Q, K, V , V ′ , M HSA out , M1 , M2 ) AND THEIR COMBINATIONS SHOW STRONG CORRELATIONS WITH TEST ACCURACY , WHEREAS FEATURES OUTPUT BY NON -LINEAR SUBMODULES EXHIBIT SIGNIFICANTLY WEAKER CORRELATIONS .PROXIES COMPUTED IN THE TOKEN SPACE ACHIEVE HIGHER CORRELATIONS THAN THOSE IN THE EMBEDDING SPACE .                                                                                                                                                                                                                                                            
+
+> Proxy Entropy Minimum Eigenvalue Token Embedding Token Embedding
+> ρτρτρτρτ
+> Encoder
+> Q0.745 0.509 0.732 0.480 0.796 0.636 0.794 0.633
+> K0.733 0.485 0.738 0.495 0.792 0.630 0.797 0.637
+> V0.744 0.503 0.718 0.468 0.797 0.637 0.796 0.637
+> V′0.787 0.578 0.666 0.453 0.792 0.628 0.699 0.540
+> M HSA out 0.790 0.585 0.657 0.439 0.794 0.633 0.701 0.541
+> M10.844 0.660 0.762 0.571 0.795 0.633 0.761 0.585
+> M20.809 0.599 0.676 0.463 0.761 0.589 0.698 0.537
+> GELU out 0.137 0.104 0.131 0.100 0.016 0.013 0.129 0.104
+> SC M SA out -0.039 -0.023 -0.056 -0.038 0.008 0.007 -0.138 -0.109
+> SC M LP out -0.023 -0.014 -0.043 -0.029 0.042 0.034 -0.138 -0.109
+> LN EP in -0.024 -0.014 -0.050 -0.033 0.021 0.017 -0.138 -0.109
+> LN EP out -0.031 -0.019 -0.071 -0.047 0.052 0.042 -0.142 -0.113
+> LN 1SC out -0.039 -0.023 -0.056 -0.038 0.008 0.007 -0.138 -0.109
+> LN 2SC out -0.029 -0.017 -0.055 -0.038 0.037 0.029 -0.139 -0.110
+> LN 3SC out -0.023 -0.014 -0.043 -0.028 0.042 0.034 -0.138 -0.109 Patches EP -0.192 -0.158 -0.192 -0.157 NA NA -0.192 -0.157 MLP Head E-0.055 -0.034 -0.088 -0.059 0.076 0.061 -0.126 -0.096
+> LN Eout -0.011 -0.006 0.216 0.133 0.091 0.074 -0.086 -0.067
+> QKV 0.773 0.544 0.720 0.496 0.795 0.634 0.734 0.529
+> M1+M20.849 0.665 0.752 0.562 0.797 0.639 0.752 0.576
+> QKV +M1+M20.838 0.652 0.837 0.649 0.798 0.640 0.836 0.654
+> QKV +M HSA out 0.805 0.604 0.773 0.553 0.798 0.639 0.771 0.567
+> M HSA out +M1+M20.851 0.669 0.744 0.556 0.798 0.640 0.745 0.570
+> QKV +M HSA out +M1+M20.856 0.676 0.759 0.574 0.798 0.640 0.831 0.650
+> Q+K+V0.740 0.499 0.728 0.477 0.798 0.640 0.798 0.639
+> SC M SA out +SC M LP out -0.040 -0.024 -0.056 -0.037 0.027 0.022 -0.143 -0.114
+
+and QKV + M HSA out + M1 + M2, against the baselines across 3,000 ViT architectures: Tiny (5-7M), Small (15-19M), and Base (45-47M), with 1,000 architectures in each parameter range. As shown in Table II, our proxies improve correlation rankings by 18%, 25%, and 48% for the 5–7M, 15–19M, and 45–47M ranges, respectively. VI. E FFICIENT VIT A RCHITECTURE DESIGN 
+
+We use the previous proxies and our Token-Entropy proxies with reduced dimension u = 1 to search for the optimal subnet on the same set of 1,000 ViT architectures within 5-7 parame-ter ranges. As shown in the table III, our proposed proxies suc-cessfully identify the optimal subnet, improving accuracy by 0.11%-0.17% compared to previous proxies across the 1,000 
+
+TABLE II SPEARMAN ’S ρ AND KENDALL ’S τ CORRELATION RANKINGS FOR THREE SETS OF 1,000 V IT ARCHITECTURES WITH PARAMETER RANGES OF 
+
+5–7M, 15–19M, AND 45–47M, COMPARING THE TOP -3 T OKEN -E NTROPY PROXIES (u = 1 ) WITH BASELINES . OUR PROPOSED PROXIES SIGNIFICANTLY IMPROVE THE CORRELATION RANKINGS ,
+
+DEMONSTRATING THAT THEY ARE STRONG INDICATORS OF VIT
+
+PERFORMANCE .
+
+Proxy 5-7M 15-19M 45-47M 
+
+ρ τ ρ τ ρ τ
+
+SNIP [17] 0.313 0.207 0.280 0.190 0.056 0.037 GraSP [19] -0.101 -0.066 -0.064 -0.043 0.023 0.015 TE-score [34] -0.319 -0.219 -0.084 -0.057 -0.106 -0.072 NASWOT [20] 0.382 0.278 0.232 0.162 0.243 0.171 DSS [14] 0.622 0.439 0.468 0.315 -0.119 -0.079 AutoProxA [15] 0.675 0.477 0.446 0.299 -0.126 -0.084 DSS++ [16] 0.638 0.448 0.450 0.302 -0.140 -0.094 
+
+M1 + M2 0.849 0.665 0.718 0.529 0.368 0.251 
+
+M HSA out + M1 + M2 0.851 0.669 0.717 0.529 0.360 0.246 
+
+QKV + M HSA out + M1 + M2 0.856 0.676 0.720 0.533 0.350 0.239 
+
+ViT architectures in the 5–7M ranges, respectively. Moreover, our proxies achieve an 87.5%–98.6% reduction in computation time when searching over 1,000 ViT architectures, requiring only 0.06 hours compared to 0.48 – 4.3 hours for previous proxies in the 5–7M range. 
+
+TABLE III RESULTS ON IMAGE NET USING DIFFERENT PROXIES TO SEARCH FOR THE OPTIMAL ARCHITECTURE AMONG 1,000 V IT ARCHITECTURES , WITH THE 
+
+5–7M PARAMETER RANGES 
+
+Proxy Param(M) ↓ FLOPs(B) ↓ Top-1 ↑ Time(h) ↓
+
+SNIP [17] 6.9 1.7 74.89 1.00 GraSP [19] 5.7 1.4 74.47 1.38 TE-score [34] 5.9 1.5 74.60 4.30 NASWOT [20] 6.9 1.7 74.94 0.82 DSS [14] 6.9 1.6 75.29 0.60 AutoProxA [15] 6.9 1.5 75.32 0.48 DSS++ [16] 6.9 1.6 75.30 0.80 
+
+M1 + M2 6.9 1.5 75.41 0.05 
+
+M HSA out + M1 + M2 6.9 1.5 75.43 0.06 
+
+QKV + M HSA out + M1 + M2 6.9 1.5 75.38 0.08 
+
+VII. C ONCLUSION 
+
+In this work, we provide a rigorous analysis of how fea-ture representations relate to ViT generalization, considering feature information, axes, dimensions, and locations. Our pro-posed feature proxies improve correlation ranking by 18–48% over baselines across parameter ranges. For efficient ViT ar-chitecture design, our method achieves higher accuracy across architectures while significantly reducing training, search, and proxy computation costs. Extensive experiments across dif-ferent ViT architectural scale confirm the effectiveness and broad applicability of our approach, establishing a principled framework for understanding ViT features, predicting general-ization, and enabling efficient ViT design. Future work applies the findings to design compact models for different tasks [35]– [37]. ACKNOWLEDGMENT 
+
+This research is supported by Temasek Laboratories, Singapore University of Technology and Design; the National Research Foun-dation, Singapore under its AI Singapore Programmes (AISG Award No.: AISG2-TC-2022-007); the Agency for Science, Technology and Research (A*STAR) under its MTC Programmatic Funds (Grant No. M23L7b0021); the National Research Foundation, Singapore and Infocomm Media Development Authority under its Trust Tech Funding Initiative. Any opinions, findings and conclusions or recom-mendations expressed in this material are those of the author(s) and do not reflect the views of National Research Foundation, Singapore and Infocomm Media Development Authority. 
+
+REFERENCES [1] A. Dosovitskiy, L. Beyer, A. Kolesnikov, D. Weissenborn, X. Zhai, T. Unterthiner, M. Dehghani, M. Minderer, G. Heigold, S. Gelly et al. ,“An image is worth 16x16 words: Transformers for image recognition at scale,” arXiv preprint arXiv:2010.11929 , 2020. [2] Z. Tu, H. Talebi, H. Zhang, F. Yang, P. Milanfar, A. Bovik, and Y. Li, “Maxvit: Multi-axis vision transformer,” in European conference on computer vision . Springer, 2022, pp. 459–479. [3] A. Ali, H. Touvron, M. Caron, P. Bojanowski, M. Douze, A. Joulin, I. Laptev, N. Neverova, G. Synnaeve, J. Verbeek et al. , “Xcit: Cross-covariance image transformers,” Advances in neural information pro-cessing systems , vol. 34, pp. 20 014–20 027, 2021. [4] X. Dong, J. Bao, D. Chen, W. Zhang, N. Yu, L. Yuan, D. Chen, and B. Guo, “Cswin transformer: A general vision transformer backbone with cross-shaped windows,” in Proceedings of the IEEE/CVF confer-ence on computer vision and pattern recognition , 2022, pp. 12 124– 12 134. [5] M. Chen, H. Peng, J. Fu, and H. Ling, “Autoformer: Searching transformers for visual recognition,” in Proceedings of the IEEE/CVF international conference on computer vision , 2021, pp. 12 270–12 280. [6] X. Su, S. You, J. Xie, M. Zheng, F. Wang, C. Qian, C. Zhang, X. Wang, and C. Xu, “Vitas: Vision transformer architecture search,” in European Conference on Computer Vision . Springer, 2022, pp. 139–157. [7] C. Gong and D. Wang, “Nasvit: Neural architecture search for efficient vision transformers with gradient conflict-aware supernet training,” ICLR Proceedings 2022 , 2022. [8] C. Yan, X. Chang, Z. Li, L. Yao, M. Luo, and Q. Zheng, “Masked distil-lation advances self-supervised transformer architecture search,” in The Twelfth International Conference on Learning Representations , 2024. [Online]. Available: https://openreview.net/forum?id=LUpC8KTvdV [9] H. Wang, C. Ge, H. Chen, and X. Sun, “Prenas: Preferred one-shot learning towards efficient neural architecture search,” in International conference on machine learning . PMLR, 2023, pp. 35 642–35 654. [10] M. Chen, K. Wu, B. Ni, H. Peng, B. Liu, J. Fu, H. Chao, and H. Ling, “Searching the search space of vision transformer,” Advances in Neural Information Processing Systems , vol. 34, pp. 8714–8726, 2021. [11] J. Liu, X. Huang, G. Song, H. Li, and Y. Liu, “Uninet: Unified architecture search with convolution, transformer, and mlp,” in European Conference on computer vision . Springer, 2022, pp. 33–49. [12] M. Ding, X. Lian, L. Yang, P. Wang, X. Jin, Z. Lu, and P. Luo, “Hr-nas: Searching efficient high-resolution neural architectures with lightweight transformers,” in Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , 2021, pp. 2982–2992. [13] C. Tang, L. L. Zhang, H. Jiang, J. Xu, T. Cao, Q. Zhang, Y. Yang, Z. Wang, and M. Yang, “Elasticvit: Conflict-aware supernet training for deploying fast vision transformer on diverse mobile devices,” in 
+
+Proceedings of the IEEE/CVF international conference on computer vision , 2023, pp. 5829–5840. [14] Q. Zhou, K. Sheng, X. Zheng, K. Li, X. Sun, Y. Tian, J. Chen, and R. Ji, “Training-free transformer architecture search,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,2022, pp. 10 894–10 903. [15] Z. Wei, P. Dong, Z. Hui, A. Li, L. Li, M. Lu, H. Pan, and D. Li, “Auto-prox: Training-free vision transformer architecture search via automatic proxy discovery,” in Proceedings of the AAAI Conference on Artificial Intelligence , vol. 38, no. 14, 2024, pp. 15 814–15 822. [16] Q. Zhou, K. Sheng, X. Zheng, K. Li, Y. Tian, J. Chen, and R. Ji, “Training-free transformer architecture search with zero-cost proxy guided evolution,” IEEE Transactions on Pattern Analysis and Machine Intelligence , 2024. [17] N. Lee, T. Ajanthan, and P. H. Torr, “Snip: Single-shot network pruning based on connection sensitivity,” arXiv preprint arXiv:1810.02340 , 2018. [18] G. Li, Y. Yang, K. Bhardwaj, and R. Marculescu, “Zico: Zero-shot nas via inverse coefficient of variation on gradients,” arXiv preprint arXiv:2301.11300 , 2023. [19] C. Wang, G. Zhang, and R. Grosse, “Picking winning tickets before training by preserving gradient flow,” arXiv preprint arXiv:2002.07376 ,2020. [20] J. Mellor, J. Turner, A. Storkey, and E. J. Crowley, “Neural architec-ture search without training,” in International conference on machine learning . PMLR, 2021, pp. 7588–7598. [21] T. Laurent, J. H. von Brecht, and X. Bresson, “Feature collapse,” arXiv preprint arXiv:2305.16162 , 2023. [22] Q. Garrido, R. Balestriero, L. Najman, and Y. Lecun, “Rankme: Assessing the downstream performance of pretrained self-supervised representations by their rank,” in International conference on machine learning . PMLR, 2023, pp. 10 929–10 974. [23] S. Zhai, T. Likhomanenko, E. Littwin, D. Busbridge, J. Ramapuram, Y. Zhang, J. Gu, and J. M. Susskind, “Stabilizing transformer training by preventing attention entropy collapse,” in International Conference on Machine Learning . PMLR, 2023, pp. 40 770–40 803. [24] Y. Rao, W. Zhao, B. Liu, J. Lu, J. Zhou, and C.-J. Hsieh, “Dynam-icvit: Efficient vision transformers with dynamic token sparsification,” 
+
+Advances in neural information processing systems , vol. 34, pp. 13 937– 13 949, 2021. [25] H. Yin, A. Vahdat, J. M. Alvarez, A. Mallya, J. Kautz, and P. Molchanov, “A-vit: Adaptive tokens for efficient vision transformer,” in Proceedings of the IEEE/CVF conference on computer vision and pattern recognition ,2022, pp. 10 809–10 818. [26] Y. Tang, K. Han, Y. Wang, C. Xu, J. Guo, C. Xu, and D. Tao, “Patch slimming for efficient vision transformers,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,2022, pp. 12 165–12 174. [27] Z. Wei, H. Pan, L. Li, P. Dong, Z. Tian, X. Niu, and D. Li, “Tvt: Training-free vision transformer search on tiny datasets,” arXiv preprint arXiv:2311.14337 , 2023. [28] O. Russakovsky, J. Deng, H. Su, J. Krause, S. Satheesh, S. Ma, Z. Huang, A. Karpathy, A. Khosla, M. Bernstein et al. , “Imagenet large scale visual recognition challenge,” International journal of computer vision , vol. 115, no. 3, pp. 211–252, 2015. [29] J. Yu, P. Jin, H. Liu, G. Bender, P.-J. Kindermans, M. Tan, T. Huang, X. Song, R. Pang, and Q. Le, “Bignas: Scaling up neural architecture search with big single-stage models,” in European Conference on Computer Vision . Springer, 2020, pp. 702–717. [30] D. Wang, C. Gong, M. Li, Q. Liu, and V. Chandra, “Alphanet: Improved training of supernets with alpha-divergence,” in International Conference on Machine Learning . PMLR, 2021, pp. 10 760–10 771. [31] D. Wang, M. Li, C. Gong, and V. Chandra, “Attentivenas: Improving neural architecture search via attentive sampling,” in Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , 2021, pp. 6418–6427. [32] Z. JH, “Spearman rank correlation. encyclopedia of biostatistics,” John Wiley & Sons, Ltd.(eds) vol (7). Online ISBN: 9780470011812— DOI ,vol. 10, p. 0470011815, 2005. [33] H. Abdi, “The kendall rank correlation coefficient,” Encyclopedia of measurement and statistics , vol. 2, pp. 508–510, 2007. [34] W. Chen, X. Gong, and Z. Wang, “Neural architecture search on imagenet in four gpu hours: A theoretically inspired perspective,” arXiv preprint arXiv:2102.11535 , 2021. [35] S. Song, N.-M. Cheung, V. Chandrasekhar, B. Mandal, and J. Lin, “Egocentric activity recognition with multimodal fisher vector,” in 
+
+2016 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP) . IEEE, 2016. [36] K. Min and J. J. Corso, “Integrating human gaze into attention for egocentric activity recognition,” in Proceedings of the IEEE/CVF Winter Conference on Applications of Computer Vision (WACV) , 2021, pp. 1069–1078. [37] K. Chandrasegaran, N.-T. Tran, A. Binder, and N.-M. Cheung, “Discov-ering transferable forensic features for cnn-generated images detection,” in European Conference on Computer Vision (ECCV) . Springer, 2022, pp. 671–689.

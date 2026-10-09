@@ -1,0 +1,1977 @@
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, 2025
+1
+Adaptive Semantic Communication with Residual
+Quantization for Resilient Vehicular Networks
+Xuanhao Luo, Ruichen Gao, Sandeep Sreenivasan, Zhizhen Li, Yuchen Liu, Member, IEEE
+Abstract—Vehicular networks require timely visual informa-
+tion exchange to support safety-critical applications such as
+cooperative perception and hazard awareness, yet transmitting
+high-dimensional camera data over bandwidth-limited and dy-
+namic wireless links remains challenging. In this paper, we
+propose an adaptive semantic communication architecture for
+vehicular multicast that adjusts the amount of visual information
+transmitted according to current channel conditions, available
+communication resources, and latency requirements. Specifically,
+the visual encoder uses residual quantization to represent each
+image at multiple bitrate and reconstruction-quality levels. At
+runtime, the system selects an appropriate level based on the
+communication conditions, enabling it to trade visual fidelity
+for lower transmission overhead when network resources are
+limited. Context-adaptive entropy coding further compresses the
+quantized representations using offline-learned statistics, without
+requiring retraining for different channel conditions. This design
+allows the visual representation to be learned offline while the
+communication strategy is adapted online. Experimental results
+demonstrate competitive rate-distortion performance at ultra-
+low bitrates, improved delivery reliability and deadline satisfac-
+tion across diverse vehicular scenarios, and strong downstream
+perception performance, achieving up to 0.88 mAP50 while
+dynamically adapting to changing communication conditions.
+Index
+Terms—Vehicular
+networks,
+semantic
+compression,
+residual quantization, entropy coding, visual communication
+I. INTRODUCTION
+Modern visual communication systems, such as vehicular
+perception [1], satellite imaging [2], and edge–cloud vision
+platforms [3], require the efficient transmission of high-
+dimensional visual data over bandwidth-limited and dynam-
+ically varying wireless links. In these scenarios, camera or
+LiDAR data must be delivered in real time despite rapid
+fluctuations in channel conditions caused by mobility, inter-
+ference, and environmental dynamics. Vehicular networks, in
+particular, represent a highly demanding setting, where coop-
+erative perception [4], collision avoidance [5], and emergency
+response [6] rely on low-latency and reliable dissemination of
+visual information [7]. However, road wireless environments
+are inherently dynamic, with rapidly varying channel condi-
+tions, heterogeneous receiver populations, and limited commu-
+nication resources. These factors make it challenging to deliver
+high-dimensional visual data efficiently. Conventionally, visual
+communication pipelines rely on pixel-level codecs such as
+X. Luo, S. Sandeep, Z. Li and Y. Liu are with the Department of Computer
+Science, North Carolina State University, Raleigh, NC, 27695, USA (Emails:
+{xluo26, srsreeni, zli92, yuchen.liu}@ncsu.edu).
+R. Gao is with the Department of Electrical and Computer En-
+gineering, New York University, Brooklyn, NY, 11201, USA (Email:
+ruichen.gao@nyu.edu).
+JPEG or HEVC to reduce transmission overhead. While ef-
+fective in removing statistical redundancy, these methods are
+agnostic to task semantics, allocating bits uniformly across the
+scene regardless of their relevance to downstream perception
+tasks.
+This limitation motivates the development of semantic
+communication (SemCom) techniques, which focus on pre-
+serving task relevant information to achieve higher com-
+pression efficiency [8]. Many recent works adopt deep joint
+source–channel coding (JSCC) [9], which jointly optimizes
+source representation and channel transmission under specific
+physical layer settings. However, such designs inherently
+couple source and channel coding, making their performance
+dependent on the channel assumptions considered during
+training. When channel conditions deviate from the training
+regime, adaptation or retraining may be required [10], and
+reconstruction quality can degrade as the channel quality
+deteriorates [11]. This coupling is less suited to our target
+setting of safety critical vehicular communication, where pre-
+dictable reconstruction after successful delivery and flexible
+runtime adaptation under rapidly varying channel and resource
+conditions are particularly important. Meanwhile, some gen-
+erative model based approaches [12], [13] reconstruct data
+by sampling from learned data priors, which may produce
+perceptually plausible but semantically inconsistent outputs.
+Such behavior can undermine the reliability of reconstructed
+content in safety critical vehicular perception tasks, for in-
+stance, when nearby vehicles are missed, blurred, or spa-
+tially distorted. More importantly, existing works primarily
+focus on reconstruction or task performance under channel
+impairments, while transmission latency, delivery reliability,
+downstream perception utility, and runtime adaptation must
+be jointly considered in dynamic vehicular networks.
+Motivated by these challenges, we adopt a system-oriented
+perspective and decouple semantic source coding from channel
+modeling to improve communication flexibility and adapt-
+ability. Here, flexibility refers to reuse pretrained semantic
+representations across heterogeneous and evolving wireless en-
+vironments without requiring redesign or retraining for specific
+channel models. Adaptability, on the other hand, captures the
+capability of the system to dynamically adjust transmission
+strategies at runtime, such as rate allocation, redundancy
+control, or semantic prioritization, in response to time-varying
+channel conditions and task requirements, thereby maintain-
+ing consistent end-task performance under uncertainty. Our
+design therefore focuses on learning compact and structured
+visual representations that enable predictable and controllable
+trade-offs among semantic fidelity, transmission latency, and
+arXiv:2610.10886v1  [cs.NI]  7 Oct 2026
+
+
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, 2025
+2
+delivery reliability.
+To this end, we develop an adaptive SemCom architecture,
+which integrates residual quantization (RQ) with n-gram-
+based arithmetic coding (NAC). The RQ module exposes
+multiple hierarchical discrete representations with different
+quantization depths, allowing the residual quantization depth
+to serve as a runtime communication control variable across
+different bitrate-fidelity operating points. The NAC module
+then losslessly compresses the discrete index sequence at each
+operating point by exploiting short-range contextual dependen-
+cies, further reducing the transmission payload without alter-
+ing the underlying semantic representation. To address time-
+varying wireless conditions, we then develop a lightweight
+model adaptation mechanism that dynamically adjusts the
+semantic compression depth to meet varying bandwidth and
+latency constraints. It is worth noting that the proposed frame-
+work is channel-agnostic at the representation learning stage,
+while remaining channel-aware at runtime through lightweight
+depth adaptation in the second stage. Beyond conventional
+reconstruction metrics, we jointly consider perceptual task
+accuracy, delivery success, and latency. This system-level
+evaluation framework provides a comprehensive assessment of
+whether transmitted visual information remains useful under
+realistic communication and computing constraints. By com-
+bining adaptive semantic compression with perception-aware
+evaluation, RQ-NAC bridges the gap between communication
+efficiency and semantic reliability in safety-critical vehicular
+networks. The main contributions of this paper are summarized
+as follows:
+• We develop a system-level adaptive semantic communica-
+tion architecture for vehicular multicast that exposes pre-
+trained RQ configurations as runtime-selectable operating
+points, enabling the communication system to adapt the
+transmitted representation to dynamic channel, resource,
+and latency conditions without online retraining.
+• We propose a scalable compression framework, RQ-
+NAC, that combines residual quantization with context-
+adaptive lossless entropy coding. Different RQ depth con-
+figurations provide controllable bitrate and reconstruction
+fidelity trade-offs, while the offline entropy model further
+reduces the corresponding residual index streams.
+• We design a lightweight runtime depth-selection mech-
+anism that jointly considers effective multicast capacity,
+receiver scale, and application deadlines. The controller
+dynamically selects the RQ operating point under a
+unified policy, enabling adaptive trade-offs between re-
+construction fidelity and timely delivery.
+• We conduct a comprehensive system-level evaluation
+across representative vehicular multicast scenarios, in-
+cluding rate-distortion comparison with recent learning-
+based compression baselines, runtime profiling, con-
+trolled channel and resource sensitivity, downstream per-
+ception, and out-of-distribution robustness.
+The remainder of this paper is organized as follows. Sec-
+tion II reviews related work. Section III introduces the vehicu-
+lar communication model and operating scenarios. Section IV
+presents the proposed RQ-NAC framework, and Section V
+describes the runtime adaptive depth-selection mechanism.
+Section VI presents the evaluation methodology, while Sec-
+tion VII reports the experimental results on compression,
+system-level adaptation, downstream perception, and robust-
+ness under distribution shift. Section VIII concludes the paper.
+II. RELATED WORK
+Network planning and communication under limited re-
+sources remain fundamental challenges in dynamic wireless
+systems [14]–[16]. Semantic communication has emerged as
+a promising paradigm to address the limitations of traditional
+bit-level communication, particularly in resource-constrained
+and dynamic environments such as vehicular networks [17]–
+[19]. The core idea is to transmit only the task-relevant
+information, thereby improving communication efficiency and
+robustness [20], [21]. In general, SemCom systems can be
+broadly categorized into task-oriented and reconstruction-
+oriented paradigms based on their transmission objectives.
+Task-oriented SemCom focuses on transmitting task-relevant
+features for downstream applications, such as image classifica-
+tion, machine translation, and visual question answering [22].
+In contrast, reconstruction-oriented SemCom aims to recon-
+struct semantically faithful contents or signals at the receiver
+[23]. In a broader sense, reconstruction can also be regarded
+as a specific type of task [24] in communication systems.
+Within these SemCom paradigms, JSCC has been widely
+studied as a representative approach for end-to-end transmis-
+sion [9], [11], [25], [26]. Classical JSCC schemes are typi-
+cally tailored to specific source–channel pairs, limiting their
+generalizability across different communication environments
+[25]. Recent deep learning-based JSCC approaches leverage
+neural networks to learn end-to-end mappings, demonstrating
+improved robustness under noisy conditions [9], [11]. HARQ-
+assisted SemCom has also been explored for LiDAR coop-
+erative perception under noisy wireless channels [27]. These
+approaches primarily focus on preserving semantic or task
+information under channel impairments. In contrast, our work
+targets scalable ultra low bitrate visual source coding for band-
+width constrained vehicular communication, while decoupling
+representation learning from the channel model and adapting
+the RQ depth at runtime according to communication and
+latency constraints. This distinction is particularly relevant
+to safety critical vehicular applications, where reliability and
+timely delivery are essential system requirements [28]. In such
+settings, the decoupled design avoids direct channel induced
+degradation of the reconstructed representation after successful
+delivery.
+To reduce reliance on end-to-end training and improve
+adaptability in dynamic wireless environments, recent works
+explore generative model-based SemCom. For example, [10],
+[12] leverage generative adversarial networks (GAN) inversion
+with pretrained generative models to enable training-free se-
+mantic transmission. [13] proposes a training-free generative
+SemCom system using diffusion models, where semantic
+features are transmitted and images are reconstructed at the
+receiver via noise-aware diffusion sampling. While such ap-
+proaches improve perceptual quality and flexibility, generative
+
+
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, 2025
+3
+Source image
+Transmitter (Source Vehicle)
+    Dashcam
+Roadside camera
+Adaptive Depth
+Controller
+......
+V2V Multicast
+Channel
+Semantic Encoder
+n-gram Arithmetic
+Coding
+Residual Quantizer
+Compressed Semantic Bitstream
+...
+Downstream
+Perception
+Selected Depth
+Channel State
+(SINR, Interference, ...)
+Receiver 1
+Reconstructed
+Image
+Semantic Decoder
+Receiver n
+Reconstructed
+Image
+Semantic Decoder
+Fig. 1. System overview of the proposed adaptive SemCom framework for V2V multicast in wireless networks. A source vehicle encodes visual data from
+its camera or sensor into a compact semantic representation, which is then transmitted to multiple receivers over a shared wireless channel. The compression
+configuration is dynamically adjusted based on channel conditions and system constraints.
+models such as GANs, variational autoencoder (VAEs), and
+diffusion models reconstruct data by sampling from learned
+data priors [29]–[31], which may produce perceptually plausi-
+ble but semantically inconsistent outputs, i.e., hallucinations.
+This prior-driven generation leads to semantic drift from the
+original input, which is undesirable in safety-critical applica-
+tions such as vehicular perception, where reliable and accurate
+perception is essential [32]. This limitation motivates the
+exploration of more reliable semantic representation schemes.
+To address the above limitations of generative model-based
+approaches, recent works have explored alternative designs
+based on discrete latent representations that decouple source
+and channel coding. In [33], a framework based on vector-
+quantized VAE (VQ-VAE) is adopted to encode images into
+discrete latent codes, improving reliability and compatibility
+with digital communication systems. Unlike generative ap-
+proaches, discrete representation-based methods perform de-
+terministic encoding and reconstruction, preserving structural
+consistency with the original input while introducing only
+controlled distortion. From a probabilistic perspective, VQ-
+VAE can still be interpreted within the VAE framework, where
+the posterior becomes deterministic and the Kullback–Leibler
+(KL) divergence term reduces to a constant under a uniform
+prior [34]. Recent efforts further improve VQ-based com-
+pression by enhancing the quantization process. For instance,
+Adaptive VQ-VAE [35] introduces a hyper-network to gen-
+erate adaptive side information, which reduces quantization
+distortion and improves rate-distortion performance. However,
+such approaches still rely on single-stage vector quantization,
+limiting their representational capacity and scalability, espe-
+cially under highly constrained bitrate regimes.
+Residual-quantized VAE (RQ-VAE) [36] further extends
+VQ-VAE via hierarchical residual quantization, enabling
+multi-stage refinement of latent representations with control-
+lable fidelity and bitrate. This hierarchical structure provides
+greater flexibility and expressiveness compared to conven-
+tional VQ-based methods, making it particularly suitable for
+scalable semantic compression under dynamic wireless con-
+ditions. In our preliminary work [37], we introduced RQ-
+NAC as a channel-agnostic semantic compression framework
+that combines residual quantization with n-gram-based arith-
+metic coding for bandwidth-limited visual communication.
+This paper substantially extends that framework by introducing
+runtime depth adaptation under multicast channel and latency
+constraints, block-level HARQ modeling, system-level relia-
+bility and latency evaluation, controlled channel and resource
+sensitivity studies, and downstream perception analysis. These
+extensions move the focus from standalone semantic compres-
+sion to an adaptive SemCom system for dynamic vehicular
+networks.
+III. SYSTEM MODEL
+Fig. 1 illustrates the overall vehicle-to-vehicle (V2V) se-
+mantic communication framework. At the source vehicle,
+visual data are encoded into a compact semantic bitstream
+and transmitted to multiple receivers over a shared wireless
+channel. Each receiver decodes the received bitstream to
+reconstruct the visual content for downstream perception. An
+adaptive depth controller at the transmitter selects the RQ
+operating point according to the observed channel state and
+system constraints, enabling trade-offs among compression
+efficiency, transmission latency, and reconstruction quality.
+A. Communication Model
+Let V = {v1, v2, . . . , vN} denote the set of receivers within
+a local communication region, and let {γu}N
+u=1 denote their in-
+stantaneous signal-to-interference-plus-noise ratio (SINR) val-
+ues. To model reliable multicast under heterogeneous receiver
+conditions, we adopt a coverage-based bottleneck abstraction
+and define the effective SINR as the (1 −η)-quantile of the
+receiver SINR distribution:
+γη = Quantile1−η({γu}),
+(1)
+
+
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, 2025
+4
+where η denotes the target receiver coverage ratio. The effec-
+tive SINR is then mapped to the multicast rate Rmc through
+the PHY abstraction described in Section VI-D.
+With K concurrent multicast flows and a resource fraction
+ρ ∈(0, 1] allocated to visual semantic dissemination, the
+effective resource fraction available to each flow is αeff =
+ρ
+K . Assuming an orthogonal frequency-division multiplexing
+(OFDM)-based physical layer with N full
+sc
+available subcarriers
+per scheduling interval, the effective number of subcarriers
+assigned to each multicast flow is
+Nsc = αeffN full
+sc ,
+(2)
+which determines the achievable multicast throughput under
+the PHY abstraction. Accordingly, the effective multicast rate
+Rmc is jointly determined by the effective SINR γη and the
+allocated resource fraction αeff.
+B. Block Transmission and HARQ Model
+To accurately capture the end-to-end latency and reliability
+of semantic information delivery, we model the transmission
+process using a block-based abstraction inspired by transport-
+block-level HARQ in 5G NR systems [38]. The compressed
+bitstream of size S bits is segmented into fixed-size trans-
+mission blocks of Sblk bits, each corresponding to a PHY-
+layer transport block that can be independently decoded and
+retransmitted.
+Under the PHY abstraction, the number of successfully
+decoded bits per scheduling interval is denoted by bslot, which
+is determined by the effective SINR γη and resource allocation
+αeff. The transmission time of a single block is given by
+Tblk =
+Sblk
+bslot
+
+Tslot.
+(3)
+We adopt a simplified HARQ model in which each trans-
+mission block can be retransmitted up to Nretx times upon
+decoding failure. Let ni denote the number of transmission
+attempts for the i-th block. The total transmission latency is
+then expressed as
+Ttx =
+M
+X
+i=1
+ni Tblk,
+(4)
+where M = ⌈S/Sblk⌉is the total number of blocks. The
+resulting transmission latency is incorporated into the end-to-
+end latency model used for runtime depth selection in Section
+V.
+C. Representative Operating Scenarios
+To capture heterogeneous traffic and communication re-
+quirements in vehicular networks, we consider three repre-
+sentative operating scenarios: Cruise, Junction, and Collision.
+These scenarios differ in multicast scale, channel conditions,
+communication load, and latency requirements, providing a
+range of operating conditions from relatively relaxed to highly
+constrained transmission. The detailed parameter settings are
+given in Section VI-D.
+IV. PROPOSED TWO-STAGE SEMANTIC COMPRESSION
+FRAMEWORK
+The core component of the proposed semantic commu-
+nication system is the semantic encoder shown in Fig. 1.
+As illustrated in Fig. 2, the proposed solution, called RQ-
+NAC, consists of a residual-quantization-based semantic en-
+coder followed by a lossless context-adaptive entropy coding
+module, forming a two-stage pipeline for scalable semantic
+compression and efficient transmission.
+A. Residual Quantization for Semantic Compression
+In the first stage, a semantic encoder transforms the input
+visual data into hierarchical discrete latent representations with
+controllable quantization depth. Formally, let E(·) and G(·)
+denote the encoder and decoder, respectively. Given an input
+image X ∈RH×W ×3, the encoder produces a latent feature
+map:
+Z = E(X) ∈RHz×Wz×nz,
+(5)
+where Hz and Wz are the spatial dimensions of the latent
+space, and nz is the feature dimensionality per spatial location.
+Each spatial feature vector Zh,w ∈Rnz is quantized using
+residual quantization with depth D and a shared codebook
+C = {e(1), e(2), . . . , e(K)},
+(6)
+where e(k) ∈Rnz denotes the k-th codeword, and K is the
+codebook size.
+At the stage d, the quantizer selects a codeword e(k(d)
+h,w)
+from the codebook and refines the quantized approximation:
+ˆZ(d)
+h,w =
+d
+X
+i=1
+e(k(i)
+h,w),
+ˆZh,w = ˆZ(D)
+h,w,
+(7)
+where d ∈{1, . . . , D} denotes the residual quantization depth.
+The selected codeword indices are
+Mh,w =
+ k(1)
+h,w, . . . , k(D)
+h,w
+
+,
+which constitutes the discrete symbols generated during quan-
+tization. Collectively, these index sequences form the code
+map M
+∈
+[K]Hz×Wz×D, which serves as the compact
+discrete representation transmitted over the wireless channel.
+At the receiver side, the transmitted code map M is used to
+reconstruct the quantized latent map ˆZ ∈RHz×Wz×nz, which
+is subsequently decoded to obtain the final image ˆX = G( ˆZ).
+The overall training objective combines a reconstruction
+term and a multi-level commitment term as:
+L = ∥X −ˆX∥2
+2 + β
+D
+X
+d=1
+∥Z −sg[ ˆZ(d)]∥2
+2,
+(8)
+where sg[·] denotes the stop-gradient operator, which acts as
+the identity function during the forward pass while blocking
+gradient propagation during backpropagation [34]. Following
+the RQ-VAE implementation, we update the codebook using
+exponential moving average (EMA) of the clustered encoder
+outputs instead of gradient-based updates. This approach sta-
+bilizes training and prevents codebook collapse. Additionally,
+perceptual loss and patch-level adversarial loss are incorpo-
+rated to enhance visual fidelity. This hierarchical quantization
+
+
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, 2025
+5
+n-gram
+Arithmetic
+coding (AC)
+Stage 1: Semantic Encoder
+Stage 2: Lossless
+Entropy Compression
+Decoder at Receiver
+Original image
+Reconstructed image
+…
+Residual
+Quantizer
+Flattened Code
+Wireless
+Channel
+Shared
+code book
+Shared
+frequency table
+Bitstream
+Code Map M
+Downsample
+Semantic
+Decoder
+Lossless AC
+Decoder
+Fig. 2. Overview of the proposed RQ-NAC pipeline, consisting of a residual-quantized semantic encoder and a context-adaptive entropy coding module.
+structure refines the latent representation level by level while
+sharing the same compact codebook across all depths, produc-
+ing a discrete index tensor M. We then flatten the index tensor
+M into a one-dimensional sequence s = (s1, s2, . . . , sN) with
+length N = HzWzD. This sequence serves as the input to the
+entropy coding stage as follows.
+B. Context-adaptive Arithmetic Coding
+After the semantic compression stage, the residual quantiza-
+tion encoder outputs a sequence of discrete indices s. Although
+already compact, this sequence still contains statistical redun-
+dancy due to the strong correlation among neighboring indices.
+To further exploit these dependencies, we adopt a context-
+adaptive lossless entropy coding scheme.
+From an information-theoretic view, the minimum achiev-
+able code length of this sequence is its conditional entropy:
+H(S | C) = −
+X
+st,ct
+p(st, ct) log p(st | ct),
+(9)
+where p(st, ct) is the joint distribution of the symbol and
+its context. In practice, arithmetic coding uses an estimated
+model q(·), leading to an expected coding rate given by the
+cross-entropy H(p, q) = Ep(st,ct)
+
+−log q(st | ct)
+
+. Thus,
+improving the accuracy of q directly tightens the gap between
+the achievable rate and the entropy bound.
+To better approximate p(·) and capture local dependencies,
+we employ an n-gram–based probabilistic model. Although
+predictive autoregressive models such as LLMs or transformer-
+based entropy models are used in natural language [39] and
+byte-level [40], [41] compression, their sequential inference is
+too slow for real-time visual data transmission. Thus, the n-
+gram model provides a low computational overhead while still
+capturing essential dependencies for entropy coding. Given a
+context ct = (st−n+1, . . . , st−1), the conditional probability
+of the next symbol is estimated by maximum likelihood:
+ˆP(st | ct) = N(ct, st)
+N(ct) ,
+(10)
+where N(ct, st) denotes the number of occurrences of the
+(ct, st) pattern in the training corpus, and N(ct) is the number
+of occurrences of the context ct. By conditioning on ct, the
+n-gram estimator provides a more faithful approximation of
+the true sequence statistics, thereby reducing the cross-entropy
+term H(p, q) and improving lossless compression efficiency.
+However, when certain n-gram combinations are unseen
+during training, direct estimation may yield zero probabilities,
+which can collapse the arithmetic coding (AC) interval. To
+mitigate this issue, we apply additive smoothing [42] that
+assigns a small nonzero probability to unseen symbols. The
+smoothed conditional probability is defined as:
+˜P(st | ct) = N(ct, st) + α
+N(ct) + αK ,
+(11)
+where α is a small positive smoothing coefficient (0 < α ≤1)
+and K is the codebook size. This approach ensures that every
+possible symbol maintains a nonzero probability, thereby pre-
+venting numerical instability and guaranteeing robust encoding
+and decoding across all contexts. In our framework, the n-
+gram estimator ˜P(st | ct) serves as the conditional probability
+model q(st | ct) used by AC. The n-gram frequency table is
+constructed offline and shared between encoder and decoder,
+so no additional side information needs to be transmitted.
+After obtaining the probability distribution from the n-gram
+model, AC progressively narrows an interval [l, h) to encode
+the entire sequence. At step t, the interval is updated according
+to the cumulative distribution function F(· | ct) of ˜P(· | ct):
+lt = lt−1 + (ht−1 −lt−1) · F(st | ct),
+ht = lt−1 + (ht−1 −lt−1) · F(st + 1 | ct).
+(12)
+where:
+F(k | ct) =
+X
+j<k
+˜P(j | ct).
+(13)
+Through this iterative refinement, the interval [l, h) becomes
+increasingly narrow as more symbols are encoded. After
+processing all N indices, the final interval [lN, hN) uniquely
+
+
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, 2025
+6
+Fig. 3. Visual comparison of reconstructed images under different RQ depths.
+Increasing the depth preserves richer local details and sharper object contours,
+especially for nearby vehicles on the road.
+represents the entire sequence, and any real number within
+this range can serve as the compact binary representation
+transmitted to the receiver.
+At the receiver side, the decoder first loads the shared n-
+gram frequency table, which contains the conditional prob-
+ability model used during encoding. Using this model, the
+arithmetic decoder reconstructs the latent index sequence in
+a sequential manner: starting from the initial interval [0, 1),
+it repeatedly finds the sub-interval whose probability range
+contains the encoded value and updates the interval accord-
+ingly. This process continues until all indices are recovered,
+producing the exact same discrete code map as the encoder.
+The recovered indices are then mapped to codewords using the
+shared codebook to obtain the quantized latent representation
+ˆZ, which is finally fed into the semantic decoder to generate
+the reconstructed data.
+V. ADAPTIVE MODEL SELECTION UNDER CHANNEL
+CONSTRAINTS
+As illustrated in Fig. 1, the adaptive depth controller deter-
+mines the semantic encoding depth according to the observed
+channel state and system constraints before transmission. This
+section formalizes this runtime decision process as a channel-
+aware model selection problem over a discrete set of residual
+quantization depths.
+A. Scaling Dimensions and Trade-offs
+To enable adaptive communication under varying channel
+bandwidth and latency constraints, the proposed framework
+exploits two controllable scaling dimensions: the residual
+quantization depth and the order of the entropy model.
+The residual quantization depth serves as the primary run-
+time adaptation variable. The hierarchical residual quantiza-
+tion structure naturally provides multiple encoding depths,
+where each additional level progressively refines the residual
+error from the previous stage. Therefore, deeper quantization
+preserves finer semantic details and improves reconstruction
+quality, but produces a larger latent representation and incurs
+higher transmission and decoding cost. In contrast, shallower
+quantization provides a more compact representation with
+TABLE I
+PROFILING OF DIFFERENT n-GRAM ORDERS FOR RQ-NAC(8) WITH A
+FIXED RQ DEPTH OF 8.
+n
+Enc. (ms)
+Dec. (ms)
+Peak Mem.
+Storage
+1
+47.2
+718.5
+325.3 MiB
+46.6 kB
+2
+77.9
+770.9
+1.3 GiB
+59.0 MB
+3
+4400.8
+819.2
+210.7 GiB
+22.8 GB
+lower latency, at the expense of reduced semantic fidelity.
+As illustrated in Fig. 3, increasing the residual quantization
+depth leads to clearer reconstructions with richer scene details,
+sharper vehicle boundaries, and more faithful local structures.
+On the other hand, the n-gram-based entropy model intro-
+duces another trade-off among compression efficiency, compu-
+tational complexity, and statistical reliability. While increasing
+n can capture higher-order dependencies among latent indices,
+the context space grows exponentially, causing data sparsity
+and rapidly increasing storage and lookup overhead. As shown
+in our preliminary study of Table I, for RQ-NAC(8), moving
+from 1-gram to 2-gram only moderately increases encoding
+latency from 47.2 ms to 77.9 ms, whereas the 3-gram model
+becomes impractical, requiring 4.4 s encoding latency, 210.7
+GiB peak memory, and 22.8 GB storage. Therefore, we treat
+the entropy model order as an offline tunable parameter and
+adopt a moderate-order model for real-time deployment. The
+impact of different n-gram orders on compression efficiency
+is further analyzed in Sec. VII-A2.
+Based on this trade-off analysis, we use the residual quan-
+tization depth as a runtime adaptation variable for system
+configuration, while treating the entropy model order as an
+offline tunable parameter. This design allows the system to
+adjust semantic bitrate and reconstruction fidelity according to
+channel and latency conditions without retraining the semantic
+codec.
+B. Channel-Aware Adaptive Model Selection
+Given the candidate RQ depth set D, we formulate runtime
+model selection as a discrete optimization problem. At each
+transmission instance, the encoder observes the effective mul-
+ticast rate Rmc and the latency budget Tmax, and selects the
+semantic configuration that maximizes utility while satisfying
+the latency constraint.
+Let d ∈D denote a candidate configuration. The adaptive
+selection problem is formulated as
+max
+d∈D
+U(d) = wq eQ(d) −(1 −wq) eT(d)
+s.t.
+T(d) ≤Tmax,
+T(d) = Tenc(d) + E[Ttx(d)] + Tdec(d),
+Q(d) = fQ(d),
+d ∈D.
+(14)
+where Q(d) is the offline-profiled semantic reconstruc-
+tion quality associated with configuration d, and T(d) ≜
+E[Te2e(d)] denotes the expected end-to-end latency under cur-
+rent channel conditions. The semantic quality Q(d), encoding
+latency Tenc(d), and decoding latency Tdec(d) are profiled
+
+
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, 2025
+7
+offline for each candidate depth and stored for runtime lookup.
+Thus, no online quality estimation or ground-truth reference is
+required during deployment. The profiled Q(d) represents an
+average quality operating point obtained from representative
+vehicular data rather than an image specific estimate. The
+normalized terms eQ(d) and eT(d) are obtained from Q(d)
+and T(d), respectively, so that semantic quality and latency
+cost can be compared on a consistent scale. The function
+fQ(·) represents the offline-profiled mapping from quantiza-
+tion depth to semantic reconstruction quality. The expected
+transmission latency E[Ttx(d)] is derived from the block-level
+HARQ model described in Section III, and depends on the
+compressed bitstream size, the effective multicast rate, and the
+retransmission process. The scalar weight wq ∈[0, 1] controls
+the trade-off between semantic fidelity and latency, while the
+latency weight is given by 1−wq. The same weight is applied
+across all scenarios.
+Based on this formulation, the selection procedure first
+identifies the feasible candidate set. A candidate depth is
+considered feasible if its expected end-to-end latency satisfies
+the deadline constraint:
+F = {d ∈D | T(d) ≤Tmax} .
+(15)
+If no candidate satisfies the above condition, the system falls
+back to the depth with the minimum expected end-to-end
+latency:
+d⋆= arg min
+d∈D T(d),
+(16)
+which provides graceful degradation under highly constrained
+channel conditions.
+When the feasible set is nonempty, the selected depth is
+obtained by maximizing the utility over F:
+d⋆= arg max
+d∈F
+
+wq eQ(d) −(1 −wq) eT(d)
+
+.
+(17)
+After the RQ depth is selected, transmission is performed
+under the stochastic block-level HARQ process, and the real-
+ized latency and delivery success are obtained. Algorithm 1
+summarizes the proposed runtime depth selection procedure.
+Since the candidate set D is small, the computational com-
+plexity is O(|D|), making the approach suitable for real-time
+deployment without retraining or iterative optimization.
+C. Safety-Critical Perception with Domain Adaptation
+While the runtime adaptation relies on a lightweight per-
+ceptual quality proxy Q(d) for efficient RQ depth selection,
+vehicular communication must ultimately be evaluated by its
+ability to preserve safety-critical semantic information under
+dynamic wireless conditions. In particular, the perception of
+nearby vehicles is of primary importance in autonomous driv-
+ing scenarios, as close-range objects are directly related to col-
+lision avoidance and immediate decision-making. Therefore,
+beyond reconstruction fidelity, it is essential to assess whether
+the transmitted semantic representations remain effective for
+downstream perception tasks such as object detection.
+A key challenge is the domain gap between generic natural-
+image data and vehicular driving scenes, as well as the
+discrepancy between original and reconstructed images. A
+Algorithm 1 Runtime Adaptive Depth Selection for RQ-NAC
+Require: Candidate depth set D; multicast rate Rmc; latency
+budget Tmax
+Ensure: Selected depth d⋆
+1: F ←∅
+2: for all d ∈D do
+3:
+retrieve semantic quality Q(d)
+4:
+estimate expected end-to-end latency
+E[Te2e(d)] = Tenc(d) + E[Ttx(d)] + Tdec(d)
+5:
+if E[Te2e(d)] ≤Tmax then
+6:
+F ←F ∪{d}
+7:
+end if
+8: end for
+9: if F = ∅then
+10:
+d⋆←arg min
+d∈D E[Te2e(d)]
+11:
+return d⋆
+12: end if
+13: compute normalized quality score eQ(d) and normalized
+latency cost eT(d) for all d ∈F
+14: d⋆←arg max
+d∈F
+
+wq eQ(d) −(1 −wq) eT(d)
+
+15: return d⋆
+detector trained on standard datasets may not generalize well
+to semantic reconstructions that exhibit quantization artifacts
+and texture smoothing. To address this issue, we adopt a
+domain-adaptive fine-tuning strategy based on a YOLOv8n
+detector as an example. Specifically, the detector is fine-tuned
+on a vehicle-centric dataset to better capture the structural
+characteristics of real-world driving scenes. The model is ini-
+tialized from COCO-pretrained weights and optimized using
+the standard YOLOv8 detection loss [43]:
+Ldet = λboxLbox + λclsLcls + λdflLdfl,
+(18)
+where Lbox is based on Complete IoU (CIoU) [44], Lcls is
+implemented using binary cross-entropy with logits, and Ldfl
+denotes the Distribution Focal Loss [45] used for bounding-
+box regression.
+Importantly, we do not fine-tune the detector on compressed
+images. Our approach is motivated by the observation that
+RQ progressively refines the latent representation and tends to
+preserve object-level layouts and contours, while fine-grained
+textures may be smoothed under low-depth compression. This
+observation is also visually illustrated in Fig. 3 and empir-
+ically evaluated in Sec. VII-A. By fine-tuning the detector
+on vehicle-centric original images, we encourage it to better
+capture driving-scene structures and improve its generalization
+to reconstructed images across different compression levels,
+without requiring compression-specific retraining.
+VI. EVALUATION METHODOLOGY
+A. Datasets and Baselines
+We evaluate RQ-NAC in a bandwidth-limited vehicular
+communication setting using the 100K Real-World Vehicle
+Dashcam Image Dataset [46]. We use a training pool of
+
+
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, 2025
+8
+TABLE II
+PHY-LAYER PARAMETERS.
+Scheduling interval Tslot
+1 ms
+OFDM symbols per slot
+14
+Full subcarriers Nfull
+sc
+1024
+Streams per user
+1
+Target BLER
+0.10
+Transmission block size
+48 Kbits (6 KB)
+Maximum retransmissions
+4
+MCS table index
+1
+20,000 images and 1,000 images for testing. Unless otherwise
+specified, the RQ-NAC and VQ-VAE models are trained using
+a 5,000-image subset. We additionally train RQ-NAC(4) using
+the full 20,000 training set to study the effect of training
+scale. To evaluate generalization under distribution shift, we
+additionally conduct a case study using 1,000 frames from the
+Car Crash Dataset [47], which is not used during training.
+We compare RQ-NAC with different residual quantization
+depths against VQ-VAE, the recent learning-based compres-
+sion methods DiffEIC [48] and QRes-VAE [49], and the
+traditional non-learned codecs HEVC and JPEG. Input images,
+originally sized 1, 280×720, are zero-padded along the height
+to 1, 280×736 so that the spatial dimensions are compatible
+with the encoder downsampling operations. The original image
+dimensions are used for BPP calculation.
+B. Implementation Details
+The semantic encoder and decoder follow the RQ-VAE ar-
+chitecture as in [36]. The encoder progressively downsamples
+the RGB input using convolutional and residual blocks and
+maps it to a 256-dimensional latent representation. The resid-
+ual quantization module uses a codebook with 2,048 entries
+and an embedding dimension of 256. Different RQ depths
+correspond to different numbers of residual refinement stages,
+providing multiple bitrate and reconstruction fidelity operating
+points through the hierarchical residual quantization structure.
+The decoder mirrors the encoder structure and progressively
+upsamples the quantized latent representation to reconstruct
+the RGB image.
+Unless otherwise specified, the NAC module uses a 2-gram
+context model with smoothing coefficient α = 0.1. All RQ-
+NAC models are trained using eight NVIDIA A100 GPUs on
+the NVIDIA Saturn Cloud platform. The n-gram scalability
+profiling in Table I is conducted on a high-memory Google
+Cloud instance equipped with an Intel Xeon (Skylake) CPU
+at approximately 2 GHz and 624 GB RAM, since the 3-gram
+configuration requires substantially larger memory capacity.
+Runtime profiling is conducted on a local computing platform
+equipped with an Intel Core Ultra 9 275HX CPU and an
+NVIDIA RTX 5080 Laptop GPU with 16 GB memory.
+C. Evaluation Metrics
+Reconstruction metrics. To evaluate the perceptual quality
+of reconstructed image data, we adopt four data reconstruction
+metrics in different dimensions. The Structural Similarity
+Index Measure (SSIM) measures the structural and luminance
+TABLE III
+SCENARIO PARAMETERS FOR MULTICAST EVALUATION
+Scenario
+Tmax
+N
+µγ
+σγ
+ρ
+K
+(ms)
+(min–max)
+(dB)
+(dB)
+(min–max)
+Cruise
+1000
+1–5
+15
+4
+0.3
+1–3
+Junction
+750
+10–20
+10
+5
+0.5
+1–6
+Collision
+500
+50–200
+8
+6
+1.0
+1–20
+similarity between the reconstructed and ground-truth images.
+The Peak Signal-to-Noise Ratio (PSNR) quantifies pixel-level
+reconstruction accuracy based on mean squared error (MSE).
+The Learned Perceptual Image Patch Similarity (LPIPS) eval-
+uates perceptual similarity using deep feature representations.
+Finally, the Fr´echet Inception Distance (FID) [50] measures
+the distributional distance between reconstructed and reference
+images in the feature space. It is defined as
+FID = ∥µr −µg∥2
+2 + Tr
+
+Σr + Σg −2(ΣrΣg)1/2
+,
+(19)
+where µr and Σr denote the mean and covariance of the
+feature representations of the reference images, while µg and
+Σg denote those of the reconstructed images.
+Compression metrics. To evaluate the compression effi-
+ciency and data compactness, we employ bits per pixel (BPP)
+and compression ratio (CR). The BPP represents the average
+number of bits required to encode each pixel in the compressed
+image, i.e., BPP =
+bcomp
+H×W , where bcomp denotes the total
+number of bits in the compressed bitstream, and H and W
+denote the original image height and width, respectively. The
+CR is defined as the ratio between the uncompressed and
+compressed data sizes, i.e., CR =
+Sorig
+Scomp , where Sorig and
+Scomp denote the sizes of the original and compressed data,
+respectively. We also report the native BPP and compression
+ratio of the JPEG source images provided by the dataset.
+Since these files are used as the reference inputs rather than
+reconstructed outputs, reconstruction metrics are not reported
+for the JPEG baseline.
+Communication metrics. We evaluate system-level perfor-
+mance using success ratio, deadline-meet ratio, and end-to-end
+latency. The success ratio is defined as Psucc = Nsucc/Ntot,
+where Nsucc and Ntot denote the number of successful and
+total transmissions, respectively. The deadline-meet ratio is de-
+fined as Pddl = Nddl/Ntot, where Nddl counts transmissions
+completed within the latency constraint Tmax. The end-to-end
+latency comprises the delays incurred by source encoding,
+wireless transmission, and destination decoding.
+Perception metrics. We evaluate object detection perfor-
+mance using precision, recall, and mean average precision
+(mAP). To further characterize the relative importance of
+detected objects in vehicular scenes, we also use a weighted
+detection score (WDS), defined as
+WDS =
+P
+i widi
+P
+i wi
+,
+(20)
+where di ∈{0, 1} indicates whether the i-th ground-truth
+object is correctly detected, and wi denotes its importance
+weight. In this work, wi is defined as the normalized bounding-
+box area, i.e., wi = widthi×heighti
+H×W
+, which serves as an impor-
+
+
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, 2025
+9
+TABLE IV
+PERFORMANCE COMPARISON UNDER DIFFERENT COMPRESSION CONFIGURATIONS. “±” INDICATES THE STANDARD DEVIATION COMPUTED OVER THE
+TEST SET. BOLD AND UNDERLINED VALUES INDICATE THE BEST AND SECOND-BEST RESULTS AMONG LEARNED MODELS, RESPECTIVELY. JPEG* IS A
+NON-LEARNED CODEC INCLUDED AS A REFERENCE BASELINE.
+Configuration
+SSIM↑
+PSNR (dB)↑
+LPIPS↓
+FID↓
+BPP↓
+CR↑(w/o AC)
+CR↑(w/ AC)
+VQ-VAE-5k
+0.7047 ± 0.1028
+22.42 ± 2.89
+0.2667 ± 0.0758
+39.1660
+0.01098
+2,185.61
+2,166.38
+RQ-NAC(4)-5k
+0.7400 ± 0.1059
+23.57 ± 2.62
+0.2263 ± 0.0692
+32.8649
+0.04392
+546.40
+671.09
+RQ-NAC(8)-5k
+0.7637 ± 0.0874
+24.80 ± 3.01
+0.1821 ± 0.0579
+26.3956
+0.08784
+273.20
+356.25
+RQ-NAC(16)-5k
+0.7832 ± 0.0654
+25.00 ± 2.26
+0.1519 ± 0.0424
+24.8398
+0.17569
+136.60
+179.32
+RQ-NAC(4)-20k
+0.7779 ± 0.0858
+24.92 ± 3.29
+0.1541 ± 0.0451
+22.4336
+0.04392
+546.40
+627.81
+JPEG* (original dataset)
+—
+—
+—
+—
+0.5107
+47.00
+—
+tance heuristic by assigning higher weights to the meaningful
+vehicles occupying larger image regions. An object is consid-
+ered correctly detected if it is matched with a prediction of
+the same class with IoU ≥0.5.
+D. PHY Abstraction and Simulation Framework
+We implement the multicast link abstraction using the
+system-level PHY abstraction module in Sionna SYS [51]. The
+module maps the effective SINR and allocated resource frac-
+tion to the number of successfully decoded bits per schedul-
+ing interval, denoted by bslot. An inner-loop link adaptation
+mechanism is adopted to select the modulation and coding
+scheme (MCS) index such that a target BLER is satisfied. The
+transmission process follows the block-based model described
+in Section III, where the payload is segmented into fixed-
+size transmission blocks and delivered using HARQ with a
+bounded number of retransmissions. The corresponding PHY
+abstraction parameters are summarized in Table II.
+For each Monte Carlo iteration, we instantiate a multicast
+scenario by sampling: (i) the multicast group size N uniformly
+from a scenario-specific range [Nmin, Nmax], (ii) per-user
+SINR values γu from a Gaussian distribution N(µγ, σ2
+γ) in dB,
+and (iii) the number of concurrent multicast flows K uniformly
+from [Kmin, Kmax]. The effective SINR γη is computed using
+the coverage-based abstraction defined in Section III, and the
+effective resource fraction is given by αeff = ρ/K. The end-
+to-end deadline Tmax is scenario-dependent, as summarized in
+Table III. In our implementation, the quality and latency terms
+are normalized within the feasible candidate set using standard
+min–max normalization. A single quality weight wq = 0.8
+is used across all scenarios, with the corresponding latency
+weight given by 1 −wq = 0.2.
+Note that the adopted channel model is intended as a
+system-level abstraction rather than a time-resolved mobility-
+aware channel model. Accordingly, temporally correlated fast
+fading, mobility-induced Doppler, detailed inter-cell or co-
+channel interference, and CSI estimation or feedback delay
+are not explicitly modeled, and the controller assumes that
+the current effective SINR estimate is available at the time of
+depth selection.
+VII. EXPERIMENTAL RESULTS
+This section evaluates the proposed RQ-NAC framework
+under bandwidth-limited vehicular communication scenarios.
+0.025
+0.050
+0.075
+0.100
+0.125
+BPP
+0.75
+0.80
+0.85
+0.90
+SSIM ↑
+0.025
+0.050
+0.075
+0.100
+0.125
+BPP
+0.1
+0.2
+0.3
+0.4
+LPIPS ↓
+RQ-NAC (5k)
+RQ-NAC (20k)
+DiffEIC
+QRes-VAE
+HEVC
+Fig. 4.
+Rate-distortion comparison of RQ-NAC and representative image
+compression baselines on the same test set.
+We first examine its semantic reconstruction quality, com-
+pression efficiency, and entropy coding performance under
+different residual quantization depths. We then evaluate the
+runtime depth adaptation mechanism under dynamic channel
+conditions, followed by downstream object detection and out-
+of-distribution accident-scene case studies to verify perception
+utility and robustness.
+A. Performance of Semantic Compression
+1) Performance of Residual Quantization: First, we com-
+pare the proposed RQ-NAC with traditional codecs and
+learning-based baselines, as shown in Table IV. We include
+VQ-VAE as a learning-based baseline, which can be viewed
+as a single-stage quantization model. Overall, we observe a
+clear trend that increasing the quantization depth consistently
+improves reconstruction quality across all perceptual and dis-
+tortion metrics. For example, RQ-NAC(16) achieves the best
+performance among learned models trained on the 5k subset,
+reaching an SSIM of 0.7832, PSNR of 25.00 dB, and LPIPS
+of 0.1519, significantly outperforming the VQ-VAE baseline
+(SSIM 0.7047, PSNR 22.42 dB). This improvement comes at
+the cost of reduced compression efficiency, where the com-
+pression ratio decreases from 546.40× at depth 4 to 136.60×
+at depth 16, reflecting the trade-off between reconstruction
+quality and bitrate.
+To further investigate the impact of training data size, we
+evaluate a model with quantization depth 4 trained on an
+expanded dataset of 20k samples. As shown in Table IV, the
+RQ-NAC(4)-20k model achieves comparable reconstruction
+performance to the much deeper RQ-NAC(16)-5k variant,
+indicating that increasing the amount of training data can
+
+
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, 2025
+10
+Fig. 5.
+Qualitative comparison of reconstructed images produced by different compression models. The proposed RQ-NAC progressively improves visual
+fidelity as the residual quantization depth increases, recovering sharper edges, clearer object contours, and more stable scene structures. This qualitative trend
+is consistent with the quantitative results in Table IV.
+enhance the model’s representational capacity and improve
+the reconstruction quality with lower bitrate overhead. Unless
+otherwise specified, all other models are trained on the 5k
+subset.
+We further compare RQ-NAC with two recent learning-
+based image compression methods, DiffEIC [48] and QRes-
+VAE [49], as well as HEVC over multiple bitrate operating
+points, using the same test set. HEVC is evaluated using
+constant rate factor (CRF) values from 36 to 51. As shown
+in Fig. 4, RQ-NAC provides competitive rate-distortion per-
+formance in the ultra-low-bitrate regime. In particular, after
+increasing the training set from 5k to 20k samples, RQ-
+NAC(4) achieves an SSIM of 0.7779 and an LPIPS of 0.1541
+at approximately 0.04 BPP. At this bitrate, RQ-NAC(4)-
+20k achieves substantially lower LPIPS than the considered
+learned compression baselines and HEVC, while maintain-
+ing competitive SSIM. HEVC requires a considerably higher
+bitrate to approach a similar perceptual-quality level. This
+improvement is achieved without changing the quantization
+depth or representation size, suggesting that the performance
+of the current RQ-NAC models is strongly influenced by the
+available training scale rather than being fundamentally limited
+by the residual-quantization architecture.
+Fig. 5 presents a qualitative comparison of reconstructed
+images produced by different models. The VQ-VAE baseline
+exhibits noticeable distortion and global blurriness, which
+degrade perceptual quality and hinder semantic interpretation
+of scene details such as vehicle contours and road boundaries.
+In contrast, the proposed RQ-NAC with depth 4 effectively
+preserves the overall scene structure and eliminates most
+1
+2
+3
+N­Gram
+1.0
+1.1
+1.2
+1.3
+1.4
+1.5
+Compression Ratio
+Depth 4
+Depth 8
+Depth 16
+(a) Impact of n-gram order.
+1
+0.1
+0.01
+1.200
+1.225
+1.250
+1.275
+1.300
+1.325
+Compression Ratio
+Depth 4
+Depth 8
+Depth 16
+(b) Impact of coefficient α.
+Fig. 6.
+Parametric study on compression ratio under different quantization
+depths.
+visible artifacts, although the reconstruction remains slightly
+blurred due to limited quantization depth. Increasing the resid-
+ual quantization depth further enhances visual fidelity: RQ-
+NAC(8) and RQ-NAC(16) recover finer textures and sharper
+edges, producing images that are perceptually closer to the
+ground truth. These results confirm that hierarchical residual
+quantization enables a clear trade-off between compression ef-
+ficiency and perceptual quality, with deeper models achieving
+more faithful semantic reconstruction.
+2) Performance of Entropy-based Lossless Compression:
+We then evaluate the effectiveness of the proposed context-
+adaptive entropy coding model under different n-gram orders
+and quantization depths. Fig. 6a presents the resulting stage-
+2 compression ratios across different quantization depths. We
+observe that even without the contextual modeling (n = 1),
+applying AC directly yields a notable compression ratio of ap-
+proximately 1.15×, demonstrating the redundancy present in
+the latent space. When incorporating a 2-gram context model,
+
+
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, 2025
+11
+TABLE V
+PROFILING RESULTS OF COMPRESSION AND RESTORATION.
+Depth
+Compress (ms)
+Restore (ms)
+RQ-VAE
+NAC
+RQ-VAE
+NAC
+RQ-NAC(4)
+119.0571
+15.7462
+196.3354
+114.7885
+RQ-NAC(8)
+120.4951
+22.8375
+195.2968
+205.2417
+RQ-NAC(16)
+120.2094
+36.4351
+195.3817
+475.0927
+Cruise
+Junction
+Collision
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0
+Ratio
+Adaptive success
+Adaptive deadline
+JPEG success
+JPEG deadline
+(a) Success and deadline-
+meet ratios.
+Cruise
+Junction
+Collision
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0
+E2E latency (s)
+Adaptive all
+Adaptive timely
+JPEG all
+JPEG timely
+(b)
+Average end-to-end
+latency.
+Cruise
+Junction
+Collision
+0.0
+0.2
+0.4
+0.6
+TX latency (s)
+Adaptive all
+Adaptive timely
+JPEG all
+JPEG timely
+(c) Average transmission
+latency.
+Fig. 7.
+Performance comparison between the proposed model adaptation
+method and the baseline under the three scenarios. “success” indicates the
+completion success ratio, and “deadline” indicates the deadline-meet ratio.
+“all” refers to averages computed over all successful transmissions, whereas
+“timely” refers to averages computed over deadline-satisfied transmissions.
+the compression ratio improves significantly to around 1.3×,
+indicating that short-range dependencies between adjacent
+code symbols can be further leveraged to enhance compression
+performance. However, the 3-gram case leads to a degradation
+in compression efficiency because the estimated empirical
+frequencies ˜P(st | ct) deviate from the true probabilities
+P(st | ct) under limited data. The exponentially growing
+context space causes such data sparsity, leading to unreliable
+and nearly uniform estimates that increase entropy and reduce
+compression efficiency. In theory, higher-order n-grams can
+yield better compression as they more accurately model local
+dependencies, but require significantly larger datasets to avoid
+context sparsity and maintain reliable probability estimates.
+Besides, both the storage and lookup cost for frequency
+tables grow exponentially with n, which can quickly become
+impractical for resource-constrained applications.
+To mitigate sparsity, we evaluate additive smoothing with
+α ∈{1, 0.1, 0.01} under the 2-gram model. As shown in
+Fig. 6b, varying α results in only marginal compression
+differences across quantization depths, with α = 0.1 slightly
+outperforming others at depth of 4 and 8. We therefore adopt
+α = 0.1 as the default, and all “w/ AC” results in Table IV
+use this configuration. While VQ-VAE may exhibit degraded
+performance with n-gram modeling due to its relatively short
+latent sequences, which limit the effectiveness of context-
+based estimation and can introduce estimation bias, 2-gram
+modeling is most effective for our RQ-NAC, achieving up
+to 671.09× compression at depth of 4 with high perceptual
+quality.
+B. Adaptive Performance under Dynamic Channel Conditions
+1) Profiling Results and System Efficiency: To evaluate the
+practical deployment cost of the proposed SemCom pipeline,
+we first profile the runtime performance of both the compres-
+sion and restoration modules under an edge computing setting.
+TABLE VI
+MODEL SELECTION RATIO UNDER DIFFERENT VEHICULAR SCENARIOS.
+Scenario
+Selected Model
+RQ-NAC(4)
+RQ-NAC(8)
+RQ-NAC(16)
+Cruise
+0.4%
+0.0%
+99.6%
+Junction
+3.1%
+96.9%
+0.0%
+Collision
+100.0%
+0.0%
+0.0%
+The dataset provides source images in JPEG format, which
+serve as the common source data for both methods. The JPEG
+baseline directly transmits the provided JPEG files, while
+RQ-NAC decodes them into RGB images before semantic
+encoding. The reported runtime for RQ-NAC includes the
+computational overhead of semantic compression and decod-
+ing modules.
+Table V reports the average per-image processing latency
+of each component, including the RQ-VAE-based semantic
+encoder/decoder and the NAC entropy coding/decoding mod-
+ules, across different RQ depths. We observe that the semantic
+encoding time remains relatively stable (approximately 120
+ms) across different RQ depths. This is because the main
+computational cost of semantic encoding lies in the convolu-
+tional backbone used to extract the latent feature map, which
+is executed only once per image and does not scale with the
+RQ depth. A larger RQ depth mainly introduces additional
+codeword lookup and residual index generation on the latent
+features, whose overhead is relatively minor compared with
+the backbone inference.
+In contrast, the entropy coding overhead increases with the
+RQ depth due to the longer latent index sequences, particularly
+on the decoder side where the NAC part restoration becomes
+the dominant cost at higher RQ depths. Overall, the profiling
+results show that the RQ-VAE encoding latency remains nearly
+constant across RQ depths, whereas the NAC decoding cost
+increases with the length of the latent index sequence. Even
+at higher depths, the system maintains tractable latency at
+hundreds of millisecond level, making it suitable for near-real-
+time deployment in bandwidth-constrained vehicular network
+environments.
+2) Performance of Model Adaptation: Fig. 7 and Table VI
+show that the selected RQ depth varies across the three oper-
+ating scenarios as communication load and latency constraints
+change. In low-density Cruise scenarios, the vehicle controller
+predominantly selects the deepest configuration, indicating
+that the communication condition is sufficient to support
+higher-fidelity semantic transmission. In Junction scenarios,
+the selected RQ depth shifts to an intermediate operating
+point, reflecting the need to balance reconstruction quality
+and communication efficiency under moderate multicast load.
+In Collision scenarios, the controller consistently favors the
+shallowest configuration, prioritizing compactness and fast
+delivery under the most stringent communication conditions.
+This trend confirms that the proposed adaptation mechanism
+in Sec. V is able to adjust the semantic bitrate according to the
+effective multicast capacity and application deadline, without
+requiring model retraining or online optimization.
+
+
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, 2025
+12
+TABLE VII
+VEHICULAR OBJECT DETECTION PERFORMANCE UNDER DIFFERENT RECONSTRUCTION DEPTHS USING PRETRAINED AND FINE-TUNED YOLOV8N
+DETECTORS ON THE TEST110 DATASET. IN ADDITION TO STANDARD METRICS, WE REPORT A WEIGHTED DETECTION SCORE (WDS), WHERE OBJECT
+IMPORTANCE IS APPROXIMATED BY BOUNDING-BOX AREA.
+Configuration
+Pretrained YOLOv8n
+Fine-tuned YOLOv8n
+Prec.
+Rec.
+mAP50
+mAP50-95
+Prec.
+Rec.
+mAP50
+mAP50-95
+WDS
+VQ-VAE
+0.695
+0.467
+0.516
+0.298
+0.778
+0.615
+0.673
+0.398
+0.767
+RQ-NAC(4)
+0.631
+0.631
+0.621
+0.394
+0.765
+0.714
+0.785
+0.502
+0.820
+RQ-NAC(8)
+0.675
+0.674
+0.689
+0.475
+0.819
+0.747
+0.843
+0.578
+0.886
+RQ-NAC(16)
+0.710
+0.739
+0.733
+0.523
+0.861
+0.781
+0.880
+0.633
+0.897
+JPEG (Original)
+0.752
+0.757
+0.761
+0.575
+0.832
+0.868
+0.929
+0.691
+0.932
+4
+6
+8
+10
+12
+14
+16
+(a) Mean SINR (dB)
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0
+Ratio
+500 7501000
+1500
+2000
+(b) Deadline (ms)
+1510 20
+50
+100
+(c) Receiver count
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0
+Ratio
+1 2
+4
+8
+12
+16
+20
+(d) Concurrent flows
+d=4
+d=8
+d=16
+RQ-NAC
+JPEG
+Selection ratio:
+Deadline-meet ratio:
+d=4
+d=8
+d=16
+RQ-NAC
+JPEG
+Fig. 8. Controller behavior under controlled variations of channel and system
+conditions in the Junction scenario.
+3) Sensitivity Analysis: To further verify that this behavior
+is not a fixed mapping from scenario labels to quantization
+depths, Fig. 8 evaluates the controller within the same Junction
+scenario while independently varying channel and system con-
+ditions. As the available latency budget increases in Fig. 8(b),
+the selected operating point progressively shifts from shallow
+to deeper quantization, reflecting the increased opportunity to
+preserve semantic fidelity. A similar tendency is observed as
+the effective channel quality improves or the number of con-
+current flows decreases, as shown in Fig. 8(a) and in Fig. 8(d),
+respectively. In contrast, variations in the receiver popula-
+tion have a comparatively smaller effect under the adopted
+coverage-quantile multicast abstraction (Fig. 8(c)), because the
+receiver population primarily influences the sampled lower-
+tail SINR rather than directly reducing the per-flow resource
+fraction. These controlled experiments demonstrate that the
+selected RQ depth is driven by instantaneous communication
+constraints rather than by the specific scenario.
+The latency results further highlight the trade-off between
+communication efficiency and semantic processing overhead.
+RQ-NAC substantially reduces transmission latency because
+its semantic representations require fewer transmitted bits than
+0.80
+0.90
+0.95 0.99
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0
+Deadline-meet ratio
+Cruise
+RQ-NAC
+JPEG
+0.80
+0.90
+0.95 0.99
+Junction
+0.80
+0.90
+0.95 0.99
+Collision
+Coverage target η
+Fig. 9. Sensitivity of the deadline-meet ratio to the target receiver coverage
+ratio η under different scenarios.
+the baselines. Its end-to-end latency additionally includes neu-
+ral encoding, decoding, and entropy-coding overhead, which
+can make the conditional latency of successfully delivered
+JPEG samples smaller in the less constrained scenarios. How-
+ever, those JPEG results are obtained from a much smaller sub-
+set of transmissions that complete successfully and within the
+deadline. Under the most stringent Collision setting, RQ-NAC
+simultaneously provides higher timely-delivery reliability and
+lower end-to-end latency, illustrating the benefit of adaptive
+semantic compression when communication resources are
+severely limited.
+We also investigated the impact of the target receiver
+coverage ratio η on the deadline-meet performance in Fig. 9.
+As η increases, it is observed that the effective multicast
+SINR becomes more conservative, leading to lower deadline-
+meet ratios, particularly under the stringent Collision scenario.
+However, the proposed adaptive RQ-NAC consistently outper-
+forms JPEG across all tested coverage targets, indicating that
+its relative reliability advantage is preserved under different
+multicast coverage requirements.
+C. Perception Performance with Semantic Applications
+To evaluate whether the reconstructed semantic images
+remain useful for downstream perception, we conduct a task-
+oriented evaluation using a YOLOv8n object detector. We
+consider two settings: (i) a pretrained detector without adapta-
+tion, and (ii) a fine-tuned detector trained on original images
+captured by vehicles to mitigate domain shift. We construct
+a controlled test set consisting of 110 dashcam images, with
+1–3 near-field vehicles annotated per image. The same set of
+images is used across all compression levels to ensure a fair
+comparison. For the pretrained setting, we directly evaluate a
+YOLOv8n model pretrained on the COCO dataset [52]. For the
+fine-tuned setting, we train a single-class vehicle detector on
+a separate dataset of original images with no overlap with the
+
+
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, 2025
+13
+Ground Truth
+RQ-NAC (4)
+RQ-NAC (16)
+Fig. 10.
+Case study on unseen accident scenes. RQ-NAC maintains strong
+reconstruction quality under distribution shift, with deeper quantization pre-
+serving finer visual details, including clearer traffic lights and object bound-
+aries.
+test set, and select the best checkpoint using an independent
+validation set of 40 images based on validation mAP50−95.
+Detection performance is evaluated using the metrics defined
+in Section VI-C, including precision, recall, mAP, and WDS.
+As shown in Table VII, detection performance improves
+consistently as the residual quantization depth increases, in-
+dicating that deeper RQ-NAC reconstructions preserve more
+task-relevant visual structures. Under the pretrained detector,
+RQ-NAC substantially outperforms VQ-VAE and approaches
+the original JPEG baseline, demonstrating the benefit of hi-
+erarchical residual quantization for downstream perception.
+After fine-tuning on domain-specific vehicular data, detec-
+tion performance further improves across all compression
+levels. In particular, RQ-NAC(16) achieves an mAP50 of
+0.880 and even surpasses the original baseline in precision,
+suggesting that the reconstructed semantic images can retain
+highly discriminative object structures for vehicle detection.
+RQ-NAC(8) also maintains strong performance, showing that
+moderate reconstruction depth can provide a favorable balance
+between compression and perception quality. However, the
+original JPEG baseline retains the highest overall mAP50 and
+mAP50−95, indicating a tradeoff between perception fidelity
+and transmission payload.
+The WDS results further confirm that higher reconstruction
+depth better preserves objects assigned higher importance
+scores. RQ-NAC improves WDS monotonically with depth
+and reaches 0.897 at depth 16, remaining close to the original
+baseline. This indicates that the proposed semantic compres-
+sion retains information associated with vehicles occupying
+larger image regions when sufficient residual refinement is
+used. These results show that RQ-NAC preserves downstream
+perception utility under semantic compression, while domain-
+adaptive fine-tuning further improves robustness to reconstruc-
+tion artifacts in vehicular perception applications.
+D. Robustness under Distribution Shift
+To evaluate the generalization ability of RQ-NAC under
+distribution shift, we conduct a case study using a new Car
+Crash Dataset [47], which contains real-world accident scenes
+not seen during training. We directly apply two RQ-NAC
+models pretrained on the original vehicular dataset, with RQ
+depths of 4 and 16, without any fine-tuning. As shown in
+TABLE VIII
+QUANTITATIVE RESULTS OF THE OUT-OF-DISTRIBUTION CASE STUDY.
+Configuration
+SSIM↑
+LPIPS↓
+2-gram AC Gain↑
+RQ-NAC(4)
+0.6764
+0.2752
+1.2137×
+RQ-NAC(16)
+0.7369
+0.2067
+1.3068×
+Fig. 10, both models preserve the main scene structures under
+this unseen domain. The depth-4 model retains major elements
+such as vehicle outlines, traffic lights, and road structures,
+while the depth-16 model reconstructs finer details including
+object textures and sharper edges.
+Table VIII further reports the reconstruction quality together
+with the additional compression gain achieved by NAC. Since
+the latent representation dimensions remain unchanged for
+a given RQ depth, the compression ratio before arithmetic
+coding is identical to that reported in Table IV. We therefore
+evaluate the robustness of the entropy model by directly
+applying the same 2-gram frequency table learned from the
+original training data to the unseen Car Crash Dataset, without
+updating or re-estimating the table. The NAC gain remains
+above 1.2× for both configurations and is close to the cor-
+responding results on the original test set in Fig. 6, showing
+that the fixed 2-gram frequency table remains effective on the
+tested unseen accident scenes without re-estimation.
+VIII. CONCLUSION
+In this paper, we proposed a resilient and adaptive visual
+semantic communication framework for vehicular networks.
+By integrating residual quantization with a lightweight depth
+adaptation mechanism, the proposed approach enables flexi-
+ble trade-offs between semantic fidelity and communication
+efficiency under dynamic network conditions. In addition,
+we adopt a perception-aware evaluation framework that em-
+phasizes downstream task utility in safety-critical scenarios.
+Through system-level evaluation, the proposed method demon-
+strates significant improvements in delivery reliability and
+timely transmission compared with traditional image transmis-
+sion approaches, while maintaining low-latency operation and
+robust object detection performance. The results also indicate
+that adaptive semantic compression can effectively mitigate the
+impact of channel variability and network congestion, leading
+to more robust visual information delivery in diverse vehicular
+application environments.
+IX. ACKNOWLEDGMENT
+This research was supported by the National Science Foun-
+dation through Award CNS–2440756, CNS–2312138, and
+NVIDIA Academic Program Grant.
+REFERENCES
+[1] Khadija Ashraf, Vignesh Varadarajan, MD Rashed Rahman, Ryan
+Walden, and Ashwin Ashok, “See-through a vehicle: Augmenting road
+safety information using visual perception and camera communication
+in vehicles,” IEEE Transactions on Vehicular Technology, vol. 70, no.
+4, pp. 3071–3086, 2021.
+
+
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, 2025
+14
+[2] Zhouyu Li, Pinxiang Wang, Xiaochun Liang, Xuanhao Luo, Yuchen
+Liu, Xiaojian Wang, Huayue Gu, and Ruozhou Yu, “Adaorb: Adapting
+in-orbit analytics models for location-aware earth observation tasks,”
+in 2025 IEEE International Conference on Pervasive Computing and
+Communications (PerCom). IEEE, 2025, pp. 208–214.
+[3] Wuyang Zhang, Sugang Li, Luyang Liu, Zhenhua Jia, Yanyong Zhang,
+and Dipankar Raychaudhuri, “Hetero-edge: Orchestration of real-time
+vision applications on heterogeneous edge clouds,” in IEEE INFOCOM
+2019-IEEE Conference on Computer Communications. IEEE, 2019, pp.
+1270–1278.
+[4] Himlun Bista, I-Ling Yen, Farokh Bastani, Martin Mueller, and Darnell
+Moore, “Semantic-based information sharing in vehicular networks,” in
+2018 IEEE International Conference on Web Services (ICWS). IEEE,
+2018, pp. 282–289.
+[5] Xuanhao Luo, Yong Feng, and Chengdong Wang, “A clothoid curve-
+based intersection collision warning scheme in internet of vehicles,” The
+Computer Journal, vol. 66, no. 10, pp. 2447–2461, 2023.
+[6] Hong Zhong, Li Wang, Jie Cui, Jing Zhang, and Irina Bolodurina,
+“Secure edge computing-assisted video reporting service in 5g-enabled
+vehicular networks,” IEEE Transactions on Information Forensics and
+Security, vol. 18, pp. 3774–3786, 2023.
+[7] Wei Gao, Celimuge Wu, Lei Zhong, and Kok-Lim Alvin Yau, “Commu-
+nication resources management based on spectrum sensing for vehicle
+platooning,” IEEE Transactions on Intelligent Transportation Systems,
+vol. 24, no. 2, pp. 2251–2264, 2022.
+[8] Tilahun M Getu, Georges Kaddoum, and Mehdi Bennis,
+“Semantic
+communication: A survey on research landscape, challenges, and future
+directions,” Proceedings of the IEEE, vol. 112, no. 11, pp. 1649–1685,
+2025.
+[9] Jialong Xu, Tze-Yang Tung, Bo Ai, Wei Chen, Yuxuan Sun, and Deniz
+G¨und¨uz, “Deep joint source-channel coding for semantic communica-
+tions,”
+IEEE communications Magazine, vol. 61, no. 11, pp. 42–48,
+2023.
+[10] Shunpu Tang, Qianqian Yang, Jihong Park, Zhaoyang Zhang, Kaibin
+Huang, and Deniz Gunduz,
+“Cache-enabled generative joint source-
+channel coding for evolving semantic communications,” arXiv preprint
+arXiv:2603.17702, 2026.
+[11] Eirina Bourtsoulatze, David Burth Kurka, and Deniz G¨und¨uz, “Deep
+joint source-channel coding for wireless image transmission,”
+IEEE
+Transactions on Cognitive Communications and Networking, vol. 5, no.
+3, pp. 567–579, 2019.
+[12] Shunpu Tang, Qianqian Yang, Deniz G¨und¨uz, and Zhaoyang Zhang,
+“Evolving semantic communication with generative modelling,” in 2024
+IEEE 35th International Symposium on Personal, Indoor and Mobile
+Radio Communications (PIMRC). IEEE, 2024, pp. 1–6.
+[13] Shunpu Tang, Yuanyuan Jia, Qianqian Yang, Ruichen Zhang, Jihong
+Park, and Dusit Niyato,
+“Enabling training-free semantic commu-
+nication systems with generative diffusion models,”
+arXiv preprint
+arXiv:2505.01209, 2025.
+[14] Chongtao Guo, Le Liang, and Geoffrey Ye Li, “Resource allocation for
+vehicular communications with low latency and high reliability,” IEEE
+transactions on wireless communications, vol. 18, no. 8, pp. 3887–3902,
+2019.
+[15] Liang Wang, Hao Ye, Le Liang, and Geoffrey Ye Li, “Learn to compress
+csi and allocate resources in vehicular networks,” IEEE Transactions on
+Communications, vol. 68, no. 6, pp. 3640–3653, 2020.
+[16] Xuanhao Luo, Jiayuan Huang, Longyu Zhou, Mingzhe Chen, and
+Yuchen Liu, “Sparsepilot: Belief-guided network planning under sparse
+wireless measurements,” arXiv preprint arXiv:2608.09199, 2026.
+[17] Wenjun Xu, Yimeng Zhang, Fengyu Wang, Zhijin Qin, Chenyao Liu, and
+Ping Zhang, “Semantic communication for the internet of vehicles: A
+multiuser cooperative approach,” IEEE Vehicular Technology Magazine,
+vol. 18, no. 1, pp. 100–109, 2023.
+[18] Baoxia Du, Hongyang Du, Dusit Niyato, and Ruidong Li,
+“Task-
+oriented semantic communication in large multimodal models-based
+vehicle networks,” IEEE Transactions on Mobile Computing, 2025.
+[19] Yifan Yuan, Jingxuan Zhang, Xiaodong Xu, Bizhu Wang, Shujun Han,
+Mengying Sun, and Ping Zhang, “Learning-based task-centric multi-
+user semantic communication solution for vehicle networks,”
+IEEE
+Transactions on Vehicular Technology, 2025.
+[20] Wanting Yang, Hongyang Du, Zi Qin Liew, Wei Yang Bryan Lim, Zehui
+Xiong, Dusit Niyato, Xuefen Chi, Xuemin Shen, and Chunyan Miao,
+“Semantic communications for future internet: Fundamentals, applica-
+tions, and challenges,” IEEE Communications Surveys & Tutorials, vol.
+25, no. 1, pp. 213–250, 2022.
+[21] Shaolong Guo, Yuntao Wang, Ning Zhang, Zhou Su, Tom H Luan,
+Zhiyi Tian, and Xuemin Shen, “A survey on semantic communication
+networks: Architecture, security, and privacy,” IEEE communications
+surveys & tutorials, vol. 27, no. 5, pp. 2860–2894, 2024.
+[22] Huiqiang Xie, Zhijin Qin, Xiaoming Tao, and Khaled B Letaief, “Task-
+oriented multi-user semantic communications,” IEEE Journal on Se-
+lected Areas in Communications, vol. 40, no. 9, pp. 2584–2597, 2022.
+[23] Maheshi U Lokumarambage, Vishnu Sai Sankeerth Gowrisetty, Hossein
+Rezaei, Thushan Sivalingam, Nandana Rajatheva, and Anil Fernando,
+“Wireless end-to-end image transmission system using semantic com-
+munications,” IEEE Access, vol. 11, pp. 37149–37163, 2023.
+[24] Zhijin Qin, Xiaoming Tao, Jianhua Lu, Wen Tong, and Geoffrey Ye Li,
+“Semantic communications: Principles and challenges,” arXiv preprint
+arXiv:2201.01389, 2021.
+[25] Deniz G¨und¨uz, Mich`ele A Wigger, Tze-Yang Tung, Ping Zhang, and
+Yong Xiao,
+“Joint source–channel coding: Fundamentals and recent
+progress in practical designs,” Proceedings of the IEEE, 2024.
+[26] Mingyu Yang, Chenghong Bian, and Hun-Seok Kim, “Deep joint source
+channel coding for wireless image transmission with ofdm,”
+in ICC
+2021-IEEE International Conference on Communications. IEEE, 2021,
+pp. 1–6.
+[27] Yucheng Sheng, Le Liang, Hao Ye, Shi Jin, and Geoffrey Ye Li,
+“Semantic communication for cooperative perception using harq,” IEEE
+Transactions on Cognitive Communications and Networking, vol. 12, pp.
+1139–1154, 2025.
+[28] Yanghe Pan, Yuntao Wang, Shaolong Guo, Chengyu Yin, Ruidong
+Li, Zhou Su, and Yuan Wu,
+“Trustworthy semantic communication
+for vehicular networks: Challenges and solutions,”
+IEEE Vehicular
+Technology Magazine, 2025.
+[29] Ian J Goodfellow, Jean Pouget-Abadie, Mehdi Mirza, Bing Xu, David
+Warde-Farley, Sherjil Ozair, Aaron Courville, and Yoshua Bengio, “Gen-
+erative adversarial nets,”
+Advances in neural information processing
+systems, vol. 27, 2014.
+[30] Diederik P Kingma and Max Welling,
+“Auto-encoding variational
+bayes,” arXiv preprint arXiv:1312.6114, 2013.
+[31] Jonathan Ho, Ajay Jain, and Pieter Abbeel, “Denoising diffusion prob-
+abilistic models,” Advances in neural information processing systems,
+vol. 33, pp. 6840–6851, 2020.
+[32] Fenglian Pan, Yinwei Zhang, Jian Liu, Larry Head, Maria Elli, and
+Ignacio Alvarez, “Reliability modeling for perception systems in au-
+tonomous vehicles: A recursive event-triggering point process approach,”
+Transportation Research Part C: Emerging Technologies, vol. 169, pp.
+104868, 2024.
+[33] Qiyu Hu, Guangyi Zhang, Zhijin Qin, Yunlong Cai, Guanding Yu, and
+Geoffrey Ye Li, “Robust semantic communications with masked vq-vae
+enabled codebook,” IEEE Transactions on Wireless Communications,
+vol. 22, no. 12, pp. 8707–8722, 2023.
+[34] Aaron Van Den Oord, Oriol Vinyals, et al., “Neural discrete representa-
+tion learning,” Advances in neural information processing systems, vol.
+30, 2017.
+[35] Ke-Hong Chen and Yih-Chuan Lin,
+“Adaptive vqvae: a learning-
+based image compression framework with vector quantization,”
+in
+Proceedings of the 2023 11th International Conference on Computer
+and Communications Management, 2023, pp. 76–82.
+[36] Doyup Lee, Chiheon Kim, Saehoon Kim, Minsu Cho, and Wook-Shin
+Han,
+“Autoregressive image generation using residual quantization,”
+in Proceedings of the IEEE/CVF conference on computer vision and
+pattern recognition, 2022, pp. 11523–11532.
+[37] Xuanhao Luo, Ruichen Gao, Zhizhen Li, Mingzhe Chen, and Yuchen
+Liu,
+“Channel-agnostic semantic compression for bandwidth-limited
+visual communication,” arXiv preprint arXiv:2608.00394, 2026.
+[38] 3GPP, “Nr; medium access control (mac) protocol specification,” 2022.
+[39] Chandra Shekhara Kaushik Valmeekam, Krishna Narayanan, Dileep
+Kalathil, Jean-Francois Chamberland, and Srinivas Shakkottai, “Llmzip:
+Lossless text compression using large language models,” arXiv preprint
+arXiv:2306.04050, 2023.
+[40] Xuanhao Luo, Zhiyuan Peng, Zhouyu Li, Ruozhou Yu, and Yuchen
+Liu, “Rank-based modeling for universal packets compression in multi-
+modal communications,” in 2025 IEEE 26th International Symposium
+on a World of Wireless, Mobile and Multimedia Networks (WoWMoM).
+IEEE, 2025, pp. 249–258.
+[41] Xuanhao Luo, Zhouyu Li, Mingzhe Chen, Ruozhou Yu, Shiwen Mao,
+and Yuchen Liu, “Unified packet compression and model adaptation for
+integrated sensing and multi-modal communications,” IEEE Journal on
+Selected Areas in Communications, 2025.
+[42] Stanley F Chen and Joshua Goodman, “An empirical study of smoothing
+techniques for language modeling,” Computer Speech & Language, vol.
+13, no. 4, pp. 359–394, 1999.
+
+
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, 2025
+15
+[43] Glenn Jocher, Ayush Chaurasia, and Jing Qiu,
+“Ultralytics yolov8,”
+2023.
+[44] Zhaohui Zheng, Ping Wang, Wei Liu, Jinze Li, Rongguang Ye, and
+Dongwei Ren,
+“Distance-iou loss: Faster and better learning for
+bounding box regression,” in Proceedings of the AAAI conference on
+artificial intelligence, 2020, vol. 34, pp. 12993–13000.
+[45] Xiang Li, Wenhai Wang, Lijun Wu, Shuo Chen, Xiaolin Hu, Jun Li,
+Jinhui Tang, and Jian Yang, “Generalized focal loss: Learning qualified
+and distributed bounding boxes for dense object detection,” Advances in
+neural information processing systems, vol. 33, pp. 21002–21012, 2020.
+[46] “100K Vehicle Dashcam Image Dataset,” Kaggle,
+Accessed: 2026.
+URL: https://www.kaggle.com/datasets/mdfahimbinamin/100k-vehicle-
+dashcam-image-dataset/data.
+[47] “Car
+Crash
+Dataset
+(CCD),”
+Kaggle,
+Accessed:
+2026.
+URL:
+https://www.kaggle.com/datasets/asefjamilajwad/car-crash-dataset-ccd.
+[48] Zhiyuan Li, Yanhui Zhou, Hao Wei, Chenyang Ge, and Jingwen Jiang,
+“Toward extreme image compression with latent feature guidance and
+diffusion prior,” IEEE Transactions on Circuits and Systems for Video
+Technology, vol. 35, no. 1, pp. 888–899, 2024.
+[49] Zhihao Duan, Ming Lu, Zhan Ma, and Fengqing Zhu, “Lossy image
+compression with quantized hierarchical vaes,”
+in 2023 IEEE/CVF
+Winter Conference on Applications of Computer Vision (WACV). IEEE,
+2023, pp. 198–207.
+[50] Martin Heusel, Hubert Ramsauer, Thomas Unterthiner, Bernhard
+Nessler, and Sepp Hochreiter,
+“Gans trained by a two time-scale
+update rule converge to a local nash equilibrium,” Advances in neural
+information processing systems, vol. 30, 2017.
+[51] Jakob Hoydis, Sebastian Cammerer, Fayc¸al Ait Aoudia, Avinash Vem,
+Nikolaus Binder, Guillermo Marcus, and Alexander Keller, “Sionna: An
+open-source library for next-generation physical layer research,” arXiv
+preprint arXiv:2203.11854, 2022.
+[52] Tsung-Yi Lin, Michael Maire, Serge Belongie, James Hays, Pietro Per-
+ona, Deva Ramanan, Piotr Doll´ar, and C Lawrence Zitnick, “Microsoft
+coco: Common objects in context,” in European conference on computer
+vision. Springer, 2014, pp. 740–755.

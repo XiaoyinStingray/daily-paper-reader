@@ -1,0 +1,995 @@
+Title: Binary Phase Retrieval of Cosine Transforms via Local Curvature Minimization
+
+URL Source: https://arxiv.org/pdf/2610.02112v1
+
+Published Time: Fri, 02 Oct 2026 02:02:04 GMT
+
+Number of Pages: 11
+
+Markdown Content:
+> 1
+
+# Binary Phase Retrieval of Cosine Transforms via Local Curvature Minimization 
+
+Ronald Ogden, Student Member, IEEE, Shwetadwip Chowdhury, Member, IEEE, 
+
+Takashi Tanaka, Senior Member, IEEE, David Fridovich-Keil, Senior Member, IEEE 
+
+Abstract —Cosine transforms see frequent use in image and video compression due to their ease of computation and high energy compaction. This has sparked interest within the optics community in computing cosine transforms optically for com-pression. When imaging in the Fourier plane to capture a cosine transform, one encounters a phase retrieval problem: optical fields have both magnitude and phase, but cameras only capture the magnitude of the field. Cosine transforms restrict the phase retrieval problem to a binary domain as opposed to the unit circle, but general phase retrieval solutions do not leverage this. In this work, we demonstrate that sign errors in phase retrieval for cosine transforms result in a significant increase in the magnitude of the Hessian of the transform at the error. Motivated by this, we develop an algorithm to solve this binary phase retrieval problem by minimizing the curvature of the reconstructed cosine transform. We demonstrate via computational experiments that given the magnitude of the cosine transform of an image, we can consistently reconstruct the original image within a multiscale structural similarity index of 0.95. We show that the solve time grows approximately linearly with the number of pixels solved. 
+
+Index Terms —Cosine transform, Phase retrieval, Quadratic unconstrained binary optimization, Fourier optics. 
+
+I. I NTRODUCTION 
+
+# FOURIER transforms have a plethora of applications in op-tics and signal processing, including compression. How-ever, the closely related cosine transform sees significantly more use in image and video compression. For example, dis-crete cosine transforms (DCT) are used in the JPEG standard for image compression and the MPEG and H.261 standards for video compression [1]. Cosine transforms have become widely adopted due to their ease of computation (they can be computed as simply as the Fourier transform) as well as their energy compaction properties (having performance very similar to that of the optimal Karhunen-Lo´ eve transform) [2]. The compressive benefits of cosine transforms have sparked a branch of research in Fourier optics centered around optically computed cosine transforms. Gu et al. [3] performed some of the earliest work on optically computed cosine transforms, experimentally demonstrating the benefits of cosine transforms 
+
+> Ronald Ogden (corresponding author) is with the Department of Aerospace Engineering and Engineering Mechanics at the University of Texas at Austin, Austin, TX (email: ronnieogden@utexas.edu). Shwetadwip Chowdhury is with the Department of Electrical and Com-puter Engineering at the University of Texas at Austin, Austin, TX (email: shwetadwip.chowdhury@utexas.edu). Takashi Tanaka is with the Department of Aeronautics and Astronautics and the Department of Electrical and Computer Engineering at Purdue University, West Lafayette, IN (email: tanaka16@purdue.edu). David Fridovich-Keil is with the Department of Aerospace Engineering and Engineering Mechanics at the University of Texas at Austin, Austin, TX (email: dfk@utexas.edu).
+
+from a rate distortion perspective. Wong and Cheng [4] proposed an optical method of processing video to meet the H.261 compression standard. Ma et al. [5] implemented an optical cosine transform system to perform synthetic aperture radar image compression. Ogden et al. [6] proposed utilizing optically computed cosine transforms with event cameras to perform high speed visual scene compression. Optical sensing devices typically capture the magnitude of an optical field, but not the phase, which is essential infor-mation in most applications, including those above. Except for [3], each of these applications propose a beam-flooding technique for phase retrieval. There, a reference beam is super-imposed on the optical cosine transform such that the resulting field is converted from a real-valued field to a nonnegative-valued field. If one has an image of the reference beam, an image of the standalone cosine transform and the image of the superposition, one can theoretically retrieve the phase of the cosine transform. However, the beam-flooding method relies on precise alignment to achieve interference sufficiently accurate to perform effective phase retrieval. This practically results in performance that is not robust to misalignment and other implementation errors, necessitating other more mature phase retrieval solutions. General phase retrieval problems are posed as follows. Given measurements of the form 
+
+yk = |a⊤ 
+
+> k
+
+z|2, (1) and known sampling vectors ak ∈ Cn for k ∈ [K], where K
+
+is the number of measurements and [K] := {1, 2, 3, ..., K },find the z ∈ Cn satisfying (1). This problem has applications in crystallography, coherent imaging, astronomy, quantum mechanics, and acoustic processing, among many other fields. Many solutions exist for general phase retrieval problems, which can be readily applied to Fourier imaging. Shecht-man et al. [7] provide a review of modern phase retrieval techniques in optics. Notable examples include alternating projection algorithms like the Gerchberg-Saxton algorithm [8] or the hybrid input-output method [9], solving the transport of intensity equation [10], modern optimization techniques such as PhaseLift [11] or Wirtinger Flow [12] and a variety of learning-based approaches [13–17]. Each of these methods pose the phase retrieval problem as a decision over a complex domain. While the Fourier transform of a real-valued function can be complex-valued, the cosine transform of a real-valued function must be real-valued, allowing one to restrict the phase retrieval problem in the latter case to a binary domain as opposed to the full complex torus. State-of-the-art phase retrieval arXiv:2610.02112v1 [eess.IV] 1 Oct 2026 2Reconstruction Binary Phase Recovery Sign Solution |DCT(Original)| |DCT( ᐧ)| Original DCT -1 (ᐧ) 
+
+> Fig. 1. Motivating application of the proposed phase retrieval method. Given access to the magnitude of the DCT of an image, we aim to recover the sign of the transform such that the original image can be reconstructed with high accuracy.
+
+solutions cannot leverage this principle when applied to cosine transforms. In the context of image/video compression, the strong energy compaction of cosine transforms allows one to devote computational resources more efficiently during phase retrieval, focusing efforts in higher energy regions of the frequency domain. In this work, we leverage these advantages to develop a binary phase retrieval algorithm for cosine trans-forms of images. Fig. 1 depicts a block diagram of the binary phase recovery workflow. II. P HASE RETRIEVAL METHODOLOGY 
+
+In this section we introduce fundamental properties of cosine transforms of images, motivate the Hessian norm minimization framework for binary phase retrieval of cosine transforms and convert the resulting problem into a standard-form binary quadratic program. 
+
+A. Cosine Transforms of Images 
+
+Let the n-dimensional Fourier transform of a function f :
+
+Rn 7 → C be defined as 
+
+F {f }(ω) := 
+
+Z
+
+> Rn
+
+f (x)e−2πi x·ω dx, (2) and its n-dimensional cosine transform be defined as 
+
+Fc{f }(ω) := 2 n
+
+Z
+
+> Rn
+> ≥0
+
+f (x)
+
+> n
+
+Y
+
+> k=1
+
+cos(2 πx kωk) dx, (3) where xk and ωk denote the kth elements of the vectors x
+
+and ω, respectively. The cosine transform of f is the Fourier transform of the even part of f .Our objective is to recover an image given the magnitude of its cosine transform. In order for this to be possible, we must have that the magnitude of an image’s cosine transform is unique to that image. Herein, we shall consider an “image” to be a function f : R2 7 → R that is nonnegative, integrable and has compact support. One can always shift an image so that its support lies in R2 
+
+> ≥0
+
+and then reflect the resulting function about each axis to produce an even function. The Fourier transform of the resulting function must be equivalent to its cosine transform. Given this definition, the intensity of the cosine transform of an image is unique. We state this property formally below. 
+
+Theorem 1. Suppose f, g : R2 7 → R are both even, nonnegative, integrable functions with compact support that satisfy |Fc{f }(ω)| = |Fc{g}(ω)| for all ω ∈ R2. Then 
+
+f (x) = g(x) almost everywhere. 
+
+Appendix A proves Theorem 1. Similar results exist for many variations on the phase retrieval problem. For example, Hayes [18] analyzed the conditions that imply the uniqueness of a discrete multidimensional signal given the magnitude or phase of its Fourier transform. See Table 1 in [7] for the set of conditions necessary and/or sufficient to imply unique phase retrieval solutions in various versions of the phase retrieval problem. In general phase retrieval, such uniqueness is not always guaranteed. In the case where one wishes to retrieve the phase of a Fourier transform given its magnitude, there are three “trivial ambiguities” referred to in literature [7], among other potential ambiguities: 1) global phase shift: ˜f (x) = f (x)eiω0 ,2) conjugate inversion: ˜f (x) = f (−x)∗,3) spatial shift: ˜f (x) = f (x − x0).The Fourier transform and cosine transform of any even func-tion are equivalent, so Theorem 1 precludes these ambiguities in our framework. We examine each ambiguity to provide some intuition behind its resolution. We defined images to be real and nonnegative, immediately removing the first am-biguity. Extending a real image to be even removes the second ambiguity. The triviality of this third ambiguity may depend on the specific application. If one aims to optically encode the movement of an object by imaging the frequency domain as done in [6], one needs to ensure spatial shifts affect the magnitude of the Fourier transform. If ˜f (x) = f (x − x0),then 
+
+F { ˜f }(ω) = F {f }(ω)e−2πi x0·ω , (4) which differs from F {f } by a phase ramp. However, |F { ˜f }| 2
+
+is equivalent to |F {f }| 2. In contrast, cosine transforms can capture space-domain shifts in their intensity maps. As an illustration, consider the 1-dimensional example where f (x) = 1 for x ∈ [0 , 1] and f (x) = 0 otherwise, and ˜f (x) = f (x−1) .Then 
+
+Fc{f }(ω) = 2 sinc (2 ω), (5) 
+
+Fc{ ˜f }(ω) = 4 sinc (4 ω) − 2sinc (2 ω). (6) The intensity of these cosine transforms differ significantly. Thus, the intensity of the cosine transform can retain informa-tion about the original function that the intensity of the Fourier transform could not without the addition of another tool, such as a stationary reference object in the image domain. 3
+
+B. Motivating Hessian Norm Minimization 
+
+For ease of notation, we will use f to denote the cosine transform of an image in this section onward. Given f : R2 7 →
+
+R, we aim to recover f on the domain Ω := [0 , a ] × [0 , b ]
+
+up to a global sign ambiguity, given only its magnitude. In particular, given only g(x) = |f (x)| with the initial condition sgn (f (0)) = 1 , the objective is to find a map s : Ω 7 → {− 1, 1}
+
+such that s(x)g(x) = f (x) for all x ∈ Ω. For arbitrary 
+
+f , this problem is ill-posed. However, one can leverage the following two assumptions which generally hold for the cosine transforms of natural images: 
+
+Assumption 1. ∇f is continuous 1 on Ω.
+
+Assumption 2. There exists 2 an ε > 0 such that ∥∇ f (x)∥ ≥ ε
+
+for almost all x satisfying f (x) = 0 .
+
+These assumptions ensure that the zero level sets of g serve as unambiguous boundaries between the domain of f that is positively valued and that which is negatively valued. If these two assumptions hold, then when reconstructing f , if an incorrect sign change is assigned across a closed curve, the resultant reconstruction will have a discontinuity in its gradient along the curve and a Dirac delta in its Hessian. When integrating the norm of the Hessian over the domain, these delta functions can significantly add to the total value, making them a strong indicator that an incorrect sign has been assigned to a region. Consider the following illustrative 1-dimensional example of this phenomenon, depicted in Fig. 2. Let f (x) = cos( x) for 
+
+x ∈ [0 , π ], giving g(x) = | cos( x)|. The correct sign function is 
+
+s(x) = 
+
+(
+
+1, x ∈ [0 , π/2),
+
+−1, x ∈ (π/2, 1] . (7) We shall compare this function to an incorrect sign function, 
+
+ˆs(x) := 1 for all x ∈ [0 , π ]. In the case of a correct sign function, the reconstruction of f , that is sg , has smooth first and second derivatives. Integrating the norm of the second derivative over x ∈ [0 , π ] gives 
+
+Z π
+
+> 0
+
+d2
+
+dx 2
+
+ s(x)g(x) dx =
+
+Z π
+
+> 0
+
+d2
+
+dx 2 cos( x) dx (8) 
+
+=
+
+Z π
+
+> 0
+
+|cos( x)| dx (9) 
+
+= 2 . (10) In the case of an incorrect sign function, the reconstruction of f , that is ˆsg , has a discontinuous first derivative and Dirac delta function in its second derivative. Integrating the norm of           
+
+> 1As noted in the proof of Theorem 1, cosine transforms of images must be analytic and thus smooth, so Assumption 1 must hold.
+> 2See Appendix C for a theoretical note of this assumption. :
+> 4
+> :
+> 23:
+> 4
+> -1 01cos( x)
+> :
+> 4
+> :
+> 23:
+> 4
+> -1 01
+> ddx cos( x)
+> :
+> 4
+> :
+> 23:
+> 4
+> -1 01
+> d2
+> dx 2cos( x)
+> :
+> 4
+> :
+> 23:
+> 4
+> -1 01jcos( x)j
+> :
+> 4
+> :
+> 23:
+> 4
+> -1 01
+> ddx jcos( x)j
+> :
+> 4
+> :
+> 23:
+> 4
+> -1 01
+> d2
+> dx 2jcos( x)j
+> Area = 2 Area = 2 Area = 2
+> Fig. 2. Illustration of the impact of erroneous sign changes on the Hessian of a function. The left three plots illustrate a function satisfying Assumption 1 and Assumption 2 with its first and second derivatives and the right three plots illustrate corresponding plots for an incorrect reconstruction.
+
+the second derivative over x ∈ [0 , π ] gives 
+
+Z π
+
+> 0
+
+d2
+
+dx 2
+
+ ˆs(x)g(x) dx =
+
+Z π
+
+> 0
+
+d2
+
+dx 2 | cos( x)| dx (11) 
+
+=
+
+Z π
+
+> 0
+
+(|cos( x)| + 2 δ (x − π/2)) dx 
+
+(12) 
+
+= 4 . (13) The resulting integral is double that for the case of a correct sign function, demonstrating how the norm of the Hessian serves as an indicator for incorrect sign changes. Let S denote the set of functions from Ω to {− 1, 1},
+
+H(f ) denote the Hessian of a function f and ∥ · ∥ F denote the Frobenius norm of a matrix. The preceding discussion motivates us to solve the binary phase retrieval problem via the following optimization problem: 
+
+min 
+
+> s∈S
+
+Z
+
+> Ω
+
+∥H(sg )( x)∥2 
+
+> F
+
+dx. (14) 
+
+C. Discretized Optimization Problem 
+
+While our mathematical motivation has been presented in a continuous domain, in practice, we seek to recover the sign for functions measured discretely. Given sufficiently high spatial sampling of the function, the same motivation holds in the discrete analog. Let f ∈ Rm×n represent a discretization of 
+
+f , and let g ∈ Rm×n 
+
+> ≥0
+
+be defined such that gi,j = |fi,j | for all 
+
+i ∈ [m] and j ∈ [n]. In order to formulate (14) discretely, we utilize the following central difference approximation of the Hessian, H(f):
+
+H(f)i,j := 
+
+Hxx (f)i,j Hxy (f)i,j 
+
+Hxy (f)i,j Hyy (f)i,j 
+
+
+
+, (15) 4
+
+where Hxx (f), Hxy (f), Hyy (f) ∈ Rm×n are matrices with entries given by 
+
+Hxx (f)i,j := fi−1,j − 2fi,j + fi+1 ,j , (16) 
+
+Hxy (f)i,j := ( fi−1,j −1 − fi+1 ,j −1
+
+− fi−1,j +1 + fi+1 ,j +1 )/4, (17) 
+
+Hyy (f)i,j := fi,j −1 − 2fi,j + fi,j +1 (18) for all i ∈ [m] and j ∈ [n]. We adopt a same-padding scheme to approximate the Hessian at the border of f. That is, for 
+
+f ∈ Rm×n, we define f0,j := f1,j , fm+1 ,j := fm,j for all 
+
+j ∈ {0, 1, ..., n + 1 } and fi, 0 := fi, 1, fi,n +1 := fi,n for all i ∈ { 0, 1, ..., m + 1 }. With this approximation, the new optimization problem becomes 
+
+min 
+
+> s∈{− 1,1}m×n
+
+X
+
+> i,j
+
+∥H(s ⊙ g)i,j ∥2 
+
+> F
+
+, (19) where s ⊙ g denotes the Hadamard product of s and g.
+
+D. Binary Quadratic Program Formulation 
+
+All terms in the objective function in (19) are quadratic expressions with respect to elements of s, so (19) is a binary quadratic program. In this section, we reformulate (19) in a classical form recognizable by standard solvers such as Gurobi [19] or Mosek [20]. Suppose s has columns s1, s2, ..., sn. Let s := vec (s) := (s⊤ 
+
+> 1
+
+, s⊤ 
+
+> 2
+
+, ..., s⊤ 
+
+> n
+
+)⊤ ∈ {− 1, 1}mn and G := diag (vec (g)) ∈
+
+Rmn ×mn  
+
+> ≥0
+
+. Then vec (s ⊙ g) = Gs. Let D1 
+
+> m
+
+represent the matrix that computes the central difference first derivative approximation on a vector of size m and D2 
+
+> m
+
+represent the matrix that computes the central difference second derivative approximation on a vector of size m, both using same padding at the boundaries. Specifically, 
+
+D1 
+
+> m
+
+:= 12
+
+
+
+−1 1 0
+
+−1 0 1
+
+−1 . . . . . .. . . 0 10 −1 1
+
+
+
+, (20) 
+
+D2 
+
+> m
+
+:= 
+
+
+
+−1 1 01 −2 11 . . . . . .. . . −2 10 1 −1
+
+
+
+. (21) Given these definitions we re-express (16) to (18) as 
+
+Hxx (f) = fD2
+
+> n
+
+, (22) 
+
+Hxy (f) = D1
+
+> m
+
+fD1
+
+> n
+> ⊤
+
+, (23) 
+
+Hyy (f) = D2
+
+> m
+
+f. (24) As provided in [21], given arbitrary matrices A, X, B of compatible dimensions, the following relation holds: vec (AXB ) =  B⊤ ⊗ A vec (X). (25) Thus, if we define Im to be the m-dimensional identity matrix and apply (25) to the preceding equations, we have that for arbitrary f ∈ Rm×n,vec (Hxx (f)) = Dxx vec (f), where Dxx := D2 
+
+> n
+
+⊗ Im, (26) vec (Hxy (f)) = Dxy vec (f), where Dxy := D1 
+
+> n
+
+⊗ D1
+
+> m
+
+, (27) vec (Hyy (f)) = Dyy vec (f), where Dyy := In ⊗ D2
+
+> m
+
+, (28) where ⊗ denotes the Kronecker product of two matrices. Using the relationships introduced in this section, we have: 
+
+X
+
+> i,j
+
+∥H(s ⊙ g)i,j ∥2
+
+> F
+
+= X
+
+> i,j
+
+
+
+|Hxx (s ⊙ g)i,j |2 + 2 |Hxy (s ⊙ g)i,j |2
+
++ |Hyy (s ⊙ g)i,j |2
+
+(29) 
+
+= ∥vec (Hxx (s ⊙ g)) ∥2 + 2 ∥vec (Hxy (s ⊙ g)) ∥2
+
++ ∥vec (Hyy (s ⊙ g)) ∥2 (30) 
+
+= ∥Dxx Gs∥2 + 2 ∥Dxy Gs∥2 + ∥Dyy Gs∥2 (31) 
+
+= s⊤G
+
+
+
+(Dxx )2 + 2 Dxy ⊤Dxy + ( Dyy )2
+
+Gs. (32) Thus, the optimization problem can be expressed as 
+
+min  
+
+> s∈{− 1,1}mn
+
+s⊤ ˜Qs, (33) where 
+
+˜Q := G(( Dxx )2 + 2 Dxy ⊤Dxy + ( Dyy )2)G. (34) Note that (33) has at least two solutions due to the invariance of the objective to global sign changes. One can assume without loss of generality that the first element of s is 1. If ˜Q
+
+decomposes into block matrices as 
+
+˜Q =
+
+q q⊤
+
+q Q
+
+
+
+, (35) where q is a scalar, q ∈ Rmn −1 and Q ∈ R(mn −1) ×(mn −1) ,then the last mn − 1 elements of the minimizers of (33) are equivalent to the minimizer of following problem up to a global sign: 
+
+min  
+
+> s∈{− 1,1}mn −1
+
+s⊤Qs + 2 q⊤s. (36) Finally, we use the substitution s = 2 b − 1, where 1 is a vector of all ones, to convert the decision variable from signs to binary digits. Thus, the final optimization problem takes the form 
+
+min 
+
+> b∈{ 0,1}mn −1
+
+b⊤Qb + c⊤b, (37) where c = q − Q1. This is a quadratic unconstrained binary optimization (QUBO) problem, which can be solved using off-the-shelf optimization software such as Gurobi [19] or Mosek [20]. After computing a solution to (37), one can recover a discrete sign function ˆs ∈ {− 1, 1}m×n via 
+
+ˆs = unvec m,n 
+
+ 12b∗ − 1
+
+
+
+, (38) where b∗ is the solution to (37) and the unvec m,n (·) operator is the inverse of the vec (·) operator introduced previously. 5
+
+III. O PTIMIZATION ALGORITHM 
+
+QUBOs are known to be NP-hard problems in general [22]. Solve times for such problems using exact techniques like branch-and-bound can grow exponentially with input size, posing an issue in this case where inputs consist of large arrays. In this section, we introduce Algorithm 1, which exploits the structure of cosine transforms of natural images to achieve effective binary phase retrieval quickly. Algorithm 1 functions by 1) Dividing the array g into blocks, 2) Determining a set of connected, high-energy blocks (measured as the squared Frobenius norm of the block), 3) Solving (37) for each block in this high-energy set individually in parallel, and 4) Resolving inter-block sign discrepancies via a related but far lower-dimensional QUBO. The decomposition of g enables the binary solver to operate on significantly smaller problems in parallel as opposed to attempting to search the intractably large domain of the original problem. By only solving the phase of high-energy blocks, Algorithm 1 devotes its attention to recovering the phase of pixels that will most impact the reconstruction of the original image. The remainder of this section elaborates on the details of Algorithm 1. 
+
+Algorithm 1 Binary Phase Retrieval 
+
+Input: Array g ∈ Rm×n 
+
+> ≥0
+
+, block size m′ × n′, block inclusion ratio α ∈ [0 , 1] , block border width β ∈ Z≥0.
+
+Output: Sign (phase) solution ˆs ∈ {− 1, 0, 1}m×n. 
+
+> 1:
+
+(m, n ) ← size (g) 
+
+> 2:
+
+M ← m/m ′, N ← n/n ′ 
+
+> 3:
+
+wi,j ← ∥ gi,j ∥2 
+
+> F
+
+for (i, j ) ∈ [M ] × [N ] 
+
+> 4:
+
+v ←GET ENERGETIC BLOCKS (w, α ) ▷ Algorithm 2  
+
+> 5:
+
+v ←DILATION (v) 
+
+> 6:
+
+for (i, j ) ∈ [M ] × [N ] do ▷ Parallelizable loop  
+
+> 7:
+
+if vi,j = 1 then  
+
+> 8:
+
+˜si,j β ← SOLVE BINARY PHASE (gi,j β , 1, 1)  
+
+> 9:
+
+˜si,j ← TRIM BORDER (˜ si,j β , β ) 
+
+> 10:
+
+else  
+
+> 11:
+
+˜si,j ← 0m′×n′ 
+
+> 12:
+
+˜g ← ˜s ⊙ g 
+
+> 13:
+
+s ← SOLVE BINARY PHASE (˜ g, m ′, n ′) 
+
+> 14:
+
+ˆs ← ˜s ⊙ (s ⊗ 1m′×n′ ) 
+
+> 15:
+
+return ˆs 
+
+> 16:
+
+function SOLVE BINARY PHASE (g, m ′, n ′) 
+
+> 17:
+
+(m, n ) ← size (g) 
+
+> 18:
+
+M ← m/m ′, N ← n/n ′ 
+
+> 19:
+
+Compute T via (40) given m′, n ′, M, N  
+
+> 20:
+
+Compute ˜Q via (41)  
+
+> 21:
+
+Extract Q and q from ˜Q according to (35)  
+
+> 22:
+
+c ← q − Q1 
+
+> 23:
+
+b∗ ← arg min b∈{ 0,1}M N −1 b⊤Qb + c⊤b 
+
+> 24:
+
+return unvec M,N (1 , (2 b∗ − 1)⊤)⊤
+
+Algorithm 1 decomposes g into blocks of size m′ × n′ with 
+
+M := m/m′ ∈ N and N := n/n′ ∈ N encoding the number of blocks in each dimension. We denote by gi,j ∈ Rm′×n′ 
+
+> ≥0
+
+the 
+
+(i, j )th block of g, consisting of rows (i − 1) m′ + 1 to im ′
+
+and columns (j − 1) n′ + 1 to jn ′ of g.One could solve for the phase of every block in g, but many blocks will have minimal impact when computing the IDCT of g. The energy compaction property of cosine transforms ensures that the majority of the energy in g is concentrated in regions corresponding to low frequencies. Algorithm 1 takes advantage of this, reducing the computational load by solving the phase of only the most energetic fraction of blocks, mini-mizing distortion upon image reconstruction. Given α ∈ [0 , 1] ,a parameter denoting the fraction of blocks whose phase will be solved, Algorithm 2 computes a mask, v ∈ { 0, 1}M ×N ,such that P 
+
+> i,j
+
+vi,j = ⌊αM N ⌋. If vi,j = 1 , then Algorithm 1 will solve for the phase of block gi,j . Otherwise, it will assign a sign of 0 to the corresponding block. 3 Even under Assumption 1 and Assumption 2, binary phase retrieval up to a global sign is not possible on a function with a domain that is not connected, so Algorithm 2 must ensure that the 1-level set of v is connected. Let w ∈ RM ×N 
+
+> ≥0
+
+given by wi,j := ∥gi,j ∥2 
+
+> F
+
+denote the array of block energies of g. From the discussion above, the mask 
+
+v must be connected and satisfy P 
+
+> i,j
+
+vi,j = ⌊αM N ⌋ while aiming to maximize P 
+
+> i,j
+
+vi,j wi,j . Algorithm 2 implements a greedy procedure to achieve this objective. Algorithm 2 initializes the solution v to contain only the highest energy block. At each iteration, the block with the highest energy that is adjacent to the current solution set is added. The array 
+
+c ∈ { 0, 1}M ×N in Algorithm 2 indicates the blocks that are adjacent to the solution v at a given iteration. Fig. 3 illustrates Algorithm 2 visually. Algorithm 2 can result in a v with only sparse connectivity, which can negatively impact binary phase retrieval. Algorithm 1 applies a morphological dilation to v to remedy this phenomenon. 
+
+Algorithm 2 Energy-Greedy Connected Block Masking 
+
+Input: Array of block energies w ∈ RM ×N 
+
+> ≥0
+
+, block inclusion ratio α ∈ [0 , 1] .
+
+Output: Indicator array v ∈ { 0, 1}M ×N of blocks in solution.  
+
+> 1:
+
+Initialize v ← 0M ×N , c ← 0M ×N 
+
+> 2:
+
+l ← arg max w 
+
+> 3:
+
+vl ← 1 
+
+> 4:
+
+cl′ ← 1 for l′ ∈ N (l) ▷ N (l) := {l′ adjacent to l} 
+
+> 5:
+
+for k ← 2 : ⌊αM N ⌋ do  
+
+> 6:
+
+l ← arg max( w ⊙ c) 
+
+> 7:
+
+vl ← 1, cl ← 0 
+
+> 8:
+
+for l′ ∈ N (l) if vl′̸ = 1 then cl′ ← 1 
+
+> 9:
+
+return v
+
+In order to solve for the sign of an individual block, gi,j ,the block along with its bordering pixels are fed to the QUBO formulated in Section II-D to solve for their sign. Let gi,j β
+
+denote the block augmented with a border of width β, that is, the array consisting of rows (i − 1) m′ + 1 − β to im ′ + β        
+
+> 3If an element of sis 0 instead of ±1, then sis infeasible with respect to the optimization problem in (19). This relaxation from the original formulation enables the removal of low energy frequencies during image reconstruction as opposed to arbitrary sign allocation. 6
+> Fig. 3. Illustration of Algorithm 2. The energy of a block is depicted by its grayscale color (lighter corresponding to greater weights). The blocks included in the solution ( vin Algorithm 2) at each iteration are bounded by the solid blue border. The blocks considered as candidates ( cin Algorithm 2) for the next iteration are bounded by a dotted magenta border.
+
+and columns (j − 1) n′ + 1 − β to jn ′ + β of g. Applying the procedure in Section II-D to gi,j β will yield an output, ˜si,j β ∈{− 1, 1}(m′+β)×(n′+β). Trimming the first β and last β rows and columns of ˜si,j β yields ˜si,j ∈ {− 1, 1}m′×n′
+
+, the interim sign solution for the individual block. While we ultimately discard the solution for the sign of the border pixels, passing border pixels to the QUBO solver enables it to more accurately compute the Hessian and solve for the correct sign near the edge of a block. The width of the border β can be tuned to achieve the desired performance from the solver. Increasing 
+
+β improves the accuracy of the solver at the cost of a solve time that grows exponentially with β. Same padding is used whenever the border extends beyond the domain of the image. The formulation in (36) assumed that the first (top-left) pixel of the array undergoing phase retrieval has positive sign. While this assumption removes the sign solution ambiguity for a block, when applied to all of the individual blocks of an image, it leads to an inter-block sign discrepancy. The correct sign for the top-left pixel of every block will likely vary between blocks. See Fig. 4 for an example of this phenomenon. Let 
+
+˜s ∈ {− 1, 0, 1}m×n be the interim sign solution resulting from concatenating the individual block solutions, ˜si,j , together (we include 0 as a potential element of ˜s to account for low-energy blocks assigned a value of 0 in the previous stage of Algorithm 1). In order to resolve this inter-block sign discrepancy, one can treat ˜g := ˜ s ⊙ g as a new function to recover the sign of. We formulate this new phase retrieval problem as discussed in Section II-D; however, here we define sign changes across entire blocks (rather than individual pixels) as the decision variables. In order to apply an array of signs s ∈ {− 1, 1}M ×N
+
+blockwise to ˜g, that is, multiply the block ˜gi,j by the sign si,j 
+
+for all i ∈ [M ] and j ∈ [N ], one can multiply ˜g elementwise by s ⊗ 1m′×n′ , where 1m′×n′ ∈ Rm′×n′
+
+denotes a matrix of all ones. As shown in Appendix B, the following relationship holds: vec (s ⊗ 1m′×n′ ) = T vec (s), (39) Individual Block Solutions Inter-Block Resolution Global Sign Solution        
+
+> Fig. 4. Illustration of inter-block discrepancies and their resolution. The top-left image represents the individual block solutions concatenated as the interim solution, ˜s. That image still contains inter-block sign discrepancies. The lower left image depicts the corresponding sign corrections necessary to resolve the discrepancies, s⊗1m′×n′. The Hadamard product of these two arrays yields the full solution, ˆs.
+
+where T ∈ { 0, 1}mn ×M N is given by 
+
+T := IN ⊗ 1n′ ⊗ IM ⊗ 1m′ (40) and 1m′ ∈ Rm′
+
+denotes a vector of all ones. That is, T
+
+transforms a vector of blockwise signs to the corresponding vector of pixelwise signs. Using this relationship, to solve the Hessian minimization problem for ˜g as outlined in Section II-D, we replace the definition for ˜Q in (34) with 
+
+˜Q := T ⊤G(( Dxx )2 + 2 Dxy ⊤Dxy + ( Dyy )2)GT (41) and all instances of m and n with M and N respectively. In the case where m′ = n′ = 1 , we have M = m, N = n
+
+and T = Imn , resulting in the definition of ˜Q in (34) and (41) being equivalent. If the resulting solution is denoted s ∈{− 1, 1}M ×N , then the final binary phase retrieval solution is given by 
+
+ˆs = ˜ s ⊙ (s ⊗ 1m′×n′ ) . (42) One should note that this divide-and-conquer method of solving the QUBO over the whole image does not guarantee a globally optimal solution. However, as will be demonstrated in Section IV, there remains little practical room for improvement in the quality of the phase retrieval. IV. C OMPUTATIONAL RESULTS 
+
+The performance of Algorithm 1 was measured by testing it on the DCT magnitude of images in the Kodak Lossless True Color Image Suite [23]. This dataset consists of 24 images of size 768 × 512 or 512 × 768 . Fig. 1 depicts the experimental pipeline for a single image. We compute the magnitude of the DCT of an image before feeding it to Algorithm 1. The resulting sign solution is applied to the DCT magnitude function to compute the reconstruction of the DCT. We take the inverse DCT of the result to compute the reconstructed image. As noted briefly in Section II-C, 7
+
+our motivation for Hessian norm minimization as a means to recover binary phase applies to the discrete case only if the DCT used has a sufficiently small sampling interval. We can create an arbitrarily small DCT sampling interval by padding the original image with zeros before taking the DCT. Given an input image F0 ∈ Rm0×n0 
+
+> ≥0
+
+and nonnegative integer parameters mp and np, we pad F0 as follows: 
+
+Fp =
+
+ F0 0m0×np
+
+0mp×n0 0mp×np
+
+
+
+. (43) Then given the parameters defining the solver’s block size 
+
+m′ and n′, we compute m = m′⌊(m0 + mp)/m ′⌋ and n =
+
+n′⌊(n0 + np)/n ′⌋ and construct F ∈ Rm×n using the first m
+
+rows and n columns of Fp. This ensures that the dimensions of F are such that they divide evenly into blocks during phase retrieval. Let Cm ∈ Rm×m be the matrix that performs the DCT-II transform on a vector: 
+
+(Cm)i,j := 
+
+q 1 
+
+> m
+
+, i = 1 ,
+
+q 2 
+
+> m
+
+cos π(2 i−1)( j−1) 2m , i ∈ [m] \ { 1}, (44) for all j ∈ [n]. Then we compute the two-dimensional DCT of F:
+
+f = CmFC⊤ 
+
+> n
+
+. (45) Letting g be the element-wise magnitude of f, we apply Algorithm 1 to g with parameters m′, n′, α and β to compute 
+
+ˆs. We compute the reconstructed DCT as ˆf = ˆ s ⊙ g. Finally, we compute the reconstructed image, ˆF0 as the first m0 rows and n0 columns of ˆF = C−1 
+
+> m
+
+ˆfC−⊤  
+
+> n
+
+= C⊤
+
+> m
+
+ˆfCn.In the remainder of this section, we shall:  
+
+> •
+
+quantify how the success of Algorithm 1 varies with the sampling frequency of the DCT,  
+
+> •
+
+quantify how the distortion of the reconstructed image varies with the amount of pixels we solve the phase for (encoded by the parameter α in Section III),  
+
+> •
+
+demonstrate the qualitative benefits of Algorithm 2,  
+
+> •
+
+demonstrate that the solve time for Algorithm 1 grows linearly with respect to the number of pixels solved for given a sufficiently small α.
+
+A. Phase Retrieval Success vs Sampling Interval 
+
+Given ˆs, the solution for the element-wise sign of f given g,and s, the true element-wise sign of f, let e ∈ {− 1, 0, 1}m×n
+
+be given by e := ˆ s ⊙ s. That is, ei,j is 1 if ˆsi,j is correct, -1 if ˆsi,j is incorrect and 0 if no solution was attempted at that element due to energy masking. Simply computing the ratio of elements of e that are equal to 1 is not a good indicator for the success of the binary phase solution. For example, one could construct ˆs by randomly choosing signs at each pixel. In expectation, the resulting e would indicate a 1-to-1 ratio of correct to incorrect pixels, but success at any given pixel would be independent of success at neighboring pixels. As a comparison, if e was such that ei,j = 1 if i < m/ 2 and 
+
+ei,j = −1 otherwise, then e would again indicate a 1-to-1 ratio of correct to incorrect pixels. However, in this later case, phase has been recovered almost perfectly, barring a sign change along a line. Loosely speaking, a large, continuous region of          
+
+> Fig. 5. Scatter plot of NSS against mp=npfor the phase retrieval of each image in the data set. A representative correctness matrix ecorresponding to one of the images in the data set is displayed immediately to the right of its padding value. In these images, white represents 1, gray represents 0 and black represents -1. As padding increases, NSS increases and has less variance. The non-zero region of elooks increasingly uniform as padding is added, indicating stronger performance.
+
+same-sign elements in e indicates that the solver captured sign 
+
+changes consistent with those of s. We adopt the following metric with this concept in mind. Let Ni,j := {(i′, j ′) ∈ [m]×[n] : max( |i−i′|, |j −j′|) = 1 }
+
+denote the set of indices in the neighborhood of (i, j ). Let 
+
+V := {(i, j ) ∈ [m] × [n] : ei′,j ′̸ = 0 ∀(i′, j ′) ∈ N i,j } denote indices whose neighborhoods in the array e have no zeros. We define the neighbor similarity score NSS of the array e as NSS := 1
+
+|V| 
+
+X
+
+> (i,j )∈V
+
+1
+
+|N i,j |
+
+X
+
+> (i′,j ′)∈N i,j
+
+I(ei,j , ei′,j ′ ), (46) where 
+
+I(x, y ) := 
+
+(
+
+1, x = y, 
+
+0, x̸ = y. (47) That is, the neighbor similarity score of e computes the average over (i, j ) ∈ V of the ratio of elements of e neighboring ei,j 
+
+that are equal to ei,j . Averaging over V ensures we ignore sections of e that correspond to no attempt at computing phase. For low quality phase solutions, e will appear to have random entries that have no correlation with their neighbors, resulting in NSS near 0.5. As the quality of the phase retrieval solution improves, the value of an element of e tends to match that of its neighbors. In this regime, NSS approaches 1. Fig. 5 depicts the neighbor similarity score that results from running Algorithm 1 on DCTs constructed from each image in the data set given some padding mp = np that was varied from 0 to 3000 in increments of 300. For this experiment, we set 
+
+α = 0 .1, β = 1 and m′ = n′ = 6 . As the padding increases and the cosine transforms are consequently upsampled, the neighbor similarity score increases and contains less variance, indicating better and more consistent performance across the data set. Upsampling the cosine transform enables the phase retrieval optimization to effectively detect discontinuities in the derivative of ˆf, allowing the motivation presented in Section II-B to hold. 8𝛼 = 0.01                     
+
+> 𝛼 = 0.10 Reconstruction Reconstruction Phase Correctness Phase Correctness
+> Fig. 6. Image reconstructions ˆF0for two images resulting from the experiment described in Section IV-B using α= 0 .01 and α= 0 .1. The “phase correctness” displayed to the right of each reconstruction is the corresponding array eas described in Section IV-A. In the phase correctness images, white represents 1, gray represents 0 and black represents -1. Bit Recovery Ratio
+> 00.02 0.04 0.06 0.08 0.1 0.12 0.14
+> MSSSIM
+> 0.65 0.7 0.75 0.8 0.85 0.9 0.95 1
+> Fig. 7. Scatter plot of MSSSIM against bit recovery ratio. This plot illustrates how the distortion of a reconstructed image decreases as one solves the phase of more pixels. Reasonable reconstruction quality can be achieved by only solving the phase for a fraction of the total pixels.
+
+B. Pixels Solved vs Reconstruction Distortion 
+
+In order to quantify how the distortion between the original image, F0, and the reconstructed image, ˆF0, varies as we vary the proportion of pixels we choose to solve phase over, we ran our experimental pipeline over the entire data set with the parameters mp = np = 3000 , β = 1 and m′ = n′ = 6 while varying α from 0.1 to 1.0 in increments of 0.1. We measured the distortion between F0 and ˆF0 by computing their multiscale structural similarity (MSSSIM) index [24]. Fig. 7 displays the results. The “bit recovery ratio” indicates the number of pixels that phase was solved for divided by the number of elements (mn ) of the cosine transform array. We used a large padding value, which ensured that phase was recovered accurately and consistently over the data set. The plot illustrates how the reconstruction quality improves as the proportion of pixels that we solve phase for increases. Image reconstructions achieved an MSSSIM of greater than 0.95 across almost the entire data set by setting α = 0 .1.Fig. 6 depicts the qualitative results of Algorithm 2 and Algorithm 1. As seen, low values of α can result in blurring or ringing artifacts in the reconstruction of an image. These result from the loss of high frequency information in the phase solving process, as Algorithm 2 masks these low-energy regions. The phase correctness plot for the image of the house highlights how Algorithm 2 can highlight directional frequency bands that contain higher energy relative to the rest of the cosine transform. 
+
+C. Solution Time 
+
+The experiment described in Section IV-B was run in the environment summarized in Table I using parallel block processing with 12 workers. For each value of α, we measured the average across all images in the dataset of the amount of time it took to solve for the phase of all individual blocks in parallel (line 8 in Algorithm 1) and the average amount of time it took to resolve inter-block sign discrepancies (line 13 in Algorithm 1). The results are displayed in Fig. 8. The amount of time it takes to solve all individual blocks in parallel grows linearly with the number of bits solved due to the fact that the size of individual blocks is constant. The amount of time it takes to resolve inter-block discrepancies is superlinear with respect to the number of bits solved due to the fact that the size of the feasible space in the inter-block resolution problem grows exponentially with the number of bits solved. However, over the range of α that we tested, the inter-block resolution time was always significantly less than the individual block solution time, resulting in a total solve time that grows approximately linearly in this range. V. C ONCLUSION 
+
+In this work, we motivated and designed an algorithm that retrieves phase for the cosine transform of images by min-imizing the curvature of the reconstructed transform. Unlike general phase retrieval algorithms, our algorithm leverages the 9                      
+
+> TABLE I HARDWARE AND SOFTWARE ENVIRONMENT
+> Category Component Specification Hardware CPU AMD Ryzen 9 7950X (16 Cores, 32 Threads, up to 5.7 GHz) RAM 128 GB DDR5 4800 MT/s Storage 2 TB NVMe PCIe 4.0 ×4SSD
+> Software Operating System Ubuntu 22.04.5 LTS (Linux 6.8 Kernel) Programming Language MATLAB R2022b Optimization Solver Gurobi 13.0.2 Average Bit Recovery Ratio
+> 00.02 0.04 0.06 0.08 0.1 0.12 0.14
+> Average Solve Time (seconds)
+> 050 100 150 200 250 300
+> Total Parallel Block Solution Inter-block Resolution
+> Fig. 8. Plot of phase solution time against the number of pixels solved. The parallel solution of individual blocks drives the total solution time in this regime and grows linearly with bit recovery ratio.
+
+energy compaction of cosine transforms and their restricted phase domain. We demonstrated that the algorithm can con-sistently reconstruct images to within an MSSSIM of 0.95. While this algorithm functions well on computationally computed cosine transforms, it does not yet perform well on optically generated cosine transforms. Misalignment, ambient light, vibration and other factors present within a lab envi-ronment can introduce “noise” into the cosine transform of an image, causing it to violate the motivation discussed in Section II-B. In particular, the sharp curvature present along the zero level set of an image of an ideal cosine transform can become fairly smooth when non-ideal factors are introduced. Future work will explore how to make our algorithm robust to such issues. Algorithm 1 functions by decomposing a cosine transform into blocks, solving each block independently and then resolv-ing sign discrepancies between each block. The subproblems are coupled together through the parameter β as well as the inter-block curvature. However, there is no guarantee that Algorithm 1 converges to a global optimum of (19). Another direction for future work would involve employing an optimization technique that synergizes well with the divide-and-conquer nature of Algorithm 1 while guaranteeing opti-mality, such as the alternating direction method of multipliers (ADMM). However, the iterative nature of ADMM may result in longer solve times. APPENDIX APROOF OF THEOREM 1Let F := Fc{f } and G := Fc{g}. Since f has compact support, F is an entire function in C2 by the Paley-Wiener Theorem (see Theorem 5.4.10 in [25]). Thus, its restriction to 
+
+R2 is real analytic. Under the same reasoning, G must also be real analytic. Manipulation of the condition F (ω)2 = G(ω)2
+
+yields 
+
+(F (ω) − G(ω))( F (ω) + G(ω)) = 0 (48) for all ω ∈ R2. Both of the factors in the equation above must be analytic since they are the sum of analytic functions. Suppose F (ω) − G(ω) is nonzero at some ω. Then by the continuity of this term, it must be nonzero on a neighbor-hood of ω. In order for (48) to hold in that neighborhood, 
+
+F (ω) + G(ω) must be zero on the whole neighborhood. By the Identity Theorem for analytic functions, this would imply 
+
+F (ω) + G(ω) is identically zero on R2. Swapping the two terms in the previous argument enables us to conclude that either F ≡ G or F ≡ − G. Both f and g are assumed to be nonnegative, so F (0) and G(0) must both be positive. Thus, 
+
+F ≡ G, and we have the desired result by the uniqueness of the cosine transform for even functions. APPENDIX BDERIVATION OF (39) Suppose s is an M by N array with columns s1, s2, ..., sN .If one right-multiplies s by a N by n′ matrix consisting of all zeros except for row j consisting of all ones, the resulting matrix consists of n′ copies of sj horizontally concatenated. Thus, to produce a matrix consisting of n′ copies of sj for all 
+
+j ∈ [N ] concatenated horizontally in order, one must right-multiply s by (IN ⊗1n′ )⊤. Similarly, one can produce a matrix consisting of m′ copies of each row of s concatenated verti-cally in order by left-multiplying s by IM ⊗ 1m′ . Combining these two operations gives us 
+
+s ⊗ 1m′×n′ = ( IM ⊗ 1m′ ) s (IN ⊗ 1n′ )⊤. (49) Applying the vec (·) operation to both sides of this equation and utilizing (25) to simplify the right hand side yields the desired identity. APPENDIX CNOTE ON ASSUMPTION 2A simple counterexample to Assumption 2 may be con-structed. One need simply to convolve two images together 10 
+
+and the cosine transform of the result will have degenerate continuous curves on which the transform and its gradient are simultaneously zero. We shall demonstrate, however, that such counterexamples are topologically rare. Let I denote the set of even images as defined in Section II-A. Given an f ∈ I , let F := Fc{f }. Let Σ( f ) denote the set of ω ∈ R2 such that F (ω) = 0 and ∇F (ω) = 0. Finally, given a compact domain Ω ⊂ R2
+
+> >0
+
+, denote by DΩ the set of 
+
+f ∈ I such that Σ( f ) ∩ Ω̸ = ∅.
+
+Theorem 2. DΩ is nowhere dense in I. Furthermore, I \ D Ω
+
+is dense in I.Proof. We shall use ∥ · ∥ to denote the Euclidean norm of a vector and ∥·∥ 1 to denote the L1 norm of a function, the latter of which we use to induce a topology on I. Given an arbitrary 
+
+f ∈ I and F := Fc{f }, we construct an image perturbation 
+
+pc ∈ I parameterized by c ∈ R3
+
+> >0
+
+. Let x2 := ( a, 0) ⊤ and 
+
+x3 := (0 , a )⊤, where a ∈ R>0. Then define 
+
+q1(x) := δ(x), (50) 
+
+q2(x) := 1/2(q1(x − x2) + q1(x + x2)) , (51) 
+
+q3(x) := 1/2(q1(x − x3) + q1(x + x3)) , (52) and set pc := P3 
+
+> k=1
+
+ckqk, the cosine transform of which is denoted Pc. The use of a Dirac delta in the construction of pc
+
+means it is not strictly an element of I, but one can construct a similar proof by substituting the Dirac delta with the function 
+
+q1(x) := 
+
+(
+
+r−2, ∥x∥ < r, 
+
+0, ∥x∥ ≥ r, (53) and selecting r ∈ R>0 sufficiently small. The resulting perturbed image is in I. We shall continue with our Dirac delta formulation for ease of exposition. Let J : Ω × R3 
+
+> >0
+
+7 → R3 denote the map from frequency coordinates ω and parameter coordinates c to the 1-jet of the perturbed image’s cosine transform: 
+
+J(ω; c) := 
+
+ F (ω) + Pc(ω)
+
+∇F (ω) + ∇Pc(ω)
+
+
+
+. (54) A point ω is an element of Σ( f +pc) exactly when J(ω; c) = 
+
+0. Computing the gradient of J with respect to c yields 
+
+∇cJ(ω) = 
+
+
+
+1 cos(2 πaω 1) cos(2 πaω 2)0 −2πa sin(2 πaω 1) 00 0 −2πa sin(2 πaω 2)
+
+ ,
+
+(55) which is nonsingular for all ω ∈ Ω given a sufficiently small a.Thus, ∇ω,cJ(ω; c) has full row rank and J is consequently a submersion. Let Jc : Ω 7 → R3 denote the restriction of J(ω; c)
+
+to a particular c. By the Parametric Transversality Theorem (see Theorem 6.35 in [26]) Jc is transverse to the origin for almost all c. Thus, we can choose c such that the perturbed image f + pc is arbitrarily close to the original image f in the 
+
+L1 norm and Jc is transverse to the origin in R3.We have shown that the set of images with a 1-jet transverse to the origin in R3 is dense in I. However, the codimension of the origin in R3 is 3, which is larger than the dimension of 
+
+Ω, which is 2. Transversality of Jc to the origin dictates that this is only possible if Jc(Ω) fails to intersect the origin (see Theorem 6.30 of [26]). Thus, I \ D Ω is dense in I.In order to show that DΩ is nowhere dense in I, we only have left to show that I \ D Ω is open, as the complement of a dense, open set is nowhere dense. Suppose f ∈ I \ D Ω. Then 
+
+F and ∇F are continuous (we demonstrated in Appendix A that F was analytic). Since Σ( f )∩Ω = ∅ and Ω is compact by assumption, we must have that ∥(F (ω), ∇F (ω)⊤)⊤∥ attains a minimum value ε > 0 over Ω. It is straightforward to show 
+
+ F (ω)
+
+∇F (ω)
+
+
+
+≤ √1 + C∥f ∥1, (56) where C > 0 depends on the radius of the support of functions in I. Now, consider the open ball of functions g ∈ I such that 
+
+∥f − g∥1 < ε/ (2 √1 + C). Then, by the triangle inequality, we have that for all ω ∈ Ω,
+
+ G(ω)
+
+∇G(ω)
+
+
+
+≥
+
+ F (ω)
+
+∇F (ω)
+
+
+
+−
+
+ F (ω) − G(ω)
+
+∇F (ω) − ∇ G(ω)
+
+
+
+(57) 
+
+≥ ε − √1 + C∥f − g∥1 ≥ ε/ 2. (58) That is, for all ω ∈ Ω, ω /∈ Σ( g). Thus, all such g are elements of I \ D Ω and we are done. REFERENCES 
+
+[1] K. Sayood, Introduction to data compression . Morgan Kaufmann, 2017. [2] N. Ahmed, T. Natarajan, and K. R. Rao, “Discrete cosine transform,” IEEE Transactions on Computers , vol. 100, no. 1, pp. 90–93, 1974. [3] Z.-H. Gu, J. R. Leger, and S. H. Lee, “Optical compu-tations of cosine transforms,” Optics Communications ,vol. 39, no. 3, pp. 137–142, 1981. [4] K. W. Wong and L. M. Cheng, “Optical cosine trans-form using microlens array and phase-conjugate mirror,” 
+
+Japanese journal of applied physics , vol. 31, no. 5S, p. 1672, 1992. [5] J. Ma, B. Yang, Y. Gao, L. Tao, and X. Liu, “Sar image compression using optronic processing,” The Journal of Engineering , vol. 2019, no. 19, pp. 5982–5985, 2019. [6] R. Ogden, D. Fridovich-Keil, and T. Tanaka, “Rate-distortion analysis of optically passive vision compres-sion,” in ICASSP 2026 - 2026 IEEE International Con-ference on Acoustics, Speech and Signal Processing (ICASSP) , 2026, pp. 8417–8421. [7] Y. Shechtman, Y. C. Eldar, O. Cohen, H. N. Chapman, J. Miao, and M. Segev, “Phase retrieval with application to optical imaging: a contemporary overview,” IEEE signal processing magazine , vol. 32, no. 3, pp. 87–109, 2015. [8] R. Gerchberg and W. Saxton, “A practical algorithm for the determination of phase from image and diffraction plane pictures,” SPIE milestone series MS , vol. 94, pp. 646–646, 1994. [9] J. R. Fienup, “Phase retrieval algorithms: a comparison,” 
+
+Applied optics , vol. 21, no. 15, pp. 2758–2769, 1982. 11 
+
+[10] C. Zuo, J. Li, J. Sun, Y. Fan, J. Zhang, L. Lu, R. Zhang, B. Wang, L. Huang, and Q. Chen, “Transport of intensity equation: a tutorial,” Optics and Lasers in Engineering ,vol. 135, p. 106187, 2020. [11] E. J. Candes, T. Strohmer, and V. Voroninski, “Phaselift: Exact and stable signal recovery from magnitude mea-surements via convex programming,” Communications on Pure and Applied Mathematics , vol. 66, no. 8, pp. 1241–1274, 2013. [12] E. J. Candes, X. Li, and M. Soltanolkotabi, “Phase retrieval via wirtinger flow: Theory and algorithms,” 
+
+IEEE Transactions on Information Theory , vol. 61, no. 4, pp. 1985–2007, 2015. [13] A. Sinha, J. Lee, S. Li, and G. Barbastathis, “Lensless computational imaging through deep learning,” Optica ,vol. 4, no. 9, pp. 1117–1125, 2017. [14] A. Goy, K. Arthur, S. Li, and G. Barbastathis, “Low pho-ton count phase retrieval using deep learning,” Physical review letters , vol. 121, no. 24, p. 243902, 2018. [15] W. Zhang, Y. Wan, Z. Zhuang, and J. Sun, “What is wrong with end-to-end learning for phase retrieval?” 
+
+arXiv preprint arXiv:2403.15448 , 2024. [16] I. Kang, F. Zhang, and G. Barbastathis, “Phase extrac-tion neural network (phenn) with coherent modulation imaging (cmi) for phase retrieval at low photon counts,” 
+
+Optics Express , vol. 28, no. 15, pp. 21 578–21 600, 2020. [17] C. Metzler, P. Schniter, A. Veeraraghavan, and R. Bara-niuk, “prdeep: Robust phase retrieval with a flexible deep network,” in International Conference on Machine Learning . PMLR, 2018, pp. 3501–3510. [18] M. Hayes, “The reconstruction of a multidimensional sequence from the phase or magnitude of its fourier transform,” IEEE Transactions on Acoustics, Speech, and Signal Processing , vol. 30, no. 2, pp. 140–154, 1982. [19] Gurobi Optimization, LLC, “Gurobi Optimizer Reference Manual,” 2026. [Online]. Available: https://www.gurobi.com [20] M. ApS, MOSEK API for MATLAB 11.1.11 ,2026. [Online]. Available: https://docs.mosek.com/11. 1/matlabapi/index.html [21] K. B. Petersen, M. S. Pedersen et al. , “The matrix cookbook,” Technical University of Denmark , vol. 7, no. 15, p. 510, 2008. [22] A. P. Punnen, “The quadratic unconstrained binary op-timization problem,” Springer International Publishing ,vol. 10, pp. 978–3, 2022. [23] R. Franzen, “Kodak lossless true color image suite (pho-tocd pcd0992),” https://r0k.us/graphics/kodak/, 1999, ac-cessed: April 27, 2026. [24] Z. Wang, E. P. Simoncelli, and A. C. Bovik, “Multiscale structural similarity for image quality assessment,” in The Thrity-Seventh Asilomar Conference on Signals, Systems & Computers, 2003 , vol. 2. IEEE, 2003, pp. 1398–1402. [25] S. G. Krantz and H. R. Parks, A primer of real analytic functions . Springer Science & Business Media, 2002. [26] J. M. Lee, Introduction to Smooth Manifolds , 2nd ed. Springer, 2013.
