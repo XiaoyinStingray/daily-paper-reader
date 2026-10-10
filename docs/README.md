@@ -48,17 +48,17 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-10-09</span>
+      <span class="dpr-home-dashboard-kicker">2026-10-10</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 8 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 5 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
     <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>1</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>7</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>0</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>5</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-10-09 23:03:52 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-10-10 22:08:46 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -69,7 +69,9 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>2026-10-09 日报完成8篇论文筛选，精读1篇、速读7篇。最值得看的是精读8.0分的《Dissecting Representation Structure in Vision Transformers》，系统剖析ViT内部表征结构；速读中7.0分的车载网络自适应语义通信也值得关注。普通读者可先从ViT表征结构这篇入手，再按兴趣浏览速读列表。</p>
+<p>今日精读挂零、速读5篇，ViT分布偏移下的token缩减以7.0分领跑。</p>
+<p>最值得看：分布偏移时“晚一点再减token”更稳，以及用Nyström sketch把二阶LLM训练压到线性内存。</p>
+<p>普通读者可先读7分那篇，关注效率与鲁棒性的权衡，再按需跟进6分的LLM训练与扩散模型讨论。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -78,12 +80,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">精读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">1 篇</strong>
+    <strong class="dpr-home-dashboard-count">0 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Dissecting Representation Structure in Vision Transformers: A Rigorous Architectural Study">Dissecting Representation Structure in Vision Transformers: A Rigorous Architectural Study</span></li></ul>
+<p class="dpr-home-dashboard-empty">今日暂无推荐。</p>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">neural-arch <strong>1</strong></span></div>
+
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -91,12 +93,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">速读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">7 篇</strong>
+    <strong class="dpr-home-dashboard-count">5 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Adaptive Semantic Communication with Residual Quantization for Resilient Vehicular Networks">Adaptive Semantic Communication with Residual Quantization for Resilient Vehicular Networks</span></li><li><span class="dpr-home-dashboard-paper-title" title="Binary Phase Retrieval of Cosine Transforms via Local Curvature Minimization">Binary Phase Retrieval of Cosine Transforms via Local Curvature Minimization</span></li><li><span class="dpr-home-dashboard-paper-title" title="Lightweight and Versatile Learned Optimization by Recombination of Gradient History">Lightweight and Versatile Learned Optimization by Recombination of Gradient History</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Later Is Better: Token Reduction for ViTs Under Distribution Shift">Later Is Better: Token Reduction for ViTs Under Distribution Shift</span></li><li><span class="dpr-home-dashboard-paper-title" title="Clean: Second-order LLM Training at Linear Memory Cost via Nyström Sketching">Clean: Second-order LLM Training at Linear Memory Cost via Nyström Sketching</span></li><li><span class="dpr-home-dashboard-paper-title" title="Should We Skip Diffusion?">Should We Skip Diffusion?</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">neural-arch <strong>4</strong></span><span class="dpr-home-dashboard-tag">compress <strong>3</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">neural-arch <strong>5</strong></span></div>
 </section>
 </div>
 
