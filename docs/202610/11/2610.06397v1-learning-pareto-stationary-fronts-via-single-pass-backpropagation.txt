@@ -1,0 +1,1303 @@
+Title: Learning Pareto Stationary Fronts via Single-Pass Backpropagation
+
+URL Source: https://arxiv.org/pdf/2610.06397v1
+
+Published Time: Tue, 06 Oct 2026 03:06:56 GMT
+
+Number of Pages: 28
+
+Markdown Content:
+# Learning Pareto Stationary Fronts via Single-Pass Backpropagation 
+
+Elina Rojin Celik 
+
+Department of Computer Science Saarland University, Germany 
+
+celik@cs.uni-saarland.de 
+
+Marcos Medeiros Raimundo 
+
+Instituto de Computação Universidade Estadual de Campinas, Brazil 
+
+mraimundo@ic.unicamp.br 
+
+Isabel Valera 
+
+Department of Computer Science Saarland University, Germany 
+
+ivalera@cs.uni-saarland.de 
+
+## Abstract 
+
+We propose MOSEL (Multi-Objective Stackelberg Efficient Learning), a framework for a posteriori multi-objective optimization (MOO) in deep neural networks that recovers a full front of Pareto stationary solutions at the computational cost of standard single-objective training. MOSEL reformulates the problem as a bilevel optimization problem that leverages network modularity to decouple representation learning from objective-preference alignment. Casting the bilevel problem as a Stackelberg game enables solving the original a posteriori MOO problem in a single forward–backward pass. As a result, MOSEL matches the time and memory efficiency of standard single-objective training while enabling scalable Pareto stationary front learning. Empirically, MOSEL uncovers diverse and optimal Pareto frontiers in strongly conflicting settings (e.g., fairness–accuracy). Remarkably, even in weakly conflicting regimes such as multi-task learning, it consistently converges to solutions closer to the utopia point, outperforming both standard single-objective training and specialized multi-task learning methods. These results highlight the broader potential of a posteriori MOO learning as a pathway to efficiently learn more diverse and robust representations, ultimately improving generalization. 
+
+## 1 Introduction 
+
+Multi-objective optimization (MOO) is ubiquitous across deep learning applications, arising whenever models must balance multiple objectives (i.e., losses during training). Many such objectives stem from competing stakeholder demands, leading to strongly conflicting objectives . For example, in 
+
+fairness , individual and group fairness must be traded-off against predictive performance [48]; and, in 
+
+LLM alignment , objectives such as helpfulness, harmlessness, and honesty can conflict [21, 31, 51]. Similar conflicts emerge from the distributed or sequential nature of learning: in federated learning 
+
+each client optimizes a local objective that may conflict with those of other clients [65]; and in 
+
+reinforcement learning , agents must balance multiple reward signals simultaneously [19, 36, 70]. Other MOO applications lead to weak conflicts among objectives where, while the objectives may not be directly in conflict, the local nature of neural network (NN) optimization may lead to suboptimal solutions. For example, in multi-task learning (MTL) joint training can improve performance on individual tasks compared to training them independently (positive transfer); yet, task-specific losses may conflict during optimization, degrading overall performance [34, 56, 67]. Similar weak conflicts arise in multimodal learning [25, 63], and in domain generalization [5], often leading to suboptimal NNs that fail to capture diversity across modalities and domains. 
+
+> Preprint. arXiv:2610.06397v1 [cs.LG] 5 Oct 2026
+
+In practice, multiple objectives are often aggregated into a single scalar loss, a strategy that simplifies training but obscures trade-offs and can lead to suboptimal solutions. In particular, collapsing objectives into a single loss: (i) in strongly conflicting regimes, fails to capture the full spectrum of Pareto optimal solutions, thereby masking the trade-offs among objectives [19, 52]; or, (ii) in weakly conflicting regimes, requires manual weighting that is problem-dependent and sensitive to factors such as loss magnitudes [6]. Importantly, such a priori scalarization tends to bias optimization toward dominant objectives, e.g., prioritizing performance over fairness [43, 68] or favoring certain tasks over others [56, 67]. Consequently, it can lead to misleading interpretations of the underlying trade-offs and, more importantly, hinder the optimizer from reaching solutions close to the utopia point, thereby limiting overall performance. A principled solution to these issues is a posteriori 
+
+MOO, and in particular, Pareto front learning (PFL). However, to the best of our knowledge, there is currently no PFL approach that is suitable for training deep neural networks at scale, while providing Pareto stationarity guarantees .In this paper, we propose MOSEL (Multi-Objective Stackelberg Efficient Learning), the first frame-work for PFL in deep neural networks that recovers Pareto stationary solutions at scale. To that end, we exploit the modular structure of neural networks to decouple representation learning from objective preference alignment, enabling efficient MOO training without sacrificing scalability. Specifically, we introduce a framework for PFL that reformulates the problem as a bilevel optimization, which we then cast into a Stackelberg game, allowing the original problem to be solved efficiently with a single forward–backward pass of backpropagation. As a result, MOSEL achieves Pareto stationary learning with time and memory complexity comparable to conventional single-objective training .Beyond efficiency, we demonstrate that explicitly modeling multiple objectives allows MOSEL to: (i) recover diverse and high-quality Pareto frontiers in strongly conflicting settings; and, (ii) converge to solutions closer to the utopia solution in weakly conflicting regimes such as MTL, outperforming both single-objective baselines and specialized multi-task methods. These findings suggest that efficient multi-objective learning can serve as a foundation for learning richer, more diverse representations, potentially improving robustness and generalization in deep neural networks. 
+
+## 2 Background and Related Work 
+
+In this section, we introduce the key concepts from multi-objective and bilevel optimization that underpin our approach, and provide an overview of the related literature. 
+
+2.1 Multi-objective optimization. 
+
+In deep learning, MOO naturally arises when training a model with multiple loss functions. Let 
+
+θ ∈ Θ ⊂ Rn denote the parameters of a neural network, and consider m non-negative, differentiable loss functions Lj : Θ → R+, which may correspond to task-specific losses in multi-task learning or stakeholder-defined losses (e.g., fairness objectives). The training problem can then be formulated as a MOO problem [15, 44]: 
+
+min  
+
+> θ∈Θ
+
+L(θ) = min  
+
+> θ∈Θ
+
+(L1(θ), . . . , Lm(θ)) . (1) In MOO, the objectives are typically conflicting, meaning that no single parameter configuration simultaneously minimizes all losses. To formalize optimal trade-offs, [44] defines a dominance relation: a solution θ1 ∈ Θ is said to be dominated by θ2 ∈ Θ, denoted by L(θ2) ≺ L (θ1), if θ2
+
+improves at least one objective without worsening any other. A point θ∗ ∈ Θ is called Pareto optimal (PO) if no other point in Θ dominates it. Given the non-convexity of neural network loss landscapes, we focus on local notions of optimality. 
+
+Optimality. The set of local Pareto optimal solutions [44] is defined as 
+
+P := {θ∗ ∈ Θ | ∃ ϵ > 0 : ∀θ ∈ N ϵ(θ∗), L(θ) ⊀ L(θ∗)} (2) where Nϵ(θ∗) = {θ ∈ Θ | ∥ θ − θ∗∥ < ϵ }. The image set L(P) is referred to as the local Pareto front (PF), which may consist of multiple or even infinitely many solutions. 2In differentiable settings, a point θ∗ ∈ Θ is Pareto stationary if there exists a convex combination of the gradients of the losses that vanishes. Formally, θ∗ is Pareto stationary if 
+
+∃ r ∈ Rm, r j ≥ 0, X rj = 1 : 
+
+> m
+
+X
+
+> j=1
+
+rj ∇L j (θ∗) = JL(θ∗)T r = 0, (3) where JL(θ∗) denotes the Jacobian of the vector-valued objective. Pareto stationarity is a necessary condition for local Pareto optimality, and becomes sufficient under convexity assumptions [13, 17]. 
+
+Scalarization. A natural approach to MOO is to reduce the vector-valued problem in Eq. (1) to a sin-gle surrogate objective via scalarization , which encodes a preference over the objectives through a vec-tor r [44]. Two common scalarization functions that we will explore in this work include linear scalar-ization (LS) [44], which translates to a weighted sum of the objectives as Pmi=1 riLi(θ) and smooth Tchebychev scalarization (CS) [33], which is defined as 1 
+
+> τ
+
+log Pmi=1 exp ( τ · ri | L i(θ) − u⋆i |) with smoothing parameter τ and utopia point u⋆, where each u⋆i is the ideal objective value of Li(θ)
+
+attainable in isolation. In the presence of conflicting objectives, this point is generally infeasible. While linear scalarization is simple and efficient, it can only recover solutions on convex parts of the Pareto front, Tchebychev scalarization on the other hand does not suffer from this limitation [44]. 
+
+Related works. MOO methods can be categorized based on when preferences are specified [38, 44]. 
+
+No-preference approaches resolve competing gradients without user input [13, 56]. A priori methods compute a single Pareto stationary solution for a fixed preference, typically via scalarization [33] or preference-aware gradient balancing [41], but require retraining for new preferences. A posteriori 
+
+methods instead generate a set of trade-off solutions, e.g., by partitioning the objective space [32], tracing Pareto sets [40], or sampling preferences for coverage [4]. Interactive methods iteratively refine solutions with user feedback [44], but remain costly in deep learning, although approaches such as RLHF [7] and LLM alignment [47] can be seen as instances of this paradigm. A key limitation of both a priori and finite-solution a posteriori methods is their inability to generalize to unseen preferences without retraining. Pareto Front Learning (PFL) addresses this by learning a mapping from preferences to Pareto optimal solutions, aiming for (i) optimality (i.e., solutions lying on the Pareto front) and (ii) diversity (i.e., coverage of the full front) [9, 22]. Pareto Hypernetworks [45] achieve this but incur high computational and parameter costs due to per-objective gradients and auxiliary networks. COSMOS [53] improves scalability with a single training run and minimal overhead, but lacks guarantees of Pareto stationarity, as shown in Appendix A. In contrast to prior work, MOSEL combines the strengths of a posteriori methods and Pareto front learning while avoiding their key limitations, achieving Pareto stationary solutions without incurring significant computational or parameter overhead. 
+
+2.2 Bilevel optimization 
+
+A bilevel optimization problem introduces a hierarchy between two connected optimization problems: 
+
+min  
+
+> ϕ∈Φ
+
+g(ϕ, θ) s.t. θ ∈ arg min 
+
+> θ′∈Θ
+
+f (ϕ, θ′) (4) where Φ ⊆ Rp and Θ ⊆ Rq denote the feasible decision spaces for the upper and lower level problems; and g and f denote the upper and lower level objectives respectively [10, 12]. The bilevel formulation provides a more natural way to describe an objective that inherently depends on the outcome of a second objective [58], allowing for more flexibility in the optimization process by enabling separate optimization for each level. 
+
+Related works. Previous works [4, 66] have explored bilevel formulations of MOO. Rather than fixing preference vectors a priori, [4] optimizes a distribution over a finite set of preferences in the upper level with respect to a quality metric (e.g., hypervolume) computed in the lower level. While this yields well-distributed solutions, the number of Pareto points remains fixed and limited by the upper-level design. In contrast, [66] propose a bilevel formulation with accuracy as the upper-level and fairness as the lower level objective. However, scaling this approach beyond two objectives is non-trivial, as each additional objective requires introducing additional hierarchical levels. In contrast to prior work, MOSEL leverages bilevel optimization to efficiently learn Pareto stationary fronts without restricting the number of solutions or objectives. 
+
+3Input image @ 224x224 Res layer 3 1x256 @ 14x14 Res layer 2 1x128 @ 28x28 Res layer 4 1x512 @ 7x7 Linear Preference vector shift scale FiLM layer FC Conv1 1x64 @128x128 Res layer 1 1x64 @ 56x56   
+
+> Representation Learning Network Input Output Loss Preference Alignment Network (a) (b)
+
+Figure 1: Overview of MOSEL. (a) MOSEL partitions the NN into a representation learning network, which steers z toward Pareto optimal solutions, and a preference alignment network conditioning on r ∼ Dir (α) to cover diverse trade-offs. (b) Illustration on ResNet-34 [20]: z is extracted at the network split point and modulated via a FiLM layer [50], which maps r to a scaling and shift factor per feature channel, steering the final predictions ˆy(x; r) toward the desired objective trade-off. 
+
+## 3 From a posteriori MOO to bilevel optimization of neural networks 
+
+In this section, we cast the a posteriori MOO problem, or more specifically, the Pareto stationary front learning of deep neural networks into a bilevel optimization problem. To that end, we first assume a scalarization function , of the form s : Rm × [0 , 1] m 7 → R, to aggregate the vector of loss functions (i.e., objectives) L = ( L1, . . . , Lm) into a single scalar value, according to a given preference vector r ∈ [0 , 1] m. In our case, we consider linear scalarization Pmi=1 riLi(θ) [44] and smooth Tchebycheff scalarization 1 
+
+> τ
+
+log Pmi=1 exp ( τ · ri | L i(θ) − u⋆i |) [33]. Second, we leverage the modularity of neural networks to decouples the learning of optimal (i.e., Pareto stationary) from diverse (i.e., different trade-offs among objectives) solutions, as illustrated in Figure 1 (a). To this end, we partition the network into: (i) a representation learning network fθ,which seeks representations steering the Pareto front toward the utopia point, effectively guiding solu-tions toward optimality ; and (ii) a preference alignment network gϕ, which focuses on maintaining 
+
+diversity of the solutions across the Pareto front. By separating optimality and diversity within the NN, MOSEL mitigates adversarial interactions between competing goals, yielding a more stable optimization process. In Section 4, we formalize this intuition by showing that stochastic preference sampling implicitly regularizes the representation network toward shared features, exponentially suppressing objective-specific ones. Importantly, this decomposition comes at almost no additional memory or computational cost, as it simply requires the incorporation of a preference vector as input to the preference alignment network and partitioning the NN computational graph during training. Figure 1 (b) illustrates this architectural design using the ResNet-34 architecture [20]. The network is divided into two parts: a representation learning network, comprising the convolutional stem and the first three residual layers, and a preference alignment network consisting of the fourth residual layer followed by the fully connected head. We leverage the intermediate representation after the third residual layer, denoted by z, as the conditioning point for preference injection. As highlighted in Figure 1 (b), the only modification to the original architecture is a Feature-wise Linear Modulation (FiLM) layer [50] inserted at the split point, which modulates z channel-wise based on the preference vector r, steering the shared representation towards the desired trade-off while preserving its spatial structure. The resulting conditioned representation z′ is subsequently passed through the remaining network. This design introduces only negligible overhead relative to the base network. Third, we can now reformulate the original a posteriori MOO problem from Eq. (1) as the following 
+
+bilevel optimization problem :(leader) arg min 
+
+> ϕ
+
+s(L(θ, ϕ(r)); r)
+
+(follower) s.t. arg min 
+
+> θ
+
+s(L(θ, ϕ(r)); r) , ∀r ∼ Dir (α), (5) where the preference vectors r are sampled from a Dirichlet distribution with hyperparameter α and 
+
+s denotes the scalarization function. 4In the context of Pareto front learning, the bilevel perspective provides a natural decomposition between optimality and diversity: the lower level ensures Pareto stationary solutions, while the upper level governs preference alignment and coverage of the front. We interpret the lower level optimization problem as the follower , which optimizes the parameters of the representation network 
+
+θ, and the upper level problem as the leader , which optimizes the parameters of the preference alignment network ϕ. We adopt this leader-follower perspective in Section 4, where we cast the bilevel problem as a Stackelberg game. By combining this interpretation with the modular structure of neural networks, we enable efficient single-pass training that recovers diverse, Pareto stationary solutions without restricting the number of objectives or attainable trade-offs. 
+
+Theorem 1 (Pareto stationarity.) . Before introducing the Stackelberg interpretation, we first show that any solution to Eq. (5) is a Pareto stationary solution of the original a posteriori MOO prob-lem in Eq. (1) . We assume that the scalarization function s satisfies the following properties: (i) 
+
+s(L(θ, ϕ(r)); r) is continuously differentiable in θ and ϕ and (ii) s(L(θ, ϕ(r)); r) is strictly mono-tonically increasing in each objective Li. Note that both linear scalarization and smooth Tchebycheff scalarization satisfy these conditions, since they are strictly monotone in each objective for ri > 0.Proof. Let ϕ⋆ and θ⋆ denote solutions to the upper and lower level optimization problems, respec-tively. Invoking stationarity of ϕ⋆ and θ⋆, the first-order optimality conditions yield: 
+
+∇ϕ s(L(θ⋆, ϕ⋆(r)); r) = 
+
+> m
+
+X
+
+> i=1
+
+ωi(r) ∇ϕLi(θ⋆, ϕ⋆(r)) = 0, (6) 
+
+∇θ s(L(θ⋆, ϕ⋆(r)); r) = 
+
+> m
+
+X
+
+> i=1
+
+ωi(r) ∇θ Li(θ⋆, ϕ⋆(r)) = 0, (7) where ωi(r) ∝ ∂s/∂ Li > 0 according to property (ii), and we normalize so that Pmi=1 ωi(r) = 1 .Eq. (6) and (7) express 0 as a convex combination of the per-objective gradients at (ϕ⋆, θ⋆), which is precisely the Pareto stationarity condition in Eq. (3). Thus, any solution (ϕ⋆, θ⋆) to the bilevel optimization problem in Eq. (5) is Pareto stationary. ■
+
+## 4 MOSEL: Multi-Objective Stackelberg Efficient Learning 
+
+In this section, we introduce Multi-Objective Stackelberg Efficient Learning (MOSEL), a framework for a posteriori multi-objective optimization in deep neural networks that recovers a full front of Pareto stationary solutions at the computational cost of standard single-objective training. To that end, we build on recent works that leverage Stackelberg game theory for deep learning optimization—such as gradient homogenization in multi-task learning [24] and fairness–accuracy trade-offs [66]—to cast the bilevel optimization problem in Eq. (5) to a Stackelberg game. Following the notion of a differentiable Stackelberg equilibrium, introduced in [16], we train both the representation learning and preference alignment networks via simultaneous gradient updates—in other words, via a single forward-backward pass. A general Stackelberg game is a two-player game consisting of a leader and follower, where the leader plays first and the follower reacts optimally to this move, representing the hierarchical structure of bilevel optimization problems. As stated by Fiez et al. [16], given the objectives of leader and follower g, f : Φ × Θ → R, a strategy (ϕ⋆, θ⋆) is a Stackelberg equilibrium, if it minimizes 
+
+arg min 
+
+> ϕ∈Φ
+
+g(ϕ, θ) s.t. θ ∈ arg min 
+
+> θ′∈Θ
+
+f (ϕ, θ′). (8) As we operate in non-convex settings, we consider the corresponding local formulation, where the strategy ϕ⋆ ∈ Uϕ is a local Stackelberg solution for the leader if, for all ϕ ∈ Uϕ,
+
+sup  
+
+> θ∈RUθ(ϕ⋆)
+
+g(ϕ⋆, θ) ≤ sup  
+
+> θ∈RUθ(ϕ)
+
+g(ϕ, θ), (9) where RUθ (ϕ) = θ ∈ Uθ | f (ϕ, θ) ≤ f (ϕ, θ′), ∀θ′ ∈ Uθ is the follower’s local best-response. Moreover, for any θ⋆ ∈ RUθ (ϕ⋆), (ϕ⋆, θ⋆) is a local Stackelberg equilibrium on Uϕ × Uθ . However, the exact computation of RUθ (ϕ) is intractable in neural networks. 5Algorithm 1 MOSEL algorithm 
+
+Input: Dataset D = ( x, y ), Dirichlet hyperparameter α, learning rates ηϕ and ηθ ▷ η ϕ < η θ
+
+for e epochs do for every batch (x, y ) ∼ pD do 
+
+Sample r ∼ Dir( α) ▷ 1 preference vector per batch (Forward Pass )
+
+ˆy ← gϕ(fθ (x), r); ▷ Compute NN outputs 
+
+ℓ := s(L(θ, ϕ (r)); r) ▷ Evaluate and scalarize the losses (Backward Pass )
+
+ϕ ← ϕ − ηϕ ∇ϕr⊤ℓ ▷ Update preference alignment network 
+
+θ ← θ − ηθ ∇θ r⊤ℓ ▷ Update representation learning network 
+
+end for end for return ϕ, θ
+
+To overcome this limitation, Fiez et al. [16] introduce the notion of differentiable Stackelberg equilibrium , where (ϕ⋆, θ⋆) = ( ϕ⋆, b (ϕ⋆)) is a differentiable Stackelberg equilibrium, if 
+
+∇ϕ g(ϕ⋆, b (ϕ⋆)) = 0 and ∇2 
+
+> ϕ
+
+g(ϕ⋆, b (ϕ⋆)) ≻ 0, (10) where θ⋆ = b(ϕ⋆) is the follower’s best response that is implicitly defined by ∇θ f (ϕ⋆, θ⋆) = 0 . The concepts of local Stackelberg equilibrium and differentiable Stackelberg equilibrium coincide except on a set of measure zero [16], making the differentiable Stackelberg equilibrium a natural target for gradient-based optimization. Fiez et al. [16] further show, that simultaneous gradient updates with a timescale separation, that is, a smaller learning rate for the leader than for the follower, is sufficient to ensure local convergence to a differentiable Stackelberg equilibrium. Intuitively, the faster follower updates keep θ close to its best response at every leader step, approximating the hierarchical structure of the Stackelberg game without requiring exact best-response computation. These guarantees directly connect to the Pareto stationarity condition in Eq. (3), as any differentiable Stackelberg equilibrium (ϕ⋆, θ⋆) satisfy their first-order stationarity conditions, which coincide with the condition in Eq. (3). Thus, convergence to a differentiable Stackelberg equilibrium implies convergence to a Pareto stationary solution, providing the theoretical foundation for the MOSEL algorithm in Alg. 1. We highlight that the output of Alg. 1 correspond to local optima of the neural network parameters ϕ and θ, which in turn yield a Pareto stationary solution of the bilevel optimization problem in Eq. (5), and consequently of the original MOO problem in Eq. (1). Beyond Pareto stationarity, the stochastic preference sampling in Alg. 1 implicitly regularizes the representation network toward shared features. Under the power-iteration characterization of early-stage gradient descent [69], we show in Theorem 3 that objective-specific features are exponentially suppressed relative to shared ones, with strength controlled by the Dirichlet concentration α.
+
+Proposition 1 (Implicit regularization toward shared features) . Consider the bilevel problem in Eq. (5) 
+
+with two objectives A and B, solved via the Stackelberg formulation of Alg. 1. Let XA, XB ⊆ X 
+
+denote the feature directions in fθ relevant to each objective and XAB = XA ∩ X B the shared features. In the weakly conflicting regime, i.e., when XAB ̸ = ∅, let ρk,m denote the relative learning ratio, i.e., the fraction of representational energy allocated to feature k over feature m, under the stochastic preference sampling of Alg. 1. Then: 
+
+∀ k ∈ X AB , m ∈ X \ X AB : ∃ α : ρk,m > 1.
+
+Thus, there exists a Dirichlet parameter α, such that the network preferentially learns shared features over objective-specific ones, even when the latter has a larger average importance as shown in Remark 2. The full proof, assumptions, and generalization to K objectives can be found in App. A.2. 
+
+Computational time and memory complexity. Note that MOSEL shares the same asymptotic complexity as COSMOS [53], with O(e·m·p) time and O(e·p) memory, where e denotes the number of epochs and p the number of network parameters. This efficiency arises because both methods perform a single forward and backward pass over m objectives per gradient step. Importantly, the proposed split architecture introduces no additional overhead: the timescale separation approximation reduces the nested second-order derivatives of exact bilevel optimization to standard gradient descent, thereby achieving Pareto stationarity at no extra computational cost. 65 Experiments 
+
+5.1 Strongly conflicting setting: Fairness-Performance trade-off 
+
+Fairness in machine learning is inherently a multi-objective problem, as metrics such as Difference in Equality of Opportunity (DEO) directly conflict with predictive performance [48, 62]. Existing approaches typically treat fairness as a constraint or penalty, reducing the problem to a single trade-off and limiting the information available to decision makers [37]. This is particularly problematic in high-stakes domains such as criminal justice, credit scoring, and healthcare [43, 62]. We leverage this use case in the following experiments to empirically validate that MOSEL recovers diverse and high-quality Pareto frontiers in strongly conflicting settings. 
+
+Datasets. We evaluate on Adult [2], COMPAS [1], and Credit [23], three widely used tabular fairness benchmarks with ’sex’ as the sensitive attribute, and on the image dataset FairFace [27], predicting ’gender’ under sensitive attribute ’race’ . Training objectives are binary cross-entropy (BCE) as a proxy for accuracy and a differentiable hyperbolic tangent relaxation of DEO [48] as a fairness surrogate; at test time we report misclassification error and DEO. 
+
+Baselines and metrics. We compare MOSEL against COSMOS [53], evaluating both on 25 uniformly distributed test rays. We additionally compare against the post-processing baseline of Hardt et al. [18], which operates on an unconstrained classifier (using the same NN architecture) by sweeping a shared target TPR across per-group ROC convex hulls to derive group-specific decision thresholds, tracing out the Pareto front. Further details on hyperparameters, architectures, and training are provided in Appendix B. We report the relative hypervolume [71], defined as the achieved hypervolume divided by the maximum possible hypervolume between the utopia point (ideal, generally unattainable) and nadir point (worst per-objective value among observed solutions) as shown in Appendix B.2; alongside the number of non-dominated solutions per method, where dominated solutions are removed in post-processing. 
+
+Results. Table 1 summarizes the results on both training and test objectives. MOSEL-LS and MOSEL-CS consistently match or outperform COSMOS across datasets in terms of both hypervolume and the number of Pareto optimal solutions, providing strong empirical evidence that MOSEL recovers diverse and high-quality Pareto frontiers in strongly conflicting settings. This advantage is particularly pronounced in Figure 2, where on FairFace, COSMOS collapses to a near-degenerate front, while both MOSEL variants maintain high hypervolume and a substantially larger set of Pareto optimal solutions. The post-hoc fairness baseline [18] remains competitive in hypervolume in some cases (e.g., Default and FairFace test error), but generally yields fewer non-dominated solutions. Moreover, on datasets such as Adult, its solutions are concentrated in a narrow region of low unfairness but high error, limiting its practical utility. Table 1: Fairness-Performance Trade-offs. Relative hypervolume and number of Pareto optimal solutions on the fairness benchmarks, computed on training loss and test error. Mean ± std over five runs; best entries per column shaded. Dataset Method HV Loss ↑ HV Error ↑ # PO sol. (Loss) ↑ # PO sol. (Error) ↑                                                                                                                                                                                                
+
+> Adult MOSEL-LS 0.939 ±0.007 0.849 ±0.012 22.8 ±1.2 21.2 ±1.5 MOSEL-CS 0.819 ±0.017 0.776 ±0.015 23.8 ±0.7 22.0 ±1.4 COSMOS 0.926 ±0.014 0.830 ±0.010 20.2 ±0.7 17.4 ±1.9 Classifier 0.906 ±0.025 0.618 ±0.016 8.0 ±0.6 6.2 ±0.7 COMPAS MOSEL-LS 0.920 ±0.019 0.568 ±0.008 15.6 ±1.4 14.6 ±1.4 MOSEL-CS 0.930 ±0.007 0.560 ±0.005 15.2 ±1.6 14.2 ±1.6 COSMOS 0.928 ±0.002 0.567 ±0.019 14.6 ±1.0 13.6 ±1.0 Classifier 0.881 ±0.026 0.645 ±0.037 9.2 ±1.6 6.2 ±1.5 Default MOSEL-LS 0.951 ±0.011 0.922 ±0.014 17.0 ±1.7 15.4 ±0.8 MOSEL-CS 0.902 ±0.029 0.897 ±0.024 13.6 ±2.1 10.8 ±2.3 COSMOS 0.938 ±0.009 0.905 ±0.016 14.6 ±3.9 11.8 ±2.5 Classifier 0.941 ±0.023 0.925 ±0.016 4.8 ±1.3 4.0 ±1.1 FairFace MOSEL-LS 0.987 ±0.013 0.701 ±0.047 13.6 ±1.0 10.6 ±2.3 MOSEL-CS 0.998 ±0.003 0.734 ±0.042 13.2 ±2.3 11.4 ±2.4 COSMOS 0.193 ±0.038 0.176 ±0.037 3.2 ±1.0 2.0 ±0.9 Classifier 0.808 ±0.009 0.708 ±0.030 16.4 ±1.4 12.2 ±1.6
+
+70.14 0.16 0.18 0.2 0.22 0.24               
+
+> Error
+> 0.00 0.02 0.04 0.06 0.08 0.10 0.12
+> DEO
+> Adult
+> 00.1 0.2 0.3 0.4
+> Error
+> 0.00 0.05 0.10 0.15 0.20 0.25 0.30 0.35
+> DEO
+> COMPAS
+> 0.18 0.19 0.2 0.21 0.22
+> Error
+> 0.000 0.005 0.010 0.015
+> DEO
+> Default
+> 0.1 0.2 0.3 0.4
+> Error
+> 0.00 0.05 0.10 0.15 0.20 0.25 0.30
+> DEO
+> FairFace MOSEL-LS MOSEL-CS COSMOS Classifier
+
+Figure 2: Fairness-Performance Trade-offs. Test-time Pareto fronts, plotting classification error against fairness violation. The grey dotted lines indicate zero unfairness and the best accuracy achievable by an unconstrained classifier; their intersection defines the utopia point—an ideal, yet unattainable solution toward which all methods aim to converge. 0.10 0.15 0.20                    
+
+> Error Task TL
+> 0.10 0.12 0.14 0.16 0.18 0.20
+> Error Task BR
+> Multi-MNIST
+> 0.18 0.20 0.22
+> Error Task TL
+> 0.18 0.20 0.22 0.24
+> Error Task BR
+> Multi-Fashion
+> 0.05 0.10 0.15 0.20 0.25
+> Error Task TL
+> 0.14 0.16 0.18 0.20 0.22
+> Error Task BR
+> Multi-Fashion+MNIST
+> 0.030 0.035 0.040 0.045 0.050
+> Error Goatee
+> 0.03 0.04 0.05 0.06 0.07 0.08 0.09
+> Error Mustache
+> CelebA MOSEL-LS MOSEL-CS COSMOS PCGrad MGDA GradNorm FAMO NashMTL Equal weight Single Task
+
+Figure 3: Two-task setting. Test-time Pareto fronts on the error, showing the trade-offs between task-specific errors. Grey dotted lines indicate the best achievable single-task performance on each task; their intersection marks the single-task baseline. In this weakly conflicting setting, positive transfer allows methods to surpass this baseline, with MOSEL achieving the largest improvements. 
+
+5.2 Weakly conflicting setting: Multi-Task Learning 
+
+In multi-task learning, joint training can improve task performance via positive transfer, but task-specific losses may also induce conflicting gradients, degrading performance [56]. However, such conflicts are not guaranteed as they depend in diverse factors like the data, training dynamics, etc., placing MTL in a weakly conflicting regime. As a result, methods designed to resolve gradient conflicts—such as GradNorm [6], FAMO [35], NashMTL [46], and PCGrad [67] —can even harm performance [34, 57]. We use the MTL setting to demonstrate that MOSEL adapts to both regimes without prior knowledge of the conflict structure. First, in a simple two-task setting, we show that MOSEL converges to solutions closer to the utopia point by effectively leveraging positive transfer, outperforming both standard single-objective training and specialized multi-task learning methods without additional computational cost. In a second experiment, we demonstrate that MOSEL efficiently enables positive transfer in settings with many tasks (objectives). 
+
+Datasets. We evaluate on three synthetic and one real-world benchmark. Multi-MNIST [54], Multi-Fashion and Multi-Fashion+MNIST [32] are synthetic multi-task benchmarks that are composed of two digits or clothing items based on the MNIST [30] and Fashion-MNIST [64] dataset,where the goal is to simultaneously classify both objects (top-left and bottom-right), using per-task cross-entropy as objectives. As real-world benchmark we consider the CelebA dataset [39], containing over 200,000 images of celebrities, annotated with 40 binary attributes. 
+
+Baselines and metrics. We compare against COSMOS [53], MGDA [56], PCGrad [67], Grad-Norm [6], FAMO [35], NashMTL [46], equal weighting and single task performances. PCGrad is evaluated on 5 preferences, as it requires retraining for every preference. While standard PCGrad uses equal weighting, we weigh the objectives based on these preferences to obtain diverse solutions. As other baselines do not support preference conditioning, we report the single obtained solution. Details on hyperparameters, architectures, and training configurations for all experiments are provided in Appendix B. We train all methods using binary cross-entropy; and evaluate using error at test time. 81 2 3 4 5 6 7 8 9 10 Number of tasks Makeup Lipstick Male Attractive Arched Brows No Beard 5 o'Clock Earrings Sideburns Goatee                                                                                                      
+
+> 89.1 93.0 97.2 79.7 81.5 94.3 93.1 88.0 95.4 95.4
+> +0.8 +1.0 +1.0 +1.0 +1.2 +1.3 +1.3 +1.4 +1.3 -0.5 +0.5 +0.7 +0.6 +0.5 +0.7 +0.5 +0.3 +0.5 +0.2 +0.3 +0.1 +0.5 +0.4 +0.5 +0.4 +0.5 +0.8 +0.7 +1.3 +1.8 +1.6 +1.6 +1.8 +0.8 +0.8 +0.8 +0.5 +0.8 +0.7 +0.7 +0.5 +0.7 +0.8 +0.7 +0.6 +0.5 +0.6 +0.6 +0.5 +0.5 +0.6 +2.2 +2.1 +1.7
+> Task Acc (%) Improvement over Single Task (%)
+> 12345678910 Number of tasks Pale Skin Necklace Brown Hair Narrow Eyes Straight Hair Blurry Gray Hair Sideburns Pointy Nose Mouth Open
+> 96.1 86.2 86.7 85.8 81.4 95.0 97.6 95.4 75.8 92.7
+> -1.6 +0.8 +0.8 +0.7 +0.9 +0.8 +0.9 +0.8 +0.8 +1.5 -0.3 -0.1 -0.0 +0.1 -0.1 -0.0 -0.2 +0.0 +1.3 +1.2 +1.8 +1.1 +1.8 +1.6 +1.7 +1.4 +0.8 +1.0 +1.1 +1.0 +1.1 +1.0 +1.1 +1.0 +1.1 +0.6 +1.1 +0.8 +0.7 +0.3 +0.5 +0.6 +0.6 +0.5 +0.3 +0.2 +0.3 +0.4 +1.9 +1.8 +2.0 +0.6 +0.1 +0.2
+> Task Acc (%) Improvement over Single Task (%)
+> -1.6% -0.8% +0.0% +0.8% +1.6%
+
+Figure 4: Scalability to number of objectives on CelebA . Per-task accuracy improvement over the single-task baseline (gray column) for the most correlated (left) and least correlated (right) task sets, as the number of jointly optimized tasks increases. Results are averaged over 5 seeds. 
+
+Results on two-task setting. As shown in Figure 3, MOSEL recovers solutions closest to the utopia point on all synthetic benchmarks, consistently outperforming COSMOS, most of the MTL methods, and the equal weight baseline. Notably, even in these weakly conflicting settings, where gradient-based MTL methods are specifically designed to help, MOSEL matches or surpasses their performance, demonstrating its benefits regardless of the degree of gradient conflict. Impor-tantly, beyond solution quality, MOSEL also excels in efficiency. The table on the left shows the Method ∆ Param. Time ( ×) CPU ( ×)Equal weight 17,495,136 248 .4 ± 45 .7 min 11 .15 ± 0.25 MB MOSEL-LS +672 ×1.0 ± 0.1 ×0.97 ± 0.02                                                         
+
+> MOSEL-CS +672 ×1.0±0.2×0.98 ±0.02
+> COSMOS +1,072 ×1.1±0.1×0.99 ±0.02
+> PCGrad +0 ×9.8±2.2×1.06 ±0.01
+> MGDA +0 ×3.0±0.5×0.99 ±0.03
+> GradNorm +0 ×3.0±0.0×0.95 ±0.02
+> FAMO +0 ×1.2±0.1×0.96 ±0.03
+> NashMTL +0 ×2.4±0.2×1.28 ±0.01
+> Single Task +0 ×2.0±0.3×1.01 ±0.03
+
+computational overhead on CelebA relative to equal weight training (top); # Param. are abso-lute counts; time and CPU are multiplicative factors; and, means and standard deviations are computed over five runs. As reported, MOSEL introduces negligible computational overhead, adding only 672 parameters and matching the training time of equal weight training, while PCGrad incurs a nearly 10 × slowdown due to per-preference retraining, and single-task train-ing scales linearly with the number of tasks. Together, these results confirm that MOSEL recovers diverse and high-quality Pareto fronts at the cost of standard single-objective training. 
+
+Results on scalability to number of objectives. To further assess scalability, we conduct an ablation on CelebA comparing correlated and uncorrelated task sets as the number of jointly optimized objectives grows (Figure 4), with tasks added incrementally and performance measured relative to single-task baselines. Task correlation is measured by the co-occurrence frequency of attributes in images. For correlated tasks (left panel), shared representations enable strong positive transfer, with accuracy improvements over the single-task baseline growing consistently as more objectives are added. For uncorrelated tasks (right panel), positive transfer is weaker, yet MOSEL still outperforms single-task training on the majority of objectives. The occasional degradations can be attributed to two factors: tasks with high single-task accuracy have little room for improvement, and by choosing the Pareto optimal solution closest to the zero vector for evaluation, high-loss tasks dominate the distance computation, while low-loss tasks (high single-task accuracy) contribute minimally. Nonetheless, the overall performance gains come at no additional cost: computational overhead remains negligible as the number of objectives grows, Figure 8 shows that runtime stays approximately constant, with only minor fluctuations; while memory increases only marginally, highlighting the scalability of MOSEL. 
+
+## 6 Conclusion 
+
+We propose an efficient a posteriori multi-objective framework for deep neural networks that achieves Pareto stationary solutions at the cost of standard single-objective training via a bilevel, Stackelberg formulation enabling single-pass updates. Empirically, it recovers diverse Pareto frontiers in strongly conflicting settings and converges closer to the utopia point in weakly conflicting regimes such as multi-task learning, demonstrating that efficient multi-objective learning scales and improves performance by learning more diverse representations to capture all objectives. 9Limitations and future work. Despite its advantages, our approach has several limitations that open avenues for future research. First, our results suggest that efficient multi-objective learning can yield richer, more robust representations, especially in weakly conflicting regimes, motivating further study on transfer [49] and alignment [21]. Moreover, our fairness–performance experiments show that our method achieves better trade-offs while providing diverse solutions for informed deploy-ment; extending this to other high-stakes domains such as clinical risk prediction [42], recidivism assessment [37] or credit scoring [29] is an important direction for future work. Second, the method relies on a modular decomposition of neural networks, which may not be straightforward to design or optimal for all architectures; exploring adaptive or learned decompositions is therefore another important avenue. Third, while the computational overhead of MOSEL for recovering a Pareto stationary front is minimal, deploying the model requires selecting a preference vector—and thus a specific trade-off. This decision becomes increasingly challenging as the number of objectives grows and remains an open problem [26]; addressing it via human-in-the-loop methods for multi-objective evaluation and selection is a key direction for future work. Overall, our results highlight the promise of our approach and, together with these challenges, motivate a broader research agenda at the intersection of scalable multi-objective learning, adaptive model design, and decision-aware deployment of deep neural models. 
+
+## Acknowledgments and Disclosure of Funding 
+
+This work has been supported by the project “Society-Aware Machine Learning: The paradigm shift demanded by society to trust machine learning,” funded by the European Union and led by IV (ERC-2021-STG, SAML, 101040177). Views and opinions expressed are, however, those of the author(s) only and do not necessarily reflect those of the aforementioned funding agencies. Neither of the aforementioned parties can be held responsible for them. We would like to thank Nektarios Kalampalikis for the insightful discussions and continuous support throughout this project. 
+
+## References 
+
+[1] Julia Angwin, Jeff Larson, Surya Mattu, and Lauren Kirchner. How we analyzed the COMPAS recidivism algorithm, 2016. URL https://www.propublica.org/article/ how-we-analyzed-the-compas-recidivism-algorithm .[2] Barry Becker and Ronny Kohavi. Adult, 1996. URL https://doi.org/10.24432/C5XW20 .[3] Gerard Ben Arous, Reza Gheissari, Jiaoyang Huang, and Aukosh Jagannath. High-dimensional sgd aligns with emerging outlier eigenspaces. In International Conference on Learning Repre-sentations , volume 2024, pages 47732–47778, 2024. [4] Weiyu Chen and James Kwok. Multi-objective deep learning with adaptive reference vectors. 
+
+Advances in Neural Information Processing Systems , 35:32723–32735, 2022. [5] Yongqiang Chen, Kaiwen Zhou, Yatao Bian, Binghui Xie, Bingzhe Wu, Yonggang Zhang, MA KAILI, Han Yang, Peilin Zhao, Bo Han, and James Cheng. Pareto invariant risk minimiza-tion: Towards mitigating the optimization dilemma in out-of-distribution generalization. In The Eleventh International Conference on Learning Representations , 2023. [6] Zhao Chen, Vijay Badrinarayanan, Chen-Yu Lee, and Andrew Rabinovich. Gradnorm: Gra-dient normalization for adaptive loss balancing in deep multitask networks. In International conference on machine learning , pages 794–803. PMLR, 2018. [7] Paul F Christiano, Jan Leike, Tom Brown, Miljan Martic, Shane Legg, and Dario Amodei. Deep reinforcement learning from human preferences. Advances in neural information processing systems , 30, 2017. [8] cjadams, Daniel Borkan, inversion, Jeffrey Sorensen, Lucas Dixon, Lucy Vasserman, and nithum. Jigsaw unintended bias in toxicity classification. https://kaggle.com/competitions/ jigsaw-unintended-bias-in-toxicity-classification , 2019. Kaggle. 10 [9] Carlos A Coello Coello, Gary B Lamont, and David A Van Veldhuizen. Evolutionary algorithms for solving multi-objective problems . Springer, 2007. [10] Benoît Colson, Patrice Marcotte, and Gilles Savard. An overview of bilevel optimization. 
+
+Annals of operations research , 153(1):235–256, 2007. [11] Yatin Dandi, Matteo Vilucchio, Luca Arnaboldi, Hugo Tabanelli, and Florent Krzakala. Deep learning as neural low-degree filtering: A spectral theory of hierarchical feature learning. arXiv preprint arXiv:2605.13612 , 2026. [12] Stephan Dempe. Foundations of bilevel programming . Springer, 2002. [13] Jean-Antoine Désidéri. Multiple-gradient descent algorithm (mgda) for multiobjective opti-mization. Comptes Rendus. Mathématique , 350(5-6):313–318, 2012. [14] Alexey Dosovitskiy and Josip Djolonga. You only train once: Loss-conditional training of deep networks. In International conference on learning representations , 2019. [15] Matthias Ehrgott. Multicriteria optimization . Springer, 2005. [16] Tanner Fiez, Benjamin Chasnov, and Lillian Ratliff. Implicit learning dynamics in stackelberg games: Equilibria characterization, convergence analysis, and empirical study. In Proceedings of the 37th International Conference on Machine Learning , volume 119 of Proceedings of Machine Learning Research , pages 3133–3144. PMLR, 13–18 Jul 2020. [17] Jörg Fliege and Benar Fux Svaiter. Steepest descent methods for multicriteria optimization. 
+
+Mathematical methods of operations research , 51(3):479–494, 2000. [18] Moritz Hardt, Eric Price, and Nati Srebro. Equality of opportunity in supervised learning. 
+
+Advances in neural information processing systems , 29, 2016. [19] Conor F Hayes, Roxana R˘ adulescu, Eugenio Bargiacchi, Johan Källström, Matthew Macfarlane, Mathieu Reymond, Timothy Verstraeten, Luisa M Zintgraf, Richard Dazeley, Fredrik Heintz, et al. A practical guide to multi-objective reinforcement learning and planning: Cf hayes et al. 
+
+Autonomous Agents and Multi-Agent Systems , 36(1):26, 2022. [20] Kaiming He, Xiangyu Zhang, Shaoquing Ren, and Jian Sun. Deep residual learning for image recognition. 2016 ieee conf. In Comput. Vis. Pattern Recognit , pages 770–778, 2015. [21] Qiang He and Setareh Maghsudi. Pareto multi-objective alignment for language models. In 
+
+Joint European Conference on Machine Learning and Knowledge Discovery in Databases ,pages 257–272. Springer, 2025. [22] Long P Hoang, Dung D Le, Tran Anh Tuan, and Tran Ngoc Thang. Improving pareto front learning via multi-sample hypernetworks. arXiv e-prints , pages arXiv–2212, 2022. [23] Hans Hofmann. Statlog (German Credit Data), 1994. URL https://archive.ics.uci. edu/dataset/144/statlog+german+credit+data .[24] Adrián Javaloy and Isabel Valera. Rotograd: Gradient homogenization in multitask learning. In 
+
+International Conference on Learning Representations , 2022. [25] Adrian Javaloy, Maryam Meghdadi, and Isabel Valera. Mitigating modality collapse in multi-modal VAEs via impartial optimization. In Proceedings of the 39th International Conference on Machine Learning , Proceedings of Machine Learning Research, pages 9938–9964. PMLR, 2022. [26] Adrián Javaloy, Antonio Vergari, and Isabel Valera. Copa: Comparing the incomparable in multi-objective model evaluation. arXiv preprint arXiv:2503.14321 , 2025. [27] Kimmo Karkkainen and Jungseock Joo. Fairface: Face attribute dataset for balanced race, gender, and age for bias measurement and mitigation. In Proceedings of the IEEE/CVF Winter Conference on Applications of Computer Vision , pages 1548–1558, 2021. 11 [28] Diederik P Kingma and Jimmy Ba. Adam: A method for stochastic optimization. arXiv preprint arXiv:1412.6980 , 2014. [29] Nikita Kozodoi, Johannes Jacob, and Stefan Lessmann. Fairness in credit scoring: Assessment, implementation and profit implications. European Journal of Operational Research , 297(3): 1083–1094, 2022. [30] Yann LeCun, Patrick Haffner, Léon Bottou, and Yoshua Bengio. Object recognition with gradient-based learning. In Shape, contour and grouping in computer vision , pages 319–345. Springer, 1999. [31] Chengao Li, Hanyu Zhang, Yunkun Xu, Hongyan Xue, Xiang Ao, and Qing He. Gradient-adaptive policy optimization: Towards multi-objective alignment of large language models. In Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , pages 11214–11232, 2025. [32] Xi Lin, Hui-Ling Zhen, Zhenhua Li, Qing-Fu Zhang, and Sam Kwong. Pareto multi-task learning. Advances in neural information processing systems , 32, 2019. [33] Xi Lin, Xiaoyuan Zhang, Zhiyuan Yang, Fei Liu, Zhenkun Wang, and Qingfu Zhang. Smooth tchebycheff scalarization for multi-objective optimization. In International Conference on Machine Learning , pages 30479–30509. PMLR, 2024. [34] Bo Liu, Xingchao Liu, Xiaojie Jin, Peter Stone, and Qiang Liu. Conflict-averse gradient descent for multi-task learning. Advances in neural information processing systems , 34:18878–18890, 2021. [35] Bo Liu, Yihao Feng, Peter Stone, and Qiang Liu. Famo: Fast adaptive multitask optimization. 
+
+Advances in Neural Information Processing Systems , 36:57226–57243, 2023. [36] Erlong Liu, Yu-Chang Wu, Xiaobin Huang, Chengrui Gao, Ren-Jian Wang, Ke Xue, and Chao Qian. Pareto set learning for multi-objective reinforcement learning. In Proceedings of the AAAI Conference on Artificial Intelligence , volume 39, pages 18789–18797, 2025. [37] Suyun Liu and Luis Nunes Vicente. Accuracy and fairness trade-offs in machine learning: a stochastic multi-objective approach: S. liu, ln vicente. Computational Management Science , 19 (3):513–537, 2022. [38] Suyun Liu and Luis Nunes Vicente. The stochastic multi-gradient algorithm for multi-objective optimization and its application to supervised machine learning. Annals of Operations Research ,339(3):1119–1148, 2024. [39] Ziwei Liu, Ping Luo, Xiaogang Wang, and Xiaoou Tang. Deep learning face attributes in the wild. In Proceedings of International Conference on Computer Vision (ICCV) , December 2015. [40] Pingchuan Ma, Tao Du, and Wojciech Matusik. Efficient continuous pareto exploration in multi-task learning. In Proceedings of the 37th International Conference on Machine Learning ,volume 119 of Proceedings of Machine Learning Research , pages 6522–6531. PMLR, 13–18 Jul 2020. [41] Debabrata Mahapatra and Vaibhav Rajan. Multi-task learning with user preferences: Gradient descent with controlled ascent in pareto optimization. In International Conference on Machine Learning , pages 6597–6607. PMLR, 2020. [42] N Martinez and M Bertran. Fairness with minimal harm: A pareto-optimal approach for healthcare. NeurIPS ML4H: Machine Learning for Health , 2019. [43] Natalia Martinez, Martin Bertran, and Guillermo Sapiro. Minimax pareto fairness: A multi objective perspective. In Proceedings of the 37th International Conference on Machine Learning ,volume 119 of Proceedings of Machine Learning Research , pages 6755–6764. PMLR, 13–18 Jul 2020. [44] Kaisa Miettinen. Nonlinear multiobjective optimization , volume 12. Springer Science & Business Media, 1999. 12 [45] Aviv Navon, Aviv Shamsian, Ethan Fetaya, and Gal Chechik. Learning the pareto front with hypernetworks. In International Conference on Learning Representations , 2021. [46] Aviv Navon, Aviv Shamsian, Idan Achituve, Haggai Maron, Kenji Kawaguchi, Gal Chechik, and Ethan Fetaya. Multi-task learning as a bargaining game. In International Conference on Machine Learning , pages 16428–16446. PMLR, 2022. [47] Long Ouyang, Jeffrey Wu, Xu Jiang, Diogo Almeida, Carroll Wainwright, Pamela Mishkin, Chong Zhang, Sandhini Agarwal, Katarina Slama, Alex Ray, et al. Training language models to follow instructions with human feedback. Advances in neural information processing systems ,35:27730–27744, 2022. [48] Kirtan Padh, Diego Antognini, Emma Lejal-Glaude, Boi Faltings, and Claudiu Musat. Address-ing fairness in classification with a model-agnostic multi-objective algorithm. In Uncertainty in artificial intelligence , pages 600–609. PMLR, 2021. [49] Sinno Jialin Pan and Qiang Yang. A survey on transfer learning. IEEE Transactions on knowledge and data engineering , 22(10):1345–1359, 2009. [50] E Perez, F Strub, H De Vries, and V Dumoulin. Visual reasoning with a general conditioning layer, courville. In In Proceedings of the AAAI Conference on Artificial Intelligence , 2017. [51] Yinuo Ren, Tesi Xiao, Michael Shavlovsky, Lexing Ying, and Holakou Rahmanian. Cos-dpo: Conditioned one-shot multi-objective fine-tuning framework. In Proceedings of the Forty-first Conference on Uncertainty in Artificial Intelligence , volume 286 of Proceedings of Machine Learning Research , pages 3525–3551. PMLR, 21–25 Jul 2025. [52] Diederik M Roijers, Peter Vamplew, Shimon Whiteson, and Richard Dazeley. A survey of multi-objective sequential decision-making. Journal of Artificial Intelligence Research , 48: 67–113, 2013. [53] Michael Ruchte and Josif Grabocka. Scalable pareto front approximation for deep multi-objective learning. In 2021 IEEE international conference on data mining (ICDM) , pages 1306–1311. IEEE, 2021. [54] Sara Sabour, Nicholas Frosst, and Geoffrey E Hinton. Dynamic routing between capsules. 
+
+Advances in neural information processing systems , 30, 2017. [55] Victor Sanh, Lysandre Debut, Julien Chaumond, and Thomas Wolf. Distilbert, a distilled version of bert: smaller, faster, cheaper and lighter. In NeurIPS EMC 2 Workshop , 2019. [56] Ozan Sener and Vladlen Koltun. Multi-task learning as multi-objective optimization. Advances in neural information processing systems , 31, 2018. [57] Guangyuan SHI, Qimai Li, Wenlong Zhang, Jiaxin Chen, and Xiao-Ming Wu. Recon: Reducing conflicting gradients from the root for multi-task learning. In The Eleventh International Conference on Learning Representations , 2023. [58] Ankur Sinha, Pekka Malo, and Kalyanmoy Deb. A review on bilevel optimization: From classical to evolutionary approaches and applications. IEEE transactions on evolutionary computation , 22(2):276–295, 2017. [59] Samuel L. Smith and Quoc V. Le. A bayesian perspective on generalization and stochastic gradient descent. In International Conference on Learning Representations , 2018. URL 
+
+https://openreview.net/forum?id=BJij4yg0Z .[60] Samuel L. Smith, Pieter-Jan Kindermans, and Quoc V. Le. Don’t decay the learning rate, increase the batch size. In International Conference on Learning Representations , 2018. URL 
+
+https://openreview.net/forum?id=B1Yy1BxCZ .[61] Mingxing Tan and Quoc Le. EfficientNet: Rethinking model scaling for convolutional neural networks. In Proceedings of the 36th International Conference on Machine Learning , volume 97 of Proceedings of Machine Learning Research , pages 6105–6114. PMLR, 09–15 Jun 2019. 13 [62] Susan Wei and Marc Niethammer. The fairness-accuracy pareto front. Statistical Analysis and Data Mining: The ASA Data Science Journal , 15(3):287–302, 2022. [63] Yake Wei and Di Hu. Mmpareto: boosting multimodal learning with innocent unimodal assistance. In Proceedings of the 41st International Conference on Machine Learning , ICML’24, 2024. [64] Han Xiao, Kashif Rasul, and Roland Vollgraf. Fashion-mnist: a novel image dataset for benchmarking machine learning algorithms. arXiv preprint arXiv:1708.07747 , 2017. [65] Haibo Yang, Zhuqing Liu, Jia Liu, Chaosheng Dong, and Michinari Momma. Federated multi-objective learning. In Thirty-seventh Conference on Neural Information Processing Systems ,2023. [66] Mehdi Yazdani-Jahromi, Ali K Yalabadi, AmirArsalan Rajabi, Aida Tayebi, Ivan Garibay, and Ozlem O Garibay. Fair bilevel neural network (fairbinn): on balancing fairness and accuracy via stackelberg equilibrium. Advances in Neural Information Processing Systems , 37: 105780–105818, 2024. [67] Tianhe Yu, Saurabh Kumar, Abhishek Gupta, Sergey Levine, Karol Hausman, and Chelsea Finn. Gradient surgery for multi-task learning. Advances in neural information processing systems ,33:5824–5836, 2020. [68] Muhammad Bilal Zafar, Isabel Valera, Manuel Gomez Rogriguez, and Krishna P Gummadi. Fairness constraints: Mechanisms for fair classification. In Artificial intelligence and statistics ,pages 962–970. PMLR, 2017. [69] Bohan Zhang, Zihao Wang, Hengyu Fu, and Jason D. Lee. Neural networks learn generic multi-index models near information-theoretic limit. In The Fourteenth International Conference on Learning Representations , 2026. [70] Tianchen Zhou, Fnu Hairi, Haibo Yang, Jia Liu, Tian Tong, Fan Yang, Michinari Momma, and Yan Gao. Finite-time convergence and sample complexity of actor-critic multi-objective reinforcement learning. In Proceedings of the 41st International Conference on Machine Learning , volume 235, pages 61913–61933. PMLR, 21–27 Jul 2024. [71] Eckart Zitzler, Dimo Brockhoff, and Lothar Thiele. The hypervolume indicator revisited: On the design of pareto-compliant indicators via weighted integration. In International conference on evolutionary multi-criterion optimization , pages 862–876. Springer, 2007. 14 A Proofs 
+
+A.1 Non-stationarity of COSMOS solutions Theorem 2. Let G be the objective function of the COSMOS algorithm, defined as: 
+
+G = rT L − λ rT L∥r∥∥L∥ (11) 
+
+where L ∈ Rm 
+
+> ≥0
+
+is the loss vector, r ∈ Rm 
+
+> ≥0
+
+is the target preference vector on the probability simplex, i.e., P ri = 1 , and λ > 0 is a scalar hyperparameter. Assume that at any stationary point, the objective gradients exhibit non-degenerate conflict such that rank (JL) = m − 1. As ri → 1, if the hyperparameter violates the bound λ ≤ ∥L∥ 2 
+
+> ∥L∥−L i
+
+, the stationary points of G are strictly not Pareto stationary. Proof. To evaluate the Pareto stationarity of G, we first find its gradient with respect to parameters θ:
+
+∇θ G = JT 
+
+> L
+
+r − λJ T
+
+> L
+
+ 1
+
+∥r∥∥L∥ 
+
+
+
+r − rT L∥L∥ 2 L
+
+ 
+
+(12) We can rewrite this by factoring out the Jacobian transpose JT 
+
+> L
+
+to isolate the effective weighting vector r′:
+
+∇θ G = JT
+
+> L
+
+ 
+
+1 − λ
+
+∥r∥∥L∥ 
+
+
+
+r +
+
+ λ(rT L)
+
+∥r∥∥L∥ 3
+
+
+
+L
+
+| {z }
+
+> r′
+
+(13) At a stationary point of the COSMOS algorithm, ∇θ G = 0 , which implies JT 
+
+> L
+
+r′ = 0 . By our non-degenerate conflict assumption, the left null space of JL is 1-dimensional. Therefore, any valid Pareto preference vector r satisfying JT 
+
+> L
+
+r = 0 must be a scalar multiple of r′, i.e., r = c · r′ for some 
+
+c̸ = 0 . Consequently, for the point to be Pareto stationary, r′ must be either strictly non-negative or strictly non-positive. Since rT L > 0 and L ≥ 0, the vector r′ cannot be strictly non-positive, and therefore Pareto stationarity strictly requires r′ ≥ 0.Enforcing r′ ≥ 0 yields: 
+
+L ≥ − (∥r∥∥L∥ − λ)
+
+ ∥L∥ 2
+
+λ(rT L)
+
+
+
+r . (14) Rearranging the terms, we get: 
+
+L ≥ 
+
+ λ − ∥ r∥∥L∥ 
+
+λ
+
+  ∥L∥ 2
+
+rT L
+
+
+
+r . (15) By the Cauchy–Schwarz inequality, rT L ≤ ∥ r∥∥L∥ . Because rT L > 0, we invert this to establish a strict lower bound for the fractional term: 
+
+1
+
+rT L ≥ 1
+
+∥r∥∥L∥ =⇒ ∥L∥ 2
+
+rT L ≥ ∥L∥ ∥r∥ . (16) Substituting this lower bound back into our inequality, we establish the necessary condition for Pareto stationarity for any component i:
+
+Li ≥
+
+
+
+1 − ∥r∥∥L∥ 
+
+λ
+
+ ∥L∥ ∥r∥ ri . (17) To simplify the analysis, let ∆i = ∥L∥ − L i ≥ 0 be the objective deficit. Substituting Li = ∥L∥ − ∆i
+
+yields: 
+
+∥L∥ − ∆i ≥
+
+
+
+1 − ∥r∥∥L∥ 
+
+λ
+
+ ∥L∥ ∥r∥ ri . (18) 15 Expanding the right side and moving all terms to the left forms a quadratic inequality with respect to 
+
+∥L∥ :
+
+ri
+
+λ ∥L∥ 2 +
+
+
+
+1 − ri
+
+∥r∥
+
+
+
+∥L∥ − ∆i ≥ 0 . (19) Solving this quadratic inequality for its non-negative root gives the exact necessary lower bound for the total loss norm ∥L∥ :
+
+∥L∥ ≥ λ
+
+2ri
+
+−
+
+
+
+1 − ri
+
+∥r∥
+
+
+
++
+
+s
+
+1 − ri
+
+∥r∥
+
+2
+
++ 4ri∆i
+
+λ
+
+ . (20) We now analyze the behavior of this necessary condition as the preference vector concentrates on objective i, meaning ri → 1. Because r is on the probability simplex ( P rj = 1 and rj ≥ 0), ri → 1
+
+implies that all other components rj → 0, which consequently means ∥r∥ → 1. Applying this limit to the exact bound: 
+
+lim 
+
+> ri→1
+
+λ
+
+2ri
+
+−
+
+
+
+1 − ri
+
+∥r∥
+
+
+
++
+
+s
+
+1 − ri
+
+∥r∥
+
+2
+
++ 4ri∆i
+
+λ
+
+
+
+= λ
+
+2
+
+r 4∆ i
+
+λ = λ
+
+2 · 2√∆i
+
+√λ
+
+= pλ∆i . (21) Therefore, as ri → 1, the necessary condition for Pareto stationarity simplifies to: 
+
+∥L∥ ≥ pλ∆i . (22) Since both ∥L∥ and √λ∆i are non-negative, we can square both sides and isolate the hyperparameter 
+
+λ:
+
+∥L∥ 2 ≥ λ∆i =⇒ λ ≤ ∥L∥ 2
+
+∆i
+
+. (23) Substituting the objective deficit ∆i = ∥L∥ − L i back into the inequality: 
+
+λ ≤ ∥L∥ 2
+
+∥L∥ − L i
+
+. (24) If this bound is violated, i.e., λ > ∥L∥ 2 
+
+> ∥L∥−L i
+
+, no value of ∥L∥ can maintain r′ ≥ 0, forcing the effective weighting vector r′ to contain negative components. Since our assumption guarantees that r′ is the unique vector satisfying JT 
+
+> L
+
+r′ = 0 , the presence of negative components implies that no non-negative preference vector r ≥ 0 can exist. Thus, when ri → 1 and λ > ∥L∥ 2 
+
+> ∥L∥−L i
+
+, the stationary point is strictly not Pareto stationary. 
+
+A.2 Stochastic weighting as implicit regularization 
+
+Zhang et al. [69] show that, under standard assumptions on the data and architecture, a two-layer neural network trained via layer-wise gradient descent on a Gaussian multi-index model f (x) = 
+
+g(U x ) learns the hidden subspace U through a power method dynamic. Specifically, they consider • inputs x ∼ N (0 , I d)
+
+• a two-layer network h(x) = P 
+
+> j
+
+aj σ(w⊤ 
+
+> j
+
+x) with with activation satisfying the monomial approximation property [69, Definition B.7] • small isotropic initialization w(0)  
+
+> j
+
+∼ N (0 , σ 2
+
+> w
+
+Id) and • fixed outer weights during the first training stage. 16 Under these conditions, gradient descent with appropriate weight decay yields a power iteration on the empirical discovery matrix 
+
+ˆΣl = 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+l′(0 , y i)xix⊤ 
+
+> i
+
+(25) so that w(T ) 
+
+> j
+
+∝ ˆΣTl w(0)  
+
+> j
+
+. This implies that after T steps, the expected fraction of a neuron’s energy aligned with feature direction uk scales as λ2Tk /(P 
+
+> i
+
+λ2Ti ), where λk is the corresponding eigenvalue of ˆΣl. Features with larger eigenvalues exponentially dominate, and finite-sample noise is filtered out through the spectral gap. Leveraging this result, we can show that in MTL stochastic task weights regularize against domination of one task, where the regularization strength is controlled by the variance of the Dirichlet distribution we sample from. 
+
+Theorem 3. Consider two tasks A and B that share the same orthonormal eigenbasis U for their discovery matrices, with task-specific eigenvalues λk,A and λk,B for each feature direction 
+
+uk. At each gradient descent step t, the tasks are combined with stochastic weights r(t) 
+
+> A
+
+, r (t)
+
+> B
+
+satisfying r(t) 
+
+> A
+
++ r(t) 
+
+> B
+
+= 1 , drawn i.i.d. from a distribution with expectations ¯rA, ¯rB and shared variance Vα(r) := Var (rA). Let ¯λk := ¯ rAλk,A + ¯ rB λk,B denote the expected eigenvalue and 
+
+∆k := ( λk,A − λk,B )/¯λk the relative task disagreement. Under the power iteration regime of Zhang et al. [69], and assuming Vα(r)∆ 2 
+
+> k
+
+≪ 1 so that a second-order Taylor approximation in the fluctuations is valid, the relative learning ratio between features k and m after T steps satisfies: 
+
+ρk,m (T ) := E|⟨ r(T ) 
+
+> j
+
+, u k⟩| 2
+
+E|⟨ r(T ) 
+
+> j
+
+, u m⟩| 2 ≈
+
+ ¯λk
+
+¯λm
+
+2T
+
+exp 
+
+
+
+−T · Vα(r) · ∆2 
+
+> k
+
+− ∆2
+
+> m
+
+
+
+. (26) 
+
+Proof. Under stochastic task weighting, the multi-task discovery matrix at step t is 
+
+Σ(t) 
+
+> MT
+
+= r(t) 
+
+> A
+
+ΣA + r(t) 
+
+> B
+
+ΣB . (27) Since both tasks share the eigenbasis U , the operator acts as a scalar on each eigendirection 
+
+λ(t) 
+
+> k
+
+= r(t) 
+
+> A
+
+λk,A + r(t) 
+
+> B
+
+λk,B . (28) Writing the weight fluctuation as δt := r(t) 
+
+> A
+
+− ¯rA (so that r(t) 
+
+> B
+
+− ¯rB = −δt), we obtain 
+
+λ(t) 
+
+> k
+
+= ¯λk + δt(λk,A − λk,B ) . (29) Since uk is an eigenvector of both ΣA and ΣB , and the power iteration applies the stochastic operator independently at each step, the projection of the weight vector onto uk after T steps factors as: 
+
+⟨r(T ) 
+
+> j
+
+, u k⟩ = ηT γkTY
+
+> t=1
+
+λ(t) 
+
+> k
+
+, (30) where γk := ⟨r(0)  
+
+> j
+
+, u k⟩ is the initial projection. The signal energy aligned with feature k is the square of this projection: 
+
+|⟨ r(T ) 
+
+> j
+
+, u k⟩| 2 = η2T γ2
+
+> kT
+
+Y
+
+> t=1
+
+ λ(t)
+
+> k
+
+2. (31) Moving to log-space, we obtain: 
+
+12 log  |⟨ r(T ) 
+
+> j
+
+, u k⟩| 2 = T log η + log |γk| +
+
+> T
+
+X
+
+> t=1
+
+log λ(t) 
+
+> k
+
+. (32) Substituting λ(t) 
+
+> k
+
+= ¯λk + δt(λk,A − λk,B ) and applying the second-order Taylor expansion 
+
+log( ¯λk + x) ≈ log ¯λk + x
+
+¯λk
+
+− x2
+
+2¯λ2
+
+> k
+
+(33) 17 with x = δt(λk,A − λk,B ), each summand becomes: 
+
+log λ(t) 
+
+> k
+
+≈ log ¯λk + δt
+
+λk,A − λk,B 
+
+¯λk
+
+− δ2
+
+> t
+
+2
+
+ λk,A − λk,B 
+
+¯λk
+
+2
+
+. (34) Summing over T steps and taking expectations term by term, the zero-order term contributes T log ¯λk;the first-order term vanishes since E[δt] = 0 and the δt are independent across steps; the second-order term contributes − T ·Vα(r)2 ∆2
+
+> k
+
+, using E[δ2 
+
+> t
+
+] = Vα(r) and the definition ∆k := ( λk,A − λk,B )/¯λk.This yields: 
+
+E
+
+ 12 log  |⟨ r(T ) 
+
+> j
+
+, u k⟩| 2
+
+≈ T log( η¯λk) + log |γk| − T · Vα(r)2 ∆2
+
+> k
+
+. (35) Exponentiating both sides gives the expected signal energy for feature k:Signal k(T ) ≈ γ2 
+
+> k
+
+(η¯λk)2T · exp  −T · Vα(r)∆ 2
+
+> k
+
+ . (36) Forming the ratio ρk,m (T ) := Signal k(T )/Signal m(T ), the learning rate η2T cancels identically, and the initialization projections cancel in expectation since E[γ2 
+
+> k
+
+] = E[γ2
+
+> m
+
+] = σ2 
+
+> w
+
+by the isotropic initialization assumption. Combining the exponential terms via eA/e B = eA−B yields (26). 
+
+Remark 1. Equation (26) decomposes the competition between any two features into two multiplica-tive forces. The first factor, (¯λk/¯λm)2T , is a deterministic race : it exponentially favors whichever feature has the larger average eigenvalue across tasks, and it is exactly the dynamics that would arise under fixed (non-stochastic) task weighting. The second factor, exp( −T · Vα(r)[∆ 2 
+
+> k
+
+− ∆2
+
+> m
+
+]) ,is a stochastic penalty : it exponentially suppresses whichever feature has higher relative task disagreement ∆k. This penalty arises because multiplicative noise always reduces geometric growth rates, the same mechanism by which SGD’s minibatch noise implicitly regularizes in the single-task setting [59]. Crucially, shared features ( ∆k ≈ 0) are unaffected by the penalty, while task-specific features ( |∆k| ≫ 0) are actively suppressed, preventing the dominant task from hijacking the network’s representational capacity. The sampling variance Vα(r) controls the strength of this regularization, playing a role analogous to the noise scale η/B in SGD implicit regularization [60]. 
+
+Remark 2 (Regularization overcoming task domination.) . Suppose feature k has a much larger average eigenvalue than feature m (¯λk ≫ ¯λm), but feature k is task-specific ( ∆k ≫ 0) while feature 
+
+m is shared ( ∆m ≈ 0). The two factors in (26) pull in opposite directions. Feature m wins the competition (i.e., ρk,m (T ) < 1) when the stochastic penalty dominates. Since both factors scale linearly in T in the exponent, the step count cancels and the critical variance at which the transition occurs is: 
+
+V ∗ 
+
+> α
+
+(r) = 2 log( ¯λk/¯λm)∆2 
+
+> k
+
+− ∆2
+
+> m
+
+. (37) For Vα(r) > V ∗ 
+
+> α
+
+(r), the network suppresses the dominant but task-specific feature and converges on the weaker but shared feature. For Vα(r) < V ∗ 
+
+> α
+
+(r), the deterministic advantage prevails and the task-specific feature dominates, leading to negative transfer. When sampling task weights from a Dirichlet distribution, Vα(r) = 1 /(4 α + 4) for the two-task case, so lower concentration α increases the regularization strength. 
+
+Remark 3 (No regularization effect.) . If both features exhibit similar levels of task disagreement (∆k ≈ ∆m), then ∆2 
+
+> k
+
+− ∆2 
+
+> m
+
+≈ 0 and the stochastic penalty cancels out of the ratio regardless of 
+
+Vα(r). The competition reduces to the pure deterministic race ρk,m (T ) ≈ (¯λk/¯λm)2T , and the stronger feature dominates exponentially. This is expected: the variance penalty targets differential 
+
+disagreement between features, not disagreement per se. When both features are equally task-specific (or equally shared), the stochastic weighting provides no selective pressure. 
+
+Proposition 2 (Worst-case generalization to J tasks) . Consider J tasks that share the same orthonor-mal eigenbasis U for their discovery matrices, with task-specific eigenvalues λk, 1, . . . , λ k,J for each feature direction uk. At each gradient descent step t, the tasks are combined with stochastic weights 
+
+w(t)1 , . . . , w (t) 
+
+> J
+
+satisfying PJj=1 r(t) 
+
+> j
+
+= 1 , drawn i.i.d. from a distribution with expectations ¯wj and 
+
+18 shared variance Vα(r) := Var (w1). Let ¯λk := PJj=1 r(t) 
+
+> j
+
+λk,j denote the expected eigenvalue and let 
+
+λmax k := max  
+
+> j
+
+λk,j λmin k := min  
+
+> j
+
+λk,j ∆k := λmax k − λmin k
+
+¯λk
+
+denote the eigenvalue of most and least favored task for feature k and the worst-case relative disagreement between them. Assuming ∆k, ∆m ≪ 1, the relative learning ratio is bounded by 
+
+ ¯λk
+
+¯λm
+
+2T
+
+exp 
+
+
+
+− T
+
+4 ∆2
+
+> k
+
+
+
+≤ ρk,m (T ) ≤
+
+ ¯λk
+
+¯λm
+
+2T
+
+exp 
+
+ T
+
+4 ∆2
+
+> m
+
+
+
+(38) 
+
+Proof. Since ¯λk is a convex combination of {λk,j }j it takes values in [λmin k , λ max k ] almost surely. By Popoviciu’s inequality, Var 
+
+
+
+λ(k)
+
+> k
+
+
+
+≤ (λmax k − λmin k )2
+
+4 = ∆2 
+
+> k
+
+¯λ2
+
+> k
+
+4 (39) Repeating the log-signal expansion from Theorem 3, the expected log-signal takes the same form as (35): 
+
+E 12 log  Signal k(T ) ≈ T log( η¯λk) + log |γk| − T
+
+2¯λ2
+
+> k
+
+Var  λ(t)
+
+> k
+
+. (40) Using (40), the variance penalty is bounded above by T ∆2
+
+> k
+
+/8. Exponentiating and multiplying by 2 yields: 
+
+γ2 
+
+> k
+
+(η¯λk)2T exp 
+
+
+
+− T 
+
+> 4
+
+∆2
+
+> k
+
+
+
+≤ Signal k(T ) ≤ γ2 
+
+> k
+
+(η¯λk)2T . (41) Then ρk,m = Signal k/Signal m yields (38). 
+
+Remark 4 (Extension and Scope) . The theory presented in Theorem 3 extends to broader architectures and settings through a single key structural property: that early-stage gradient descent drives each neuron’s parameters via a power iteration on a label-weighted second-order operator, such that the projection onto any joint feature direction uk factors multiplicatively as ⟨r(T ) 
+
+> j
+
+, u k⟩ = ηT γk
+
+QTt=1 λ(t) 
+
+> k
+
+.We discuss the three conditions required by Theorem 3 and how they generalize below. 
+
+Fixed outer weights. MOSEL trains the representation network fθ and the preference alignment network gϕ with learning rates satisfying ηϕ ≪ ηθ, following the Stackelberg timescale separation of Fiez et al. [16]. Thus gϕ is approximately stationary over the timescale on which θ updates, corresponding to fixed outer weights during the feature learning phase while fθ executes the power iteration. 
+
+Power iteration in representation space. Under the layer-wise decoupling of Dandi et al. [11], which holds for smooth activations with σ′′ (0) ̸ = 0 and vanishing initialization scaling, each layer ℓ independently performs a power iteration on a label-weighted moment operator ˆC(ℓ) =
+
+> 1
+> n
+
+Pnμ=1 yμzℓ−1(xμ)zℓ−1(xμ)⊤. Linear scalarization under stochastic preference sampling r(t) ∼
+
+Dir (α) produces at each layer and step an effective operator ˆC(ℓ,t ) = P 
+
+> j
+
+r(t) 
+
+> j
+
+ˆC(ℓ) 
+
+> j
+
+, a stochastic convex combination of the per-objective operators. This layer-wise analysis extends naturally to convolutional and other structured architectures, where the spectral operators can be equivalently defined over the channel space. 
+
+Shared eigenbasis. This assumption is most plausible in the MTL setting, where tasks share common inputs and differ only in their targets. In fairness or OOD settings it is more restrictive and not necessarily fulfilled. 
+
+Loss function. The power-iteration mechanism requires only that early training iterates some label-dependent operator; the loss function affects the dynamics solely through the form of this operator. Under general losses, the relevant spectral object generalizes to a transformed correlation operator 
+
+ˆΣg = 1
+
+> n
+
+Pni=1 g(yi)xix⊤ 
+
+> i
+
+, where g(y) is determined by the loss gradient [11]. The core stochastic mitigation of task domination is therefore decoupled from the squared loss. While an explicit multiplicative formula for classification losses remains an open challenge, the high-dimensional analysis of Ben Arous et al. [3] provides rigorous support: SGD trajectories concentrate layer by layer on the low-rank outlier eigenspaces of the empirical Hessian and gradient matrices, confirming that an eigenvalue-ordered selection process governs representations under classification losses and suggesting our analysis extends to classification regimes in future work. 19 B Experimental details 
+
+B.1 Experimental setup General settings. All datasets use a 70/10/20 train/validation/test split. We use early-stopping based on validation hypervolume across all methods. For a fair comparison, all methods share the same architecture. MOSEL additionally requires splitting the network into a representation learning and a preference alignment component, as described in the respective subsections below. For COSMOS, we use all hyperparameters as reported in the original paper. Unless stated otherwise, all methods share the same training hyperparameters, including the Dirichlet sampling parameter α, number of epochs, and batch size, which mostly follow the setup in [53]. All methods use Adam [28] as the optimizer. For MOSEL, we use separate Adam optimizers for the leader and follower. To ensure convergence to an equilibrium point, the leader learning rate must be smaller than the follower’s, we found that one order of magnitude difference works best. Based on that, we select the learning rate combination yielding the best validation hypervolume. Learning rates are decayed by a factor of 0.1 at dataset-specific milestones. For all other methods, hyperparameters are selected via grid search over validation hypervolume. The smooth Tchebychev scalarization [33] additionally requires a smoothing parameter τ , set to 0.01 across all datasets, and the utopia point u⋆. Since u⋆ is generally unknown, we approximate it with a running minimum over objectives observed during training. All experiments were conducted on an internal computing cluster with an automatic job assignment system, thus we cannot ensure the specific CPU and GPU used for each particular experiment. However, all jobs were submitted with defined resource requirements: multi-dataset experiments requested 2 GPUs and 1 CPU, FairFace and CelebA experiments requested 2 GPUs and 4 CPUs, and tabular experiments required no GPU and 2 CPUs. The required memory for each experiment is reported in the respective tables. 
+
+B.1.1 Tabular datasets Model. For the fairness use case, we consider three tabular datasets: Adult, COMPAS and Default. Following prior work [53], we use an MLP with two hidden layers and hidden dimensions 60 and 25: 
+
+Linear( d, 60) → ReLU → Linear(60, 25) → ReLU → Linear(25, 1) .
+
+Hyperparameters. The model is trained for 50 epochs with a batch size of 256, using α = [0 .5, 0.5] 
+
+for Adult and COMPAS and α = [0 .1, 0.5] for Default, following the values of [53]. The COSMOS learning rate is 10 −3 for all tabular datasets without a learning rate scheduler. For MOSEL, we use leader and follower learning rates of [10 −3, 10 −2] for Adult and Default, and [10 −2, 10 −1] for COMPAS. The learning rate is decayed by a factor of 0.1 at epochs 15 and 40 for Adult, epochs 30 and 40 for COMPAS, and epochs 30 and 45 for Default. 
+
+Splitting the architecture. This architecture provides two natural split points, namely before the second or third linear layer. Empirically, splitting before the last linear layer yields insufficient capacity in the preference alignment network to meaningfully incorporate the preference vector. Thus we split before the second linear layer across all datasets. 
+
+B.1.2 Multi-Image classification Model. For the Multi-MNIST, Multi-Fashion and Multi-Fashion+MNIST datasets we adopt the standard LeNet architecture [30]. 
+
+Hyperparameters. Following the values of [53], the model is trained for 100 epochs with a batch size of 256 and α = [1 .2, 1.2] . The COSMOS learning rate is 10 −3, decayed by a factor of 0.1 at epochs 20, 40, 80, and 90. For MOSEL, we use leader and follower learning rates of [10 −4, 10 −3]
+
+with the same scheduler milestones. A weight decay of 10 −3 is applied to the leader to keep the impact of leader and follower balanced and improve training stability. 
+
+Splitting the architecture. We split the network immediately after flattening, using the convolu-tional trunk for representation learning which produces a 720-dimensional embedding z, that is then passed to the subsequent shared linear layer and two task-specific heads that form the preference alignment network. 20 B.1.3 CelebA Model. For CelebA, we use the pretrained EfficientNet-B4 [61]. 
+
+Hyperparameters. Again, we follow the values of [53], thus the model is finetuned for 30 epochs with a batch size of 32 and α = [1 , 1] . The COSMOS learning rate is 5 × 10 −4, for MOSEL, we use leader and follower learning rates of [5 × 10 −5, 5 × 10 −4].
+
+Splitting the architecture. The modular block structure allows for many candidate split points. We select the split parameter by cross-validation on validation hypervolume. The optimal split was found after the 16th MBConv block, such that the convolutional stem and first 16 MBConv blocks form the representation learning network. The remaining MBConv blocks together with the convolutional head, pooling, and two-layer MLP task heads form the preference alignment network. 
+
+B.1.4 FairFace Model. For FairFace we use a pretrained ResNet-34 [20] following [27]. 
+
+Hyperparameters. Since FairFace was not used in [53], all hyperparameters are selected via cross-validation on validation hypervolume. The model is finetuned for 30 epochs with a batch size of 128 and α = [0 .5, 0.5] . The COSMOS hyperparameters are λ = 0 .1 and learning rate of 10 −4,decayed by a factor of 0.1 at epochs 20. For MOSELwe use leader and follower learning rates of 
+
+[10 −5, 10 −4] with the same scheduler milestones. 
+
+Splitting the architecture. Possible split points are restricted to boundaries between residual stages (layer1 - layer4), which gives a total of four possible split poitns. Again, we cross-validate this parameter on validation hypervolume. The optimal split was found after layer3, thus the convolutional stem together with the first three residual stages form the representation learning network, and layer4 together with the two-layer MLP task heads form the preference alignment network. 
+
+B.2 Hypervolume computation Objective 1 Objective 2 Hypervolume Indicator 
+
+> Maximum Hypervolume Achieved Hypervolume (Local) Pareto optimal solutions Utopia point Nadir point Maximum Hypervolume Achieved Hypervolume (Local) Pareto optimal solutions Utopia point Nadir point
+
+Figure 5: Hypervolume computation The hypervolume indicator measures the vol-ume of the objective space dominated by a set of solutions and bounded by a reference point [71]. As illustrated in Fig. 5, we compute it stepwise as a sum of rectangles, where each solution on the approximated Pareto front contributes a rectangular region bounded by its objective values and the nadir point. To enable compari-son across datasets and methods, we report the 
+
+relative hypervolume , defined as the ratio of the achieved hypervolume (shown in blue) to the maximum possible hypervolume enclosed between the utopia and nadir points (shown in gray). The nadir point is set per dataset as the largest objective value observed across all meth-ods plus a margin of 0.05, ensuring all solutions are strictly dominated. The utopia point is task-dependent: for multi-task learning it is set to (0,0), representing zero loss or zero error on all tasks, while for fairness it is set to (min er-ror/min loss, 0), reflecting the best achievable error/loss at zero discrimination. A relative hy-pervolume of 1 thus corresponds to a solution set that perfectly covers the entire trade-off region between the utopia and nadir points. Note that the utopia point is in general not achievable in multi-objective optimization, as it would minimize all objectives simultaneously. 21 B.3 Conditioning on the preference vector 
+
+For the tabular datasets, we concatenate the preference vector r with the learned representation 
+
+z and pass both directly to the preference alignment network, which is sufficient when no spatial structure is present. For image data on the other hand, we condition on the preference vector r using a Feature-wise Linear Modulation (FiLM) layer [50], which has been shown to enable effective preference-dependent representation modulation in MOO settings [4, 14]. Concretely, a linear layer projects the preference vector r to channel-wise scale and shift parameters (γ, β), which modulate the representation z channel-wise as z′ := γ(r)⊙z +β(r). This requires adding a single linear layer 
+
+Linear( dim (r), 2 · dim (z)), introducing only 2 · dim (z) · (dim (r) + 1) additional parameters, which are a negligible overhead relative to the full network. 
+
+## C Additional experimental results 
+
+C.1 Fairness use case 
+
+Figure 6 shows the Pareto fronts for all fairness datasets on the training objectives, complementing the main paper results. Table 2 reports the computational overhead of each method relative to the Classifier baseline in terms of parameter count, training time, CPU memory, and GPU memory. Both MOSEL variants add substantially fewer parameters than COSMOS across all datasets (+50 vs. +120 for tabular, +1,536 vs. +6,993 for FairFace), while incurring comparable or lower training time and memory overhead. GPU memory is only reported for FairFace, as the tabular datasets were trained on CPU. 0.5 1 5        
+
+> Binary Cross-Entropy Loss
+> 0.00 0.02 0.04 0.06 0.08 0.10 0.12
+> DEO
+> Adult
+> 0.1 0.5 1
+> Binary Cross-Entropy Loss
+> 0.00 0.05 0.10 0.15 0.20 0.25 0.30 0.35
+> DEO
+> COMPAS
+> 0.5 1
+> Binary Cross-Entropy Loss
+> 0.000 0.005 0.010 0.015
+> DEO
+> Default
+> 0.5 15
+> Binary Cross-Entropy Loss
+> 0.00 0.05 0.10 0.15 0.20 0.25 0.30
+> DEO
+> FairFace MOSEL-LS MOSEL-CS COSMOS Classifier
+
+Figure 6: Test-time Pareto fronts on the fairness use case, showing training objectives (BCE loss vs DEO). The grey dotted lines mark zero unfairness and the best BCE loss achievable by an unconstrained classifier; their intersection defines the utopia point, the ideal but infeasible solution, toward which all methods aim to converge. 
+
+C.2 MTL use case 
+
+Figure 7 shows the Pareto fronts for all MTL datasets on the training objectives, complementing the main paper results. Table 3 reports per-task accuracy at the solution closest to the utopia point, and Table 5 reports hypervolume and number of Pareto optimal solutions for both loss and error metrics. Both MOSEL variants consistently achieve higher hypervolume than COSMOS and the other baselines across most datasets, with MOSEL-LS performing particularly strongly on the synthetic datasets and MOSEL-CS on CelebA. While COSMOS tends to produce more Pareto optimal solutions, MOSEL variants achieve better overall front quality as measured by hypervolume. Table 4 reports computational overhead relative to the Equal weight baseline. Both MOSEL variants add more parameters than COSMOS (+4,320 vs. +708), which is attributable to the FiLM conditioning layer applied to the 720-dimensional representation z in the LeNet architecture. However, this additional parameter count is solely due to preference conditioning and does not translate into meaningful increases in training time or memory consumption, with both remaining comparable to COSMOS and the Equal weight baseline. 22 Table 2: Computational overhead on fairness datasets relative to classifier (bottom); # Param. are absolute counts, time and CPU are multiplicative factors. Mean ± std over five runs. Dataset Method ∆#Param. Time (rel.) CPU Mem (rel.) GPU Mem (rel.) Adult MOSEL-LS +50 1.2 ± 0.2 1.10 ± 0.07 –MOSEL-CS +50 1.2 ± 0.1 1.06 ± 0.06 –COSMOS +120 1.2 ± 0.2 1.09 ± 0.03 –Classifier 6,891 44 .4 ± 4.4 s 10 .30 ± 0.34 MB –COMPAS MOSEL-LS +50 1.5 ± 0.7 1.00 ± 0.03 –MOSEL-CS +50 1.5 ± 0.7 0.96 ± 0.03 –COSMOS +120 1.1 ± 0.0 0.99 ± 0.03 –Classifier 2,811 11 .5 ± 1.0 s 11 .43 ± 0.46 MB –Default MOSEL-LS +50 1.2 ± 0.3 0.91 ± 0.05 –MOSEL-CS +50 1.0 ± 0.1 0.92 ± 0.02 –COSMOS +120 1.0 ± 0.1 0.91 ± 0.01 –Classifier 7,011 33 .2 ± 5.0 s 12 .22 ± 0.48 MB –FairFace MOSEL-LS +1,536 0.7 ± 0.0 0.88 ± 0.04 0.50 ± 0.00 
+
+MOSEL-CS +1,536 1.2 ± 0.6 0.93 ± 0.09 0.56 ± 0.07 
+
+COSMOS +6,993 1.6 ± 0.6 1.05 ± 0.11 0.58 ± 0.07 
+
+Classifier 21,293,393 2927 .9 ± 1425 .5 s 8.89 ± 0.04 MB 8929 .68 ± 536 .47 MB Table 3: Per-task accuracy at the solution closest to the utopia point on the test Pareto front, across all MTL benchmarks. As joint training enables positive transfer, we take (0 , 0) as the utopia point and select the solution minimizing Euclidean distance to it, which can lie beyond the single-task baseline. TL and BR denote top-left and bottom-right tasks on the synthetic benchmarks. Mean ± std over five independent runs; best results per column shaded. Multi-MNIST Multi-Fashion Multi-Fashion+MNIST CelebA Method Acc TL Acc BR Acc TL Acc BR Acc TL Acc BR Acc Goatee Acc Mustache MOSEL-LS 0.919 ± 0.001 0.901 ± 0.002 0.829 ± 0.003 0.821 ± 0.001 0.930 ± 0.001 0.851 ± 0.003 0.968 ± 0.002 0.964 ± 0.001 MOSEL-CS 0.910 ± 0.002 0.895 ± 0.002 0.817 ± 0.004 0.812 ± 0.003 0.916 ± 0.003 0.845 ± 0.003 0.970 ± 0.001 0.966 ± 0.001 COSMOS 0.907 ± 0.003 0.886 ± 0.002 0.824 ± 0.004 0.821 ± 0.004 0.915 ± 0.004 0.837 ± 0.005 0.960 ± 0.005 0.959 ± 0.004 PCGrad 0.914 ± 0.006 0.894 ± 0.004 0.814 ± 0.004 0.828 ± 0.001 0.928 ± 0.003 0.845 ± 0.007 0.954 ± 0.000 0.961 ± 0.000 MGDA 0.912 ± 0.009 0.897 ± 0.006 0.822 ± 0.004 0.820 ± 0.002 0.919 ± 0.002 0.852 ± 0.002 0.967 ± 0.001 0.961 ± 0.000 GradNorm 0.913 ± 0.005 0.897 ± 0.002 0.821 ± 0.006 0.820 ± 0.006 0.914 ± 0.011 0.855 ± 0.004 0.967 ± 0.002 0.964 ± 0.001 FAMO 0.909 ± 0.010 0.894 ± 0.006 0.818 ± 0.005 0.818 ± 0.005 0.938 ± 0.002 0.838 ± 0.007 0.967 ± 0.001 0.965 ± 0.001 NashMTL 0.916 ± 0.003 0.891 ± 0.006 0.824 ± 0.002 0.816 ± 0.002 0.924 ± 0.011 0.846 ± 0.013 0.967 ± 0.001 0.964 ± 0.001 Equal weight 0.913 ± 0.006 0.895 ± 0.003 0.824 ± 0.007 0.820 ± 0.007 0.929 ± 0.003 0.846 ± 0.007 0.963 ± 0.005 0.963 ± 0.002 Single Task 0.914 ± 0.001 0.889 ± 0.004 0.823 ± 0.005 0.811 ± 0.006 0.939 ± 0.003 0.841 ± 0.004 0.969 ± 0.002 0.964 ± 0.002 0.3 0.4 0.5                     
+
+> Cross-Entropy Loss Task TL
+> 0.30 0.35 0.40 0.45 0.50 0.55
+> Cross-Entropy Loss Task BR  Multi-MNIST
+> 0.48 0.50 0.52 0.54 0.56
+> Cross-Entropy Loss Task TL
+> 0.50 0.55 0.60 0.65
+> Cross-Entropy Loss Task BR  Multi-Fashion
+> 0.2 0.3 0.4 0.5 0.6 0.7
+> Cross-Entropy Loss Task TL
+> 0.40 0.45 0.50 0.55 0.60
+> Cross-Entropy Loss Task BR  Multi-Fashion+MNIST
+> 0.10 0.15 0.20
+> Binary Cross-Entropy Loss Goatee
+> 0.10 0.15 0.20 0.25
+> Binary Cross-Entropy Loss Mustache
+> CelebA MOSEL-LS MOSEL-CS COSMOS PCGrad MGDA GradNorm FAMO NashMTL Equal weight Single Task
+
+Figure 7: Test-time Pareto fronts on the MTL use case, showing the trade-offs between task-specific (Binary) Cross-Entropy losses. Grey dotted lines indicate the best achievable single-task performance on each task; their intersection marks the single-task baseline. In this weakly conflicting setting, positive transfer allows methods to surpass this baseline, with MOSEL achieving the largest improve-ments. 23 Table 4: Computational overhead on MTL datasets relative to equal weight training (bottom); # Param. are absolute counts, time and CPU are multiplicative factors. Mean ± std over five runs. Dataset Method ∆#Param. Time (rel.) CPU Mem (rel.) GPU Mem (rel.) Multi-MNIST MOSEL-LS +4,320 1.1 ± 0.2 1.15 ± 0.05 1.01 ± 0.00                                                                                                                                                                                                                                                                                                            
+
+> MOSEL-CS +4,320 1.2±0.21.09 ±0.09 1.00 ±0.00
+> COSMOS +708 1.3±0.21.07 ±0.02 1.09 ±0.03
+> PCGrad ∗+0 6.2±0.61.22 ±0.04 1.00 ±0.00
+> MGDA +0 2.0±0.41.04 ±0.06 1.12 ±0.02
+> GradNorm +0 1.9 ±0.2 1.07 ±0.05 1.00 ±0.00 FAMO +0 1.2 ±0.1 1.04 ±0.04 1.00 ±0.00 NashMTL +0 6.7 ±1.0 0.76 ±0.02 1.01 ±0.00 Single Task ∗+0 1.6±0.11.14 ±0.04 1.00 ±0.00
+> Equal weight 42,350 428 .8±75 .1s14 .65 ±1.18 MB 63 .97 ±0.00 MB Multi-Fashion MOSEL-LS +4,320 1.1±0.31.13 ±0.04 0.99 ±0.04
+> MOSEL-CS +4,320 1.1±0.11.06 ±0.06 0.96 ±0.09
+> COSMOS +708 1.5±0.21.07 ±0.08 1.11 ±0.04
+> PCGrad ∗+0 7.2±1.51.25 ±0.05 1.00 ±0.00
+> MGDA +0 2.1±0.41.01 ±0.04 1.12 ±0.02
+> GradNorm +0 2.0 ±0.2 1.09 ±0.09 1.00 ±0.00 FAMO +0 1.2 ±0.1 1.10 ±0.08 1.00 ±0.00 NashMTL +0 7.1 ±1.1 0.76 ±0.02 1.01 ±0.00 Single Task ∗+0 1.7±0.11.14 ±0.04 1.00 ±0.00
+> Equal weight 42,350 401 .7±45 .8s14 .66 ±0.90 MB 63 .97 ±0.01 MB Multi-Fashion+MNIST MOSEL-LS +4,320 1.4±0.11.01 ±0.02 1.01 ±0.00
+> MOSEL-CS +4,320 1.4±0.10.96 ±0.07 1.00 ±0.00
+> COSMOS +708 1.5±0.20.97 ±0.05 1.09 ±0.03
+> PCGrad ∗+0 7.4±1.01.15 ±0.03 1.00 ±0.00
+> MGDA +0 1.9±0.60.93 ±0.07 1.13 ±0.01
+> GradNorm +0 2.1 ±0.2 0.96 ±0.05 1.00 ±0.00 FAMO +0 1.3 ±0.1 0.98 ±0.06 1.00 ±0.00 NashMTL +0 7.7 ±1.3 0.71 ±0.01 1.01 ±0.00 Single Task ∗+0 1.9±0.01.01 ±0.05 1.00 ±0.00
+> Equal weight 42,350 377 .7±55 .1s15 .97 ±0.82 MB 63 .97 ±0.00 MB
+> ∗PCGrad requires an independent run for each of the five preference vectors, SingleTask requires an independent run for each task
+
+## D Ablations 
+
+D.1 Dirichlet parameter α
+
+To isolate the effect of the Dirichlet parameter α on the quality and diversity of the recovered Pareto front, we conduct an ablation study by varying α across four datasets, two from each use case, under both linear scalarization (LS) and Chebyshev scalarization (CS). Results are reported in Table 6. The sensitivity to α varies across datasets and scalarization functions. In strongly conflicting settings, performance degrades substantially as α increases, particularly under LS: on Adult, HV drops from 
+
+0.939 at α = 0 .5 to 0.816 at α = 1 .2, while on COMPAS the decline is even more dramatic (from 
+
+0.920 to 0.164 ), indicating a near-total failure to discover diverse trade-off solutions when preference samples concentrate near the simplex center. Under CS, Adult follows a similar trend (HV from 
+
+0.819 to 0.524 ), whereas COMPAS remains remarkably stable with HV above 0.920 across all α
+
+values. In contrast, the two MTL datasets are largely insensitive to α: on Multi-Fashion, HV and HV MCR remain effectively constant, and on Multi-Fashion+MNIST, only a mild upward trend is observed as α increases. Taken together, these results highlight two key findings. First, the impact of α is most pronounced on datasets where the objectives are strongly conflicting, and where the scalarization function is sensitive to the geometry of the preference simplex (LS more so than CS). Second, even on tasks where hypervolume remains stable, increasing α systematically contracts the extreme solutions, reducing the diversity of the recovered front—an effect that aggregate metrics can obscure. For the MTL setting, this behavior aligns with the theoretical analysis in Appendix A.2, which shows that smaller α values (below 1) increase the variance of stochastic preference sampling, strengthening the implicit bias toward learning features shared across objectives and thereby promoting greater Pareto-front diversity. On the strongly conflicting benchmarks, the effect of α is empirically even more pronounced, yet falls outside the assumptions of our current theoretical framework—extending the analysis to such settings remains an interesting direction for future work. Overall, α = 0 .5 serves as a robust default: it achieves the best or near-best hypervolume across all dataset–scalarization combinations and consistently recovers the widest spread of extreme solutions. 24 Table 5: Relative hypervolume and number of Pareto stationary solutions on the MTL benchmarks, computed on training loss and test error. Mean ± std over five runs; best entries per column shaded. Dataset Method HV Loss ↑ HV Error ↑ # PS sol. (Loss) ↑ # PS sol. (Error) ↑
+
+Multi-MNIST MOSEL-LS 0.330 ± 0.010 0.441 ± 0.008 10.6 ± 0.8 9.0 ± 0.6 MOSEL-CS 0.318 ± 0.008 0.426 ± 0.009 17.8 ± 0.4 16.8 ± 1.2 COSMOS 0.303 ± 0.008 0.418 ± 0.007 20.0 ± 1.1 19.0 ± 3.0 PCGrad 0.274 ± 0.017 0.425 ± 0.010 2.2 ± 0.7 2.8 ± 0.4 MGDA 0.267 ± 0.026 0.409 ± 0.034 1.0 ± 0.0 1.0 ± 0.0 GradNorm 0.281 ± 0.010 0.410 ± 0.016 1.0 ± 0.0 1.0 ± 0.0 FAMO 0.265 ± 0.029 0.394 ± 0.033 1.0 ± 0.0 1.0 ± 0.0 NashMTL 0.271 ± 0.015 0.401 ± 0.021 1.0 ± 0.0 1.0 ± 0.0 Equal weight 0.265 ± 0.008 0.406 ± 0.022 1.0 ± 0.0 1.0 ± 0.0 Single Task 0.264 ± 0.011 0.393 ± 0.010 1.0 ± 0.0 1.0 ± 0.0 Multi-Fashion MOSEL-LS 0.094 ± 0.004 0.171 ± 0.004 10.8 ± 1.0 8.8 ± 2.9 MOSEL-CS 0.086 ± 0.004 0.158 ± 0.007 17.4 ± 0.8 16.8 ± 1.3 COSMOS 0.097 ± 0.006 0.177 ± 0.010 17.8 ± 0.7 16.4 ± 1.9 PCGrad 0.070 ± 0.007 0.179 ± 0.005 2.2 ± 0.7 3.6 ± 0.5 MGDA 0.073 ± 0.004 0.158 ± 0.007 1.0 ± 0.0 1.0 ± 0.0 GradNorm 0.073 ± 0.002 0.155 ± 0.004 1.0 ± 0.0 1.0 ± 0.0 FAMO 0.071 ± 0.004 0.150 ± 0.005 1.0 ± 0.0 1.0 ± 0.0 NashMTL 0.069 ± 0.004 0.154 ± 0.005 1.0 ± 0.0 1.0 ± 0.0 Equal weight 0.072 ± 0.009 0.161 ± 0.019 1.0 ± 0.0 1.0 ± 0.0 Single Task 0.072 ± 0.008 0.146 ± 0.013 1.0 ± 0.0 1.0 ± 0.0 Multi-Fashion+MNIST MOSEL-LS 0.295 ± 0.012 0.376 ± 0.012 10.4 ± 0.8 8.6 ± 5.0 MOSEL-CS 0.281 ± 0.010 0.360 ± 0.009 17.4 ± 0.5 19.4 ± 1.9 COSMOS 0.270 ± 0.016 0.350 ± 0.016 22.0 ± 1.3 19.0 ± 1.1 PCGrad 0.263 ± 0.010 0.401 ± 0.008 2.4 ± 0.8 3.8 ± 0.4 MGDA 0.237 ± 0.009 0.354 ± 0.008 1.0 ± 0.0 1.0 ± 0.0 GradNorm 0.256 ± 0.011 0.355 ± 0.008 1.0 ± 0.0 1.0 ± 0.0 FAMO 0.244 ± 0.016 0.344 ± 0.019 1.0 ± 0.0 1.0 ± 0.0 NashMTL 0.238 ± 0.040 0.346 ± 0.049 1.0 ± 0.0 1.0 ± 0.0 Equal weight 0.245 ± 0.015 0.354 ± 0.019 1.0 ± 0.0 1.0 ± 0.0 Single Task 0.254 ± 0.018 0.351 ± 0.010 1.0 ± 0.0 1.0 ± 0.0 CelebA MOSEL-LS 0.555 ± 0.013 0.531 ± 0.019 22.8 ± 3.0 3.2 ± 1.2 MOSEL-CS 0.605 ± 0.004 0.556 ± 0.007 8.0 ± 6.7 4.6 ± 1.7 COSMOS 0.565 ± 0.010 0.536 ± 0.008 25.0 ± 0.0 13.0 ± 2.4 PCGrad 0.214 ± 0.000 0.427 ± 0.000 1.8 ± 0.7 1.0 ± 0.0 MGDA 0.248 ± 0.089 0.510 ± 0.006 1.0 ± 0.0 1.0 ± 0.0 GradNorm 0.508 ± 0.012 0.525 ± 0.016 1.0 ± 0.0 1.0 ± 0.0 FAMO 0.506 ± 0.006 0.532 ± 0.012 1.0 ± 0.0 1.0 ± 0.0 NashMTL 0.285 ± 0.057 0.527 ± 0.010 1.0 ± 0.0 1.0 ± 0.0 Equal weight 0.420 ± 0.120 0.496 ± 0.036 1.0 ± 0.0 1.0 ± 0.0 Single Task 0.491 ± 0.096 0.536 ± 0.021 1.0 ± 0.0 1.0 ± 0.0 
+
+D.2 Split point 
+
+To further analyze the impact of the split point on performance, we conducted ablations on ResNet, EfficientNet, and DistilBERT (see App. E). The results for ResNet and EfficientNet for FairFace and CelebA respectively, are shown in Table 7. On CelebA (EfficientNet-B4, 38 total blocks), performance varies primarily at the two extremes of the allocation spectrum. Assigning nearly all capacity to the preference alignment network (3 / 35) yields the lowest hypervolume in both training and evaluation, as the representation learning network lacks sufficient depth to learn transferable representations. Conversely, restricting the preference alignment network to only 5 blocks (33 / 5) also degrades performance, as the preference alignment network can no longer adequately specialize to diverse preference vectors. Between these extremes, performance remains stable: splits ranging from 7 / 31 to 31 / 7 all achieve comparable hypervolume, indicating broad robustness to the precise split location. On FairFace (ResNet-34, 11 total blocks), we observe a similar pattern. Hypervolume increases modestly from 0.595 at split 5 / 6 to 0.627 at 7 / 4 and 8 / 3, the performance differences across all four tested splits remain small. 25 Table 6: Ablation on Dirichlet parameter α. Relative hypervolume on two strongly and two weakly conflicting datasets computed on training loss (HV) and test error (HV MCR). Mean ± std over five runs. Mean extreme solutions (Obj 1-best, Obj 2-best) are reported for varying α and scalarization. Dataset Scalarization α HV ↑ HV MCR ↑ Obj 1-best (mean) Obj 2-best (mean) Adult 0.5 0.939 ± 0.007 0.849 ± 0.012 (0.143,0.106) (0.211,0.009) LS 0.8 0.912 ± 0.011 0.838 ± 0.019 (0.144,0.105) (0.202,0.014) 1.2 0.816 ± 0.015 0.774 ± 0.009 (0.143,0.105) (0.186,0.030) 0.5 0.819 ± 0.017 0.776 ± 0.015 (0.142,0.106) (0.188,0.030) CS 0.8 0.702 ± 0.019 0.683 ± 0.022 (0.142,0.105) (0.172,0.049) 1.2 0.524 ± 0.023 0.525 ± 0.025 (0.142,0.106) (0.153,0.079) COMPAS 0.5 0.920 ± 0.019 0.568 ± 0.008 (0.021,0.334) (0.439,0.007) LS 0.8 0.541 ± 0.193 0.434 ± 0.117 (0.021,0.334) (0.218,0.169) 1.2 0.164 ± 0.051 0.161 ± 0.049 (0.020,0.335) (0.033,0.324) 0.5 0.930 ± 0.007 0.560 ± 0.005 (0.021,0.335) (0.444,0.002) CS 0.8 0.927 ± 0.005 0.563 ± 0.009 (0.021,0.335) (0.441,0.005) 1.2 0.921 ± 0.007 0.558 ± 0.014 (0.021,0.334) (0.436,0.008) Multi-Fashion 0.5 0.269 ± 0.003 0.683 ± 0.003 (0.169,0.192) (0.180,0.178) LS 1.0 0.267 ± 0.006 0.680 ± 0.004 (0.171,0.185) (0.176,0.180) 1.2 0.268 ± 0.004 0.683 ± 0.003 (0.170,0.187) (0.174,0.178) 0.5 0.261 ± 0.005 0.678 ± 0.006 (0.172,0.261) (0.258,0.180) CS 1.0 0.260 ± 0.005 0.677 ± 0.003 (0.174,0.221) (0.228,0.180) 1.2 0.260 ± 0.005 0.676 ± 0.004 (0.174,0.219) (0.218,0.181) Multi-F+MNIST 0.5 0.450 ± 0.011 0.789 ± 0.004 (0.068,0.165) (0.081,0.153) LS 1.0 0.454 ± 0.010 0.791 ± 0.005 (0.069,0.156) (0.075,0.151) 1.2 0.462 ± 0.010 0.795 ± 0.005 (0.068,0.151) (0.075,0.147) 0.5 0.439 ± 0.012 0.782 ± 0.005 (0.075,0.212) (0.225,0.154) CS 1.0 0.444 ± 0.011 0.785 ± 0.006 (0.074,0.185) (0.138,0.152) 1.2 0.447 ± 0.009 0.787 ± 0.004 (0.075,0.180) (0.125,0.148) Table 7: Ablation on split point. The split is represented by the number of allocated blocks to representation learning (RL) and preference alignment (PA) network respectively. We report obtained HV in training and evaluation space as well as extreme points. Dataset RL / PA HV ↑ HV MCR ↑ Obj 1-best Obj 2-best CelebA 3 / 35 0.213 0.396 (0.075,0.080) (0.076,0.079) 7 / 31 0.238 0.406 (0.070,0.077) (0.071,0.076) 11 / 27 0.232 0.401 (0.070,0.079) (0.071,0.078) 17 / 21 0.242 0.415 (0.068,0.079) (0.071,0.076) 23 / 15 0.242 0.415 (0.068,0.077) (0.069,0.077) 31 / 7 0.238 0.422 (0.069,0.078) (0.071,0.076) 33 / 5 0.222 0.402 (0.072,0.086) (0.077,0.079) FairFace 5 / 6 0.595 0.562 (0.264,0.239) (0.720,0.016) 6 / 5 0.616 0.561 (0.243,0.236) (0.686,0.008) 7 / 4 0.627 0.541 (0.235,0.235) (0.728,0.000) 8 / 3 0.627 0.587 (0.202,0.255) (0.481,0.027) Across all architectures, performance is robust once the preference alignment network has sufficient capacity, indicating that the split point is not a critical hyperparameter. Based on these results, we recommend allocating approximately the final 20–25% of the blocks to the preference alignment network, while assigning the remaining blocks to the representation learning network. This simple guideline consistently performs well across CNNs and Transformers, substantially reducing the need for extensive split point tuning. 26 D.3 Number of objectives 
+
+To validate the scalability of our method to many objectives, we conduct an ablation study on CelebA as presented in Figure 4. To this end, we identify the most correlated ( ’Heavy Makeup’ 
+
+and ’Wearing Lipstick’ ) and least correlated ( ’Pale Skin’ and ’Wearing Necklace’ ) task pairs from the full set of 40 CelebA attributes. Starting from each pair, we iteratively add the next most correlated or least correlated task, scaling up to 10 objectives per set. Task corre-lation is determined via Pearson correlation coefficients ρ computed over the attribute labels, greedily selecting tasks that maximize (i.e., |ρ| ≈ 1) or minimize (i.e., |ρ| ≈ 0) the mean ab-solute correlation with the already selected set. All configurations are trained following the same pipeline as the main CelebA experiments. Since hypervolume computation scales expo-nentially with the number of objectives, we restrict evaluation to the closest point to utopia, 2 3 4 5 6 7 8 9 10 Number of objectives 300 320 340 Runtime (min)          
+
+> 2345678910 Number of objectives 820 840 860 Peak GPU mem (MB)
+> Correlated Uncorrelated
+
+Figure 8: Ablation study on CelebA: runtime and peak memory for increasing numbers of objectives, for correlated and uncorrelated features. which is generally the solution of interest in MTL. Mean accuracy and improvement over the single task baseline over 5 seeds are reported in Figure 4. Note that for improved readability, some attribute names in Figure 4 have been ab-breviated without altering their meaning. Figure 8 reports runtime and peak memory for correlated and uncorrelated features. We can see that memory is identical for both settings and only slightly increases with the numbers of objectives. While small differences in run-time exist between correlated and uncorrelated settings, the overall runtime remains roughly constant across the number of objectives. 
+
+## E Extension to transformer-based architectures 
+
+To explore the applicability of our method beyond MLPs and CNNs, we additionally conducted experiments on transformer-based architectures. To this end, we evaluate MOSEL on fairness-aware text classification using DistilBERT [55] on a 100k-sample subset of CivilComments [8], optimizing toxicity prediction (BCE) and fairness (DEO) under linear scalarization with Dirichlet parameter 
+
+α = 0 .5. DistilBERT has six Transformer blocks, and we evaluate three candidate split points. MOSEL naturally extends to this Transformer architecture without any architectural modifications, achieving consistent Pareto-front quality across three different split points (HV 0.419–0.423, standard deviation ≤ 0.011). These results emphasize, that MOSEL does not rely on architecture-specific decompositions, but instead leverages the modular structure common to modern neural networks by partitioning them at their natural block boundaries (e.g., residual stages or Transformer blocks). Extending this empirical validation to foundation vision-language models and LLMs is an exciting direction for future work. Table 8: Results on DistilBERT text-classification. Results show HV and extreme points for the front for different split points (splits between transformer blocks) Fairness extreme Accuracy extreme RL / PA HV ↑ HV MCR ↑ Acc@MinDEO(%) ↑ MinDEO ↓ DEO@MaxAcc ↓ MaxAcc(%) ↑                  
+
+> 5 / 1 0.423 0.479 88.68 0.0000 0.037 92.22 4 / 2 0.419 0.477 88.69 0.0001 0.035 92.17 3 / 3 0.419 0.475 88.70 0.0002 0.036 92.12
+
+27 F Convergence analysis 
+
+To verify that preference conditioning does not introduce optimization instability, we compare the convergence behavior of MOSEL-LS against an equal weight baseline on Multi-MNIST. Both methods use an identical optimizer and learning rate schedule (standard Adam). For each epoch we record the maximum loss across all sampled preference vectors, capturing worst-case optimization behavior. Results are reported in Table 9 as means and standard deviations over 5 seeds. Both methods exhibit nearly identical convergence profiles: a rapid descent during the first 10 epochs followed by a stable plateau, with no signs of divergence or increasing instability. After the initial transient, MOSEL maintains a small, constant gap in maximum loss relative to the baseline (∆ ≈ +0 .09 from epoch 10 onward). This gap is expected, as MOSEL repeatedly optimizes under extreme preference vectors (encouraged by our choice of α < 1) in order to recover a diverse Pareto front, rather than a single fixed weighting. Despite this more challenging optimization setting, MOSEL achieves tighter cross-seed variance than the baseline ( ±0.02 vs. ±0.04 at convergence), and the constant magnitude of ∆ after epoch 10 confirms that the additional complexity introduced by preference conditioning does not compound over training. These results demonstrate that MOSEL preserves the optimization stability of conventional single-objective training while successfully learning to cover the Pareto front. Table 9: Per-epoch maximum objective loss (mean ± std over 5 seeds). ∆ is defined as difference between MOSEL and Equal Weight baseline; negative values indicate lower (better) worst-case loss for MOSEL. After an initial transient, MOSEL maintains a small, constant gap with tighter cross-seed variance, confirming stable optimization throughout training. Epoch MOSEL-LS Max Equal Weight Max ∆ Max 0 5.54 ± 0.86 15.89 ± 5.91 -10.35 10 0.52 ± 0.03 0.42 ± 0.04 +0.09 30 0.38 ± 0.02 0.30 ± 0.05 +0.08 50 0.36 ± 0.02 0.28 ± 0.05 +0.08 70 0.37 ± 0.01 0.28 ± 0.05 +0.09 99 0.36 ± 0.02 0.27 ± 0.04 +0.09 28

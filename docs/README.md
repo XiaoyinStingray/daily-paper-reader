@@ -48,17 +48,17 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-10-10</span>
+      <span class="dpr-home-dashboard-kicker">2026-10-11</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 5 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 6 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
     <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
     <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>0</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>5</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>6</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-10-10 22:08:46 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-10-11 22:40:46 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -69,9 +69,7 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日精读挂零、速读5篇，ViT分布偏移下的token缩减以7.0分领跑。</p>
-<p>最值得看：分布偏移时“晚一点再减token”更稳，以及用Nyström sketch把二阶LLM训练压到线性内存。</p>
-<p>普通读者可先读7分那篇，关注效率与鲁棒性的权衡，再按需跟进6分的LLM训练与扩散模型讨论。</p>
+<p>2026-10-11 日报速读 6 篇、精读挂零，重点集中在优化理论与循环网络压缩。最值得看的是《Learning Pareto Stationary Fronts via Single-Pass Backpropagation》提出的单次反向传播找帕累托平稳前沿，以及自适应学习率重标定的可解模型对加速与稳定性的分析。普通读者可先挑这两篇的摘要和图，感受多目标优化与学习率调度的新思路。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -93,12 +91,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">速读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">5 篇</strong>
+    <strong class="dpr-home-dashboard-count">6 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Later Is Better: Token Reduction for ViTs Under Distribution Shift">Later Is Better: Token Reduction for ViTs Under Distribution Shift</span></li><li><span class="dpr-home-dashboard-paper-title" title="Clean: Second-order LLM Training at Linear Memory Cost via Nyström Sketching">Clean: Second-order LLM Training at Linear Memory Cost via Nyström Sketching</span></li><li><span class="dpr-home-dashboard-paper-title" title="Should We Skip Diffusion?">Should We Skip Diffusion?</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Learning Pareto Stationary Fronts via Single-Pass Backpropagation">Learning Pareto Stationary Fronts via Single-Pass Backpropagation</span></li><li><span class="dpr-home-dashboard-paper-title" title="A Solvable Model of Adaptive Learning Rate Rescaling: Acceleration, Stability &amp; Scaling">A Solvable Model of Adaptive Learning Rate Rescaling: Acceleration, Stability &amp; Scaling</span></li><li><span class="dpr-home-dashboard-paper-title" title="Learning to Remember: Distilling Memory Retention for Compact Recurrent Neural Networks">Learning to Remember: Distilling Memory Retention for Compact Recurrent Neural Networks</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">neural-arch <strong>5</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">neural-arch <strong>4</strong></span><span class="dpr-home-dashboard-tag">compress <strong>2</strong></span></div>
 </section>
 </div>
 

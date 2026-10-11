@@ -1,0 +1,465 @@
+Title: SV-TAD: Native Sparse Convs for Efficient Temporal Action Detection
+
+URL Source: https://arxiv.org/pdf/2610.11579v1
+
+Published Time: Fri, 09 Oct 2026 01:08:48 GMT
+
+Number of Pages: 30
+
+Markdown Content:
+# SV-TAD: Native Sparse Convolutions for Efficient Temporal Action Detection 
+
+## Ricardo Pizarro , 1, Roberto Valle 2, Jos´ e M. Buenaposada 3,Luis M. Bergasa 1, and Luis Baumela 21Universidad de Alcal´ a, Alcal´ a de Henares, Spain 
+
+2Universidad Polit´ ecnica de Madrid, Madrid, Spain 
+
+3Universidad Rey Juan Carlos, M´ ostoles, Spain ricardo.pizarroc@edu.uah.es 
+
+Abstract 
+
+To adapt billion-parameter Vision Transformers for long-video under-standing, recent methods freeze the backbone and train lightweight convo-lutional modules. While effective for parameter-efficient training, existing adapters do not reduce inference-time computation, leaving scalability with respect to video length largely unaddressed. Token selection can reduce attention cost by pruning redundant tokens, but it breaks the spatial grid structure required by convolutional adapters. This forces an expensive dense reconstruction, nullifying much of the potential speedup. We address this by introducing native sparse 2D convolutions, a primi-tive that allows these adapters, for the first time, to operate directly and efficiently on dynamically pruned token sets. We integrate this prim-itive into SV-TAD, an adapter framework for temporal action detec-tion, reducing VideoMAEv2-L computation by up to 64% and achiev-ing 2.2 × faster inference, while maintaining state-of-the-art accuracy on THUMOS-14 and ActivityNet-1.3. When scaled to InternVideoNext-L, our approach surpasses the previous state of the art at roughly half its computational cost. Moreover, the sparse formulation naturally sup-ports auxiliary task tokens, which improves fine-grained assembly de-tection on ATTACH. Code and trained models are available at https: //github.com/pcr-upm/eccv26_tad .
+
+keywords: Sparse Convolutions, Token Selection, Vision Transformers, Temporal Action Detection, Efficient Inference, Efficient Training 
+
+# 1 Introduction 
+
+Recent advances in large-scale video foundation models have significantly im-proved video understanding [31]. To adapt these billion-parameter Vision Trans-1arXiv:2610.11579v1 [cs.CV] 8 Oct 2026 formers to temporal action detection (TAD) tasks without prohibitive fine-tuning cost, adapter-based approaches insert lightweight convolutional mod-ules into a frozen backbone, allowing parameter-efficient specialization [21, 24]. However, despite their parameter efficiency, these adapters still operate on dense token grids and their computational cost scales proportionally with the full se-quence length of the video. As video resolution and temporal duration increase, this dense processing becomes a major computational bottleneck. Moreover, existing adapter-based approaches primarily improve training efficiency and do not reduce the inference-time computational cost of the backbone, leaving scal-ability with respect to video length largely unaddressed. In parallel, token selection [18, 4] has emerged as an effective mechanism to reduce the quadratic cost of self-attention by dynamically pruning unin-formative tokens. Unlike architectural modifications, such as efficient attention variants [28] or distillation [3], token selection preserves the original model’s rep-resentations. This makes it uniquely attractive for adapter-based fine-tuning, where any reduction in token count could directly translate into wall-clock sav-ings. However, while sparsification substantially reduces attention complexity, it disrupts the regular spatial structure required by convolutional adapters, producing a fundamental representational gap . This affects convolutions, fea-ture pyramid networks, and any operation that assumes fixed spatial neigh-borhoods. Existing convolutional adapters reshape tokens into spatial feature maps and apply grid-based convolutions, requiring dense reconstruction when tokens are removed. This reconstruction step substantially diminishes the com-putational gains of sparsification, so current adapter frameworks cannot fully benefit from token-level sparsity. Additionally, existing 3D sparse convolutional engines [10, 7] cannot be repurposed here, as their format requirements and host-side hash-table operations are architecturally incompatible with the dy-namic sparsity of token selection (Sec. 2). To address this, we introduce SparseConv2D, a native sparse 2D convolution 
+
+that bridges token selection and convolutions without dense reconstruction. Our key insight is that the sparse token set already contains everything a convolution needs: a convolution does not require the full spatial grid, only the adjacency between each output position and its K2 neighbors; encoding this adjacency explicitly over the sparse set makes the grid unnecessary. We precompute a 
+
+neighbor index table that maps each retained token to its neighbors’ positions in the sparse sequence, then execute the convolution through custom CUDA kernels that gather features directly via this table. The regular 2D patch grid further allows the table to be built in O(Nkept ), with Nkept being the number of tokens selected, translating token reduction into proportional speedups in both memory and computation. We instantiate this primitive in SparseViT-TAD (SV-TAD), a temporal ac-tion detection framework where sparse convolutional adapters are inserted into each Transformer block of a frozen ViT backbone [31, 29], while token se-lection modules progressively prune sequences in strategic layers. As shown in Fig. 1, SV-TAD achieves better efficiency-accuracy trade-offs than existing 270 71 72 73 74 75 76 
+
+> LoSA ViT-G
+> AdaTAD ViT-B AdaTAD ViT-L AdaTAD ViT-G SV-TAD ViT-B SV-TAD ViT-L SV-TAD InternVidNext-L 43% fewer TFLOPs 64% fewer TFLOPs 51% fewer TFLOPs 34% fewer TFLOPs
+
+THUMOS-14: TFLOPs vs Accuracy      
+
+> E2E-TAD LoSA AdaTAD SV-TAD (ours)
+> 10 20 50 100 200
+> TFLOPs (log scale)
+> 54 55
+> E2E-TAD SlowFast-R50
+> Average mAP (%)
+
+Figure 1: TFLOPs vs. accuracy on THUMOS-14. SV-TAD (red squares) matches or exceeds AdaTAD [21] (blue circles) at substantially lower compute across three backbone scales: 43% fewer TFLOPs with VMAEv2-B, 64% 
+
+with VMAEv2-L, and 51% when comparing our InternVideoNext-L against AdaTAD’s VMAEv2-G. adapter methods [21, 11]. With ViT-L, it achieves 64% fewer TFLOPs and 
+
+2.2x faster throughput. Our contributions are: 
+
+• We introduce native sparse 2D convolutions for Vision Transform-ers, a computational primitive that processes dynamically sparse token sequences through precomputed neighbor index tables and custom CUDA kernels, without dense grid reconstruction. 
+
+• We design sparse adapter architectures that integrate this primitive into parameter-efficient fine-tuning, enabling convolutional adapters to op-erate on token-selected sequences for the first time. 
+
+• We demonstrate 64% reduction of TFLOPs, 2.2x inference speedup, and 
+
+1.7x training acceleration over the state-of-the-art on THUMOS-14, while maintaining mAP. We validate on ActivityNet-1.3 with consistent gains. 
+
+• We show that our sparse framework is flexible enough to support mul-titask learning : in ATTACH, auxiliary landmark supervision improves over the baseline by +2.41%, demonstrating that secondary tasks can be incorporated with minimal overhead. 
+
+• We release our CUDA kernels as a standalone library for sparse token processing in PyTorch. 32 Related Work 
+
+Parameter-Efficient Fine-Tuning (PEFT). Large-scale ViTs, with hun-dreds of millions to billions of parameters, cannot be fully fine-tuned for TAD, where each input spans hundreds of frames. Adapter-based methods [14] ad-dress this by keeping the backbone weights fixed and learning only small modules inserted between layers. AIM [35] proposes spatial and temporal adapters for video recognition, while ST-Adapter [24] employs 3D convolutions to capture spatio-temporal patterns. LoSA [11] introduces long-short-range adapters and scales to VMAEv2-G, yet underperforms relative to the capacity of its billion-parameter backbone. Other methods such as ViT-TAD [34] adapt a short-term ViT-B for clip-level processing. While this keeps per-snippet FLOPs low, ViT-TAD relies on full fine-tuning of all backbone parameters, fundamentally limit-ing scaling to larger backbones. AdaTAD [21] applies temporal-informative 1D convolutional adapters, surpassing both LoSA and ViT-TAD while training only 
+
+∼2% of parameters. A common limitation across these methods is that their convolutional modules always operate on the complete spatial grid, regardless of token informativeness. Recent image-domain work [16, 36] combines PEFT with token selection but requires explicit attention-matrix computation, incom-patible with FlashAttention [9] and infeasible for TAD sequences exceeding 70k tokens. 
+
+Token Selection in Vision Transformers. The quadratic complexity of self-atten-tion in the number of tokens N has motivated numerous strategies to alleviate this cost by reducing the number of tokens that traverse the net-work. EViT [18] ranks patches according to their class-token attention and discards the lowest-scoring ones, while ToMe [4] progressively merges nearby tokens using bipartite matching, eliminating the need for additional training. DynamicViT [26] instead trains a lightweight decision network that predicts per-token keep/drop masks. In video, TokenLearner [27] and STTS [30] extend pruning and merging to the spatio-temporal setting. A shared limitation is that all of these approaches target only the self-attention bottleneck. None specifies how the irregular token sets produced should interact with local operators, such as convolutions. Merging methods carry an additional constraint, as computing the N ×N pairwise similarity matrix is at odds with sub-quadratic attention kernels like FlashAttention [9], limiting applicability to long sequences. 
+
+Sparse Convolutions. Processing spatially sparse data with convolutions has a long history in 3D vision. Submanifold sparse convolutions [10] and Minkowski-Engine [7] represent occupied voxels in hash tables, dispatching com-putation only where data exists, an approach widely adopted for LiDAR point clouds [32]. However, these engines are poorly suited to the dynamic token selec-tion in ViTs: their COO-style sparse-tensor format requires a costly round-trip to the packed dense tensors used by a ViT at every block, and pruning posi-tions invalidates cached kernel maps, forcing the coordinate manager to rebuild 4all Kd maps via hash-table probes per active site with no reuse across layers whose sparsity patterns differ. This hash-based construction is heavier than the problem requires, since ViT coordinates lie on a known regular 2D patch grid, rendering existing 3D sparse engines impractical for adapter-based video models. Separately, sparse-transformer research [6] sparsifies attention patterns rather than convolutional adapters. To our knowledge, native sparse 2D convo-lutions for the dynamic, layer-varying sparsity of token selection have not been explored before. 
+
+Our Proposal. Each research line reviewed above addresses one dimension of the efficiency challenge, but leaves the others unresolved. PEFT adapters [14, 35, 24, 21] always operate on the full spatial grid, so cost scales with total tokens regardless of informativeness. Token selection [18, 4, 26] reduces the count but does not specify how irregular token sets should interact with local operators, limiting savings to attention-only models. Existing sparse engines [10, 7, 32] are incompatible with ViT tensor formats and unsuitable for dynamic, layer-varying sparsity. SV-TAD bridges all three: sparse convolutional adapters provide PEFT-style efficiency, token selection reduces the sequence, and our native sparse 2D convolution enables both to work together, translating token reduction into proportional savings without dense reconstruction or external sparse-tensor engines. 
+
+# 3 Method 
+
+We present SV-TAD, a framework that bridges token selection and convolutional adapters for TAD. Central to our approach is SparseConv2D, a native sparse 2D convolution (Sec. 3.2), this computational primitive processes dynamically sparse token sequences without dense grid reconstruction. We integrate this primitive into a sparse adapter architecture (Sec. 3.4) and show that the result-ing framework is flexible enough to support auxiliary task supervision (Sec. 3.3). Fig. 2 provides an overview. 
+
+## 3.1 Token Selection 
+
+We employ attention-based token selection [18, 25] to progressively prune un-informative tokens during the forward pass. Crucially, unlike prior work that discards spatial information after pruning, we preserve the original grid indices 
+
+of kept tokens, this positional information is essential for our sparse convolution. At designated Transformer blocks, we compute importance scores from ag-gregated attention weights between auxiliary tokens and visual tokens. In the standard setting, only the class token serves as the auxiliary token. When more than one auxiliary task token is present (Sec. 3.3), importance scores incorporate 5Figure 2: SV-TAD architecture. Input frames and auxiliary tokens ( X)pass through a frozen pretrained ViT backbone with interleaved token selection (TS-ON) blocks. The first three blocks use standard 2D convolutions, with the rest using SparseConv2D. The expanded view shows our modified ViT block: frozen attention computes importance scores, token selection prunes uninforma-tive patches, and the trainable sparse adapter operates directly on the sparse sequence. Timing annotations show per-block latency decreasing from 60ms to 7.6ms as the sequence progressively shrinks. attention from all K tokens with learnable weights w ∈ RK :
+
+s = 1
+
+nhnhX
+
+> h=1
+> K
+
+X
+
+> k=1
+
+wk · A(h) 
+
+> k
+
+, Ikept = TS ( s, ⌊kr · N ⌋) (1) where T S is the token selection algorithm, N is the number of visual tokens, 
+
+A(h) 
+
+> k
+
+∈ RN denotes the attention weights from the k-th auxiliary token to all visual tokens at head h, nh is the number of attention heads, and kr is the keep rate. This formulation allows task-specific tokens (e.g.,, auxiliary landmarks) to influence which Nkept patches are retained, biasing selection toward regions relevant for the auxiliary task. When K=1 (class token only), this reduces to the standard EViT formulation [18]. The tokens kept Xvis = Xvis [Ikept ] are passed to subsequent layers, while Ikept encodes their original positions ( y, x )in the spatial grid H × W .
+
+Compatibility with FlashAttention. A critical advantage of our token se-lection is that it requires only the K attention rows from auxiliary tokens to visual tokens, not the full N ×N attention matrix. We extract the required K
+
+rows (where K ≪ N ) as a byproduct of the standard attention computation. This allows our entire pipeline, backbone attention, token selection, and sparse adapters to operate with FlashAttention enabled, which is essential for scaling to video sequences. Following prior work on token selection [18, 26, 25], the selection is applied at evenly-spaced layers (blocks 4, 8, 12, 16 for ViT-L), progressively reducing the sequence length. Early layers process all tokens to build robust representations before pruning begins. 6Figure 3: Kernel Timing comparison on THUMOS-14. DenseConv2D (blue) keeps latency nearly constant across different keep rates, while our Spar-seConv2D (orange) scales linearly with Nkept .
+
+## 3.2 Native Sparse 2D Convolution 
+
+The straightforward way to combine token selection with convolutional adapters is dense reconstruction . It consists of scattering the Nkept sparse tokens back to their original grid positions Xdense ∈ RT ×H×W ×D , filling pruned locations with zeros, applying standard convolution, and then gathering outputs at kept positions. While functionally correct, this approach has fundamental efficiency limitations: (1) memory scales with O(T HW ) regardless of sparsity, (2) con-volution computes over all T HW positions including empty padding, and (3) empirically, speedup plateaus as reconstruction overhead dominates, pruning more tokens yields no additional benefits. The general incompatibility and re-construction algorithm are explained in detail in Sec. G of the supplementary material. We propose a native sparse 2D convolution that operates directly on sparse token sequences, Xvis ∈ RNkept ×D/ 4. The key insight is that convolution is inherently local , e.g., a 3 ×3 kernel only needs 9 neighbors per output, not the entire grid. We exploit this locality through an indirection table that maps sparse tokens to their sparse neighbors, enabling computation without dense reconstruction. For simplicity in the following sections, we use a 3 × 3 kernel. Fig. 3 shows that our sparse kernel achieves parity with dense convolution at 
+
+∼55% keep rate; below this threshold, sparse is strictly faster, reaching 8 ×
+
+speedup at 10% keep rate. The data structure enabling our sparse convolution is a neighbor index table 
+
+N ∈ ZNkept ×9 that maps each kept token to its spatial neighbors’ positions in the sparse token list. For kept token k at grid position ( yk, x k) and kernel offsets 7δx ∈ {− 1, 0, 1} and δy ∈ {− 1, 0, 1}:
+
+N[k, j ] = 
+
+(
+
+sparse idx( yk + δy,j , x k + δx,j ) if neighbor is kept 
+
+−1 if pruned or out-of-bounds  (2) where j ∈ { 1, . . . , 9} indexes kernel positions and −1 indicates zero-padding. We construct this table efficiently in two steps, exploiting the regular 2D grid structure: 1. Build a lookup map. Create a dense array M ∈ ZH×W initialized to 
+
+−1. For each kept token k at grid position ( yk, x k), set M[yk, x k] = k.This maps grid coordinates to sparse indices. 2. Fill the neighbor table. For each kept token k, look up its 8 neighbors via N[k, j ] = M[yk +δy,j , x k +δx,j ]. If the neighbor was pruned, M returns 
+
+−1, correctly indicating zero-padding. Both steps are O(Nkept ), computed on CPU with negligible overhead (less than 
+
+∼3ms) relative to the GPU-bound adapter forward pass, and M is reused across all adapter layers until the next token selection. 
+
+3.2.1 Custom CUDA Kernels. 
+
+We implement forward and backward passes as custom CUDA kernels. The forward pass computes: 
+
+yk =
+
+> 9
+
+X
+
+> j=1
+
+Wj · x[N[k, j ]] + b (3) where Wj ∈ RCout ×Cin is the weight slice for kernel position j, and x[N[k, j ]] gathers neighbor features (zeros if N[k, j ] = −1). We provide two strategies, automatically selected based on Cout : an implicit GEMM path via cuBLAS for large channels ( Cout ≥ 256) that fully utilizes Tensor Cores, and custom tiled kernels for smaller channels that fuse gather and GEMM into a single launch. Full kernel design details are in Sec. A of the supplementary. 
+
+3.2.2 Complexity Analysis. 
+
+Our sparse convolution requires O(Nkept · K2 · Cin · Cout ) operations versus 
+
+O(T HW · K2 · Cin · Cout ) for dense convolution. With Nkept = kr · T HW ,compute scales linearly with keep rate kr . Memory is decoupled from total sequence length through chunked processing, O(chunk size · (Cin + Cout )). The full model applies token selection at S stages (e.g.,, S = 4 at blocks 4, 8, 12, 16 for ViT-L), with cumulative savings compounding across layers. At kr =0 .6 per stage, the effective rate after two stages drops to 0 .36 and after four to 0.13, placing the majority of layers well below the per-kernel crossover point where sparse convolution outperforms dense (Fig. 3). The default keep rate used for every dataset and backbone is listed in Sec. C of the supplementary. 8Table 1: Effect of keep rate kr on THUMOS-14 (InternVideoNext-L backbone).                 
+
+> Keep Rate TFLOPs vid/s mAP@0.5 Avg. mAP
+> 0.7 87.05 0.42 78.22 74.13 0.6 74.09 0.50 77.22 73.64 0.5 60.13 0.60 76.40 73.00
+
+Keep-Rate Schedule. Table 1 sweeps the per-stage keep rate kr on THUMOS-14 with the InternVideoNext-L backbone. For this model kr =0 .7 gives the best trade-off; lowering it trades accuracy for throughput gracefully, e.g., kr =0 .5reaches 0.60 videos/s (up from 0.42) at only −1.13% avg. mAP. SV-TAD thus degrades smoothly rather than collapsing as more tokens are pruned, so kr can be tuned per deployment budget. 
+
+## 3.3 Auxiliary Task Supervision 
+
+We introduce auxiliary tokens, learnable embeddings that aggregate task-specific information from visual features via cross-attention. Within each adapter, af-ter the convolution processes the bottleneck features X′ 
+
+> vis
+
+∈ RB×Nkept ×D/ 4, a lightweight cross-attention module lets auxiliary tokens query visual tokens: 
+
+X′ 
+
+> aux
+
+= CrossAttn( Xaux , X′
+
+> vis
+
+) (4) where only the auxiliary tokens Xaux are updated. In this module, the tokens are further down projected ( D/ 8). The queries Qaux are projected from the auxiliary tokens Xaux , while keys Kvis and values Vvis are projected from the visual features X′
+
+> vis
+
+. This asymmetric design enables information flow from visual patches to auxiliary tokens without overhead on the visual token set. The cross-attention module also serves as the adapter’s mechanism for modeling temporal dynamics. This makes our architecture flexible enough to support auxiliary task super-vision without requiring per-task dense reconstructions. We demonstrate this capability with landmark-guided token selection and pose heatmap prediction, which we deploy on fine-grained assembly tasks (Sec. 4.5). 
+
+## 3.4 Sparse Adapter Architecture 
+
+We integrate our sparse convolution and the auxiliary cross-attention mecha-nism into a bottleneck adapter, named SV-TAD, inserted after each Transformer block’s attention layer. As illustrated in Fig. 4, input features pass through a down-projection, GELU activation, our sparse 2D convolution, and the cross-attention module, followed by an up-projection that restores the original dimen-9Figure 4: Sparse adapter architecture. Our bottleneck adapter (orange, trainable; the surrounding ViT block is frozen) is inserted after each Transformer block’s attention layer. Visual ( Xvis ) and auxiliary ( Xaux ) tokens are down-projected (DownProj 1) before SparseConv2D gathers each kept token’s spatial neighbors via the precomputed neighbor index table N (−1 marks pruned/out-of-bounds neighbors, top-left inset). CrossAttn then lets auxiliary tokens query the sparse visual features, updating only Xaux at no extra cost to the visual path, before UpProj 1 restores the channel dimension and a learnable scalar γ
+
+modulates the adapter’s residual contribution. sion: 
+
+X′ 
+
+> vis
+
+= SparseConv2D( σ(DownProj 1(Xvis )) , N) (5) 
+
+X′ = Concat(CrossAttn( Xaux , X′
+
+> vis
+
+), X′
+
+> vis
+
+) (6) 
+
+Xout = γ · UpProj 1(X′) + X, (7) where DownP roj 1: RD → RD/ 4, σ is GELU, SparseConv2D uses neighbor table N, CrossAttn lets auxiliary tokens query the sparse bottleneck features 
+
+Xvis , U pP roj 1: RD/ 4 → RD , and γ is a learnable scalar (initialized to 1) that controls adapter influence. For early layers (before token selection), we use a standard 2D convolution, as our sparse convolution offers no gains in this dense regime. 
+
+Temporal Context Flow. Temporal information reaches visual tokens through two complementary pathways. First, after the adapter enriches the auxiliary to-kens (e.g., CLS) at layer ℓ, the frozen ViT self-attention at layer ℓ+1 naturally propagates this enriched representation to every visual token across all frames. Second, the backbone output concatenates the final CLS token along with frame features that the detection head processes directly. The CLS thus serves both as an intermediate temporal relay between adapter layers and as a global temporal summary available to the detection head. 10 4 Experiments 
+
+We demonstrate that native sparse convolutions deliver substantial efficiency gains while maintaining accuracy. We report average mAP over IoU thresholds 
+
+{0.3, 0.4, 0.5, 0.6, 0.7 } for THUMOS-14, {0.5, 0.75, 0.95 } for ActivityNet-1.3, and {0.1, 0.2, 0.3, 0.4, 0.5 } for ATTACH, following the standard protocol for each benchmark. 
+
+## 4.1 Datasets and Setup 
+
+We evaluate SV-TAD on 3 benchmarks for TAD: THUMOS-14 [15] (200/211 train/test videos, 20 sports classes), ActivityNet-1.3 [13] (10k/4,728 train/test videos, 200 activity classes), and ATTACH [1] (1,200+ assembly videos, 51 fine-grained classes with 68% temporal overlap, person-split: 28/4/10 partic-ipants for train/val/test). For THUMOS-14 and ATTACH, we use T = 768 frames at 224 × 224 resolution as input. For ActivityNet-1.3, T = 192 at 160 × 160. Full dataset statistics and preprocessing details are in Sec. B of the supplementary material. We use frozen video transformer backbones (i.e., VideoMAEv2 [31], Intern-VideoNext [29]), with the OpenTAD framework [22]. Sparse adapters are in-serted after each transformer block, with token selection in blocks 4, 8, 12, 16 (ViT-L) using kr =0 .6. We employ ActionFormer [37] as the detection head. Full hyperparameters are provided in Sec. C of the supplementary material. 
+
+## 4.2 Efficiency Analysis 
+
+We evaluate inference of SV-TAD (ViT-L) against AdaTAD [21] (ViT-L) with identical input sizes on THUMOS. 
+
+End-to-End Throughput. Figure 1 shows an overview of TFLOPs at dif-ferent model sizes. SV-TAD (ViT-L) processes 1.57 videos/second vs. the baseline’s 0.73, a 2.2x improvement: our native sparse convolution translates the 64% TFLOPs reduction at kr =0 .6 directly into real-world throughput gains, validating the approach for both faster training and practical deployment. 
+
+Training Speed. Our efficiency gains also extend to training: measuring average GPU active time, SV-TAD requires 3.01s per step (forward= 0 .70s, backward= 2 .31s) vs. the baseline’s 5.35s (forward= 1 .49s, backward= 3 .86s), a 1.7x speedup. With ViT-L, where token selection prunes four times over a 24-layer backbone, SV-TAD requires 9.23GB peak allocated memory per training step (single RTX 3090, batch size 1) vs. AdaTAD’s 13.30GB , a ∼ 31% re-duction. Despite SV-TAD having more parameters than AdaTAD at this scale (361M vs. 346M), progressively shrinking the token count that reaches self-attention at deeper layers reduces activation memory enough to outweigh the parameter count, so the memory advantage of token pruning, like the TFLOPs advantage in Fig. 1, grows with backbone depth. 11 (a) Speed scaling (b) Memory scaling 
+
+Figure 5: Sparse convolution efficiency scaling at kr =0 .3. (a) Our sparse convolution (orange) achieves 1.75 × speedup over dense (blue) at 6,144 frames (40ms vs. 70ms). (b) Dense convolution memory grows to ∼6GB at 6,144 frames regardless of sparsity. Our sparse convolution maintains constant memory 
+
+(∼800MB) via chunked processing, achieving 7.5 × reduction. 
+
+Kernel-Level Benchmarks. To verify these end-to-end gains stem from the kernel itself, we isolate the convolution module and benchmark it against dense convolution (with scatter-gather reconstruction) across temporal resolutions at 
+
+kr =0 .3. 
+
+Kernel-Level Speed. Fig. 5(a) confirms both kernels scale linearly with se-quence length, but ours operates on only Nkept = kr · N tokens, yielding con-sistent speedups: 2× at 768 frames (4ms vs. 8ms) and 1.75 × at 6,144 frames (40ms vs. 70ms). Since sparse adapters sit at every Transformer block, these per-layer gains compound across the network. 
+
+Kernel Memory Scaling. Dense convolution materializes the full H×W ×C
+
+grid regardless of sparsity, therefore memory grows linearly with sequence length (Fig. 5(b)). Ours instead allocates memory proportional to Nkept within a fixed chunk size, holding peak memory near-constant and yielding a 87% reduction at 6,144 frames (800MB vs. 6GB), enabling sequence lengths that would otherwise run out of memory. 
+
+## 4.3 Convolution Comparison: Dense vs. Sparse 
+
+To isolate the effect of our sparse convolution primitive from other architectural choices (e.g.,, 1D vs. 2D convolution), we compare against dense convolution baselines using the same adapter architecture and token selection, with scatter-gather reconstruction. Only SparseConv2D bypasses reconstruction entirely. For comparison, DenseConv1D is the temporal-convolution adapter identical to AdaTAD [21]. Table 2 presents this comparison on THUMOS-14 with the VideoMAE-B backbone. 12 Table 2: Dense vs. sparse convolution on THUMOS-14.     
+
+> Conv Type Avg.
+> DenseConv1D 69.60
+> DenseConv2D 68.83 SparseConv2D 69.35
+
+Table 3: Backbone-matched comparison on THUMOS-14 with VideoMAEv2-B. All meth-ods use identical settings. * indicates our repro-duction.         
+
+> Method TFLOPs Avg.
+> AdaTAD* 17.9 72.15 SV-TAD (No CrossAttn) 10.18 71.80 SV-TAD 10.29 72.44
+
+DenseConv2D vs. SparseConv2D. Both apply a 3 ×3 spatial convolution over the same zero-padded grid, yet SparseConv2D outperforms the dense base-line by +0.52% average mAP. We attribute the gap to numerical divergence, where implementation differences change the gradient accumulation trajectory over training. We verify that in FP32 without token selection ( kr =1), the gap shrinks to 0.10%. This shows that SparseConv2D matches dense accuracy while being substantially more efficient. A detailed analysis is provided in Sec. E of the supplementary. 
+
+DenseConv1D vs. SparseConv2D. DenseConv1D achieves a slightly higher average mAP ( 69.60 vs. 69.35 , +0.25%), as its temporal kernel directly models inter-frame dynamics, consistent with AdaTAD [21]; however, this comparison is conducted under scatter-gather reconstruction, which drastically reduces the gains obtained by token selection. Implementing an efficient native sparse 1D temporal kernel, in contrast, is difficult in practice: temporal neighbors reside in different frame blocks, causing ∼8x larger memory access distances than spatial neighbors, which breaks cache locality and coalesced warp access (see Sec. G of the supplementary for a detailed analysis). 
+
+## 4.4 Backbone-Matched Comparison 
+
+To isolate the contribution of our sparse convolution framework from backbone differences, we conducted controlled experiments using the same VideoMAEv2-B backbone. Table 3 presents this fair comparison on THUMOS-14. 
+
+Analysis. The key result is the TFLOPs column: SV-TAD requires only 
+
+10.29 TFLOPs (43% fewer than AdaTAD’s 17.9) while maintaining accu-racy (72.44% vs. 72.15%), confirming that native sparse convolutions eliminate reconstruction overhead without sacrificing quality and translate directly into 
+
+2.2x faster inference and 1.7x faster training (Sec. 4.2). 
+
+Effect of Cross-Attention for Temporal Recombination. The variant SV-TAD (No CrossAttn) already achieves the bulk of the computation reduc-tion (10.18 TFLOPs) but drops slightly below AdaTAD in accuracy (71.80% 13 Table 4: Ablation of auxiliary landmark supervision on ATTACH (Person Split) using VideoMAEv2-B. 
+
+Method TFLOPs ↓ 0.1 0.2 0.3 0.4 0.5 Avg. 
+
+SV-TAD 10.29 20.17 18.69 16.90 14.39 11.25 16.28 SV-TAD + Kp 11.17 22.58 21.10 19.21 16.80 13.76 18.69 
+
+vs. 72.15%). As shown in Table 2, replacing a temporal 1D convolution with a spatial 2D convolution sacrifices inter-frame modeling: DenseConv1D outper-forms DenseConv2D by +0.77%. Our cross-attention module compensates for this: a single CLS query aggregates information across retained patches from different frames, recovering global temporal context, and closes the gap at neg-ligible compute cost (+0.11 TFLOPs). SparseConv2D is also robust to the choice of token-selection criterion (e.g.,, EViT-style attention vs. norm-based), at matched compute (Sec. E of the supplementary). 
+
+## 4.5 Auxiliary Task Tokens Experiments 
+
+Sparse representations create a structural advantage beyond efficiency: since our framework explicitly tracks which tokens survive selection and their original grid positions, it naturally enables auxiliary task supervision. Existing convolutional adapters operate exclusively on the visual feature grid, with no mechanism to incorporate task-specific tokens. We demonstrate this on ATTACH [1], a fine-grained assembly actions benchmark. Prior work on ATTACH evaluates only frame-level classification, we are the first to formulate it as a full TAD problem. Table 4 shows that adding auxiliary landmark supervision (SV-TAD + Kp, Sec. 3.3) improves avg. mAP by +2.41% (18.69 vs. 16.28), demonstrating that the sparse adapter’s cross-attention injection point is an effective channel for multitask supervision. We provide a detailed ablation of these results in the supplementary material (Sec. F). Sec. E of the supplementary also validates that SparseConv2D generalizes beyond TAD, to image-to-video adaptation on a frozen CLIP ViT-B/16. 
+
+## 4.6 Comparison with State-of-the-Art 
+
+Table 5 compares SV-TAD with recent TAD methods on ActivityNet-1.3 and THUMOS-14. The TFLOPs for SV-TAD and AdaTAD [21] are for input with the same number of frames for each data set. For fair comparison, we report AdaTAD last-epoch test mAP from the authors’ publicly released training logs. In THUMOS-14, SV-TAD with VideoMAEv2-B requires 43% fewer TFLOPs than AdaTAD [21] (10.29 vs. 17.9) while achieving 72.44% average mAP, sur-passing AdaTAD’s 70.67% by +1.77% . We note that ViT-TAD’s 69.5% with ViT-B is obtained under a substantially reduced input regime (256 frames at 160 ×160 vs. our 768 frames at 224 ×224), and its full fine-tuning design prevents 14 Table 5: Results comparison on ActivityNet-1.3 and THUMOS14 (* indicates mAP obtained from official logs). Size-matched comparisons are highlighted.                                                                                                                                                                                        
+
+> ActivityNet-1.3 THUMOS14 Method Backbone TFLOPs ↓0.5 0.75 0.95 Avg. TFLOPs ↓0.3 0.4 0.5 0.6 0.7 Avg.
+> AFSD [19] I3D —52.40 35.30 6.50 34.40 —67.3 62.4 55.5 43.7 31.1 52.0 E2E-TAD [23] SlowFast-R50 82.48 50.47 35.99 10.33 34.10 82.48 69.4 64.3 56.0 46.4 34.9 54.2 BasicTAD [33] SlowOnly-R50 —51.20 33.41 7.57 33.12 —75.5 70.8 63.5 50.9 37.4 59.2 TALLFormer [5] VideoSwin-B —54.10 36.20 7.90 35.60 —76.0 70.0 63.2 —34.5 59.4 Re 2TAD [38] Re 2VSwin-T —54.75 37.81 9.03 36.80 —77.0 71.5 62.4 49.7 36.3 59.4 LoSA [11] VMAEv2-G 132 58.5 39.8 7.80 38.6 132 85.0 81.1 74.5 65.1 49.3 71.0 ViT-TAD [34] ViT-B —55.87 38.47 8.80 37.40 —85.1 80.9 74.2 61.8 45.4 69.5 AdaTAD [21]* VMAE-B 8.05 56.66 39.49 9.38 38.31 17.90 85.58 81.40 74.31 63.04 49.00 70.67 AdaTAD [21]* VMAE-L 27.42 57.68 40.52 9.96 39.18 59.40 87.11 83.65 76.84 66.82 53.07 73.50
+> AdaTAD [21]* VMAEv2-G 83.59 57.40 40.44 9.78 39.20 176.87 87.50 84.02 77.61 67.05 53.19 73.87 SV-TAD VMAEv2-B 4.75 57.09 39.97 9.77 38.80 10.29 87.54 83.24 75.28 65.54 50.61 72.44
+> SV-TAD VMAEv2-L 10.10 58.40 40.81 9.76 39.58 21.25 87.26 83.80 77.22 66.21 52.85 73.47 SV-TAD InternVideoNext-L 34.00 58.79 41.30 10.41 40.06 87.05 88.38 84.40 78.22 66.82 52.85 74.13
+
+scaling beyond ViT-B. Scaling to ViT-L widens the efficiency gap: SV-TAD uses 64% fewer TFLOPs (21.25 vs. 59.4) while matching AdaTAD’s accu-racy (73.47% vs. 73.50%), demonstrating that our efficiency gains grow with model size. When scaling to InternVideoNext-L, the efficiency advantage becomes most pronounced. On THUMOS-14, SV-TAD requires only 87.05 TFLOPs vs. 176.87 
+
+for AdaTAD’s billion-parameter VMAEv2-G, while surpassing its 73.87% Avg. mAP by +0.26%: a Large-sized backbone with native sparse convolutions sur-passes Giant-level performance at half the computational cost . On Activity-Net-1.3, SV-TAD with VideoMAEv2-B uses 41% fewer TFLOPs (4.75 vs. 8.05) while achieving 38.80% average mAP, surpassing AdaTAD (38.39%) by 
+
++0.41% . The most compelling result is with InternVideoNext-L: SV-TAD re-quires 59% fewer TFLOPs (34 vs. 83.59) while achieving 40.06% average mAP, surpassing AdaTAD with VMAEv2-G (39.20%) by +0.86% at every IoU threshold (Table 5). To isolate this gain from the backbone switch itself, we also run AdaTAD with the same InternVideoNext-L backbone: it reaches 39.72% average mAP at 95.3 TFLOPs, confirming that, at matched backbone, SV-TAD still cuts compute substantially (34 vs. 95.3 TFLOPs) while improving accuracy (+0.34%), so the gains stem from SV-TAD itself rather than from the choice of backbone. 
+
+# 5 Conclusion 
+
+We introduced a native sparse 2D convolution primitive that enables convo-lutional adapters to operate on dynamically pruned token sets without recon-structing the dense spatial grid. This makes sparsity effective across the entire model rather than only within attention layers. Integrated into our SV-TAD framework, this design yields substantial reductions in compute and inference time while maintaining or improving detection accuracy across multiple bench-marks. Crucially, the gains grow with model capacity: with ViT-L, we match top performing accuracy at 64% fewer TFLOPs, while with InternVideoNext-L we 15 set a new state of the art on both THUMOS-14 and ActivityNet-1.3, achieving the best accuracy while requiring roughly half the compute (51% and 59% fewer TFLOPs, respectively). In ATTACH, auxiliary landmark supervision enabled by the sparse adapter’s cross-attention injection point, sets a new state of the art and improves our baseline model by +2.41% mAP, demonstrating that the framework extends naturally to multitask learning on fine-grained assembly. Beyond temporal action detection, our primitive is applicable wherever con-volutional modules follow token selection in Vision Transformers, including spa-tial adapters, feature pyramid networks, and task-specific heads. 
+
+Limitations and Future Work. Our implementation targets NVIDIA GPUs; porting to other accelerators requires replacing the backend, although the core algorithm is architecture-agnostic. Additionally, the sparse kernel becomes faster than its dense counterpart only below the ∼55% keep rate (Fig. 3), so the primitive is most beneficial when progressive pruning through the layers is acceptable. Exploring learned, content-adaptive keep-rate schedules and extend-ing the primitive to 3D spatio-temporal neighborhoods are promising directions for future work. 
+
+# Acknowledgements 
+
+This work was supported by projects PID2022-137581OB-I00, PLEC2023-010343 (INARTRANS 4.0) and PID2024-161576OB-I00, funded by the Spanish MI-CIU/AEI/10.13039/501100011033 and FEDER, UE, co-funded by the Euro-pean Regional Development Fund (ERDF, “A way of making Europe”), and from iRoboCity2030-CM project (grant TEC-2024/TEC-62), awarded by the Community of Madrid. RP, JMB, LMB and LB are members of the Madrid ELLIS Unit, funded by the Autonomous Community of Madrid, Spain. 
+
+# References 
+
+[1] Dustin Aganian, Benedict Stephan, Markus Eisenbach, Corinna Stretz, and Horst-Michael Gross. Attach dataset: Annotated two-handed assembly ac-tions for human action understanding. In 2023 IEEE International Con-ference on Robotics and Automation (ICRA) , pages 11367–11373, 2023. [2] Tanay Agrawal, Abid Ali, Antitza Dantcheva, and Francois Bremond. Scaling action detection: Adatad++ with transformer-enhanced temporal-spatial adaptation. In Proceedings of the IEEE/CVF International Con-ference on Computer Vision , pages 12222–12231, 2025. [3] Lucas Beyer, Xiaohua Zhai, Am´ elie Royer, Larisa Markeeva, Rohan Anil, and Alexander Kolesnikov. Knowledge distillation: A good teacher is pa-tient and consistent. In IEEE/CVF Conference on Computer Vision and 
+
+16 Pattern Recognition, CVPR 2022, New Orleans, LA, USA, June 18-24, 2022 , pages 10915–10924. IEEE, 2022. [4] Daniel Bolya, Cheng-Yang Fu, Xiaoliang Dai, Peizhao Zhang, Christoph Feichtenhofer, and Judy Hoffman. Token merging: Your vit but faster. In 
+
+The Eleventh International Conference on Learning Representations, ICLR 2023, Kigali, Rwanda, May 1-5, 2023 . OpenReview.net, 2023. [5] Feng Cheng and Gedas Bertasius. Tallformer: Temporal action localiza-tion with a long-memory transformer. In Shai Avidan, Gabriel J. Brostow, Moustapha Ciss´ e, Giovanni Maria Farinella, and Tal Hassner, editors, Com-puter Vision - ECCV 2022 - 17th European Conference, Tel Aviv, Israel, October 23-27, 2022, Proceedings, Part XXXIV , volume 13694 of Lecture Notes in Computer Science , pages 503–521. Springer, 2022. [6] Rewon Child, Scott Gray, Alec Radford, and Ilya Sutskever. Generating long sequences with sparse transformers. arXiv preprint arXiv:1904.10509 ,2019. [7] Christopher B. Choy, JunYoung Gwak, and Silvio Savarese. 4d spatio-temporal convnets: Minkowski convolutional neural networks. In IEEE Conference on Computer Vision and Pattern Recognition, CVPR 2019, Long Beach, CA, USA, June 16-20, 2019 , pages 3075–3084. Computer Vision Foundation / IEEE, 2019. [8] Ekin D Cubuk, Barret Zoph, Jonathon Shlens, and Quoc V Le. Ran-daugment: Practical automated data augmentation with a reduced search space. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition workshops , pages 702–703, 2020. [9] Tri Dao, Dan Fu, Stefano Ermon, Atri Rudra, and Christopher R´ e. Flashat-tention: Fast and memory-efficient exact attention with io-awareness. Ad-vances in neural information processing systems , 35:16344–16359, 2022. [10] Benjamin Graham and Laurens Van der Maaten. Submanifold sparse con-volutional networks. arXiv preprint arXiv:1706.01307 , 2017. [11] Akshita Gupta, Gaurav Mittal, Ahmed Magooda, Ye Yu, Graham W. Tay-lor, and Mei Chen. Losa: Long-short-range adapter for scaling end-to-end temporal action localization. In IEEE/CVF Winter Conference on Appli-cations of Computer Vision, WACV 2025, Tucson, AZ, USA, February 26 - March 6, 2025 , pages 2092–2102. IEEE, 2025. [12] Joakim Bruslund Haurum, Sergio Escalera, Graham W. Taylor, and Thomas B. Moeslund. Which tokens to use? investigating token reduc-tion in vision transformers. In IEEE/CVF International Conference on Computer Vision, ICCV 2023 - Workshops, Paris, France, October 2-6, 2023 , pages 773–783. IEEE, 2023. 17 [13] Fabian Caba Heilbron, Victor Escorcia, Bernard Ghanem, and Juan Carlos Niebles. Activitynet: A large-scale video benchmark for human activity un-derstanding. In IEEE Conference on Computer Vision and Pattern Recog-nition, CVPR 2015, Boston, MA, USA, June 7-12, 2015 , pages 961–970. IEEE Computer Society, 2015. [14] Neil Houlsby, Andrei Giurgiu, Stanislaw Jastrzebski, Bruna Morrone, Quentin De Laroussilhe, Andrea Gesmundo, Mona Attariyan, and Sylvain Gelly. Parameter-efficient transfer learning for nlp. In International con-ference on machine learning , pages 2790–2799. PMLR, 2019. [15] Haroon Idrees, Amir R. Zamir, Yu-Gang Jiang, Alex Gorban, Ivan Laptev, Rahul Sukthankar, and Mubarak Shah. The THUMOS challenge on action recognition for videos ”in the wild”. Comput. Vis. Image Underst. , 155:1– 23, 2017. [16] Kwonyoung Kim, Jungin Park, Jin Kim, Hyeongjun Kwon, and Kwanghoon Sohn. Faster parameter-efficient tuning with token redundancy reduction. In IEEE/CVF Conference on Computer Vision and Pattern Recognition, CVPR 2025, Nashville, TN, USA, June 11-15, 2025 , pages 30189–30198. Computer Vision Foundation / IEEE, 2025. [17] Yingwei Li, Yi Li, and Nuno Vasconcelos. Resound: Towards action recog-nition without representation bias. In Proceedings of the European Confer-ence on Computer Vision (ECCV) , pages 513–528, 2018. [18] Youwei Liang, Chongjian Ge, Zhan Tong, Yibing Song, Jue Wang, and Pengtao Xie. Evit: Expediting vision transformers via token reorganiza-tions. In The Tenth International Conference on Learning Representations, ICLR 2022, Virtual Event, April 25-29, 2022 . OpenReview.net, 2022. [19] Chuming Lin, Chengming Xu, Donghao Luo, Yabiao Wang, Ying Tai, Chengjie Wang, Jilin Li, Feiyue Huang, and Yanwei Fu. Learning salient boundary feature for anchor-free temporal action localization. In IEEE Conference on Computer Vision and Pattern Recognition, CVPR 2021, virtual, June 19-25, 2021 , pages 3320–3329. Computer Vision Foundation / IEEE, 2021. [20] Tianwei Lin, Xiao Liu, Xin Li, Errui Ding, and Shilei Wen. BMN: boundary-matching network for temporal action proposal generation. In 
+
+2019 IEEE/CVF International Conference on Computer Vision, ICCV 2019, Seoul, Korea (South), October 27 - November 2, 2019 , pages 3888– 3897. IEEE, 2019. [21] Shuming Liu, Chen-Lin Zhang, Chen Zhao, and Bernard Ghanem. End-to-end temporal action detection with 1b parameters across 1000 frames. In IEEE/CVF Conference on Computer Vision and Pattern Recognition, CVPR 2024, Seattle, WA, USA, June 16-22, 2024 , pages 18591–18601. IEEE, 2024. 18 [22] Shuming Liu, Chen Zhao, Fatimah Zohra, Mattia Soldan, Alejandro Pardo, Mengmeng Xu, Lama Alssum, Merey Ramazanova, Juan Le´ on Alc´ azar, Anthony Cioppa, Silvio Giancola, Carlos Hinojosa, and Bernard Ghanem. Opentad: A unified framework and comprehensive study of temporal ac-tion detection. In IEEE/CVF Conference on Computer Vision and Pat-tern Recognition Workshops, CVPR Workshops 2025, Nashville, TN, USA, June 11-15, 2025 , pages 2625–2635. Computer Vision Foundation / IEEE, 2025. [23] Xiaolong Liu, Song Bai, and Xiang Bai. An empirical study of end-to-end temporal action detection. In IEEE/CVF Conference on Computer Vision and Pattern Recognition, CVPR 2022, New Orleans, LA, USA, June 18-24, 2022 , pages 19978–19987. IEEE, 2022. [24] Junting Pan, Ziyi Lin, Xiatian Zhu, Jing Shao, and Hongsheng Li. St-adapter: Parameter-efficient image-to-video transfer learning. In Sanmi Koyejo, S. Mohamed, A. Agarwal, Danielle Belgrave, K. Cho, and A. Oh, editors, Advances in Neural Information Processing Systems 35: Annual Conference on Neural Information Processing Systems 2022, NeurIPS 2022, New Orleans, LA, USA, November 28 - December 9, 2022 , 2022. [25] Ricardo Pizarro, Roberto Valle, Jos´ e M. Buenaposada, Luis M. Bergasa, and Luis Baumela. Pose-guided token selection for the recognition of ac-tivities of daily living. Image and Vision Computing , 162:105686, 2025. [26] Yongming Rao, Wenliang Zhao, Benlin Liu, Jiwen Lu, Jie Zhou, and Cho-Jui Hsieh. Dynamicvit: Efficient vision transformers with dynamic to-ken sparsification. In Marc’Aurelio Ranzato, Alina Beygelzimer, Yann N. Dauphin, Percy Liang, and Jennifer Wortman Vaughan, editors, Advances in Neural Information Processing Systems 34: Annual Conference on Neu-ral Information Processing Systems 2021, NeurIPS 2021, December 6-14, 2021, virtual , pages 13937–13949, 2021. [27] Michael S. Ryoo, A. J. Piergiovanni, Anurag Arnab, Mostafa Dehghani, and Anelia Angelova. Tokenlearner: Adaptive space-time tokenization for videos. In Marc’Aurelio Ranzato, Alina Beygelzimer, Yann N. Dauphin, Percy Liang, and Jennifer Wortman Vaughan, editors, Advances in Neu-ral Information Processing Systems 34: Annual Conference on Neural In-formation Processing Systems 2021, NeurIPS 2021, December 6-14, 2021, virtual , pages 12786–12797, 2021. [28] Yi Tay, Mostafa Dehghani, Dara Bahri, and Donald Metzler. Efficient transformers: A survey. ACM Comput. Surv. , 55(6):109:1–109:28, 2023. [29] Chenting Wang, Yuhan Zhu, Yicheng Xu, Jiange Yang, Lang Lin, Ziang Yan, Yali Wang, Yi Wang, and Limin Wang. Internvideo-next: Towards general video foundation models without video-text supervision. arXiv preprint arXiv:2512.01342 , 2025. 19 [30] Junke Wang, Xitong Yang, Hengduo Li, Li Liu, Zuxuan Wu, and Yu-Gang Jiang. Efficient video transformers with spatial-temporal token selection. In Shai Avidan, Gabriel J. Brostow, Moustapha Ciss´ e, Giovanni Maria Farinella, and Tal Hassner, editors, Computer Vision - ECCV 2022 - 17th European Conference, Tel Aviv, Israel, October 23-27, 2022, Proceedings, Part XXXV , volume 13695 of Lecture Notes in Computer Science , pages 69–86. Springer, 2022. [31] Limin Wang, Bingkun Huang, Zhiyu Zhao, Zhan Tong, Yinan He, Yi Wang, Yali Wang, and Yu Qiao. Videomae V2: scaling video masked autoencoders with dual masking. In IEEE/CVF Conference on Computer Vision and Pattern Recognition, CVPR 2023, Vancouver, BC, Canada, June 17-24, 2023 , pages 14549–14560. IEEE, 2023. [32] Yan Yan, Yuxing Mao, and Bo Li. SECOND: sparsely embedded convolu-tional detection. Sensors , 18(10):3337, 2018. [33] Min Yang, Guo Chen, Yin-Dong Zheng, Tong Lu, and Limin Wang. Basic-tad: An astounding rgb-only baseline for temporal action detection. Com-put. Vis. Image Underst. , 232:103692, 2023. [34] Min Yang, Huan Gao, Ping Guo, and Limin Wang. Adapting short-term transformers for action detection in untrimmed videos. In IEEE/CVF Con-ference on Computer Vision and Pattern Recognition, CVPR 2024, Seattle, WA, USA, June 16-22, 2024 , pages 18570–18579. IEEE, 2024. [35] Taojiannan Yang, Yi Zhu, Yusheng Xie, Aston Zhang, Chen Chen, and Mu Li. AIM: adapting image models for efficient video action recognition. In The Eleventh International Conference on Learning Representations, ICLR 2023, Kigali, Rwanda, May 1-5, 2023 . OpenReview.net, 2023. [36] Xin Yuan, Hongliang Fei, and Jinoo Baek. Efficient transformer adaptation with soft token merging. In IEEE/CVF Conference on Computer Vision and Pattern Recognition, CVPR 2024 - Workshops, Seattle, WA, USA, June 17-18, 2024 , pages 3658–3668. IEEE, 2024. [37] Chen-Lin Zhang, Jianxin Wu, and Yin Li. Actionformer: Localizing mo-ments of actions with transformers. In Shai Avidan, Gabriel J. Brostow, Moustapha Ciss´ e, Giovanni Maria Farinella, and Tal Hassner, editors, Com-puter Vision - ECCV 2022 - 17th European Conference, Tel Aviv, Israel, October 23-27, 2022, Proceedings, Part IV , volume 13664 of Lecture Notes in Computer Science , pages 492–510. Springer, 2022. [38] Chen Zhao, Shuming Liu, Karttikeya Mangalam, and Bernard Ghanem. Re 2tal: Rewiring pretrained video backbones for reversible temporal ac-tion localization. In IEEE/CVF Conference on Computer Vision and Pat-tern Recognition, CVPR 2023, Vancouver, BC, Canada, June 17-24, 2023 ,pages 10637–10647. IEEE, 2023. 20 Supplemental Materials 
+
+This supplementary provides: CUDA kernel implementation details (Sec. S-I), dataset descriptions (Sec. S-II), full training hyperparameters (Sec. S-III), AdaTAD++ reproduction analysis (Sec. S-IV), additional ablations including keep rate sensitivity, dense vs. sparse numerical divergence, robustness to the selection criterion, and generality beyond TAD (Sec. S-V), detailed ATTACH analysis (Sec. S-VI), and a discussion covering the incompatibility between token selection and standard convolutions, dense vs. sparse convolution comparisons, and why a native sparse 1D temporal kernel is infeasible.. 
+
+# S-I CUDA Kernel Implementation Details 
+
+We implement two complementary kernel strategies, automatically selected based on the channel dimension Cout . Both share the same interface: they consume the neighbor index table N (Sec. 3.2 of the main paper) and produce outputs only at kept positions, with no dense reconstruction. 
+
+## S-I.1 Implicit GEMM via cuBLAS ( C ≥ 256 )
+
+A direct implementation would iterate over all nine 3 ×3 kernel positions, issuing a separate GEMM, gather, and scatter per position, 36 kernel launches with substantial host-side overhead. We instead reorganise the data layout so that a single strided batched GEMM replaces all nine multiplications. The forward pass reduces to three kernel launches: 1. Fused gather with implicit zero-padding : A single CUDA kernel populates Xg ∈ R9×N ×Cin by gathering all 9 neighbors for all N tokens simultaneously. Invalid neighbors ( N[k, j ] = −1) are written as zeros directly. 2. Single batched GEMM : The layout [9 , N, C in ] is specifically designed for cublasGemmStridedBatchedEx , which computes all 9 matrix multipli-cations Yj = Xg [j] · Wj in one call, fully utilizing Tensor Cores. 3. Fused reduction : A parallel reduction sums over the nine kernel posi-tions, adds bias, and casts to the output dtype. This replaces scatter-based accumulation ( index add ) with a simple strided read, eliminating all CPU synchronisation points. Chunked processing extends naturally: tokens are partitioned into fixed-size chunks (e.g.,, 32K), bounding peak memory independently of sequence length. 
+
+## S-I.2 Custom Tiled Kernel ( C < 256 )
+
+When Cout is small, cuBLAS launch overhead dominates compute. We therefore provide hand-tuned CUDA kernels that fuse gather and multiply–accumulate 1into a single launch with no intermediate buffers, following a tiled GEMM struc-ture adapted for sparse convolution: 1. Tile configuration : Each thread block processes a tile of 32 output tokens × 32 output channels. Threads are mapped so each computes 2 tokens × 4 channels (a float4 ), achieving 2 × thread coarsening that amortizes neighbor index lookups and register pressure. 2. Cooperative loading : In the load phase, threads collaboratively fetch a 32 × 32 tile of input features and the corresponding weight slice into shared memory. The sparse gather happens here: each thread reads its assigned row’s neighbor index from the indirection table and fetches from the neighbor’s location (or writes zero if −1). This fuses gather with the tile load at no extra cost. 3. Compute phase : A fully-unrolled inner loop multiplies the shared mem-ory tiles, accumulating into float4 registers. The outer loops iterate over the 9 kernel positions and Cin /32 input channel tiles. 
+
+Sensitivity to spatial distribution. While the sparse kernels outperform dense baselines even under uniform random pruning, they reach peak through-put when retained tokens are spatially clustered. In practice, our token se-lection modules learn to concentrate tokens around salient actors and objects, so threads within a warp access neighbouring memory addresses, maximising cache-line reuse and memory coalescing. 
+
+## S-I.3 Shared Kernel Infrastructure 
+
+Vectorised memory access. All kernels use 128-bit loads ( float4 for FP32, 
+
+int4 for FP16/BF16) with specialised unpack routines per dtype to maximise memory bandwidth. 
+
+Mixed-precision accumulation. Inputs in FP16/BF16 are accumulated in FP32 registers. A fused operation adds bias, casts to the output dtype, and writes results to global memory in a single pass. 
+
+## S-I.4 Complexity Analysis 
+
+Our sparse convolution requires O(Nkept · K2 · Cin · Cout ) operations versus 
+
+O(T HW · K2 · Cin · Cout ) for the dense baseline, yielding a direct kr × compute reduction. Chunked processing further decouples peak memory from sequence length: with a fixed chunk of 32K tokens, memory is bounded to O(chunk size ·
+
+(Cin + Cout )), enabling arbitrarily long video sequences. Since the full model applies token selection at S stages (e.g.,, S=3 at blocks 4, 7, 10 for ViT-B), layers after the final selection stage operate at the most aggressive sparsity, where per-layer gains are largest. 2S-II Dataset Details 
+
+## S-II.1 THUMOS-14 
+
+THUMOS-14 [15] contains 200 validation and 211 test videos from 20 sports ac-tion classes, totaling approximately 26 hours of video at 30 fps ( ∼2.8M frames). Videos are untrimmed with an average of 15 action instances per video, ex-hibiting significant temporal overlap and diverse action durations ranging from fractions of a second to minutes. Following AdaTAD [21], we sample 768 frames per video with temporal stride 1, chunking each into 48 non-overlapping 16-frame clips processed by the ViT backbone. We follow standard protocol: train on validation set, evaluate on test set. 
+
+## S-II.2 ActivityNet-1.3 
+
+ActivityNet-1.3 [13] contains 10,024 training, 4,926 validation, and 5,044 test videos spanning 200 activity classes, comprising approximately 849 hours ( ∼91M frames at 30 fps). As test labels are not publicly released, we train on the train-ing split and evaluate on the validation split, excluding 198 videos blocked on YouTube following the convention of BMN [20], yielding 4,728 usable videos for evaluation. Videos average 2 minutes with 1.5 action instances each. Due to longer durations, we sample 192 frames uniformly across each video with adaptive stride, yielding 12 clips regardless of original length. 
+
+## S-II.3 ATTACH 
+
+ATTACH [1] features fine-grained bimanual assembly tasks at 30 fps, totaling 
+
+∼40 hours ( ∼4.3M frames). The dataset contains 51 action classes across 1,200+ videos with dense temporal annotations. We sample 768 frames per video with stride 4, covering ∼100 seconds per video. Over 68% of annotations temporally overlap due to simultaneous two-handed activities. 
+
+# S-III Full Training Configuration 
+
+Table S1 summarizes the complete hyperparameters used across all three datasets. 
+
+Data Augmentation. We apply random temporal cropping (crop ratio 0.9– 1.0), random horizontal flipping (probability 0.5), and RandAugment [8]. 
+
+Detection Head. ActionFormer with 6 pyramid levels, regression range ra-tios {1, 2, 4, 8, 16 , 32 }, focal loss ( γ=2, α=0 .25) for classification, and DIoU loss for regression. 3Table S1: Complete training hyperparameters across all datasets.                                                        
+
+> Hyperparameter THUMOS-14 ActivityNet ATTACH
+> Epochs 100 10 50 Batch size 216 4Number of GPUs 242Optimizer AdamW Base learning rate 1×10 −4
+> Weight decay 5×10 −2
+> LR schedule Cosine Warmup epochs 5Precision BFloat16 Frames sampled 768 192 768 Temporal stride 1adaptive 4Spatial resolution 224 ×224 160 ×160 224 ×224 Adapter bottleneck ratio 4Sparse conv kernel 3×3Token sel. blocks (ViT-B) 4, 7, 10 Token sel. blocks (ViT-L) 4, 8, 12, 16 Default keep rate kr0.6 (VMAE), 0.7 (InternVideo) Auxiliary loss weight λ--2.0 Number of keypoints --17 Heatmap resolution --56 ×56
+
+Table S2: AdaTAD++ reproduction comparison. Reported values from original paper vs. our reproduction using OpenTAD. 
+
+THUMOS-14 (mAP@IoU) Method Source 0.3 0.4 0.5 0.6 0.7 Avg. 
+
+AdaTAD++ (VMAE-B) Reported 88.3 83.7 76.6 65.0 51.8 73.3 AdaTAD++ (VMAE-B) Ours 84.64 80.33 72.68 62.44 49.67 69.95 
+
+## S-III.1 End-to-End Training and Inference 
+
+Our complete pipeline integrates a frozen pretrained[31, 29] backbone with train-able sparse adapters and an ActionFormer [37] detection head. During training, we optimize only the sparse adapters and detection head, keeping the backbone frozen for parameter efficiency. When auxiliary supervision is used (e.g.,, on ATTACH), the auxiliary head is jointly optimized with loss L = Ldet + λLaux ,where Laux is MSE for heatmap regression. Otherwise, training uses L = Ldet 
+
+alone. 
+
+# S-IV AdaTAD++ Reproduction Analysis 
+
+We attempted to reproduce AdaTAD++ [2] results using the OpenTAD frame-work [22]. Table S2 summarizes our reproduction attempt. 4Reproduction Gap Analysis. Our AdaTAD++ reproduction achieves 69.95% vs. 73.3% reported ( −3.35%). We attribute this discrepancy to: 
+
+• Missing hyperparameters : The original AdaTAD++ paper does not release code or full hyperparameter configurations. 
+
+• Data augmentation : Specific augmentation strategies are not fully doc-umented. 
+
+• Training dynamics : Training techniques are not fully specified. Despite extensive hyperparameter search, we were unable to close this gap. Our reproduction used the publicly available AdaTAD [21] codebase as the base configuration, applying the additional AdaTAD++ modifications as described in the paper. We contacted the authors to request the missing configurations but received no reply. 
+
+# S-V Additional Ablations 
+
+## S-V.1 Dense vs. Sparse 2D Convolution: Numerical Di-vergence 
+
+Although a dense 2D convolution over a zero-padded grid and our sparse 2D con-volution are mathematically equivalent, SparseConv2D outperforms the dense baseline by +0.52% average mAP on THUMOS-14 (Table 2 of the main paper). We identify two sources of numerical divergence that explain this gap. 
+
+Different forward computational backends. Our sparse convolution dis-patches a cuBLAS strided batched GEMM with explicit FP32 accumulation (cuda compute type = CUDA R 32F ), whereas the dense path uses cuDNN’s conv2d ,which may employ different tiling strategies, Winograd transforms, or accumu-lation orders internally. Because floating-point addition is non-associative, these differing reduction orders produce slightly different rounding trajectories even when the mathematical operation is identical. Under BFloat16 inputs, per-element quantization amplifies these trajectory differences with every forward pass. 
+
+Sparse backward kernel skips pruned positions. The backward kernels of our sparse convolution (both sparse bwd in and sparse bwd w ) explicitly skip pruned positions via the −1 sentinel in the neighbor table ( if (n idx == -1) continue ). The dense backward, dispatched through PyTorch autograd on F.conv2d , accumulates weight-gradient contributions from all H×W grid positions including the zero-padded ones. Although these zero-input contribu-tions are analytically zero, excluding them changes the number of terms in the accumulation and their ordering, yielding marginally different weight updates that compound over thousands of training steps. 5Verification. We validate this explanation with two controlled experiments. First, we compare kernel-level outputs at different precision levels: at FP32, dense and sparse outputs match to within machine epsilon, whereas under B-Float16 discrepancies emerge and increase as the keep rate decreases, consis-tent with greater backend divergence when more positions differ between the two paths. Second, we eliminate both sources simultaneously by running both methods at kr =1 .0 (no pruning) in FP32, making the computational graphs equivalent. Under these conditions, SparseConv2D obtains 69.79% and Dense 2DConv obtains 69.89%, a 0.10% gap well within run-to-run variance. This con-firms that the +0.52% gap observed at kr =0 .6 under BFloat16 is a reproducible consequence of the backend and gradient-path differences described above, not a methodological artifact. 
+
+## S-V.2 Robustness to the Token Selection Criterion 
+
+SparseConv2D consumes only the kept-token grid coordinates, so it is agnostic to the criterion used to choose which tokens are kept. To test this, we swap only the selector on THUMOS-14 with VideoMAEv2-B, keeping every other component fixed: an EViT-style attention criterion [18] reaches 72.43%/10.301 TFLOPs and a norm-based criterion (ranking tokens by post-LayerNorm activation mag-nitude, following the survey of selection criteria in [12]) reaches 68.06%/10.296 TFLOPs, against our default attention-based selector at 72.44%/10.297 TFLOPs. The near-identical compute confirms that SparseConv2D adds no overhead re-gardless of selector; the residual accuracy gap is determined by the selection criterion itself, not by the sparse convolution. 
+
+## S-V.3 Generality Beyond Temporal Action Detection 
+
+SparseConv2D is designed as a general token-selection primitive for PEFT adap-ters in ViTs, not one specific to TAD or to the SV-TAD architecture. To test cross-task and cross-backbone applicability, we integrate it into image-to-video adaptation: a frozen CLIP ViT-B/16 fine-tuned with AIM [35] for action recognition on Diving-48 [17]. We replace AIM’s S Adapter, a dense spatial adapter, with SparseConv2D combined with token selection, leaving the rest of the AIM recipe unchanged. Our variant reaches 88.7% top-1 accuracy at 1.01 
+
+TFLOPs, against AIM’s 88.9% at 1.62 TFLOPs, a 37.5% compute reduction at comparable accuracy ( −0.2%). This shows that the efficiency benefit of SparseConv2D is not specific to temporal action detection: it transfers directly to a different task (action classification) and a different frozen backbone (CLIP ViT-B/16). 
+
+# S-VI Detailed ATTACH Analysis 
+
+ATTACH poses a distinct challenge for sparse methods: over 68% of its anno-tations temporally overlap due to simultaneous bimanual actions, requiring the 6Table S3: Ablation on ATTACH (Person Split) with VideoMAEv2-B. SV-TAD + Kp adds auxiliary landmark supervision. * denotes our reproduction. 
+
+Method 0.1 0.2 0.3 0.4 0.5 Avg. 
+
+AdaTAD* [21] 21.68 20.20 18.32 16.00 13.03 17.84 SV-TAD (No CrossAttn) 21.11 19.53 17.52 15.09 12.20 17.09 SV-TAD 20.17 18.69 16.90 14.39 11.25 16.28 SV-TAD + Kp 22.58 21.10 19.21 16.80 13.76 18.69 
+
+model to represent multiple concurrent activities per frame. Table S3 ablates our design choices on this benchmark. 
+
+Effect of cross-attention without auxiliary tokens. Comparing rows 2 and 3 isolates the cross-attention module: adding it reduces performance from 17.09% to 16.28% ( −0.81%). Under sparsity, a single CLS query must aggregate information for multiple concurrent actions, creating a representational bottle-neck that is particularly harmful on multilabel data where frames routinely contain two simultaneous hand actions. 
+
+Landmark supervision resolves this bottleneck. Replacing the single CLS query with K=17 pose-landmark queries provides spatially-grounded at-tention targets, each tied to a specific body region. SV-TAD + Kp achieves 
+
+18.69% avg. mAP, surpassing AdaTAD by +0.85% while requiring 38% fewer FLOPs (11.17 vs. 17.90 TFLOPs). Assembly actions are defined by hand and arm movements, so pose landmarks directly inform the disambiguation of dense, overlapping action boundaries. As a secondary benefit, the auxiliary loss guides token selection toward task-relevant regions (i.e., hands and manipulated ob-jects), improving both feature quality and computational focus. 
+
+Summary. These results show that the cross-attention module is beneficial only when paired with informative auxiliary tokens. On datasets lacking such supervision, the simpler No CrossAttn variant is preferable. More broadly, they demonstrate the modularity of our framework: domain-specific auxiliary tasks can be incorporated with minimal architectural overhead when suitable supervision is available, and cleanly removed otherwise. 
+
+# S-VII Discussion 
+
+We address three design questions that arise from the main paper: whether memory overhead increases (Sec. S-VII.1), why standard convolutions cannot directly operate on sparse tokens (Sec. S-VII.2), and why we chose a spatial rather than temporal sparse kernel (Sec. S-VII.3).. 7S-VII.1 Memory Consumption 
+
+Peak GPU memory remains comparable between SV-TAD and AdaTAD. The frozen backbone activations dominate the overall memory footprint regardless of adapter design. At 768 frames with VideoMAEv2-Base, the backbone accounts for the vast majority of allocated memory, while the adapter modules (whether dense or sparse) contribute a negligible fraction. Because our sparse kernels replace rather than augment the convolution pathway, they do not introduce additional buffers beyond the neighbor index table ( Nkept × 9 int32 entries, 
+
+∼0.2 MB at kr =0 .6). In practice, SV-TAD and AdaTAD occupy nearly the same peak memory, meaning the throughput and FLOP reductions come at no memory cost. 
+
+## S-VII.2 Incompatibility Between Token Selection and Stan-dard Convolutions 
+
+Standard convolutions assume a dense, regularly structured input tensor. Token selection breaks this assumption by producing a variable-length list of kept tokens rather than a dense grid. After global TopK pruning [18] across the flattened spatio-temporal sequence ( B, T ×H×W, C ), the output is a variable-length list of kept tokens, not a dense grid. This creates two structural problems: (i) non-uniform token counts per frame (frames with salient content retain more tokens, violating the fixed H×W layout that Conv1d /Conv2d expect), and (ii) misaligned spatial positions across frames (the which positions survive differs per frame, so grid indices in the sparse list have no consistent spatial correspondence). 
+
+The scatter-gather workaround. A solution is to reconstruct the dense tensor before convolution: scatter the Nkept sparse tokens back to their original grid positions in a zero-initialized tensor of full size, apply the convolution, then 
+
+gather outputs at the kept positions. Concretely, for a 1D temporal adapter, this involves: 1. Allocate a dense tensor Xdense ∈ RB×H×W ×T ×C , initialized to zero. 2. Scatter : for each kept token k at grid position ( b, t, h, w ), write 
+
+Xdense [b, h, w, t, :] = xk.3. Reshape to ( B×H×W, C, T ) and apply nn.Conv1d .4. Gather : extract outputs at the Nkept positions via gather , discarding the zero-padded results. For a 2D spatial adapter, the process is analogous: scatter into ( B×T, C, H, W ), apply nn.Conv2d , and gather back. The key point is that every standard convolution variant requires this same reconstruct-convolve-extract pipeline. 8Efficiency limitations. This workaround has three compounding costs. (1) Mem-ory : the dense tensor allocates O(H×W ×T ×C) regardless of how many tokens were pruned, growing linearly with frame count. (2) Wasted computation :the convolution operates over the full tensor including zero-padded positions; at 
+
+kr =0 .6, ∼40% of FLOPs produce no useful output. (3) Scatter-gather over-head : both operations involve irregular memory access patterns that create a hard latency floor, pruning more aggressively reduces convolution FLOPs but cannot reduce this fixed cost. 
+
+Native sparse convolution. SparseConv2D replaces the entire allocate-scatter-convolve-gather pipeline with a single fused operation. The precomputed neigh-bor index table N ∈ ZNkept ×9 maps each kept token directly to its neighbors in the sparse list. The CUDA kernel gathers features through this indirection, computes the convolution, and writes outputs, all without materializing a dense grid. Memory and computation scale with Nkept , not H×W ×T , converting token reduction ratios into proportional wall-clock savings. 
+
+## S-VII.3 Why Spatial Rather Than Temporal Sparse Con-volution 
+
+Dense 1DConv achieves marginally higher mAP than Dense 2DConv in our ablations (Table 2 of the main paper), raising the question of why we implement a native sparse spatial rather than temporal kernel. We find that three GPU-level constraints make the temporal variant impractical. 
+
+Memory locality. Tokens within a single frame are stored contiguously: spa-tial neighbors are at most ∼14 positions apart (one grid row), placing the gather within 5–11 KB, well within L1 cache. A temporal neighbor resides in an adja-cent frame, Nkept/f rame × C × 2 bytes away ( ∼22–60 KB), an ∼8× increase in access stride. This causes L1/L2 cache thrashing, poor memory coalescing (ad-jacent warp threads need data from different frame blocks), and higher DRAM traffic as temporal loads cannot be served from cache. 
+
+Tiled kernel constraints. Our custom tiled kernel gains efficiency from co-operative loading within a single frame block, where spatially nearby tokens share locality. A temporal kernel would require 32 threads to fetch from up to 32 distinct frame blocks simultaneously, causing severe warp divergence and destroying the coalesced access pattern. 
+
+Reduced kernel utility under global TopK. A sparse temporal kernel would be less useful than its spatial counterpart. With global TopK at kr =0 .6, the probability that a given spatial position ( h, w ) survives selection in both frames t and t+1 is approximately k2 
+
+> r
+
+≈ 0.36. In contrast, spatial neighbors within the same frame share the same selection mask, so a kept token’s 8 spatial 9neighbors have a much higher survival probability, making the spatial kernel’s computation substantively meaningful. In summary, while a native sparse 1D temporal convolution is algorithmi-cally possible, every aspect of its GPU implementation, gather patterns, memory locality, tiling strategy, and effective kernel utilization, is fundamentally worse than the spatial 2D case. The marginal mAP advantage of temporal convolution (+0.25%) does not justify the performance degradation of a native sparse tem-poral kernel. Our 2D spatial design provides a direct path from token reduction ratios to proportional wall-clock savings. 10
