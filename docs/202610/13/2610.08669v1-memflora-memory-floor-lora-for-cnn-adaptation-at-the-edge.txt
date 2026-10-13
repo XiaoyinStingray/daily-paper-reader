@@ -1,0 +1,473 @@
+Title: MemFLoRA: Memory-Floor LoRA for CNN Adaptation at the Edge
+
+URL Source: https://arxiv.org/pdf/2610.08669v1
+
+Published Time: Wed, 07 Oct 2026 01:59:40 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# MemFLoRA: Memory-Floor LoRA for CNN Adaptation at the Edge 
+
+# Mehmet Emre Akbulut 
+
+Technical University of Munich Munich, Germany mehmet.akbulut@tum.de 
+
+# Johannes Geier 
+
+Technical University of Munich Munich, Germany johannes.geier@tum.de 
+
+# Ulf Schlichtmann 
+
+Technical University of Munich Munich, Germany ulf.schlichtmann@tum.de 
+
+## Abstract 
+
+On-device learning is necessary when the model encounters user-, sensor-, or environment-specific shifts after deployment. Although parameter-efficient fine-tuning (PEFT) methods, particularly Low-Rank Adaptation (LoRA) variants, enable efficient adaptation at the edge, the limiting resource for Convolutional Neural Network (CNN) adaptation is often not the number of trainable parameters but the activation state that must be retained until the backward pass. This paper introduces Memory-Floor LoRA (MemFLoRA), a low-rank CNN adapter built around a memory-first design principle rather than a direct application of transformer-oriented LoRA. In-stead of merely reducing trainable weights, we define an activation-memory-floor criterion: trainable backward computations must not depend on full-width layer inputs. The resulting adapter freezes the down-projection, trains a scale-matched up-projection, and com-bines eval-mode backbone normalization with activation-minimal backward rules, reducing saved state to the low-rank branch. Evaluated on three Human Activity Recognition (HAR) datasets and two CNN backbones under subject, body-location, and sensor-placement shifts, MemFLoRA reduces saved-activation memory by 98 .5-98 .7% and peak training-state memory by 94 .9-97 .3% relative to full fine-tuning, while matching or exceeding CNN PEFT baselines. 
+
+## CCS Concepts 
+
+• Computing methodologies → Neural networks .
+
+## Keywords 
+
+LoRA, On-Device Learning, Edge AI, CNN 
+
+ACM Reference Format: 
+
+Mehmet Emre Akbulut, Johannes Geier, and Ulf Schlichtmann. 2027. Mem-FLoRA: Memory-Floor LoRA for CNN Adaptation at the Edge. In 32nd Asia and South Pacific Design Automation Conference (ASPDAC ’27), Janu-ary 25–28, 2027, Tokyo, Japan. ACM, New York, NY, USA, 8 pages. https: //doi.org/10.1145/3840404.3848401 
+
+## 1 Introduction 
+
+Artificial Intelligence (AI) at the edge has become increasingly im-portant as intelligent sensing devices become deeply embedded in everyday life. Smartphones, wearables, and Internet of Things (IoT) platforms interact with their environments and generate large amounts of domain-specific data. This trend pushes AI computation          
+
+> This work is licensed under a Creative Commons Attribution 4.0 International License.
+> ASPDAC ’27, Tokyo, Japan
+> © 2027 Copyright held by the owner/author(s). ACM ISBN 979-8-4007-2923-2/2027/01 https://doi.org/10.1145/3840404.3848401 Conv
+> ReLU
+> bitmask
+> Frozen Trainable Optional
+> Dropped
+> States
+> Saved
+> States
+> (eval mode)
+> Fused Frozen Backbone
+> 10... 110
+> (rank-r)
+> ReLU
+> sign bitmask full width backbone
+> saved states
+
+Figure 1: Brief overview of MemFLoRA computation and saved-state graph, reducing persistent saved state from 
+
+𝑂 (𝐵 𝐶 ℓ 𝑇 ℓ ) to 𝑂 (𝐵 𝑟 𝑇 ℓ ) plus a bit-packed ReLU mask. 
+
+closer to the data source, enabling lower latency, reduced commu-nication costs, and improved privacy compared with sending all data to cloud servers [26]. However, a fixed pretrained model may fail to provide robust predictions after deployment. For example, in sensor-based HAR, the target stream can differ from the source data due to subject-dependent motion patterns, sensor-placement deviations, device heterogeneity, and evolving user behavior [16, 21]. These changes can lead to distribution shifts or concept drifts and degrade the out-of-distribution performance of fixed pretrained models. Since the corrective data are generated locally and may be privacy-sensitive, adapting the model on-device is preferable to repeated cloud-side retraining. However, full fine-tuning updates all model parameters and incurs substantial memory, compute, and energy overhead, which can exceed the resources of embedded systems and motivate more selective adaptation strategies. Since its introduction [9], LoRA has become a widely used adap-tation method for Large Language Models (LLMs), but its role in CNNs and extreme-edge learning scenarios remains much less ex-plored. The standard reading of PEFT is that reducing the number of trainable parameters reduces the training-memory footprint. This assumption is often reasonable in LLMs, where optimizer state and trainable weight gradients dominate. However, for edge CNNs, memory is often dominated by the activation tensors that auto-matic differentiation retains for backward propagation, not by the optimizer state or the trainable parameter set [4]. This mismatch indicates that parameter-efficient methods may still be memory-expensive, motivating MemFLoRA 1: a LoRA-style CNN adapter with an activation-memory floor. The design rule is  
+
+> 1Code is available at https://github.com/mehmetemreakbulut/MemFLoRA. arXiv:2610.08669v1 [cs.LG] 6 Oct 2026 ASPDAC ’27, January 25–28, 2027, Tokyo, Japan Mehmet Emre Akbulut, Johannes Geier, and Ulf Schlichtmann
+
+that no trainable backward computation should require the full-width activation tensor. The adapter satisfies this rule through a frozen down-projection, a trainable up-projection scale-matched to the frozen backbone, and eval-mode backbone normalization. This restricts the saved state to the low-rank branch while preserving adaptation capacity. In summary, our main contributions are: 
+
+• By decomposing the saved-tensor cost into three pillars, we define an activation-memory-floor criterion requiring that no persistent full-precision activation tensor used by trainable backward computations scales with layer width, and show that MemFLoRA satisfies it with rank-𝑟 saved state. Enforcing this floor reduces saved-activation memory by 98 .5-98 .7% and total peak training-state memory by 94 .9-97 .3% relative to full fine-tuning. 
+
+• We introduce a memory-floor CNN adapter that combines a frozen down-projection, a scale-matched trainable up-pro-jection, eval-mode backbone normalization, and activation-minimal backward rules, together with a streaming-gradient (SG) variant that recovers the exact projection gradient with-out persistently saving the full-width activation. 
+
+• Across three HAR datasets spanning subject, location, and sensor-placement shifts and two CNN backbones, we match or exceed all evaluated rank-dependent PEFT methods in mean Macro-F1 across ranks and backbones. 
+
+## 2 Background and Related Work 
+
+Prior work on efficient adaptation has followed two complementary directions. LoRA-style PEFT methods restrict updates to low-rank branches, reducing trainable parameters and optimizer-state costs while remaining easy to integrate into pretrained models and, in many cases, mergeable into the backbone for inference. On-device training methods instead prioritize the dominant training-memory cost by reducing saved activations through selective updates and freezing. Our work bridges these directions by co-designing the adapter architecture and training graph around this activation-memory constraint, rather than treating activation reduction and adaptation as independent problems. 
+
+## 2.1 Low-Rank Adaptation 
+
+LoRA introduced low-rank adaptation by injecting trainable low-rank updates into frozen pretrained weights, reducing trainable parameters while preserving accuracy [9]. Most low-rank adapta-tion research focuses on transformer-based models and the adapter architecture. Work on CNNs is sparser and largely adopts the same parameter-centric perspective as its transformer-based counter-parts [8, 11, 15] rather than reconsidering the activation state re-tained during training. ConvLoRA [1] combines LoRA with Ad-aBN [12] for medical-image domain adaptation, whereas Convo-lution Meets LoRA [24] integrates lightweight convolutions into LoRA experts without fine-tuning the convolution itself. LoRA-C [8] performs low-rank decomposition at the convolutional-layer level rather than the kernel level, targeting parameter-efficient adaptation for IoT devices. More recently, LoRA-Edge [11] targets on-device CNN fine-tuning for human activity recognition under domain shift, using a tensor-train structure to reduce trainable pa-rameters and improve convergence. Across this body of work, the shared objective is parameter efficiency, leaving the CNN setting’s dominant saved-activation cost largely unaddressed. LoRA-FA [23] freezes the down-projection and trains only the up-projection. Theoretical work on asymmetric low-rank adapters further explains that freezing the input-side projection constrains updates to a projected subspace, while leaving the output-side fac-tor trainable can remain expressive in high-dimensional regimes [25]. MemFLoRA inherits this asymmetric-trainability principle but extends it to CNN adaptation, where BatchNorm, activation backward, and convolutional execution introduce saved-state con-straints absent from the transformer setting. Asymmetric train-ability alone removes the full-width input saved for the trainable down-projection. In CNNs, however, full-width state can also be retained by train-mode BatchNorm, activation backward, and the frozen convolutional branch. 
+
+## 2.2 On-Device Training and Activation-Memory 
+
+Several prior systems reduce training memory for on-device learn-ing through quantization, sparse updates, rematerialization, or ac-tivation compression. TinyTL [4] showed that activations dom-inate on-device training memory. Building on this perspective, MCUNetV3 [13] combines quantization-aware scaling, sparse up-dates, and a tiny training engine to enable learning under extremely small memory budgets. POET [18] formulates rematerialization and paging schedules for training, while gradient checkpointing [7] re-duces activation storage by recomputing intermediate activations during the backward pass. Activation-compression methods such as ActNN [6], GACT [14], and Few-bit Backward [17] reduce the cost of storing activations by compressing or quantizing them. Checkpointing, rematerialization, and activation compression are orthogonal execution-level techniques: they reduce or recon-struct the state required by a given adapter but do not change its intrinsic backward dependencies. Our floor instead concerns adapter design, before such techniques are applied. MemFLoRA attains this floor without recomputation or compression, and these techniques can be applied on top of it for further savings. MemFLoRA combines asymmetric low-rank adaptation with the activation-centric perspective of on-device training. Unlike the execution-level techniques discussed above, it modifies the adapter’s intrinsic backward dependencies so that the persistent state required by trainable computations is bounded by the rank-
+
+𝑟 branch. To the best of our knowledge, MemFLoRA is the first LoRA-style CNN adapter explicitly designed around an activation-memory-floor criterion. The novelty lies in enforcing a graph-level activation-memory constraint across the frozen projection, adapter branch, backbone normalization, activation backward, adapter place-ment, convolutional geometry, and optionally, projection-gradient recovery. 
+
+## 3 Method 
+
+We introduce a family of LoRA-style adapters for activation-memory-efficient CNN adaptation as illustrated in Figure 1. In transformers, LoRA is naturally applied to linear projections, where the main design variable is the rank of the injected update. In CNNs, how-ever, the adapter interacts with convolutional kernel geometry, BatchNorm mode and statistics, activation functions, and fused MemFLoRA: Memory-Floor LoRA for CNN Adaptation at the Edge ASPDAC ’27, January 25–28, 2027, Tokyo, Japan 
+
+Conv–BN–ReLU execution. Consequently, directly factorizing con-volutional weights may reduce trainable parameters while still retaining full-width feature maps for the backward pass. We in-stead require that no trainable backward formula should require the full-width activation tensor. In the remainder of this section, we define the memory floor, derive the adapter form and placement from it, and show how each component follows from this constraint rather than being an independent design choice. 
+
+## 3.1 The Activation-Memory Floor Criterion 
+
+Total training memory decomposes as 
+
+𝑀 train = 𝑀 weights + 𝑀 grad + 𝑀 optim + 𝑀 saved + 𝑀 buf , (1) where the terms denote model weights, gradients, optimizer states, tensors saved during the forward pass for backward reuse, and temporary buffers, respectively. Among these, 𝑀 saved can dominate for edge CNNs (Figure 2). Parameter-efficient fine-tuning reduces 
+
+𝑀 grad and 𝑀 optim but leaves 𝑀 saved essentially unchanged, which is why parameter efficiency does not imply memory efficiency. For input 𝑥 ℓ ∈ R𝐵 ×𝐶 ℓ ×𝑇 ℓ , 𝑀 saved decomposes into three pillars ,each retained by a distinct part of the backward graph: (i) acti-vation/ReLU state : although ReLU backward requires only the ac-tivation sign, standard automatic differentiation typically retains a full-width tensor, 𝑂 (𝐵 𝐶 ℓ 𝑇 ℓ ); (ii) BatchNorm state : train-mode BatchNorm’s backward requires the normalized input, so full-width BN input is saved, 𝑂 (𝐵 𝐶 ℓ 𝑇 ℓ ); (iii) frozen-branch convolution state :the input of every convolution is saved, including the input of the adapter and the input of the frozen backbone. A standard low-rank convolutional adapter trains both factors and therefore its saved adapter input remains full-width, 𝑂 (𝐵 𝐶 ℓ 𝑇 ℓ ), matching the asymp-totic activation width of full fine-tuning. We define the activation-memory floor for single-pass LoRA-style CNN adapters as persistent saved state of 𝑂 (𝐵𝑟𝑇 ℓ ) for train-able backward computations, independent of 𝐶 ℓ . The ReLU gate is accounted for separately as a bit-packed mask, which is the mini-mal direct state for exact ReLU backward without recomputation. MemFLoRA satisfies this by replacing the dense saved state of the three pillars with the rank-𝑟 bottleneck and a bit-packed ReLU gate. 
+
+Eval-mode BatchNorm removes Pillar (ii): During adaptation, the BatchNorm statistics (𝜇 ℓ , 𝜎 2 
+
+> ℓ
+
+) are frozen to target-calibrated values, and the affine parameters (𝛾 𝑠,ℓ , 𝛽 𝑠,ℓ ) are the fixed backbone scale and shift. BatchNorm then reduces to a per-channel affine map BN eval  
+
+> 𝑠
+
+(𝑧 ) = 𝑎 𝑠,ℓ ⊙ 𝑧 +𝑏 𝑠,ℓ ; 𝑎 𝑠,ℓ = 𝛾 𝑠,ℓ √︃   
+
+> 𝜎 2
+> 𝑠,ℓ +𝜀
+
+; 𝑏 𝑠,ℓ = 𝛽 𝑠,ℓ −𝑎 𝑠,ℓ ⊙ 𝜇 𝑠,ℓ (2) Because (2) is a fixed affine transform, its backward pass saves no activation. Eval-mode BatchNorm is therefore a precondition for the floor rather than an optional choice. 
+
+Bit-packed sign mask reduces Pillar (i): the backward pass of a fused Conv–BN–ReLU operator stores the ReLU sign at one bit per element rather than a full-precision tensor. 
+
+Frozen down-projection removes Pillar (iii): We adapt each con-volution with a frozen down-projection 𝑃 ℓ and a trainable up-projection 𝑈 ℓ . If 𝑃 ℓ were trainable, its gradient has the outer-product form ∇𝑃 ℓ ∝ 𝑔 ℓ 𝑥 ⊤ 
+
+> ℓ
+
+which would require retaining the full-width input 𝑥 ℓ , of size 𝑂 (𝐵 𝐶 ℓ 𝑇 ℓ ), violating the floor. After freezing 𝑃 ℓ ,0 10 20 30 40 50 60 70 80           
+
+> Full LoRA-C LoRA-Edge MemFLoRA MemFLoRA-SG
+> 63.40 (56.65) 59.76 (57.35) 40.04 (37.71) 3.23 (0.83) 5.01 (0.83)
+> T-ResNet
+> 0100 200 300 400 500 600 700 800
+> Peak training memory (MB)
+> Full LoRA-C LoRA-Edge MemFLoRA MemFLoRA-SG
+> 666.64 (639.56) 592.61 (583.05) 491.22 (481.79) 17.83 (8.40) 26.30 (8.40)
+> MobileNetV2
+> Model state Optimizer state Live training state
+
+Figure 2: Peak training-state memory decomposition of Mo-bileNetV2 at rank-2 on Opportunity with a batch size of 64. Labels report total peak memory, with saved-activation mem-ory in parentheses. 
+
+𝑈 ℓ requires only the bottleneck activation 𝑞 ℓ = 𝑃 ℓ 𝑥 ℓ ∈ R𝐵 ×𝑟 ×𝑇 ℓ re-ducing the saved adapter state to 𝑂 (𝐵 𝑟 𝑇 ℓ ). At 𝑟 = 1, this becomes 
+
+𝑂 (𝐵 𝑇 ℓ ) and is independent of 𝐶 ℓ . Frozen-projection asymmetry is thus a requirement of the floor, not a stylistic choice. 
+
+## 3.2 Adapter Form and Placement 
+
+We adapt each convolution with a branch consisting of a frozen down-projection 𝑃 ℓ and a trainable up-projection 𝑈 ℓ :
+
+Δℓ = 𝑈 ℓ
+
+ 𝑃 ℓ 𝑥 ℓ
+
+ = 𝑈 ℓ (𝑞 ℓ ), (3) As shown in Section 3.1, freezing 𝑃 ℓ places this branch at the memory-floor: the gradient of 𝑈 ℓ depends only on the rank-𝑟 bot-tleneck 𝑞 ℓ , never on the full-width input 𝑥 ℓ .To preserve the activation-memory floor, we implement each Conv–BN–ReLU site as a single activation-minimal operator rather than exposing the convolution output, BN output, and ReLU preac-tivation as separate saved tensors. Under this memory constraint, the adapter branch is added to the fused Conv–BN output: 
+
+𝑦 ℓ = 𝜑 
+
+
+
+BN eval 
+
+> 𝑠
+
+ 𝑊 0 
+
+> ℓ
+
+𝑥 ℓ
+
+ + Δℓ
+
+
+
+(4) Here, 𝑊 0 
+
+> ℓ
+
+is the frozen source convolution, 𝜑 is the activation function, and Δℓ is the low-rank adapter update. Because eval-mode BatchNorm is affine (Equation (2)), injecting the adapter before normalization is algebraically equivalent to 
+
+𝜑 
+
+
+
+BN eval  
+
+> 𝑠
+
+(𝑊 0 
+
+> ℓ
+
+𝑥 ℓ + Δℓ )
+
+
+
+= 𝜑 
+
+
+
+BN eval  
+
+> 𝑠
+
+(𝑊 0 
+
+> ℓ
+
+𝑥 ℓ ) + 𝑎 𝑠,ℓ ⊙ Δℓ
+
+
+
+. (5) 
+
+## 3.3 Scale-Matching the Adapter Branch 
+
+The forward rule in (4) adds the adapter output Δℓ to the normalized backbone output BN eval  
+
+> 𝑠
+
+(𝑊 0 
+
+> ℓ
+
+𝑥 ℓ ). The backbone term is scaled per channel by 𝑎 𝑠,ℓ per (2); the adapter term, at raw scale, is not. This subsection shows that matching the per-channel scale of the two branches is critical under the evaluated initialization and optimiza-tion protocol, examines the two ways to supply it, and derives our choice. Writing the pre-activation as 
+
+𝑧 ℓ = 𝑎 𝑠,ℓ ⊙ ( 𝑊 0 
+
+> ℓ
+
+𝑥 ℓ ) + 𝑏 𝑠,ℓ + 𝑈 ℓ (𝑞 ℓ ), (6) the bottleneck 𝑞 ℓ = 𝑃 ℓ 𝑥 ℓ is a frozen random projection of the layer input; its per-channel magnitudes are uncontrolled and are not on the scale of the normalized backbone term. When the two branches are mismatched in scale, the adapter updates are poorly conditioned across channels, the adapter output rapidly grows out of scale with the normalized backbone term, and the ReLU gate destabilizes. ASPDAC ’27, January 25–28, 2027, Tokyo, Japan Mehmet Emre Akbulut, Johannes Geier, and Ulf Schlichtmann 
+
+Empirically, a raw-scale memory-floor adapter fails to adapt at all (Section 4, Table 4). The adapter branch, therefore, requires per-channel scale-matching to the backbone before summation. 
+
+Option A: trainable bottleneck normalization. One way to supply the missing scale is to normalize the bottleneck before 𝑈 ℓ with a trainable BatchNorm BN 𝑟,ℓ over the 𝑟 bottleneck channels, 
+
+ΔBN 𝑟  
+
+> ℓ
+
+= 𝑈 ℓ
+
+ 𝛾 𝑟,ℓ ⊙ 𝑞 ℓ − 𝜇 𝑟,ℓ √︃ 
+
+𝜎 2 
+
+> 𝑟,ℓ
+
++ 𝜀 
+
++ 𝛽 𝑟,ℓ 
+
+, (7) with batch statistics (𝜇 𝑟,ℓ , 𝜎 2 
+
+> 𝑟,ℓ
+
+) and trainable affine (𝛾 𝑟,ℓ , 𝛽 𝑟,ℓ ). This normalization places every bottleneck channel at unit scale and prevents the collapse of (6). Batch-dependent statistics add varia-tion under small adaptation batches and discard the per-channel bottleneck magnitudes used by the trainable spatial kernel. 
+
+Option B: inherited scale. The equivalence in (5) identifies a natu-ral per-channel scale directly: it is the eval-mode BatchNorm output scale 𝑎 𝑠,ℓ , the same constant that the fused block already applies to the backbone branch. Scaling the adapter output by 𝑎 𝑠,ℓ yields 
+
+𝑦 ℓ = 𝜑 
+
+
+
+BN eval 
+
+> 𝑠
+
+ 𝑊 0 
+
+> ℓ
+
+𝑥 ℓ
+
+ + 𝑎 𝑠,ℓ ⊙ 𝑈 ℓ (𝑞 ℓ )
+
+
+
+(8) Unlike BN 𝑟,ℓ , the factor 𝑎 𝑠,ℓ is a fixed, precomputed, per-channel constant, so it introduces no batch-statistic noise and no additional saved state, and it leaves the bottleneck magnitudes intact for 𝑈 ℓ .
+
+Choice. Under the matched initialization and geometry presented in Section 3.4, the fixed scale 𝑎 𝑠,ℓ outperforms the trainable normal-ization BN 𝑟,ℓ (Table 4): both prevent the collapse, but 𝑎 𝑠,ℓ avoids the statistical noise caused by BN 𝑟,ℓ and preserves the bottleneck signal. Although BN 𝑟,ℓ is initialization-agnostic and mitigates the effect of projection, we adopt (8) and use no bottleneck normalization. 
+
+## 3.4 Convolutional Geometry 
+
+The adapter is defined by a frozen down-projection 𝑃 ℓ and a train-able up-projection 𝑈 ℓ , but it does not yet specify which factor carries the spatial kernel . For a linear layer, this question does not arise; for a convolution, it is a design choice determining whether the adapter can re-learn temporal or spatial filters for the target domain. Two parameterizations are on the memory floor, since both keep the bottleneck 𝑞 ℓ at rank 𝑟 .
+
+Frozen-kernel parameterization. The down-projection 𝑃 ℓ carries the 𝑘 -tap spatial kernel and is frozen; the trainable 𝑈 ℓ is a pointwise (1 × 1) channel mixer: 
+
+𝑃 ℓ ∈ R𝑟 ×𝐶 ℓ ×𝑘 , 𝑈 ℓ ∈ R𝐶 out ×𝑟 ×1, #(𝑈 ℓ ) = 𝑟 𝐶 out . (9) Here, the spatial filters are fixed, so the adapter can only re-mix a fixed set of filter responses; it cannot form new temporal filters. 
+
+Trainable-kernel parameterization. The down-projection is a frozen pointwise projection and the trainable up-projection carries the full 𝑘 -tap spatial kernel: 
+
+𝑃 ℓ ∈ R𝑟 ×𝐶 ℓ ×1, 𝑈 ℓ ∈ R𝐶 out ×𝑟 ×𝑘 , #(𝑈 ℓ ) = 𝑟 𝐶 out 𝑘. (10) The trainable spatial kernel operates directly on the bottleneck magnitudes 𝑞 ℓ , which are the same magnitudes that Section 3.3 showed must be preserved rather than normalized away. 
+
+Parameter cost and the floor. The trainable-kernel parameteriza-tion costs a factor of 𝑘 in trainable parameters, 𝑟 𝐶 out 𝑘 versus 𝑟 𝐶 out .This cost falls on the optimizer state 𝑀 optim , not on the activation floor: the saved adapter state is 𝑂 (𝐵 𝑟 𝑇 ℓ ) in both parameterizations, since 𝑞 ℓ = 𝑃 ℓ 𝑥 ℓ is rank-𝑟 regardless of where the kernel sits. For edge CNNs, where 𝑀 saved ≫ 𝑀 optim (see Figure 2), the 𝑘 × parameter increase is a subdominant cost paid to recover adaptation capacity at the same activation floor. 
+
+Initialization. Because 𝑃 ℓ is frozen, its initialization fixes the subspace in which the adapter operates and the per-channel scale of the bottleneck. We initialize 𝑃 ℓ ∼ N ( 0, 1/𝑟 ), for which 
+
+EVar (𝑞 ℓ,𝑗 ) = 1 
+
+> 𝑟
+
+tr (Σ𝑥 ℓ ). (11) This expected variance is identical across the 𝑟 bottleneck chan-nels, where Σ𝑥 ℓ = Cov (𝑥 ℓ ). This produces a variance-balanced bottleneck compatible with the scale-matched adapter in (8). The trainable up-projection is zero-initialized, 𝑈 ℓ = 0, so the adapter is inactive at initialization and adaptation starts exactly from the source model. The scale mismatch of Section 3.3 therefore acts on the gradient rather than the forward pass. We examine sensitivity to this initialization in Section 4. 
+
+## 3.5 Projection-Gradient Recovery 
+
+MemFLoRA freezes 𝑃 ℓ to preserve the memory floor, but this re-stricts adaptation to a fixed projected subspace. As an optional ex-tension, MemFLoRA-SG uses rematerialization, an execution-level technique orthogonal to the adapter design, to update 𝑃 ℓ without persistently retaining the full-width input 𝑥 ℓ . Let 𝑔 ℓ = 𝜕 L/ 𝜕𝑞 ℓ ,where 𝑞 ℓ = 𝑃 ℓ 𝑥 ℓ . Then 
+
+𝜕 L
+
+𝜕𝑃 ℓ
+
+=∑︁ 
+
+> 𝑏,𝑡
+
+𝑔 ℓ,𝑏,𝑡 𝑥 ⊤ 
+
+> ℓ,𝑏,𝑡
+
+. (12) Standard backpropagation retains 𝑥 ℓ until this outer product is formed. MemFLoRA-SG stores only the rank-𝑟 gradient 𝑔 ℓ , replays the current adapted network under no_grad , and immediately con-tracts each rematerialized 𝑥 ℓ with 𝑔 ℓ [7]. The input is released immediately after its layerwise contraction, so full-width activa-tions do not accumulate across layers and only one such buffer is live at a time. MemFLoRA-SG therefore preserves rank-bounded persistent backward state, 𝑂 (𝐵 𝑟 𝑇 ℓ ), at the cost of one additional forward pass and a layer-local full-width temporary buffer included in the reported peak-memory accounting. 
+
+## 4 Experimental Results 
+
+We follow the experimental protocol and application scope estab-lished by LoRA-Edge [11], the most directly related on-device CNN adaptation baseline, while extending the evaluation across three ranks and 20 independent seeds, with detailed training-state mem-ory accounting and additional rank-independent baselines. We evaluate T-ResNet [19] and MobileNetV2 [20] on the three HAR benchmarks summarized in Table 2, spanning complementary de-ployment shifts. Opportunity uses Leave-One-Subject-Out (LOSO), with one subject as target and the others as source; RealWorld uses Leave-One-Location-Out (LOLO), with one sensor location as target; and RealDisp uses ideal placement as source and self placement as target. Target data are divided into 80% adaptation MemFLoRA: Memory-Floor LoRA for CNN Adaptation at the Edge ASPDAC ’27, January 25–28, 2027, Tokyo, Japan 
+
+Table 1: Headline Macro-F1 comparison at 50 adaptation steps. Mean ± sample standard deviations across 20 seeds are reported. 
+
+Dataset Backbone Zero Shot Full FT Bias-Tuning BN-Tuning 𝑟 LoRA-C LoRA-Edge MemFLoRA MemFLoRA-SG Opportunity MobileNetV2 2 0.698 ± 0.037 0.730 ± 0.032 0.747 ± 0.025 0.758 ± 0.028 0.585 ± 0.088 0.820 ± 0.025 0.632 ± 0.054 0.668 ± 0.043 4 0.728 ± 0.032 0.760 ± 0.027 0.764 ± 0.028 0.774 ± 0.024 8 0.756 ± 0.028 0.789 ± 0.025 0.771 ± 0.028 0.785 ± 0.023 T-ResNet 2 0.746 ± 0.044 0.710 ± 0.052 0.768 ± 0.046 0.773 ± 0.040 0.511 ± 0.087 0.847 ± 0.026 0.655 ± 0.054 0.684 ± 0.052 4 0.773 ± 0.039 0.746 ± 0.046 0.793 ± 0.034 0.797 ± 0.035 8 0.801 ± 0.030 0.774 ± 0.038 0.812 ± 0.033 0.815 ± 0.031 RealDisp MobileNetV2 2 0.882 ± 0.005 0.892 ± 0.004 0.891 ± 0.004 0.896 ± 0.004 0.791 ± 0.000 0.894 ± 0.013 0.835 ± 0.003 0.865 ± 0.005 4 0.890 ± 0.005 0.898 ± 0.004 0.888 ± 0.010 0.897 ± 0.006 8 0.897 ± 0.003 0.903 ± 0.006 0.885 ± 0.010 0.895 ± 0.007 T-ResNet 2 0.738 ± 0.009 0.631 ± 0.005 0.742 ± 0.017 0.768 ± 0.015 0.526 ± 0.000 0.891 ± 0.009 0.599 ± 0.005 0.620 ± 0.005 4 0.787 ± 0.010 0.686 ± 0.004 0.787 ± 0.010 0.815 ± 0.009 8 0.827 ± 0.010 0.742 ± 0.006 0.828 ± 0.011 0.847 ± 0.011 RealWorld MobileNetV2 2 0.802 ± 0.044 0.817 ± 0.046 0.874 ± 0.038 0.882 ± 0.035 0.610 ± 0.087 0.911 ± 0.026 0.751 ± 0.067 0.825 ± 0.049 4 0.846 ± 0.037 0.866 ± 0.035 0.886 ± 0.035 0.892 ± 0.034 8 0.880 ± 0.032 0.889 ± 0.034 0.896 ± 0.034 0.901 ± 0.032 T-ResNet 2 0.689 ± 0.096 0.632 ± 0.108 0.826 ± 0.065 0.847 ± 0.052 0.449 ± 0.124 0.903 ± 0.028 0.554 ± 0.134 0.631 ± 0.125 4 0.779 ± 0.067 0.717 ± 0.085 0.859 ± 0.047 0.871 ± 0.044 8 0.847 ± 0.043 0.799 ± 0.056 0.875 ± 0.045 0.883 ± 0.040 
+
+Table 2: Datasets, domain shifts, and preprocessing settings. 
+
+Dataset Shift Subj. Act. Hz Win./Str. Opportunity [5] Subject 4 17 30 60/30 RealWorld [22] Body location 15 8 50 500/250 RealDisp [2] Sensor placement 17 33 50 250/125 and 20% held-out test data, with no test data used for adaptation or AdaBN calibration. All methods use Adam [10] with a learning rate of 0 .001, a batch size of 64, and 50 adaptation steps to match the evaluation protocol of LoRA-Edge [11]. We adapt all convolutional layers in T-ResNet and the pointwise convolutions in MobileNetV2, and evaluate ranks 
+
+𝑟 ∈ { 2, 4, 8}. We report macro-F1 over 20 seeds. For each random seed, the source model is independently pretrained for 20 epochs; all adaptation runs use a weight decay of 0 .0005 and no learning-rate scheduler. MemFLoRA-SG replay uses the same mini-batch and unchanged parameters and completes before the optimizer step. We compare against both rank-independent and rank-dependent adaptation baselines. The rank-independent baselines are Zero-shot , which performs no target adaptation, Full Fine-Tuning (Full FT) which updates the entire model, Bias-tuning [3] and BN-tuning . The rank-dependent baselines are LoRA-C [8] and LoRA-Edge [11], two CNN-oriented LoRA baselines for edge adaptation. 
+
+## 4.1 Comparative Memory Analysis 
+
+Table 3 reports training-memory scaling at 𝑟 = 2 across batch sizes for T-ResNet and MobileNetV2, while Figure 2 visualizes the 𝐵 = 64 peak-memory decomposition. Although the other methods reduce the number of trainable parameters, their memory remains domi-nated by saved activations. At 𝐵 = 64, MemFLoRA reduces saved-activation memory relative to Full FT by 98 .5% on T-ResNet and 98 .7% on MobileNetV2, with corresponding peak training-state re-ductions of 94 .9% and 97 .3%. MemFLoRA-SG retains rank-bounded persistent state but incurs a replay buffer, yielding peak-memory 
+
+Table 3: For T-ResNet and MobileNetV2, batch-size entries report peak/saved-activation memory [MB]; optimizer-state memory is reported separately.                                                
+
+> Method 𝐵 1𝐵 8𝐵 32 𝐵 64 Opt. [MB] T-ResNet Full FT 9.02/0.90 13.84/7.09 35.08/28.33 63.40/56.65 4.49 LoRA-C 5.51/3.10 11.53/9.12 32.20/29.79 59.76/57.35 0.10 LoRA-Edge 2.93/0.60 7.05/4.72 21.19/18.86 40.04/37.71 0.02 MemFLoRA 2.44/0.02 2.50/0.11 2.81/0.42 3.23/0.83 0.08 MemFLoRA-SG 2.50/0.02 2.78/0.11 3.74/0.42 5.01/0.83 0.10 MobileNetV2 Full FT 43.20/16.12 109.00/81.91 346.93/319.85 666.64/639.56 17.97 LoRA-C 27.17/17.61 90.00/80.44 305.40/295.84 592.61/583.05 0.30 LoRA-Edge 17.09/7.66 69.77/60.34 250.39/240.96 491.22/481.79 0.16 MemFLoRA 9.63/0.20 10.54/1.11 13.66/4.23 17.83/8.40 0.16 MemFLoRA-SG 9.91/0.20 11.73/1.11 17.97/4.23 26.30/8.40 0.16
+
+reductions of 92 .1% and 96 .1%, respectively. For fairness, all rank-dependent methods use activation-aware implementations that retain only tensors required by their adapter gradients. The batch-size sweep further shows that MemFLoRA’s saved-state advantage persists as activation memory grows. Notably, its peak memory at 
+
+𝐵 = 64, 3 .23 MB on T-ResNet and 17 .83 MB on MobileNetV2, is comparable to LoRA-Edge at 𝐵 = 1, with 2 .93 MB and 17 .09 MB, respectively. Thus, under a similar memory budget, MemFLoRA supports a 64 × larger adaptation batch. 
+
+## 4.2 Results Across Adaptation Budgets 
+
+Table 1 reports macro-F1 under a tight 50-step adaptation budget across six dataset–backbone settings and three ranks. Among the single-pass rank-dependent methods, MemFLoRA reaches an aver-age of 0 .827, compared with 0 .798 for LoRA-C and 0 .777 for LoRA-Edge. Thus, its substantial memory reduction does not come at the cost of adaptation quality. MemFLoRA-SG provides an accuracy-oriented operating point by increasing the average macro-F1 to 0.839, while retaining a substantially smaller memory footprint than conventional CNN LoRA methods. ASPDAC ’27, January 25–28, 2027, Tokyo, Japan Mehmet Emre Akbulut, Johannes Geier, and Ulf Schlichtmann Zero Shot Full FT Bias-Tuning BN-Tuning LoRA-C LoRA-Edge MemFLoRA (Ours) MemFLoRA-SG (Ours)                     
+
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> 0.9 Macro-F1
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> 0.9 Macro-F1
+> 50 100 150 200 250 Adaptation steps
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> 0.9 Macro-F1
+> 50 100 150 200 250 Adaptation steps
+> T-ResNet MobileNetV2 Opportunity Opportunity RealWorld RealWorld RealDisp RealDisp Zero Shot Full FT Bias-Tuning BN-Tuning LoRA-C LoRA-Edge MemFLoRA MemFLoRA-SG
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> 0.9 Macro-F1
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> 0.9 Macro-F1
+> 50 100 150 200 250 Adaptation steps
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> 0.9 Macro-F1
+> 50 100 150 200 250 Adaptation steps
+
+T-ResNet MobileNetV2 Opportunity Opportunity RealWorld RealWorld RealDisp RealDisp 
+
+Figure 3: Adaptation performance at 𝑟𝑎𝑛𝑘 = 2 across adapta-tion steps for T-ResNet (left) and MobileNetV2 (right). 
+
+We next examine convergence across adaptation budgets. Fig-ure 3 shows the rank-2 adaptation trajectories, which are qual-itatively consistent across datasets and backbones. MemFLoRA narrows the gap to Full FT as adaptation proceeds while remaining competitive at convergence. MemFLoRA-SG generally provides the strongest performance through projection-gradient recovery. 
+
+## 4.3 Design Ablations and Training Cost 
+
+Table 4 summarizes three design choices. First, Gaussian initializa-tion consistently outperforms the orthogonalized projection across the three evaluated ranks. We therefore use Gaussian initialization in the remaining experiments. Second, placing the spatial kernel in the trainable factor improves macro-F1 while preserving the same rank-bounded saved-state. Finally, the scale-normalization ablation shows that adding an unnormalized adapter to the nor-malized backbone output causes performance to collapse. Either bottleneck normalization or the frozen source-BN scale restores a usable adapter scale, but the source-BN scale alone gives the best average result. Following prior on-device adaptation protocols, we calibrate AdaBN using one batch of target data, showing that it has a negligible effect. Entries in the table report mean macro-F1 over all target subjects from an independent ablation sweep; differences from Table 1 are within seed-level variation. Table 5 summarizes the training-side cost at rank 2 on Opportu-nity. MemFLoRA closely matches the computational cost of LoRA-Edge: 222 .5 versus 218 .6 million MACs for T-ResNet and 286 .0versus 283 .2 million MACs for MobileNetV2. These correspond to only 70% and 71% of the Full Fine-Tuning cost, respectively. MemFLoRA uses more trainable parameters than LoRA-Edge on T-ResNet (10 .6K versus 2 .3K) and the same number on MobileNetV2 
+
+Table 4: Ablations on Opportunity with T-ResNet at 50 adap-tation steps. 
+
+Factor Variant 𝑟 = 2 𝑟 = 4 𝑟 = 8Init. Normal 𝑃 0.759 0.777 0.802 Orthogonal 𝑃 0.673 0.709 0.751 Geom. 1×1 down, 𝑘 ×𝑘 up 0.760 0.777 0.802 
+
+𝑘 ×𝑘 down, 1 ×1 up 0.731 0.755 0.773 Scale None 0.200 0.197 0.187 
+
+𝐵𝑁 𝑟 0.728 0.772 0.805 
+
+𝑎 𝑠 0.764 0.792 0.808 
+
+AdaBN Off 0.753 0.779 0.804 On 0.762 0.783 0.801 
+
+Table 5: Training-performance summary at rank 2. Total adaptation Multiply-Accumulates (MACs) are reported as AdaBN calibration MACs plus 50 adaptation steps. 
+
+Backbone Method Par. 
+
+[10 3]
+
+MACs 
+
+[10 6]
+
+Relative cost [%]
+
+Steps to 85% [𝑛 ]
+
+T-ResNet Full FT 560.9 320.0 – –LoRA-C 12.8 320.2 100 22 LoRA-Edge 2.3 218.6 68 24 MemFLoRA 10.6 222.5 70 19 MemFLoRA-SG 10.6 331.7 104 15 
+
+MobileNetV2 Full FT 2250 403.0 – –LoRA-C 37.1 390.9 97 32 LoRA-Edge 19.8 283.2 70 24 MemFLoRA 19.8 286.0 71 24 MemFLoRA-SG 19.8 426.0 106 23 
+
+(19 .8K). This is a deliberate geometry-level trade-off: the trainable parameter footprint remains small, while the adapter directly re-duces the activations saved for backward, which dominate CNN training memory. MemFLoRA therefore provides comparable or better adaptation quality and nearly identical computational cost to LoRA-Edge, while substantially reducing peak training-state memory. MemFLoRA-SG retains the same number of trainable pa-rameters but requires 104% and 106% of the Full Fine-Tuning MACs because of its additional forward replay. It therefore offers higher adaptation accuracy in exchange for additional computation, while remaining in the same low-memory regime as MemFLoRA. To iso-late the convergence behavior during adaptation, we measure the adaptation steps until each method first reaches 85% of the final Full FT macro-F1 at the adaptation checkpoints shown in Figure 3. Mem-FLoRA and MemFLoRA-SG reach the threshold fastest on T-ResNet and are comparable to LoRA-Edge on MobileNetV2. MemFLoRA also outperforms non-LoRA activation-minimal ap-proaches, such as TinyTL [4]. Since TinyTL is not a plug-and-play LoRA adapter, its implementation requires architecture-specific design choices; we therefore evaluate both an activation-minimal frozen-block variant with eval-mode BN and a train-BN variant that preserves BN adaptation at higher memory cost. On Opportunity, these variants reach 0.682 and 0.737 macro-F1 with 150.47 MB and 518.83 MB peak training-state memory, respectively. In contrast, rank-2 MemFLoRA reaches 0.747 macro-F1 with only 17.83 MB, showing that our low-rank memory-floor design provides a simpler adapter-style alternative with substantially lower training memory. MemFLoRA: Memory-Floor LoRA for CNN Adaptation at the Edge ASPDAC ’27, January 25–28, 2027, Tokyo, Japan 
+
+Table 6: Training-state memory measured at rank 𝑟 = 2 and batch size 𝐵 = 64 . Entries report peak concurrent training-state storage / saved-backward state [MB]. 
+
+Method T-ResNet MobileNetV2 Full FT 54.52 / 47.77 666.72 / 639.55 LoRA-C 52.37 / 49.96 592.61 / 583.04 LoRA-Edge 35.12 / 32.79 491.21 / 481.78 MemFLoRA 3.22 / 0.83 17.83 / 8.39 
+
+Table 7: Peak requested CUDA memory at 𝑟 = 2, 𝐵 = 64 
+
+[MB], from the same runs as Table 6. Values include inputs, temporaries, and workspaces in addition to training state. 
+
+Method T-ResNet MobileNetV2 Full FT 66.20 673.39 LoRA-C 64.08 601.45 LoRA-Edge 44.80 503.32 MemFLoRA 19.43 95.43 
+
+## 4.4 Jetson Orin Deployment Validation 
+
+We validate training-state memory on an NVIDIA Jetson Orin Nano (8 GB) using both backbones and all methods at 𝑟 = 2 and 𝐵 = 64. We measure one complete update after two warm-up updates using Opportunity-shaped inputs. The device profiler tracks allocations associated with model parameters and buffers, materialized opti-mizer state, gradients, saved-backward state, and total training state. Peak memory denotes the maximum concurrent storage of these tracked training-state components, whereas saved-backward state is measured separately at the end of the forward pass. Pre-existing inputs and labels, checkpoint copies, general intermediates and workspaces, and allocator cache are outside this metric. At 𝐵 = 64, MemFLoRA reduces saved-backward storage rela-tive to Full FT by 98.3% and 98.7% on T-ResNet and MobileNetV2, respectively, with corresponding peak training-state reductions of 94.1% and 97.3%. These measurements closely follow the mem-ory reduction trend estimated in Table 3, where the corresponding reductions were 98.5%/98.7% for saved state and 94.9%/97.3% for peak training state. Nevertheless, the deployment measurements preserve the large training-state memory advantage of MemFLoRA. Table 7 reports the peak requested CUDA memory from the same runs. This footprint includes training state, input batches, transient tensors, and workspaces, but excludes unused allocator cache and allocation rounding. These additional runtime allocations lie outside the training-state memory floor of Section 3.1. Figure 4 traces the requested memory through the forward and backward passes of one MobileNetV2 update at 𝐵 = 64, recorded in a separate Full FT and MemFLoRA run; the optimizer step adds no peak and is omitted. Full FT peaks at the start of the backward pass, when 639.2 MB of saved activations are still held. MemFLoRA instead peaks early in the forward pass. The first, high-resolution layers produce the largest feature maps, and their transient interme-diates occupy 82.7 of MemFLoRA’s 95.4 MB peak, while only 1.5 MB is saved for backward. These buffers are released after each layer 0250 500 750    
+
+> forward backward peak 673.4 MB
+> Full FT
+> 0250 500 750
+> forward backward peak 95.4 MB 95.2 MB
+> MemFLoRA
+> Requested GPU memory [MB]
+> Held before step Saved for backward Weight gradients Working buffers
+
+Figure 4: Requested GPU memory during one MobileNetV2 update at 𝑟 = 2, 𝐵 = 64 on Jetson Orin Nano. 
+
+instead of accumulating. A second, nearly equal spike (95.2 MB) occurs at the end of the backward pass, when backpropagation reaches the same early layers and their full-width activation gra-dients are formed. Full FT shows the same late spike in working buffers, but by then most of its saved activations have been released. MemFLoRA’s peak is therefore set by the transient working set of the largest layers, not by retained state. 
+
+## 5 Conclusion 
+
+MemFLoRA shows that efficient edge CNN adaptation depends not only on trainable parameters but also on activations retained for backpropagation. It reduces saved-activation memory by 98.5– 98.7% and peak training-state memory by 94.9–97.3% relative to full fine-tuning. By defining an activation-memory-floor criterion, deriving the design constraints it imposes, and showing that adapta-tion quality can be preserved while satisfying it, this work reframes LoRA for on-device CNN adaptation as a saved-state design prob-lem rather than merely a parameter-count problem, providing a foundation for future edge adaptation research. 
+
+## Acknowledgments 
+
+This work has been developed in the project DI-EDAI funded by the German Federal Ministry of Research, Technology and Space (BMFTR) under contract No. 16ME0991. ASPDAC ’27, January 25–28, 2027, Tokyo, Japan Mehmet Emre Akbulut, Johannes Geier, and Ulf Schlichtmann 
+
+## References 
+
+[1] Sidra Aleem, Julia Dietlmeier, Eric Arazo, and Suzanne Little. 2024. ConvLoRA and AdaBN Based Domain Adaptation via Self-Training. In 2024 IEEE Interna-tional Symposium on Biomedical Imaging (ISBI) . 1–5. doi:10.1109/ISBI56570.2024. 10635661 [2] Oresti Banos, Mate Attila Toth, Miguel Damas, Hector Pomares, and Ignacio Rojas. 2014. Dealing with the Effects of Sensor Displacement in Wearable Activity Recognition. Sensors 14, 6 (2014), 9995–10023. doi:10.3390/s140609995 [3] Elad Ben Zaken, Yoav Goldberg, and Shauli Ravfogel. 2022. BitFit: Simple Parameter-efficient Fine-tuning for Transformer-based Masked Language-models. In Proceedings of the 60th Annual Meeting of the Association for Computational Linguistics (Volume 2: Short Papers) , Smaranda Muresan, Preslav Nakov, and Aline Villavicencio (Eds.). Association for Computational Linguistics, Dublin, Ireland, 1–9. doi:10.18653/v1/2022.acl-short.1 [4] Han Cai, Chuang Gan, Ligeng Zhu, and Song Han. 2020. TinyTL: Reduce Mem-ory, Not Parameters for Efficient On-Device Learning. In Advances in Neural Information Processing Systems , H. Larochelle, M. Ranzato, R. Hadsell, M.F. Balcan, and H. Lin (Eds.), Vol. 33. Curran Associates, Inc., 11285–11297. [5] Ricardo Chavarriaga, Hesam Sagha, Alberto Calatroni, Sundara Tejaswi Digu-marti, Gerhard Tröster, José del R. Millán, and Daniel Roggen. 2013. The Op-portunity challenge: A benchmark database for on-body sensor-based activity recognition. Pattern Recognition Letters 34, 15 (2013), 2033–2042. doi:10.1016/j. patrec.2012.12.014 Smart Approaches for Human Action Recognition. [6] Jianfei Chen, Lianmin Zheng, Zhewei Yao, Dequan Wang, Ion Stoica, Michael Ma-honey, and Joseph Gonzalez. 2021. ActNN: Reducing Training Memory Footprint via 2-Bit Activation Compressed Training. In Proceedings of the 38th Interna-tional Conference on Machine Learning (Proceedings of Machine Learning Research, Vol. 139) , Marina Meila and Tong Zhang (Eds.). PMLR, 1803–1813. [7] Tianqi Chen, Bing Xu, Chiyuan Zhang, and Carlos Guestrin. 2016. Training Deep Nets with Sublinear Memory Cost. ArXiv abs/1604.06174 (2016). [8] Chuntao Ding, Xu Cao, Jianhang Xie, Linlin Fan, Shangguang Wang, and Zhichao Lu. 2024. LoRA-C: Parameter-Efficient Fine-Tuning of Robust CNN for IoT Devices. ArXiv abs/2410.16954 (2024). [9] Edward J Hu, Yelong Shen, Phillip Wallis, Zeyuan Allen-Zhu, Yuanzhi Li, Shean Wang, Lu Wang, and Weizhu Chen. 2022. LoRA: Low-Rank Adaptation of Large Language Models. In International Conference on Learning Representations .[10] Diederik P. Kingma and Jimmy Ba. 2014. Adam: A Method for Stochastic Opti-mization. CoRR abs/1412.6980 (2014). [11] Hyunseok Kwak, Kyeongwon Lee, Jae-Jin Lee, and Woojoo Lee. 2026. LoRA-Edge: Tensor-Train–Assisted LoRA for Practical CNN Fine-Tuning on Edge Devices. In 
+
+2026 Design, Automation & Test in Europe Conference (DATE) . 1–7. doi:10.23919/ DATE69613.2026.11539617 [12] Yanghao Li, Naiyan Wang, Jianping Shi, Xiaodi Hou, and Jiaying Liu. 2018. Adap-tive Batch Normalization for practical domain adaptation. Pattern Recognition 80 (2018), 109–117. doi:10.1016/j.patcog.2018.03.005 [13] Ji Lin, Ligeng Zhu, Wei-Ming Chen, Wei-Chen Wang, Chuang Gan, and Song Han. 2022. On-Device Training Under 256KB Memory. In Advances in Neural Information Processing Systems , S. Koyejo, S. Mohamed, A. Agarwal, D. Belgrave, K. Cho, and A. Oh (Eds.), Vol. 35. Curran Associates, Inc., 22941–22954. [14] Xiaoxuan Liu, Lianmin Zheng, Dequan Wang, Yukuo Cen, Weize Chen, Xu Han, Jianfei Chen, Zhiyuan Liu, Jie Tang, Joey Gonzalez, Michael W. Mahoney, and Alvin Cheung. 2022. GACT: Activation Compressed Training for Generic Network Architectures. In International Conference on Machine Learning .[15] Hiroki Matsutani, Masaaki Kondo, Kazuki Sunaga, and Radu Marculescu. 2025. Skip2-LoRA: A Lightweight On-device DNN Fine-tuning Method for Low-cost Edge Devices. In Proceedings of the 30th Asia and South Pacific Design Automation Conference (Tokyo, Japan) (ASPDAC ’25) . Association for Computing Machinery, New York, NY, USA, 51–57. doi:10.1145/3658617.3697589 [16] Davide Nadalini, Manuele Rusci, Luca Benini, and Francesco Conti. 2023. Re-duced precision floating-point optimization for Deep Neural Network On-Device Learning on microcontrollers. Future Generation Computer Systems 149 (2023), 212–226. doi:10.1016/j.future.2023.07.020 [17] Georgii Sergeevich Novikov, Daniel Bershatsky, Julia Gusak, Alex Shonenkov, Denis Valerievich Dimitrov, and Ivan Oseledets. 2023. Few-bit Backward: Quan-tized Gradients of Activation Functions for Memory Footprint Reduction. In 
+
+Proceedings of the 40th International Conference on Machine Learning (Proceed-ings of Machine Learning Research, Vol. 202) , Andreas Krause, Emma Brunskill, Kyunghyun Cho, Barbara Engelhardt, Sivan Sabato, and Jonathan Scarlett (Eds.). PMLR, 26363–26381. [18] Shishir G. Patil, Paras Jain, Prabal Dutta, Ion Stoica, and Joseph Gonzalez. 2022. POET: Training Neural Networks on Tiny Devices with Integrated Rematerial-ization and Paging. In Proceedings of the 39th International Conference on Machine Learning (Proceedings of Machine Learning Research, Vol. 162) , Kamalika Chaud-huri, Stefanie Jegelka, Le Song, Csaba Szepesvari, Gang Niu, and Sivan Sabato (Eds.). PMLR, 17573–17583. [19] Tal Ridnik, Hussam Lawen, Asaf Noy, Emanuel Ben Baruch, Gilad Sharir, and Itamar Friedman. 2021. TResNet: High Performance GPU-Dedicated Architecture. In Proceedings of the IEEE/CVF Winter Conference on Applications of Computer Vision (WACV) . 1400–1409. [20] Mark Sandler, Andrew Howard, Menglong Zhu, Andrey Zhmoginov, and Liang-Chieh Chen. 2018. MobileNetV2: Inverted Residuals and Linear Bottlenecks. In 
+
+Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR) .[21] Kazuki Sunaga, Masaaki Kondo, and Hiroki Matsutani. 2023. Addressing the Gap Between Training Data and Deployed Environment by On-Device Learning. 
+
+IEEE Micro 43, 6 (2023), 66–73. doi:10.1109/MM.2023.3314711 [22] Timo Sztyler and Heiner Stuckenschmidt. 2016. On-body localization of wearable devices: An investigation of position-aware activity recognition. In 2016 IEEE International Conference on Pervasive Computing and Communications (PerCom) .1–9. doi:10.1109/PERCOM.2016.7456521 [23] Longteng Zhang, Lin Zhang, Shaohuai Shi, Xiaowen Chu, and Bo Li. 2023. LoRA-FA: Memory-Efficient Low-Rank Adaptation for Large Language Models Fine-Tuning. arXiv preprint arXiv:2308.03303 (2023). [24] Zihan Zhong, Zhiqiang Tang, Tong He, Haoyang Fang, and Chun Yuan. 2024. Convolution Meets LoRA: Parameter Efficient Finetuning for Segment Anything Model. ArXiv abs/2401.17868 (2024). [25] Jiacheng Zhu, Kristjan Greenewald, Kimia Nadjahi, Haitz Sáez De Ocáriz Borde, Rickard Brüel Gabrielsson, Leshem Choshen, Marzyeh Ghassemi, Mikhail Yurochkin, and Justin Solomon. 2024. Asymmetry in low-rank adapters of foun-dation models. In Proceedings of the 41st International Conference on Machine Learning (Vienna, Austria) (ICML’24) . JMLR.org, Article 2581, 17 pages. [26] Ligeng Zhu, Lanxiang Hu, Ji Lin, Wei-Ming Chen, Wei-Chen Wang, Chuang Gan, and Song Han. 2023. PockEngine: Sparse and Efficient Fine-tuning in a Pocket. In Proceedings of the 56th Annual IEEE/ACM International Symposium on Microarchitecture (Toronto, ON, Canada) (MICRO ’23) . Association for Computing Machinery, New York, NY, USA, 1381–1394. doi:10.1145/3613424.3614307

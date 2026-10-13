@@ -48,17 +48,17 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-10-11</span>
+      <span class="dpr-home-dashboard-kicker">2026-10-13</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 6 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 13 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
     <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>0</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>6</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>1</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>12</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-10-11 22:40:46 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-10-13 01:18:09 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -69,7 +69,7 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>2026-10-11 日报速读 6 篇、精读挂零，重点集中在优化理论与循环网络压缩。最值得看的是《Learning Pareto Stationary Fronts via Single-Pass Backpropagation》提出的单次反向传播找帕累托平稳前沿，以及自适应学习率重标定的可解模型对加速与稳定性的分析。普通读者可先挑这两篇的摘要和图，感受多目标优化与学习率调度的新思路。</p>
+<p>今日精选13篇AI论文，精读1篇、速读12篇，聚焦高效压缩与注意力机制。最值得关注的是精读8分的APEX异步前缀去噪，以及速读中多流注意力残差、渐进通信有序自编码等方向。普通读者可优先从APEX了解极端压缩下的去噪思路，再按兴趣浏览速读列表。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -78,12 +78,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">精读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">0 篇</strong>
+    <strong class="dpr-home-dashboard-count">1 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p class="dpr-home-dashboard-empty">今日暂无推荐。</p>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="APEX: Asynchronous Prefix Denoising for Extreme Compression">APEX: Asynchronous Prefix Denoising for Extreme Compression</span></li></ul>
   </div>
-
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">compress <strong>1</strong></span></div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -91,12 +91,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">速读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">6 篇</strong>
+    <strong class="dpr-home-dashboard-count">12 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Learning Pareto Stationary Fronts via Single-Pass Backpropagation">Learning Pareto Stationary Fronts via Single-Pass Backpropagation</span></li><li><span class="dpr-home-dashboard-paper-title" title="A Solvable Model of Adaptive Learning Rate Rescaling: Acceleration, Stability &amp; Scaling">A Solvable Model of Adaptive Learning Rate Rescaling: Acceleration, Stability &amp; Scaling</span></li><li><span class="dpr-home-dashboard-paper-title" title="Learning to Remember: Distilling Memory Retention for Compact Recurrent Neural Networks">Learning to Remember: Distilling Memory Retention for Compact Recurrent Neural Networks</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Goal-Oriented Ordered Autoencoding for Successive Refinement in Progressive Communication">Goal-Oriented Ordered Autoencoding for Successive Refinement in Progressive Communication</span></li><li><span class="dpr-home-dashboard-paper-title" title="Multi-Stream Attention Residuals">Multi-Stream Attention Residuals</span></li><li><span class="dpr-home-dashboard-paper-title" title="State-Isolated Vision Mamba via Update-Tendency Routing for Underwater Image Enhancement">State-Isolated Vision Mamba via Update-Tendency Routing for Underwater Image Enhancement</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">neural-arch <strong>4</strong></span><span class="dpr-home-dashboard-tag">compress <strong>2</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">neural-arch <strong>7</strong></span><span class="dpr-home-dashboard-tag">compress <strong>5</strong></span></div>
 </section>
 </div>
 

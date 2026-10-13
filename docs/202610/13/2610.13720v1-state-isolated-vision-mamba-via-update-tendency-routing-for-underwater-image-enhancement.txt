@@ -1,0 +1,2730 @@
+State-Isolated Vision Mamba via Update-Tendency Routing
+for Underwater Image Enhancement
+Yan Luo
+Laibin Chang
+Zefan Feng
+Yi’ang Chen
+Kui Jiang
+Zhengguo Li
+Abstract
+Vision Mamba has recently emerged as an efficient al-
+ternative to convolutional and Transformer-based archi-
+tectures by modeling long-range spatial dependencies
+through recurrent state evolution. Existing studies pri-
+marily improve token serialization, scanning strategies,
+or expert routing, yet largely overlook a more funda-
+mental question: how should recurrent states be orga-
+nized for spatially heterogeneous visual restoration? In
+this paper, we show that forcing tokens with heteroge-
+neous update behaviors to recurrently modify a shared
+hidden state leads to persistent cross-content interfer-
+ence, which we term State Contention. We further argue
+that effective recurrent modeling should organize state
+evolution according to token compatibility rather than
+token ordering.
+Based on this observation, we intro-
+duce State Isolation, a new recurrent state organization
+principle for Vision Mamba, where tokens with compat-
+ible state-update tendencies evolve within independent
+recurrent state streams. To instantiate this principle, we
+propose IsoMamba, a ∆-guided architecture that con-
+structs model-intrinsic update representations, discovers
+update-compatible token groups through label-free clus-
+tering, and routes them to isolated Mamba experts fol-
+lowing a cluster–route–isolate paradigm.
+In addition,
+we develop a dynamic channel-wise reweighting objec-
+tive to compensate for wavelength-dependent reconstruc-
+tion difficulty in underwater images. Extensive experi-
+ments demonstrate that IsoMamba consistently achieves
+state-of-the-art performance on multiple underwater im-
+age enhancement benchmarks while providing substan-
+tially cleaner hidden-state responses, validating the effec-
+tiveness of state-isolated recurrent modeling. Our code is
+available at: https://github.com/kkoucy/IsoMamba.
+1
+Introduction
+Underwater images suffer from wavelength-dependent ab-
+sorption and scattering that accumulate along the line
+of sight [23].
+Variations in scene depth, illumination,
+and water conditions make the resulting degradation spa-
+tially non-uniform [1]. Consequently, severely attenuated
+regions may require stronger color and contrast correc-
+tion, whereas mildly degraded structures should be pro-
+cessed more conservatively. Effective underwater image
+Figure 1:
+(a) Existing Mamba serializes features into
+a single mixed sequence with the spatial-coupled state
+stream. (b) IsoMamba clusters tokens by ∆and routes
+state-isolated sequences into decoupled Mamba experts.
+enhancement (UIE) therefore requires spatially adaptive
+processing of heterogeneous restoration requirements.
+CNN- and Transformer-based methods have signifi-
+cantly advanced UIE, yet modeling long range dependen-
+cies in high resolution images often involves a trade-off
+between computational cost and receptive field [51, 72].
+State Space Models (SSMs), particularly Mamba [11],
+provide an efficient alternative by propagating informa-
+tion over long token sequences with linear complexity.
+Vision Mamba methods typically focus on how a two-
+dimensional feature grid is serialized, using raster, lo-
+cal, semantic, or frequency-aware scanning to improve
+information propagation [18, 21, 33]. Recent restoration
+approaches further employ multi-expert routing to im-
+prove adaptability to diverse degradations [50, 65]. How-
+ever, the organization of recurrent state sharing is typ-
+ically a consequence of sequence construction or expert
+assignment rather than an explicit modeling objective.
+Whether tokens that successively modify the same recur-
+rent trajectory exhibit compatible state-update behavior
+remains largely unexamined. This motivates a state-level
+question: which tokens should share the same recurrent
+state evolution?
+We investigate this question in the context of spa-
+tially heterogeneous image restoration.
+After serializa-
+tion, tokens associated with different image contents suc-
+cessively update a shared recurrent state stream, ht =
+¯Atht−1+ ¯Btxt. When tokens with dissimilar state-update
+tendencies successively modify the same recurrent state,
+their responses are accumulated within a common tra-
+1
+arXiv:2610.13720v1  [cs.CV]  9 Oct 2026
+
+
+Figure 2: State Contention versus State Isolation.
+(a) Input image. (d) Token groups obtained from the
+∆-derived update representation. (b), (e) Hidden-state
+responses of the shared-state baseline and IsoMamba, re-
+spectively. (c), (f) Their corresponding channel-wise ab-
+solute reconstruction residuals using same normalization
+range.
+jectory, which may obscure group-specific state informa-
+tion. We refer to this forced recurrent mixing as State
+Contention. Unlike generic feature entanglement, State
+Contention specifically refers to the coupling introduced
+during recurrent evolution, where heterogeneous tokens
+sequentially modify a shared state. Figure 2(b)–(c) show
+that the shared-state baseline produces weakly struc-
+tured hidden-state responses and widespread reconstruc-
+tion residuals.
+Although token reordering changes lo-
+cal dependencies, it does not alter the underlying state-
+sharing relationship.
+To reorganize state sharing, we require a model-
+intrinsic criterion for estimating token compatibility. In
+Mamba, the input-dependent discretization signal ∆
+modulates the discretized state transition and input injec-
+tion [11]. We therefore construct a ∆-derived representa-
+tion as a proxy for each token’s state-update tendency
+and group tokens by similarity in this space. The coherent
+patterns in Figure 2(d) suggest that these groups capture
+structured update behavior without relying on explicit
+semantic or spatial criteria. Based on this grouping, we
+introduce State Isolation: tokens with similar estimated
+update tendencies share recurrent evolution, whereas dif-
+ferent groups evolve through separate state streams. This
+design is intended to resolve interference between tokens
+with dissimilar update behaviors while preserving recur-
+rent interaction within each compatible group.
+We instantiate this principle with IsoMamba,
+a
+∆-guided architecture following a cluster–route–isolate
+paradigm.
+IsoMamba groups tokens in the learned ∆-
+derived space and routes each group to a dedicated
+Mamba expert with an independent recurrent state. The
+resulting features are remapped to their original spatial
+layout and fused with lightweight global context to pre-
+serve image-level coherence.
+As shown in Figure 2(e)–
+(f), IsoMamba produces more structured hidden-state
+responses and lower reconstruction residuals than the
+shared-state baseline, consistent with reduced State Con-
+tention. Furthermore, to address wavelength-dependent
+differences in restoration difficulty, we introduce a dy-
+namic channel-wise reweighting objective that adjusts
+RGB supervision according to the current reconstruction
+errors.
+Our main contributions are summarized as follows:
+• We identify State Contention, a previously over-
+looked limitation of Vision Mamba in which to-
+kens with heterogeneous update requirements re-
+peatedly modify a shared recurrent state, causing
+cross-content interference during spatially heteroge-
+neous restoration.
+• We introduce State Isolation and instantiate it
+with IsoMamba,
+a ∆-guided architecture that
+constructs model-intrinsic state-update representa-
+tions and follows a label-free cluster–route–isolate
+paradigm, routing tokens with similar estimated
+update tendencies without semantic supervision or
+hand-crafted partitions.
+• We
+develop
+a
+dynamic
+channel-wise
+reweight-
+ing objective that adaptively balances wavelength-
+dependent reconstruction difficulty, complementing
+State Isolation to alleviate residual color bias in UIE
+task.
+2
+Methodology
+2.1
+Overview
+As illustrated in Figure 3, IsoMamba adopts an asym-
+metric U-shaped architecture. The encoder uses Global
+MBlocks with four direction selective scanning to estab-
+lish image level context, while the decoder employs Iso-
+lated MBlocks to reorganize recurrent evolution according
+to token-wise update compatibility. At each stage, the
+encoder provides the corresponding decoder stage with
+two stop-gradient cues: the input-dependent discretiza-
+tion signal ∆for update-aware routing and the aggregated
+terminal states for global coordination.
+Each decoder
+stage then performs update-tendency modeling, state-
+compatible routing, and isolated recurrent evolution.
+2.2
+State-Update Representation
+State Isolation requires estimating which tokens can com-
+patibly share recurrent evolution. For a selective state-
+space model, the token-wise update is
+hi = exp(∆iA) ⊙hi−1 + Bi(∆i ⊙xi).
+(1)
+Because the eigenvalues of A are negative, ∆i modulates
+the trade-off between historical-state retention and input-
+driven renewal.
+We therefore use its multidimensional
+response as a model-intrinsic proxy for the token’s state-
+update tendency.
+2
+
+
+Figure 3: Overview of IsoMamba. The proposed framework consists of two complementary stages. (a) Overall
+architecture. (b) Global recurrent modeling establishes image-level context through a shared state stream. (c) State-
+Isolation MBlock reorganizes recurrent state evolution by separating tokens with incompatible update tendencies into
+independent state streams. (d) A cluster–route–isolate strategy realizes State Isolation using model-intrinsic update
+tendency derived from ∆.
+Given a decoder feature map X ∈RB×H×W ×C, we
+unfold it along four scan directions and reuse the corre-
+sponding encoder update projections:
+R∆= Concat4
+d=1[T −1
+d
+ X(d)sg[W (d)
+∆]
+
+],
+(2)
+where T −1
+d
+restores the spatial layout and sg[·] denotes
+stop-gradient. To account for the encoder decoder distri-
+bution gap, we introduce a low-rank residual adaptation:
+R = Softplus (R∆+ α(XWA)WB) ,
+(3)
+where WA and WB are low-rank matrices and α is learn-
+able. The resulting representation R ∈RB×H×W ×D is
+used to estimate similarity in recurrent update behavior
+rather than explicit semantic or spatial similarity.
+2.3
+Cluster–Route–Isolate
+Given the update-tendency representation R, IsoMamba
+constructs an instance-adaptive partition of K token
+groups.
+To reduce routing overhead, clustering is per-
+formed on an ℓ2-normalized and spatially pooled repre-
+sentation, and the centers are updated from their assigned
+tokens within each forward pass. The resulting partition
+therefore adapts to the input-specific update structure.
+The instance-specific centers are unordered: although
+the set C = {cm}K
+m=1 is meaningful, its indices may per-
+mute across images and training iterations. Directly asso-
+ciating these indices with fixed experts would expose an
+expert to inconsistent update regimes. We therefore in-
+troduce a fixed set of orthonormal anchors P = {pk}K
+k=1,
+initialized once and kept unchanged throughout training,
+where p⊤
+i pj = δij. For each image, we compute
+Smk = bc⊤
+mpk
+(4)
+and perform greedy one-to-one maximum similarity
+matching.
+Let π(k) denote the center matched to an-
+chor pk; the ordered center associated with expert k is
+then
+eck = l2norm(cπ(k)).
+(5)
+This anchor referenced ordering provides persistent order
+labels for the experts and encourages consistent expert
+assignments across instances.
+Using the ordered centers, we compute full-resolution
+routing probabilities as
+Ahwk = Softmaxk
+Rhwec⊤
+k
+τ
+
+,
+(6)
+where τ = exp(θ) is a learnable positive temperature. A
+Top-1 assignment is used in the forward pass, while a
+straight-through estimator propagates gradients through
+3
+
+
+the soft probabilities:
+M hard
+hw
+= OneHot
+
+arg max
+k
+Ahwk
+
+,
+M = sg
+
+M hard −A
+
++ A,
+(7)
+Thus, M equals the binary Top-1 assignment in the for-
+ward pass, while its gradients follow A.
+Unlike conventional expert routing, the proposed as-
+signment determines not only which expert processes a to-
+ken, but also which tokens enter the same recurrent state
+stream. Clustering estimates state-update compatibility,
+while anchor-based ordering encourages a consistent as-
+sociation between update regimes and expert identities
+across instances.
+2.4
+Isolated Recurrent Evolution
+Tokens assigned to group k are gathered into a compact
+sequence and processed by a dedicated Mamba expert:
+Yk = Mambak (Xhw | Mhw = 1) .
+(8)
+Each expert maintains an independent recurrent state,
+allowing tokens with similar estimated update tenden-
+cies to evolve within the same stream while isolating dif-
+ferent groups. This organization is designed to alleviate
+State Contention by preventing dissimilar update regimes
+from repeatedly modifying a common recurrent trajec-
+tory. The expert outputs are subsequently pushed back
+to their original coordinates and merged into the decoder
+feature map, preserving spatial correspondence and out-
+put resolution.
+2.5
+Global State Coordination
+State isolation improves local adaptivity but may weaken
+communication across groups.
+We therefore inject a
+shared global state into each expert through lightweight
+feature-wise modulation.
+At each decoder stage, the terminal hidden states from
+the four encoder scan directions are aggregated into a
+global descriptor Hg. For an expert output Yk, channel-
+wise modulation parameters are predicted as
+[γ, β] = MLP(sg[Hg]),
+eYk = Yk ⊙(1 + γ) + β.
+(9)
+The same global descriptor is shared across experts, co-
+ordinating independently restored regions under a com-
+mon image-level context. The final MLP layer is zero-
+initialized so that the modulation begins as an identity
+mapping.
+2.6
+Objective Function
+State Isolation addresses spatially heterogeneous restora-
+tion,
+while underwater degradation is also strongly
+wavelength-dependent. Since RGB channels may exhibit
+Linear
+Conv
+𝝈
+SS2D
+Global Fusion
+Norm
+Linear
+𝝈
+Global 
+Hidden State
+(a) Mamba Expert
+(1+𝜸)
+𝜷
+Global 
+Hidden State
+Input Feature
+Output Feature
+FiLM MLP
+(b) Global Fusion
+𝝈
+SiLU
+Addition
+Multiplication
+Figure 4: The detailed structure of Mamba expert.
+markedly different reconstruction difficulty, a channel-
+symmetric objective can be dominated by easier channels.
+For each channel c ∈{R, G, B}, we compute its current
+reconstruction error:
+Ec =
+1
+HW
+X
+x
+ˆIc(x) −Ic(x)
+ .
+(10)
+The corresponding difficulty weight is
+wc = α + (1 −α) Ec
+¯E + ϵ,
+¯E = 1
+3
+X
+c
+Ec,
+(11)
+where gradients through wc are stopped. The channel-
+adaptive reconstruction loss is then
+Lca =
+1
+HW
+X
+c
+X
+x
+wc
+ˆIc(x) −Ic(x)
+ .
+(12)
+The complete training objective combines channel-
+adaptive reconstruction, structural similarity, and edge
+preservation:
+L = λ1Lca + λ2Lssim + λ3Ledge,
+(13)
+where λ1 = 8, λ2 = 1, and λ3 = 4.
+3
+Experiments
+3.1
+Experimental Settings
+Datasets. We jointly train IsoMamba from scratch on
+the union of the UIEB [32] and LSUI [42] training sets,
+containing 800 and 3,502 paired images, respectively.
+Evaluation is conducted under both full-reference (FR)
+and no-reference (NR) settings. For FR evaluation, we
+use 90 images from UIEB, 400 images from LSUI, and
+481 images from EUVP [22]. For NR evaluation, we use
+45 images from U45 [34], 60 images from C60 [32], and 16
+images from SQUID [3]. Following a unified resize-based
+protocol, all test images are resized to 256×256 for every
+competing method.
+4
+
+
+Table 1: Quantitative comparison on the full-reference datasets UIEB, LSUI, and EUVP. The best,
+second-best, and third-best results are shown in bold, underlined, and italic type, respectively.
+Method
+Venue
+UIEB
+LSUI
+EUVP
+Complexity
+PSNR↑SSIM↑MSE↓PSNR↑SSIM↑MSE↓PSNR↑SSIM↑MSE↓Params (M)↓FLOPs (G)↓Time (s)↓
+U-shape
+TIP23
+20.54
+0.772
+91.77
+24.16
+0.846
+81.40
+25.48
+0.830
+74.20
+65.60
+66.20
+0.063
+DM-UIE
+MM23
+23.46
+0.861
+76.30
+27.27
+0.849
+66.66
+26.86
+0.865
+57.04
+10.70
+66.89
+0.197
+GUPDM
+MM23
+23.99
+0.877
+75.49
+27.67
+0.867
+56.97
+26.21
+0.850
+64.45
+1.49
+95.80
+0.696
+Semi-UIR
+CVPR23
+23.49
+0.860
+79.86
+27.46
+0.878
+63.57
+26.85
+0.876
+60.57
+3.31
+72.88
+0.785
+wMamba
+arXiv24
+23.55
+0.888
+78.32
+28.71
+0.894
+50.32
+28.55
+0.882
+47.01
+3.69
+7.53
+0.028
+CECF
+AAAI24
+21.94
+0.868
+86.06
+26.34
+0.878
+64.94
+28.34
+0.874
+49.35
+39.69
+83.58
+0.002
+MambaIR
+ECCV24
+24.04
+0.912
+75.99
+29.16
+0.903
+47.97
+29.23
+0.892
+43.07
+25.92
+137.57
+0.103
+WF-Diff
+CVPR24
+22.78
+0.912
+83.64
+27.49
+0.894
+59.79
+27.01
+0.876
+60.06
+18.48
+570.09
+0.146
+HCLR
+IJCV24
+21.98
+0.887
+84.74
+28.74
+0.889
+49.93
+27.86
+0.864
+52.38
+4.87
+401.90
+0.054
+F-RWKV
+arXiv25
+24.30
+0.912
+76.58
+28.81
+0.899
+50.90
+29.43
+0.882
+42.85
+5.31
+15.69
+0.088
+HINT
+ICCV25
+24.64
+0.922
+73.88
+29.31
+0.910
+47.87
+29.14
+0.897
+45.36
+24.73
+142.12
+0.080
+Concertormer
+ICCV25
+22.55
+0.901
+84.27
+26.97
+0.893
+60.60
+28.53
+0.901
+48.07
+45.96
+201.01
+0.108
+MaIR
+CVPR25
+25.11
+0.923
+71.33
+29.76
+0.908
+44.70
+29.90
+0.899
+39.80
+7.78
+12.59
+0.377
+EVSSM
+CVPR25
+24.93
+0.916
+70.09
+29.49
+0.902
+45.97
+29.67
+0.885
+41.31
+17.10
+126.00
+0.279
+DTIUIE
+TIP26
+24.57
+0.911
+71.39
+28.18
+0.893
+53.89
+28.10
+0.880
+49.64
+50.81
+385.93
+0.112
+IsoMamba (Ours) –
+25.32
+0.920
+68.21
+29.89
+0.914
+43.64
+30.09
+0.902
+33.41
+15.23
+51.59
+0.095
+Table 2: Quantitative comparison on the no-reference datasets U45, C60, and SQUID. The best, second-
+best, and third-best results are shown in bold, underlined, and italic type, respectively. Tied values are assigned
+the same rank.
+Method
+Venue
+U45
+C60
+SQUID
+UCIQE↑UIQM↑URanker↑CLIP-IQA↑UCIQE↑UIQM↑URanker↑CLIP-IQA↑UCIQE↑UIQM↑URanker↑CLIP-IQA↑
+U-shape
+TIP23
+0.567
+3.105
+1.242
+0.435
+0.545
+2.660
+0.956
+0.457
+0.544
+2.230
+0.554
+0.524
+DM-UIE
+MM23
+0.603
+3.108
+1.810
+0.537
+0.580
+2.577
+1.341
+0.559
+0.659
+0.519
+-0.070
+0.560
+GUPDM
+MM23
+0.573
+3.028
+1.591
+0.528
+0.550
+2.591
+1.150
+0.556
+0.577
+2.486
+0.952
+0.568
+Semi-UIR
+CVPR23
+0.605
+3.131
+2.031
+0.510
+0.585
+2.648
+1.596
+0.556
+0.588
+2.309
+1.134
+0.586
+wMamba
+arXiv24
+0.608
+3.068
+2.026
+0.531
+0.580
+2.773
+1.415
+0.504
+0.576
+2.673
+1.003
+0.558
+CECF
+AAAI24
+0.606
+3.096
+1.965
+0.505
+0.584
+2.695
+1.440
+0.515
+0.569
+2.369
+0.881
+0.480
+MambaIR
+ECCV24
+0.613
+3.091
+2.006
+0.547
+0.582
+2.679
+1.442
+0.583
+0.565
+2.482
+0.895
+0.677
+WF-Diff
+CVPR24
+0.612
+3.068
+2.029
+0.537
+0.584
+2.715
+1.463
+0.538
+0.580
+2.572
+0.806
+0.651
+HCLR
+IJCV24
+0.592
+3.168
+1.729
+0.554
+0.566
+2.737
+1.333
+0.573
+0.576
+2.449
+0.947
+0.577
+F-RWKV
+arXiv25
+0.616
+3.055
+1.969
+0.544
+0.589
+2.510
+1.433
+0.574
+0.569
+2.403
+0.689
+0.614
+HINT
+ICCV25
+0.613
+3.136
+2.069
+0.542
+0.578
+2.614
+1.493
+0.569
+0.578
+2.529
+0.937
+0.671
+Concertormer
+ICCV25
+0.597
+3.088
+1.792
+0.556
+0.563
+2.632
+1.219
+0.574
+0.546
+2.390
+0.556
+0.663
+MaIR
+CVPR25
+0.612
+3.083
+1.875
+0.541
+0.589
+2.564
+1.375
+0.562
+0.586
+2.473
+0.928
+0.653
+EVSSM
+CVPR25
+0.615
+3.100
+1.971
+0.542
+0.584
+2.640
+1.422
+0.564
+0.551
+2.114
+0.576
+0.611
+DTIUIE
+TIP26
+0.572
+2.650
+1.333
+0.533
+0.496
+2.892
+1.128
+0.518
+0.564
+3.071
+1.583
+0.420
+IsoMamba (Ours) –
+0.614
+3.142
+1.933
+0.596
+0.586
+2.621
+1.547
+0.554
+0.584
+2.586
+1.005
+0.604
+Metrics.
+For paired benchmarks, we report PSNR,
+SSIM, and MSE to measure pixel fidelity and structural
+preservation.
+For unpaired real-world benchmarks, we
+report UCIQE [57], UIQM [40], URanker [17], and CLIP-
+IQA [49], which assess underwater-specific visibility, color
+naturalness, perceptual quality, and semantic image qual-
+ity from complementary perspectives.
+Implementation Details. IsoMamba is implemented
+in PyTorch 2.4.1 and trained on a single NVIDIA RTX
+4090 GPU. We use AdamW with an initial learning rate
+of 1 × 10−4 and (β1, β2) = (0.9, 0.999). The network is
+optimized for 300K iterations with a batch size of 2, using
+cosine annealing for learning-rate decay. Unless otherwise
+stated, all ablations are conducted on the UIEB test set
+with identical training configurations.
+Compared Methods. We compare IsoMamba with
+representative CNN-, Transformer-, diffusion-, RWKV-,
+and Mamba-based methods, including U-Shape [42], DM-
+UIE [47], GUPDM [38], Semi-UIR [20], wMamba [16],
+CECF [9], MambaIR [19], WF-Diff [66], HCLR [68], F-
+RWKV [67], HINT [70], Concertormer [26], MaIR [31],
+EVSSM [25] and DTIUIE[69].
+3.2
+Comparisons with State-of-the-Arts
+Full-Reference Performance.
+Tables 1 shows that
+IsoMamba achieves the highest PSNR and lowest MSE
+on all three paired benchmarks. It obtains 25.32,dB on
+UIEB, 29.89,dB on LSUI, and 30.09,dB on EUVP, demon-
+strating that the improvement is consistent across differ-
+ent data distributions rather than being tied to a single
+training domain. The gains are particularly meaningful
+because IsoMamba does not rely on globally increasing
+model capacity.
+Instead, it reorganizes recurrent state
+evolution so that tokens with incompatible update re-
+quirements no longer repeatedly overwrite the same state
+stream. IsoMamba also maintains a favorable computa-
+tional profile, using 15.23M parameters, 51.59 GFLOPs,
+and 0.095s per 256 × 256 image.
+This result indicates
+that State Isolation preserves the linear token-processing
+property of Mamba and improves the use of recurrent
+capacity rather than simply introducing a substantially
+larger restoration network.
+Real-World Perceptual Performance. Table 2 re-
+ports results on three unpaired real-world benchmarks.
+5
+
+
+Figure 5: Visual comparison under paired and unpaired settings. In the paired example, IsoMamba recovers
+colors and fine structures that more closely agree with the reference. In the unpaired example, it suppresses severe
+color casts without introducing oversaturation or texture artifacts.
+Table 3:
+Full resolution evaluation.
+Entries are
+PSNR↑/SSIM↑/UCIQE↑/UIQM↑. † denotes tiled infer-
+ence while others use full-image inference.
+Method
+UIEB
+LSUI
+HINT†
+21.63/0.881/0.604/2.888
+27.44/0.897/0.597/2.880
+EVSSM†
+20.72/0.875/0.604/2.935
+26.75/0.883/0.593/2.835
+MaIR
+23.19/0.892/0.605/2.910
+28.53/0.907/0.596/2.911
+Ours
+23.94/0.895/0.615/2.849 29.01/0.909/0.599/2.881
+Although underwater no-reference metrics are known to
+emphasize different and occasionally conflicting percep-
+tual properties, IsoMamba remains competitive across all
+four metrics. It achieves the best CLIP-IQA score on U45
+and ranks among the top-performing methods on the re-
+maining datasets and metrics. The consistency between
+FR and NR results suggests that State Isolation improves
+both reference-based reconstruction fidelity and percep-
+tual restoration under unknown real-world degradation.
+Visual Comparison. Figure 5 further demonstrates
+the advantage of organizing recurrent computation ac-
+cording to update compatibility.
+Methods based on
+globally shared restoration pathways often under-correct
+severely degraded regions or over-enhance already visible
+structures.
+In contrast, IsoMamba performs differenti-
+ated restoration across spatial regions: heavily degraded
+areas receive stronger renewal, while reliable structures
+retain more historical information.
+This behavior pro-
+duces more natural colors, sharper local details, and fewer
+artificial boundaries.
+Full Resolution Evaluation. The main comparisons
+follow a unified 256 × 256 protocol to ensure consistent
+inputs across methods. We further evaluate representa-
+tive models on full-resolution UIEB and LSUI images us-
+ing the same RTX 4090 GPU. Models exceeding the 24
+GB memory limit use 512 × 512 tiles with a 64-pixel
+overlap, while IsoMamba processes entire images without
+tiling. Figure 6 shows that full-image processing preserves
+global color consistency and avoids boundary artifacts as-
+sociated with patch-wise inference, demonstrating the ap-
+plicability of IsoMamba to megapixel underwater images.
+Figure 6: Full resolution visual comparison.
+3.3
+Recurrent State Organization Analy-
+sis
+We examine whether State Isolation reduces the mixing
+of hidden representations across tokens with different es-
+timated update tendencies. Using the ∆-guided routing
+labels qi, we divide tokens into update-tendency groups
+and measure how distinguishable their hidden-state fea-
+tures remain after recurrent processing.
+Group Sepa-
+ration is defined with Ssep =
+Vbetween
+Vbetween+Vwithin+ϵ, where
+Vbetween measures the variation of the group centers,
+Vwithin measures the variation of tokens around their re-
+spective group centers, and ϵ is a small constant for nu-
+merical stability. A low value indicates substantial over-
+lap between groups, whereas a high value indicates more
+distinct group-specific hidden representations.
+For Shared State, one Mamba processes the complete
+token stream through a single recurrent state. For State
+Isolation, different ∆-guided groups are processed by ded-
+icated Mamba experts with independent recurrent states.
+As shown in Table 4, Ssep score increases from 0.1870
+to 0.8488 on UIEB and from 0.1906 to 0.8383 on LSUI,
+with positive improvements for every evaluated image.
+These results show that shared state processing produces
+strongly overlapping representations across update ten-
+dency groups, whereas State Isolation yields substantially
+more distinguishable group-specific representations. This
+quantitatively supports the reduction of cross-group state
+mixing illustrated in Figure 2. More details are in Suppl
+(Sec5.1).
+6
+
+
+Table 4:
+Group
+separation
+score
+Ssep
+of
+hid-
+den
+state
+responses.
+Results
+are
+reported
+as
+mean±standard deviation across images.
+Dataset
+Shared State
+State Isolation
+Gain
+UIEB
+0.1870±0.0750
+0.8488±0.0512
+±0.6618
+LSUI
+0.1906±0.0913
+0.8383±0.0586
+±0.6477
+3.4
+Ablation Study
+We analyze IsoMamba from coarse-grained framework de-
+sign to fine-grained internal mechanisms. We first eval-
+uate its three top-level components: recurrent-state or-
+ganization, ∆-derived routing, and channel-adaptive su-
+pervision.
+We then examine the internal mechanisms
+of State Isolation, including instance-adaptive grouping,
+order-label matching, and global state coordination. Fi-
+nally, we investigate whether the improvement arises from
+state organization rather than expert capacity and ana-
+lyze the complementary effect of channel-adaptive super-
+vision on color fidelity.
+Top-Level Component Ablation.
+Under identi-
+cal training settings, replacing State Isolation, ∆-derived
+routing, or channel-adaptive supervision reduces PSNR
+by 1.28, 0.71, and 1.00 dB, respectively (Table 5), demon-
+strating their complementary contributions.
+Figure 7
+shows that the full model suppresses the localized yel-
+low artifacts observed around the diver and foreground
+fish. Figure 8 further explains the routing difference: the
+generic linear projection produces fragmented expert as-
+signments, whereas the ∆-derived representation forms
+more spatially coherent groups. Together with the quan-
+titative improvement, this comparison supports ∆as a
+more structured, model-intrinsic routing cue.
+Because
+the shared-state variant also has fewer parameters, we
+separately control for expert capacity in Table 7.
+Table 5: Top-level component ablation.
+Variant
+PSNR ↑
+SSIM ↑
+Params (M)
+(i) Shared-state Decoder
+24.04
+0.917
+12.76
+(ii) Linear Route Signal
+24.61
+0.902
+15.10
+(iii) w/o Channel Reweight
+24.32
+0.916
+15.23
+(iv) IsoMamba
+25.32
+0.920
+15.23
+Figure 7: Qualitative comparison of top-level vari-
+ants. Full IsoMamba suppresses the localized yellow ar-
+tifact around the diver and produces properer foreground
+colors.
+Internal Mechanisms of State Isolation. Table 6
+examines three internal designs of State Isolation. Re-
+placing instance-adaptive centers with image-invariant
+prototypes reduces PSNR from 25.32 to 24.51 dB, sup-
+porting the benefit of adapting state-sharing groups to
+each input.
+Removing order-label matching results in
+Figure 8: Routing assignments from different rep-
+resentations. Colors denote routed expert identities.
+Table 6: Internal mechanisms of State Isolation.
+Variant
+PSNR ↑
+SSIM ↑
+Params (M)
+(i) Image invariant prototypes
+24.51
+0.912
+14.59
+(ii) w/o order label matching
+24.27
+0.917
+15.23
+(iii) w/o global state coordination
+24.88
+0.918
+15.06
+(iv) IsoMamba
+25.32
+0.920
+15.23
+the largest drop to 24.27 dB. As illustrated in Figure 9,
+unordered centers can switch their associations with ex-
+pert indices, whereas anchor-based matching yields more
+consistent cluster–expert trajectories. Finally, removing
+global state coordination decreases PSNR to 24.88 dB, in-
+dicating that isolated recurrent streams still benefit from
+shared image-level context. Together, these results show
+complementary roles of adaptive grouping, consistent ex-
+pert assignment, and global coordination.
+State Organization versus Expert Capacity. To
+determine whether the gain arises merely from additional
+expert capacity, Table 7 compares routing strategies us-
+ing the same backbone and expert bank.
+Soft routing
+sends the complete token stream through every expert
+and combines their outputs using learned soft weights.
+It therefore retains full expert capacity, but each expert
+still recurrently processes a heterogeneous token sequence
+without state isolation, achieving only 24.17 dB. Top-2
+routing similarly mixes responses from multiple recurrent
+streams and obtains 24.59 dB. Random Top-1 preserves
+the same sparse computation as IsoMamba but breaks
+the correspondence between update tendencies and state
+streams, resulting in 24.54 dB. In contrast, ∆-guided Top-
+1 routing achieves 25.32 dB, showing that the improve-
+ment comes from meaningful token-to-state organization
+rather than expert capacity alone.
+Figure 10 provides complementary visual evidence. To-
+gether, the performance, hidden-state, and visual results
+support state organization, rather than additional expert
+capacity, as the main source of improvement.
+Table 7: State organization versus expert capacity.
+Variant
+PSNR ↑
+SSIM ↑
+Time (s)
+(i) Soft expert mixing
+24.17
+0.909
+0.106
+(ii) Top-2 expert mixing
+24.59
+0.912
+0.102
+(iii) Random Top-1 routing
+24.54
+0.913
+0.089
+(iv) ∆-guided Top-1
+25.32
+0.920
+0.095
+7
+
+
+Figure 9: Effect of order-label matching on cluster–
+expert correspondence. Ours ordering produces more
+consistently separated trajectories.
+Figure 10: Visual analysis of recurrent-state rout-
+ing. Ours routing more effectively corrects the localized
+blue color cast while introducing fewer noise artifacts in
+the background.
+4
+Conclusion
+This work identifies State Contention as a critical limita-
+tion of Vision Mamba for spatially heterogeneous restora-
+tion, where tokens with incompatible update require-
+ments interfere through a shared recurrent state. We in-
+troduce State Isolation and instantiate it with IsoMamba,
+which organizes tokens by model-intrinsic update ten-
+dency and routes incompatible groups to independent
+state streams. Extensive experiments demonstrate that
+the gains arise from improved recurrent-state organiza-
+tion rather than increased expert capacity.
+These re-
+sults highlight recurrent-state organization as a comple-
+mentary design dimension to token scanning in Vision
+Mamba.
+8
+
+
+Supplementary Material
+State-Isolated Vision Mamba via
+Update-Tendency Routing for Underwater
+Image Enhancement
+1
+Supplementary Material
+Overview. The supplementary includes the following
+sections:
+• Related Work. (Section 2)
+• High-resolution Full-image Inference.
+(Section
+3)
+• Hyperparameter Setting. (Section 4)
+• More Quantitative Analyses. (Section 5)
+• More Visualization. (Section 6)
+• More Applications. (Section 7)
+• Limitations and Future Work. (Section 8)
+2
+Related Work
+2.1
+Underwater Image Restoration
+Recent underwater image restoration methods in-
+creasingly view UIE as a joint global and local model-
+ing problem: wavelength-dependent absorption shifts
+the overall color distribution, while scattering and
+depth variation cause spatially varying haze and de-
+tail loss [1, 23]. Representative designs show a clear
+architectural trend toward balancing these two needs.
+PUIE-Net models the ambiguity of paired references
+with a conditional VAE, where a global latent code
+modulates local convolutional features, so the model
+can express multiple plausible enhancement styles
+[14].
+SGUIE-Net pushes adaptivity further by us-
+ing semantic guidance to apply different enhancement
+behaviors across regions, but it also introduces re-
+liance on segmentation quality under heavy degra-
+dation [44].
+U-shape Transformer brings stronger
+global interaction through self-attention and com-
+bines spatial-wise global modeling with channel-wise
+fusion for color correction, at the cost of higher com-
+pute [42]. WF-Diff separates global tone and local
+details in the frequency domain and uses diffusion
+to refine high-frequency components, improving per-
+ceptual details but adding iterative cost [66]. Most
+recently, SS-UIE adopts Mamba-style selective scan-
+ning to obtain global context with linear complexity,
+aiming at a better speed quality trade-off for high-
+resolution inputs [41].
+Overall, these advances improve global consistency
+and local fidelity, yet the core challenge remains: dif-
+ferent clusters within one image can demand incom-
+patible restoration behaviors, which motivates archi-
+tectures that can adapt their processing more explic-
+itly across space.
+2.2
+SSMs
+for
+Vision
+and
+Image
+Restoration
+State space models (SSMs) have recently re-emerged
+as an efficient alternative to attention for long-
+range sequence modeling. Mamba introduces input-
+dependent selective updates and achieves linear-
+time processing, which makes it attractive for high-
+resolution vision tasks [11]. Following this line, Vim
+and VMamba adapt Mamba to images by serializing
+2D features into scan-ordered sequences with multi-
+directional scans so that each token can access global
+context with linear complexity [35, 71]. Building on
+these visual backbones, restoration-oriented designs
+such as MambaIR further integrate SSM blocks into
+image restoration pipelines and augment the vanilla
+scan-based module with local enhancement and chan-
+nel attention to better preserve textures and handle
+channel redundancy [19].
+To better cope with diverse degradations, recent
+works start to combine Mamba with mixture-of-
+experts (MoE) routing.
+Uni-UIR introduces ex-
+pert specialization for distinct underwater degrada-
+tions and uses a gating module to route features
+to the most suitable experts [65].
+M2-Restore fur-
+ther proposes a CLIP-guided MoE router that fuses
+task-conditioned prompts with CLIP-derived seman-
+tic priors, and refines routing via cross-modal feature
+calibration to select experts for different degrada-
+tion types [50]. Beyond routing, several studies also
+begin to revisit structural limitations of scan-based
+SSMs.
+MambaIRv2 equips SSM restoration with
+non-causal interactions, moving closer to the bidi-
+rectional information mixing of vision transformers
+[18]. Spatial-Mamba highlights the spatial-topology
+mismatch introduced by 2D-to-1D serialization, and
+proposes neighborhood state fusion in the state space
+to better preserve spatial structure even under a sin-
+gle scan [55].
+These developments suggest that improving visual
+SSM restoration is not only about stronger routing
+1
+
+
+cues, but also about addressing structural issues in-
+duced by serialization and state evolution, which mo-
+tivates our design.
+3
+High-resolution
+Full-image
+Inference
+All main-table benchmark numbers follow the com-
+mon 256×256 resize protocol for fair comparison un-
+der limited GPU memory in the main paper. Here we
+additionally report full-image inference on the orig-
+inal high resolution without tiling. We use a single
+RTX4090 24GB GPU with batch size 1.
+For each
+image, we apply reflect padding to make the spatial
+size divisible by 8, run one forward pass, then re-
+move the padding. We record runtime per image and
+the peak GPU memory, measured as the maximum
+CUDA memory allocated. We also report the maxi-
+mum CUDA memory reserved to reflect the caching
+allocator behavior.
+Table 1 summarises the five largest test im-
+ages across existing common datasets (UIEB, LSUI,
+EUVP). Our model supports direct inference up to
+1800×1350, 2.43 MP, with 3.49 seconds runtime and
+17.37 GB peak allocated memory on the largest sam-
+ple. Across the top five largest images, the peak allo-
+cated memory stays within 16.64 to 17.37 GB, while
+producing reasonable PSNR and SSIM at the original
+resolution.
+Table 1: Full-image inference on the five largest UIEB
+test images using one RTX 4090 GPU (batch size 1).
+Image
+Resolution
+Time (s) Alloc. (GB) PSNR / SSIM
+689 img .png 1800 × 1350
+3.486
+17.37
+24.28 / 0.959
+720 img .png 1800 × 1300
+3.181
+16.74
+18.41 / 0.813
+731 img .png 1800 × 1295
+3.162
+16.67
+22.93 / 0.945
+772 img .png 1800 × 1295
+3.192
+16.66
+24.33 / 0.895
+796 img .png 1800 × 1295
+3.202
+16.64
+19.83 / 0.836
+4
+Hyperparameter Setting
+We use a four-stage encoder–decoder with base chan-
+nel dimension 32 and block numbers [4, 6, 6, 8]. Iso-
+Mamba maintains a small set of experts per decoder
+stage, controlled by num clusters, which determines
+the number of cluster centers and thus the number
+of disjoint spatial groups routed to independent state
+streams at that stage.
+Our default setting uses num clusters = [2, 3, 4],
+allocating more groups to the coarsest-scale decoder
+stage (near the bottleneck), where multi-scale fea-
+tures are most mixed and tokens tend to exhibit more
+Figure 1:
+Qualitative full-image results on large-
+resolution test images. Each row shows one sample,
+indexed by the file id. From left to right are the in-
+put, our output, and the ground truth. All results are
+produced by a single full-image forward pass without
+tiling.
+diverse update tendencies. We also validated alterna-
+tive schedules, including a reversed allocation [4, 3, 2]
+and a uniform allocation [3, 3, 3]. We report the com-
+parison under the same training and evaluation pro-
+tocol to study the sensitivity to expert count and its
+distribution across stages.
+Table 2: Effect of the number of clusters.
+Variant
+PSNR SSIM Param (M) Time (s)
+-w/ [3,3,3]
+25.28
+0.917
+14.62
+0.093
+-w/ [4,3,2]
+24.87
+0.919
+14.02
+0.090
+-w/ [2,3,4] (Ours)
+25.32
+0.920
+15.23
+0.097
+At the same time, we provide the hyperparam-
+eter details and computational complexity for per-
+batch clustering here. Given a pooled feature map
+pooled ∈RB×H×W ×R, we reshape it into token form
+X ∈RB×N×R with N = HW, and apply ℓ2 normal-
+ization along the feature dimension. We then com-
+pute K cluster centers for each batch element using
+a k-means++ style initialization followed by T itera-
+tions of assignment-and-update.
+Complexity of initialization.
+Starting from one
+uniformly sampled token per batch, we adds one cen-
+ter at a time. At step m, it computes the squared
+distance from each token to its nearest selected cen-
+ter among m −1 centers. A straightforward imple-
+mentation therefore costs
+O(B · N · R · K) ,
+where the O(B · N · R) term for sampling the first
+center is negligible compared with the above.
+2
+
+
+Complexity of iterative refinement.
+Each iter-
+ation computes the full token-to-center distance ma-
+trix in RB×N×K, followed by an hard assignment,
+and then updates centers via weighted averaging.
+The dominant costs are (i) distance computation
+and (ii) weighted aggregation, both of which scale as
+O(B · N · K · R). Thus, with T refinement iterations,
+the overall refinement complexity is
+O(B · T · N · K · R) .
+Total
+complexity
+and
+the
+16×
+reduction.
+Combining initialization and refinement, the total
+clustering cost is
+O(B · N · R · K) + O(B · T · N · K · R) ≈O(B · (T + 1) · N · K · R) .
+Let (N0, R0) denote the token count and feature di-
+mension at the original input resolution.
+In prac-
+tice, we run the clustering on reduced features: we
+downsample the spatial resolution by 2 × 2 so that
+N becomes 4× smaller than N0, and we also reduce
+the channel dimension from the input to R = 1
+4R0.
+Therefore, we perform clustering on reduced features
+with N = N0
+4 and R = R0
+4 , hence the dominant term
+B · (T + 1) · N · K · R is reduced by
+N
+N0
+· R
+R0
+= 1
+4 · 1
+4 =
+1
+16.
+This 16× cost reduction makes the clustering over-
+head small enough to keep the overall inference time
+within sub-second latency in our implementation.
+5
+More Quantitative Analyses.
+5.1
+Quantifying
+Raw
+Hidden-State
+Separation
+We directly examine whether State Isolation changes
+the organization of the recurrent states themselves,
+rather than only affecting their subsequent readout.
+Specifically, we analyze the raw selective-scan state
+h(r)
+i
+recorded immediately after updating token i in
+scan direction r.The analysis isolates the recurrent
+state before any readout or output transformation.
+Fixed-expert control.
+To distinguish the effect of
+state isolation from that of expert specialization, we
+construct two fixed-expert response modes from the
+same trained checkpoint. In Shared State, all tokens
+are processed using expert 0 and follow one contin-
+uous recurrent trajectory per scan direction. In Iso-
+lated State, the same tokens are partitioned using the
+model’s actual ∆-based routing assignments and pro-
+cessed through independent group-wise recurrent tra-
+jectories, while all groups still use expert 0. The two
+modes reuse identical token-wise operands, including
+xi, ∆i, Bi, A, and the delta bias. Consequently, their
+only difference is the recurrence organization: a to-
+ken in the shared mode inherits the state accumulated
+along the original scan, whereas a token in the iso-
+lated mode inherits only the state history of its routed
+group. Dummy padding positions are excluded from
+both recurrence and measurement.
+We additionally report Full Isolation, in which each
+routed group uses its corresponding expert and main-
+tains an independent recurrent trajectory. This set-
+ting describes the combined effect of state isolation
+and expert specialization; it is not used to identify
+the state-isolation effect.
+Separation metric.
+For each of the four scan di-
+rections, we map the raw state trajectory back to
+the original spatial token positions without merging
+directions. We flatten and normalize the state asso-
+ciated with token i as
+bh(r)
+i
+=
+vec
+
+h(r)
+i
+
+vec
+
+h(r)
+i
+
+2 + ϵ
+,
+where ϵ is a small constant for numerical stability. Let
+Gk denote the set of tokens assigned to routing group
+k, N the total number of tokens, and K the number
+of active groups. The group-specific and global state
+centers for direction r are defined as
+µ(r)
+k
+=
+1
+|Gk|
+X
+i∈Gk
+bh(r)
+i ,
+µ(r) = 1
+N
+N
+X
+i=1
+bh(r)
+i .
+We then compute the between-group and within-
+group state dispersions:
+V (r)
+between =
+K
+X
+k=1
+|Gk|
+µ(r)
+k
+−µ(r)
+2
+2 ,
+V (r)
+within =
+K
+X
+k=1
+X
+i∈Gk
+bh(r)
+i
+−µ(r)
+k
+
+2
+2 .
+The directional hidden-state separation is defined as
+S(r)
+state =
+V (r)
+between
+V (r)
+between + V (r)
+within + ϵ
+.
+A higher value indicates that raw recurrent states are
+more compact within each routed group and more
+distinct across groups. Since the four scan directions
+3
+
+
+maintain independent recurrent trajectories, we com-
+pute the score separately for each direction and report
+their arithmetic mean:
+Sstate = 1
+4
+4
+X
+r=1
+S(r)
+state.
+The score is first computed for each test image and
+then aggregated over the dataset.
+Analysis.
+As shown in Table 3, group-wise recur-
+rence isolation substantially increases the separation
+of raw hidden states even when the expert parameters
+and all token-wise recurrence operands are held fixed.
+On UIEB, the score increases from 0.1870 to 0.5765,
+corresponding to a paired improvement of 0.3895
+with a 95% confidence interval of [0.3781, 0.4007].
+On LSUI, it increases from 0.1906 to 0.5614, with a
+paired improvement of 0.3707 and a 95% confidence
+interval of [0.3643, 0.3770].
+The improvements are
+significant under both paired t-tests and Wilcoxon
+signed-rank tests on each dataset (all p < 2 × 10−16),
+with Cohen’s dz values of 6.99 on UIEB and 5.73 on
+LSUI.
+The
+similar
+shared-state
+scores,
+isolated-state
+scores, and paired improvements across the two
+datasets indicate that the effect is consistent rather
+than dataset-specific. Because the fixed-expert com-
+parison removes differences in expert parameters and
+excludes all state readout and output transforma-
+tions, it provides direct evidence that group-wise re-
+currence isolation changes the structure of the raw
+recurrent states themselves. In particular, restrict-
+ing the recurrent history to tokens from the same ∆-
+defined group produces states that are more compact
+within groups and more distinct across groups.
+Full Isolation further increases the score to 0.8488
+on UIEB and 0.8383 on LSUI. This additional in-
+crease suggests that expert specialization amplifies
+the separated state structure established by group-
+wise recurrence isolation. However, since Full Isola-
+tion also changes the expert parameters, its difference
+from Shared State should not be interpreted as a pure
+state-isolation effect.
+Moreover,
+the routing assignments define the
+groups used by the separation metric. Accordingly,
+the analysis demonstrates that State Isolation makes
+raw recurrent states conform more strongly to the
+learned ∆-based routing structure, but does not by
+itself establish that these groups are uniquely optimal
+or semantically defined.
+Table 3: Separation of raw recurrent hidden
+states.
+Shared and Isolated State use identical
+expert-0 operands; Full Isolation uses the correspond-
+ing expert for each group. Scores are mean±standard
+deviation. The paired gap is Isolated minus Shared
+State.
+Measure
+UIEB
+LSUI
+Shared State (fixed expert)
+0.1870 ± 0.0750 0.1906 ± 0.0913
+Isolated State (fixed expert) 0.5765 ± 0.0933 0.5614 ± 0.1019
+Full Isolation
+0.8488 ± 0.0512 0.8383 ± 0.0586
+Paired gap
+0.3895
+0.3707
+95% bootstrap CI
+[0.3781, 0.4007]
+[0.3643, 0.3770]
+5.2
+Channel-Adaptive Supervision
+Complementary to spatial State Isolation, channel-
+adaptive reweighting accounts for the unequal re-
+construction difficulty of RGB channels in under-
+water scenes.
+Removing this supervision decreases
+PSNR from 25.32 to 24.32 dB. As shown in Ta-
+ble 4, it also increases the average channel-wise color-
+histogram KL divergence from 0.0064 to 0.0071. The
+largest improvement is observed in the green channel
+(0.0051 →0.0036), while the easiest blue channel ex-
+hibits only a minor increase (0.0038 →0.0041). Over-
+all, these results show that channel adaptive super-
+vision improves color fidelity while providing a sub-
+stantial gain in reconstruction accuracy.
+Table 4: Channel-wise color-histogram KL di-
+vergence. Lower values indicate better agreement
+with the ground-truth color distribution.
+Variant
+Red
+Green
+Blue
+Avg. ↓
+Degraded Input
+0.1574
+0.0712
+0.0608
+0.0965
+w/o Channel Reweighting
+0.0125
+0.0051
+0.0038
+0.0071
+IsoMamba(Ours)
+0.0117 0.0036
+0.0041
+0.0064
+5.3
+Contribution of Loss Functions.
+Table 5 investigates the contribution of each loss com-
+ponent. Removing the ℓ1 loss decreases the PSNR
+from 25.32 dB to 24.76 dB, indicating that pixel-
+level supervision is important for preserving recon-
+struction fidelity. Without the SSIM loss, the per-
+formance drops significantly to 23.76 dB PSNR, sug-
+gesting that structural consistency plays an impor-
+tant role in maintaining perceptual quality. Remov-
+ing the edge loss also leads to degraded performance
+in both PSNR and UCIQE, demonstrating that edge-
+aware constraints help recover high-frequency details
+and improve visual quality. Overall, the full objec-
+tive function achieves the best performance across all
+evaluation metrics.
+4
+
+
+Table 5: Ablation study on loss function com-
+ponents.
+Variant
+PSNR↑
+SSIM↑
+UCIQE↑
+(i) w/o ℓ1 Loss
+24.76
+0.916
+0.617
+(ii) w/o SSIM Loss
+23.76
+0.902
+0.615
+(iii) w/o Edge Loss
+24.52
+0.909
+0.612
+IsoMamba (Ours)
+25.32
+0.920
+0.618
+5.4
+EMA Discussion
+We additionally test an EMA-based update for
+the order label, where the label is updated dur-
+ing training by an exponential moving average of
+the sorted cluster centers.
+This adaptive ordering
+slightly improves performance on LSUI (29.89/0.914
+→29.97/0.915), but reduces generalization on UIEB
+(25.32/0.920 →24.81/0.917). A likely reason is data
+imbalance: LSUI contributes about 75% of the train-
+ing images, so the EMA label is biased toward LSUI
+statistics and becomes less suitable for UIEB. Given
+this train-domain gain but cross-domain drop, we
+keep the fixed order label in all experiments for ro-
+bustness.
+Table 6: Effect of EMA-updated order label on dif-
+ferent test sets.
+Variant
+UIEB
+LSUI
+-w/ EMA-updated
+24.81 / 0.917
+29.97 / 0.915
+-w/o EMA-updated (Ours)
+25.32 / 0.920
+29.89 / 0.914
+6
+More Visualization
+Visualization of routing partitions under dif-
+ferent numbers of clusters.
+We visualize the
+cluster route maps produced by our ∆-based rout-
+ing under different cluster counts K from different
+stages in Figure 2. For each input image, we com-
+pute the update-tendency descriptor derived from ∆,
+perform spatial clustering with K ∈{2, 3, 4}, and
+render the resulting per-pixel cluster identity as a
+color-coded map. Even without any semantic labels,
+the partitions are spatially coherent and often sepa-
+rate large smooth water clusters from more textured
+structures. As K increases, complex areas are fur-
+ther subdivided into finer groups, which is consistent
+with the idea that different clusters may prefer differ-
+ent state update behaviors and therefore benefit from
+being routed to different state streams.
+Additional visual comparisons.
+We provide ad-
+ditional visualisations for both full-reference datasets
+and non-reference datasets. Figure 3 provides qual-
+Figure 2: Visualization of ∆-driven cluster maps with
+different numbers of clusters. From left to right, we
+show the input image and the route maps for K = 2,
+K = 3, and K = 4. Each color denotes one cluster
+and its routed expert identity.
+itative comparisons against representative baselines
+on full-reference benchmarks.
+We include zoomed-
+in patches to emphasize challenging regions and re-
+port the PSNR for each example. As shown in Fig-
+ure 3, our method consistently yields more accurate
+colour correction, recovering the underlying hues in
+the first two rows while maintaining appropriate sat-
+uration (for example, the yellow tail of the small fish).
+Moreover, for the blurred case in the third row, our
+method restores the fine structures of the fish fins
+more completely, and avoids amplifying noise in visu-
+ally smooth water regions that can arise from overly
+aggressive enhancement.
+Moreover, Figure 4 presents qualitative compar-
+isons on no-reference benchmarks, where ground-
+truth images are unavailable. We include representa-
+tive methods with strong UCIQE performance, and
+report the per-image UCIQE score beneath each out-
+put. As shown in Figure 4, we evaluate three chal-
+lenging cases: severe green cast, blue-green cast, and
+low-light conditions with increasing water depth. In
+the first row, our method improves sharpness while
+suppressing noise within the highlighted regions. In
+the second row, the restoration on sandy terrain
+remains colour-balanced, avoiding noticeable over-
+compensation toward blue or red tones. In the third
+row, our method recovers brightness more effectively
+and produces clearer structures under low illumina-
+tion.
+7
+More Applications
+In addition to the underwater dataset, we also
+conduct single-task experiments on conventional
+restoration tasks, including denoising, dehazing,
+deraining, deblurring, and low-light enhance-
+ment. For each task, we train a separate model using
+the corresponding training set and evaluate it on the
+5
+
+
+Figure 3: Additional qualitative comparisons on rep-
+resentative test images. We compare with F-RWKV,
+HINT, Concertormer, MaIR, and EVSSM. Grey and
+yellow boxes indicate zoom-in regions, and the num-
+ber under each result is PSNR for that image.
+Figure 4:
+Additional NR visual comparisons on
+UCIQE. We compare with representative strong base-
+lines under this metric, and report the per-image
+UCIQE score beneath each result.
+matching test set. The dataset details and the train
+test pairing are summarized in Table 7.
+For denoising, we include DnCNN [62], FFD-
+Net [63], ADFNet [45], DGUNet [37], Restormer [59],
+and FSNet [10].
+For dehazing,
+we evaluate
+DehazeNet [4], FDGAN [12], DehazeFormer [46],
+Restormer [59], NAFNet [6], and FSNet [10]. For de-
+raining, we compare with MSPFN [24], LPNet [15],
+DRSformer [7], Restormer [59], and FSNet [10].
+For deblurring, we adopt DeblurGAN [27], Strip-
+former [48], HI-Diff [8], MPRNet [60], Restormer [59],
+and FSNet [10]. For low-light enhancement, we
+include URetinex [53], SMG [56], Retinexformer [5],
+Restormer [59], and DiffIR [54].
+We
+also
+report
+representative
+general-purpose
+and All-In-One methods, including AirNet [30],
+IDR [61],
+PromptIR [43],
+and Perceive-IR [64],
+trained under the same single-task protocol for a fair
+comparison.
+To verify that our delta-aware design is not overfit-
+ted to underwater domains, we evaluate IsoMamba on
+five standard restoration benchmarks under a single-
+task setting, as shown in Table 8.
+Table 7: Single-task dataset settings for conventional
+restoration. Each task is trained and tested indepen-
+dently; parentheses show image counts.
+Task
+Split
+Dataset (images)
+Noise
+Train
+BSD400 [2] + WED [36] (400 +
+4,744)
+Test
+Kodak24 [13] (24)
+Haze
+Train
+RESIDE-β-OTS [29] (72,135)
+Test
+SOTS-Outdoor [28] (500)
+Rain
+Train
+Rain100L [58] (200)
+Test
+Rain100L [58] (100)
+Blur
+Train
+GoPro [39] (2,103)
+Test
+GoPro [39] (1,111)
+Low-Light
+Train
+LOL [52] (485)
+Test
+LOL [52] (15)
+(1) Denoising: On Kodak24, IsoMamba achieves
+the best PSNR across all noise levels.
+Notably, at
+the heavy-noise setting (σ = 50), it outperforms
+the runner-up by a clear margin (29.58 vs.
+29.16
+dB), demonstrating robust feature preservation un-
+der severe corruption.
+(2) Dehazing: On SOTS,
+our method achieves a remarkable breakthrough, sur-
+passing the second-best method by over 1.0 dB in
+PSNR (32.80 vs.
+31.78 dB). This confirms that
+our explicit handling of state dynamics is particu-
+larly effective for atmospheric degradation. (3) De-
+raining and Low-light: On Rain100L, we achieve
+the best SSIM and the second-best PSNR. On LOL,
+IsoMamba ranks in the top three, outperforming
+other generalist baselines like Perceive-IR and Air-
+Net, falling short only to specialized low-light models
+(e.g., Retinexformer). (4) Deblurring: On GoPro,
+while not achieving state-of-the-art performance, our
+model maintains competitive ability (31.45 dB), indi-
+cating reasonable generalization capability even with-
+out motion-specific architectural priors.
+These results indicate that our state-isolation de-
+sign complements strong general restoration priors by
+clustering the gate (∆) signal, leading to a balanced
+improvement profile rather than targeting a single
+task.
+Visualization with all-in-one methods.
+We
+provide qualitative comparisons on dehazing, derain-
+ing, and low-light enhancement using their corre-
+sponding test sets. Figure 5 shows dehazing results
+under night-time (first row) and daytime (second
+row) conditions. In the night-time case, our method
+removes haze while introducing the least noise in the
+highlighted region (red box).
+In the daytime case,
+our approach better clears distant haze and restores
+finer structures, such as tree trunks and railings, with
+clearer textures in the zoomed-in areas.
+6
+
+
+Table 8: Single-task restoration results, including denoising on Kodak24, dehazing on SOTS, deraining on
+Rain100L, deblurring on GoPro, and low-light enhancement on LOL. The top three PSNR results are marked
+in RED, BLUE, and GREEN, respectively.
+Kodak24
+PSNR
+SOTS
+PSNR/SSIM
+Rain100L
+PSNR/SSIM
+GoPro
+PSNR/SSIM
+LOL
+PSNR/SSIM
+σ = 15
+σ = 25
+σ = 50
+DnCNN
+34.60
+32.14
+28.95
+DehazeNet
+22.46/0.851
+MSPFN
+33.50/0.948
+DeblurGAN
+28.70/0.858
+URetinex
+21.33/0.835
+FFDNet
+34.63
+32.13
+28.98
+FDGAN
+23.15/0.921
+LPNet
+33.61/0.958
+Stripformer
+33.08/0.962
+SMG
+23.81/0.809
+ADFNet
+34.77
+32.22
+29.06
+DehazeFormer
+31.78/0.977
+DRSformer
+38.14/0.983
+HI-Diff
+33.33/0.964
+Retinexformer
+25.16/0.845
+DGUNet
+34.56
+32.10
+28.91
+Restormer
+30.87/0.969
+Restormer
+36.74/0.978
+MPRNet
+32.66/0.959
+MIRNet
+24.14/0.835
+Restormer
+34.78
+32.37
+29.08
+NAFNet
+30.98/0.970
+NAFNet
+36.63/0.977
+Restormer
+32.92/0.961
+Restormer
+22.43/0.823
+FSNet
+34.75
+32.38
+29.10
+FSNet
+31.11/0.971
+FSNet
+37.27/0.980
+FSNet
+33.29/0.963
+DiffIR
+23.15/0.828
+AirNet
+34.81
+32.44
+29.10
+AirNet
+23.18/0.900
+AirNet
+34.90/0.977
+AirNet
+31.64/0.945
+AirNet
+21.52/0.832
+IDR
+34.78
+32.42
+29.13
+PromptIR
+31.31/0.973
+PromptIR
+37.04/0.979
+PromptIR
+32.41/0.956
+PromptIR
+22.97/0.834
+Perceive-IR
+34.84
+32.50
+29.16
+Perceive-IR
+31.65/0.977
+Perceive-IR
+38.41/0.984
+Perceive-IR
+32.83/0.960
+Perceive-IR
+23.79/0.841
+Ours
+35.10
+32.65
+29.58
+Ours
+32.80/0.979
+Ours
+38.15/0.984
+Ours
+31.45/0.946
+Ours
+24.03/0.827
+Figure 5: Visual Comparison of dehazed results be-
+tween our IsoMamba and other all-in-one methods on
+the SOTS-outdoor.
+As shown in Figure 6, our method demonstrates
+effective performance in both rain stripe removal and
+background restoration.
+In the first row, we suc-
+cessfully eliminated rain stripes within the red and
+yellow boxes.
+Simultaneously, in the second row,
+rain stripes were effectively removed from the blue
+box, whilst avoiding excessive generation of addi-
+tional white artefacts when removing stripes from the
+red box. Meanwhile, within the white box, the back-
+ground and rain stripes remain distinguishable, pre-
+serving the horse lead rope.
+Figure 6: Visual Comparison of derained results be-
+tween our IsoMamba and other all-in-one methods on
+the Rain100L.
+As illustrated in Figure 7, our method restores
+brightness while maintaining reliable colour repro-
+duction in low-light scenes. In the first row, it recov-
+ers the illumination in the red-bordered region and
+preserves the intended blue hue. In the second row,
+our approach restores dark tones without introduc-
+ing artifacts, and it maintains a clean black appear-
+ance rather than drifting toward grey or brown colour
+shifts.
+Figure 7: Visual Comparison of Low Light enhance-
+ment results between our IsoMamba and other all-in-
+one methods on the LoL.
+8
+Limitations and Future Work
+Our method is motivated by the mechanism-level
+diagnosis
+of
+State
+Contention,
+identifying
+that
+mechanism-agnostic serialization leads to conflicting
+update behaviors. We have substantiated this diag-
+nosis through extensive hidden state visualizations
+and consistent quantitative improvements, utilizing
+the learned ∆as an effective, data-driven proxy for
+state isolation. From a theoretical perspective, while
+our empirical evidence is robust, formally character-
+izing the bounds of error propagation caused by in-
+terleaved transitions remains an open frontier for the
+SSM community. We believe our findings pave the
+way for future work to develop a rigorous mathemat-
+ical metric for ”coupling intensity,” linking the scan
+order directly to the stability analysis of recursive
+update equations. In terms of application, while Iso-
+Mamba excels in handling color and haze, its perfor-
+mance on motion deblurring (e.g., GoPro) suggests
+room for improvement in modeling complex motion
+trajectories. Future iterations could explore integrat-
+ing motion-aware priors into the clustering mecha-
+nism to further broaden the scope of restoration dy-
+namics.
+7
+
+
+References
+[1] Derya Akkaynak and Tali Treibitz. Sea-thru: A
+method for removing water from underwater im-
+ages. In 2019 IEEE/CVF Conference on Com-
+puter Vision and Pattern Recognition (CVPR),
+pages 1682–1691, 2019.
+[2] Pablo Arbel´aez, Michael Maire, Charless C.
+Fowlkes, and Jitendra Malik.
+Contour detec-
+tion and hierarchical image segmentation. IEEE
+Transactions on Pattern Analysis and Machine
+Intelligence, 33:898–916, 2011.
+[3] Dana Berman, Deborah Levy, Shai Avidan, and
+Tali Treibitz.
+Underwater single image color
+restoration using haze-lines and a new quanti-
+tative dataset. IEEE Transactions on Pattern
+Analysis and Machine Intelligence, 43(8):2822–
+2837, 2020.
+[4] Bolun Cai, Xiangmin Xu, Kui Jia, Chunmei
+Qing, and Dacheng Tao. Dehazenet: An end-
+to-end system for single image haze removal.
+IEEE Transactions on Image Processing, 25:
+5187–5198, 2016.
+[5] Yuanhao
+Cai,
+Hao
+Bian,
+Jing
+Lin,
+Hao-
+qian Wang, Radu Timofte, and Yulun Zhang.
+Retinexformer: One-stage retinex-based trans-
+former for low-light image enhancement. 2023
+IEEE/CVF International Conference on Com-
+puter Vision (ICCV), pages 12470–12479, 2023.
+[6] Liangyu Chen, Xiaojie Chu, X. Zhang, and Jian
+Sun. Simple baselines for image restoration. In
+European Conference on Computer Vision, 2022.
+[7] Xiang Chen, Hao-Ran Li, Mingqiang Li, and
+Jin shan Pan.
+Learning a sparse transformer
+network for effective image deraining.
+2023
+IEEE/CVF Conference on Computer Vision
+and Pattern Recognition (CVPR), pages 5896–
+5905, 2023.
+[8] Zheng Chen, Yulun Zhang, Ding Liu, Bin Xia,
+Jinjin Gu, L. Kong, and Xin Yuan. Hierarchi-
+cal integration diffusion model for realistic image
+deblurring. ArXiv, abs/2305.12966, 2023.
+[9] Xiaofeng Cong, Jie Gui, and Junming Hou. Un-
+derwater organism color fine-tuning via decom-
+position and guidance.
+In Proceedings of the
+AAAI conference on Artificial Intelligence, vol-
+ume 38, pages 1389–1398, 2024.
+[10] Yuning Cui, Wenqi Ren, Xiaochun Cao, and
+Alois Knoll. Image restoration via frequency se-
+lection. IEEE Transactions on Pattern Analysis
+and Machine Intelligence, 46:1093–1108, 2023.
+[11] Tri Dao and Albert Gu.
+Transformers are
+SSMs:
+Generalized models and efficient algo-
+rithms through structured state space duality. In
+International Conference on Machine Learning,
+2024.
+[12] Yu Dong, Yihao Liu, He Zhang, Shifeng Chen,
+and Yu Qiao.
+Fd-gan: Generative adversarial
+networks with fusion-discriminator for single im-
+age dehazing. ArXiv, abs/2001.06968, 2020.
+[13] Rich Franzen.
+Kodak lossless true color im-
+age suite (photocd pcd0992).
+https://r0k.us/
+graphics/kodak/. Accessed: 2026-01-26.
+[14] Zhenqi Fu, Wu Wang, Yue Huang, Xinghao
+Ding, and Kai-Kuang Ma. Uncertainty inspired
+underwater image enhancement.
+In European
+Conference on Computer Vision (ECCV), pages
+465–482, 2022.
+[15] Hongyun Gao, Xin Tao, Xiaoyong Shen, and
+Jiaya Jia.
+Dynamic scene deblurring with pa-
+rameter selective sharing and nested skip con-
+nections. 2019 IEEE/CVF Conference on Com-
+puter Vision and Pattern Recognition (CVPR),
+pages 3843–3851, 2019.
+[16] Meisheng Guan, Haiyong Xu, Gangyi Jiang, Mei
+Yu, Yeyao Chen, Ting Luo, and Yang Song.
+Watermamba: Visual state space model for un-
+derwater image enhancement.
+arXiv preprint
+arXiv:2405.08419, 2024.
+[17] Chunle Guo, Ruiqi Wu, Xin Jin, Linghao Han,
+Weidong Zhang, Zhi Chai, and Chongyi Li. Un-
+derwater ranker: Learn which is better and how
+to be better. In Proceedings of the AAAI confer-
+ence on Artificial Intelligence, volume 37, pages
+702–709, 2023.
+[18] Hang Guo, Yong Guo, Yaohua Zha, Yulun
+Zhang,
+Wenbo Li,
+Tao Dai,
+Shu-Tao Xia,
+and Yawei Li.
+Mambairv2:
+Attentive state
+space restoration. 2025 IEEE/CVF Conference
+on Computer Vision and Pattern Recognition
+(CVPR), pages 28124–28133, 2024.
+[19] Hang Guo, Jinmin Li, Tao Dai, Zhihao Ouyang,
+Xudong Ren, and Shu-Tao Xia.
+Mambair: A
+simple baseline for image restoration with state-
+space model. In European conference on com-
+puter vision, pages 222–241. Springer, 2024.
+8
+
+
+[20] Shirui
+Huang,
+Keyan
+Wang,
+Huan
+Liu,
+Jun
+Chen,
+and
+Yunsong
+Li.
+Contrastive
+semi-supervised learning for underwater image
+restoration via reliable bank. Proceedings of the
+IEEE/CVF conference on Computer Vision and
+Pattern Recognition, pages 18145–18155, 2023.
+[21] Tao Huang, Xiaohuan Pei, Shan You, Fei Wang,
+Chen Qian, and Chang Xu. Localmamba: Vi-
+sual state space model with windowed selective
+scan. In European Conference on Computer Vi-
+sion, pages 12–22. Springer, 2024.
+[22] Md Jahidul Islam, Youya Xia, and Junaed Sat-
+tar. Fast underwater image enhancement for im-
+proved visual perception.
+IEEE Robotics and
+Automation Letters, 5(2):3227–3234, 2020.
+[23] J.S. Jaffe. Computer modeling and the design
+of optimal underwater imaging systems. IEEE
+Journal of Oceanic Engineering, 15(2):101–111,
+1990.
+[24] Kui Jiang, Zhongyuan Wang, Peng Yi, Chen
+Chen, Baojin Huang, Yimin Luo, Jiayi Ma,
+and Junjun Jiang.
+Multi-scale progressive fu-
+sion network for single image deraining.
+2020
+IEEE/CVF Conference on Computer Vision
+and Pattern Recognition (CVPR), pages 8343–
+8352, 2020.
+[25] Lingshun Kong, Jiangxin Dong, Jinhui Tang,
+Ming-Hsuan Yang, and Jinshan Pan. Efficient
+visual state space model for image deblurring.
+In CVPR, 2025.
+[26] Pin-Hung Kuo, Jinshan Pan, Shao-Yi Chien,
+and Ming-Hsuan Yang. Efficient concertormer
+for image deblurring and beyond. In Proceedings
+of the IEEE/CVF International Conference on
+Computer Vision, pages 14665–14675, 2025.
+[27] Orest
+Kupyn,
+Volodymyr
+Budzan,
+Mykola
+Mykhailych, Dmytro Mishkin, and Jiri Matas.
+Deblurgan: Blind motion deblurring using con-
+ditional adversarial networks. 2018 IEEE/CVF
+Conference on Computer Vision and Pattern
+Recognition, pages 8183–8192, 2017.
+[28] Boyi Li, Wenqi Ren, Dengpan Fu, Dacheng
+Tao, Dan Feng, Wenjun Zeng, and Zhangyang
+Wang. Benchmarking single-image dehazing and
+beyond. IEEE Transactions on Image Process-
+ing, 28:492–505, 2017.
+[29] Boyi Li, Wenqi Ren, Dengpan Fu, Dacheng
+Tao, Dan Feng, Wenjun Zeng, and Zhangyang
+Wang. Benchmarking single-image dehazing and
+beyond. IEEE Transactions on Image Process-
+ing, 28:492–505, 2017.
+[30] Boyun Li, Xiao Liu, Peng Hu, Zhongqin Wu,
+Jiancheng Lv, and Xiaocui Peng. All-in-one im-
+age restoration for unknown corruption.
+2022
+IEEE/CVF Conference on Computer Vision
+and Pattern Recognition (CVPR), pages 17431–
+17441, 2022.
+[31] Boyun Li, Haiyu Zhao, Wenxin Wang, Peng
+Hu, Yuanbiao Gou, and Xi Peng.
+Mair:
+A
+locality- and continuity-preserving mamba for
+image restoration. In IEEE Conference on Com-
+puter Vision and Pattern Recognition, Nashville,
+TN, June 2025.
+[32] Chongyi Li, Chunle Guo, Wenqi Ren, Runmin
+Cong, Junhui Hou, Sam Kwong, and Dacheng
+Tao. An underwater image enhancement bench-
+mark dataset and beyond. IEEE Transactions
+on Image Processing, 29:4376–4389, 2020.
+[33] Dong Li, Yidi Liu, Xueyang Fu, Senyan Xu, and
+Zheng-Jun Zha. Fouriermamba: Fourier learn-
+ing integration with state space models for im-
+age deraining. arXiv preprint arXiv:2405.19450,
+2024.
+[34] Hanyu Li, Jingjing Li, and Wei Wang. A fusion
+adversarial underwater image enhancement net-
+work with a public test dataset. arXiv preprint
+arXiv:1906.06819, 2019.
+[35] Yue Liu, Yunjie Tian, Yuzhong Zhao, Hongtian
+Yu, Lingxi Xie, Yaowei Wang, Qixiang Ye, Jian-
+bin Jiao, and Yunfan Liu. Vmamba: Visual state
+space model.
+Advances in neural information
+processing systems, 37:103031–103063, 2024.
+[36] Kede Ma, Zhengfang Duanmu, Q. Wu, Zhou
+Wang, Hongwei Yong, Hongliang Li, and Lei
+Zhang.
+Waterloo exploration database:
+New
+challenges for image quality assessment mod-
+els. IEEE Transactions on Image Processing, 26:
+1004–1016, 2017.
+[37] Chong Mou,
+Qian Wang,
+and Jian Zhang.
+Deep generalized unfolding networks for im-
+age restoration.
+2022 IEEE/CVF Conference
+on Computer Vision and Pattern Recognition
+(CVPR), pages 17378–17389, 2022.
+[38] Pan Mu, Hanning Xu, Zheyuan Liu, Zheng
+Wang, Sixian Chan, and Cong Bai. A general-
+ized physical-knowledge-guided dynamic model
+9
+
+
+for underwater image enhancement. In Proceed-
+ings of the 31st ACM International Conference
+on Multimedia, page 7111–7120, 2023.
+[39] Seungjun Nah, Tae Hyun Kim, and Kyoung Mu
+Lee. Deep multi-scale convolutional neural net-
+work for dynamic scene deblurring. 2017 IEEE
+Conference on Computer Vision and Pattern
+Recognition (CVPR), pages 257–265, 2016.
+[40] Karen Panetta, Chen Gao, and Sos Agaian.
+Human-visual-system-inspired underwater im-
+age quality measures. IEEE Journal of Oceanic
+Engineering, 41(3):541–551, 2016.
+[41] Lintao Peng and Liheng Bian. Adaptive dual-
+domain learning for underwater image enhance-
+ment. In Proceedings of the AAAI Conference
+on Artificial Intelligence, volume 39, pages 6461–
+6469, 2025.
+[42] Lintao Peng, Chunli Zhu, and Liheng Bian.
+U-shape transformer for underwater image en-
+hancement. IEEE Transactions on Image Pro-
+cessing, 32:3066–3079, 2023.
+[43] Vaishnav
+Potlapalli,
+Syed
+Waqas
+Zamir,
+Salman H. Khan, and Fahad Shahbaz Khan.
+Promptir:
+Prompting
+for
+all-in-one
+image
+restoration.
+In Neural Information Processing
+Systems, 2023.
+[44] Qi Qi, Kunqian Li, Haiyong Zheng, Xiang Gao,
+Guojia Hou, and Kun Sun. Sguie-net: Semantic
+attention guided underwater image enhancement
+with multi-scale perception. IEEE Transactions
+on Image Processing, 31:6816–6830, 2022.
+[45] Hao Shen, Zhongliu Zhao, and Wandi Zhang.
+Adaptive dynamic filtering network for image
+denoising. In AAAI Conference on Artificial In-
+telligence, 2022.
+[46] Yuda Song, Zhuqing He, Hui Qian, and Xin
+Du. Vision transformers for single image dehaz-
+ing.
+IEEE Transactions on Image Processing,
+32:1927–1941, 2022.
+[47] Yi Tang,
+Hiroshi Kawasaki,
+and Takafumi
+Iwaguchi.
+Underwater image enhancement by
+transformer-based diffusion model with non-
+uniform sampling for skip strategy. Proceedings
+of the 31st ACM International Conference on
+Multimedia, 2023.
+[48] Fu-Jen Tsai, Yan-Tsung Peng, Yen-Yu Lin,
+Chung-Chi Tsai, and Chia-Wen Lin.
+Strip-
+former: Strip transformer for fast image deblur-
+ring. In European Conference on Computer Vi-
+sion, 2022.
+[49] Jianyi
+Wang,
+Kelvin
+CK
+Chan,
+and
+Chen Change Loy. Exploring clip for assessing
+the look and feel of images. In Proceedings of
+the AAAI conference on Artificial Intelligence,
+volume 37, pages 2555–2563, 2023.
+[50] Yongzhen
+Wang,
+Yongjun
+Li,
+Zhuoran
+Zheng,
+Xiao-Ping
+Zhang,
+and
+Mingqiang
+Wei.
+M2restore:
+Mixture-of-experts-based
+mamba-cnn
+fusion
+framework
+for
+all-in-one
+image restoration. IEEE Transactions on Image
+Processing, pages 1–15, 2025.
+[51] Yudong Wang, Jichang Guo, Huan Gao, and
+Huihui Yue. Uiec2-net: Cnn-based underwater
+image enhancement using two color space. Signal
+Processing: Image Communication, 96:116250,
+2021. ISSN 0923-5965.
+[52] Chen Wei, Wenjing Wang, Wenhan Yang, and
+Jiaying Liu.
+Deep retinex decomposition for
+low-light enhancement. ArXiv, abs/1808.04560,
+2018.
+[53] Wen-Bin Wu,
+Jian Weng,
+Pingping Zhang,
+Xu Wang, Wenhan Yang, and Jianmin Jiang.
+Uretinex-net: Retinex-based deep unfolding net-
+work for low-light image enhancement.
+2022
+IEEE/CVF Conference on Computer Vision
+and Pattern Recognition (CVPR), pages 5891–
+5900, 2022.
+[54] Bin Xia, Yulun Zhang, Shiyin Wang, Yitong
+Wang, Xing Wu, Yapeng Tian, Wenming Yang,
+and Luc Van Gool.
+Diffir: Efficient diffusion
+model for image restoration. 2023 IEEE/CVF
+International Conference on Computer Vision
+(ICCV), pages 13049–13059, 2023.
+[55] Chaodong
+Xiao,
+Minghan
+Li,
+Zhengqiang
+Zhang, Deyu Meng, and Lei Zhang.
+Spatial-
+mamba: Effective visual state space models via
+structure-aware state fusion. In The Thirteenth
+International Conference on Learning Represen-
+tations, 2025.
+[56] Xiaogang Xu,
+Ruixing Wang,
+and Jiangbo
+Lu. Low-light image enhancement via structure
+modeling and guidance. 2023 IEEE/CVF Con-
+ference on Computer Vision and Pattern Recog-
+nition (CVPR), pages 9893–9903, 2023.
+10
+
+
+[57] Miao Yang and Arcot Sowmya.
+An underwa-
+ter color image quality evaluation metric. IEEE
+Transactions on Image Processing, 24(12):6062–
+6071, 2015.
+[58] Wenhan Yang, Robby T. Tan, Jiashi Feng, Ji-
+aying Liu, Zongming Guo, and Shuicheng Yan.
+Deep joint rain detection and removal from a sin-
+gle image. 2017 IEEE Conference on Computer
+Vision and Pattern Recognition (CVPR), pages
+1685–1694, 2016.
+[59] Syed
+Waqas
+Zamir,
+Aditya
+Arora,
+Salman
+Hameed
+Khan,
+Munawar
+Hayat,
+Fahad Shahbaz Khan, and Ming-Hsuan Yang.
+Restormer:
+Efficient
+transformer
+for
+high-
+resolution image restoration. 2022 IEEE/CVF
+Conference on Computer Vision and Pattern
+Recognition (CVPR), pages 5718–5729, 2021.
+[60] Syed
+Waqas
+Zamir,
+Aditya
+Arora,
+Salman
+Hameed
+Khan,
+Munawar
+Hayat,
+Fahad Shahbaz Khan, Ming-Hsuan Yang, and
+Ling
+Shao.
+Multi-stage
+progressive
+image
+restoration.
+2021 IEEE/CVF Conference on
+Computer
+Vision
+and
+Pattern
+Recognition
+(CVPR), pages 14816–14826, 2021.
+[61] Jinghao Zhang, Jie Huang, Mingde Yao, Zizheng
+Yang, Huikang Yu, Man Zhou, and Fengmei
+Zhao.
+Ingredient-oriented multi-degradation
+learning for image restoration. 2023 IEEE/CVF
+Conference on Computer Vision and Pattern
+Recognition (CVPR), pages 5825–5835, 2023.
+[62] K. Zhang, Wangmeng Zuo, Yunjin Chen, Deyu
+Meng, and Lei Zhang. Beyond a gaussian de-
+noiser: Residual learning of deep cnn for image
+denoising. IEEE Transactions on Image Process-
+ing, 26:3142–3155, 2016.
+[63] Kai Zhang, Wangmeng Zuo, and Lei Zhang. Ffd-
+net: Toward a fast and flexible solution for cnn-
+based image denoising. IEEE Transactions on
+Image Processing, 27(9):4608–4622, 2018.
+[64] Xu Zhang, Jiaqi Ma, Guoli Wang, Qian Zhang,
+Huan Zhang, and Lefei Zhang.
+Perceive-ir:
+Learning to perceive degradation better for all-
+in-one image restoration. IEEE Transactions on
+Image Processing : a publication of the IEEE
+Signal Processing Society, PP, 2024.
+[65] Xu Zhang, Huan Zhang, Guoli Wang, Qian
+Zhang, Lefei Zhang, and Bo Du. Uniuir: Consid-
+ering underwater image restoration as an all-in-
+one learner. IEEE Transactions on Image Pro-
+cessing, 34:6963–6977, 2025.
+[66] Chen Zhao, Weiling Cai, Chenyu Dong, and
+Chengwei Hu. Wavelet-based fourier information
+interaction with frequency diffusion adjustment
+for underwater image restoration. In Proceedings
+of the IEEE/CVF Conference on Computer Vi-
+sion and Pattern Recognition, pages 8281–8291,
+2024.
+[67] Lirong Zheng, Yanshan Li, Rui Yu, and Kai-
+hao Zhang. Fourier-rwkv: A multi-state percep-
+tion network for efficient image dehazing. arXiv
+preprint arXiv:2512.08161, 2025.
+[68] Jingchun Zhou, Jiaming Sun, Chongyi Li, Qi-
+uping Jiang, Man Zhou, Kin-Man Lam, Weishi
+Zhang, and Xianping Fu.
+Hclr-net:
+Hybrid
+contrastive learning regularization with locally
+randomized perturbation for underwater image
+enhancement.
+Int. J. Comput. Vision, page
+4132–4156, February 2024.
+[69] Jingchun Zhou, Dehuan Zhang, Zongxin He,
+Qilin Gai, and Qiuping Jiang.
+Multi-prior fu-
+sion transfer plugin for adapting in-air models
+to underwater image enhancement and detec-
+tion. IEEE Transactions on Image Processing,
+34:7773–7785, 2025.
+[70] Shihao Zhou, Dayu Li, Jinshan Pan, Juncheng
+Zhou, Jinglei Shi, and Jufeng Yang.
+Devil is
+in the uniformity:
+Exploring diverse learners
+within transformer for image restoration.
+In
+ICCV, 2025.
+[71] Lianghui Zhu, Bencheng Liao, Qian Zhang, Xin-
+long Wang, Wenyu Liu, and Xinggang Wang.
+Vision mamba:
+Efficient visual representation
+learning with bidirectional state space model.
+ArXiv, abs/2401.09417, 2024.
+[72] Junbin Zhuang, Yan Zheng, Baolong Guo, and
+Yunyi Yan.
+Globally deformable information
+selection transformer for underwater image en-
+hancement.
+IEEE Transactions on Circuits
+and Systems for Video Technology, 35(1):19–32,
+2025.
+11

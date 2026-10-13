@@ -1,0 +1,1089 @@
+Title: Goal-Oriented Ordered Autoencoding for Successive Refinement in Progressive Communication
+
+URL Source: https://arxiv.org/pdf/2610.13426v1
+
+Published Time: Mon, 12 Oct 2026 01:07:44 GMT
+
+Number of Pages: 10
+
+Markdown Content:
+# Goal-Oriented Ordered Autoencoding for Successive Refinement in Progressive Communication 
+
+Qi Liao, Dario Bega 
+
+Nokia Bell Labs, Stuttgart, Germany E-Mail: {qi.liao,dario.bega }@nokia-bell-labs.com 
+
+Abstract —Goal-oriented communication often struggles to sus-tain downstream task performance under variable and unpre-dictable bandwidth. We address this problem by proposing GO-OAE (Goal-Oriented Ordered AutoEncoding), which learns a progressively refinable quantized latent sequence, optimized directly for task utility rather than source reconstruction. Each component of the sequence is represented for transmission by its code index, and the learned ordering enables inference from any received prefix of the index sequence, with performance improving as more indices arrive. We prove that optimizing the goal-oriented distortion objective is equivalent to solving a weighted conditional information bottleneck formulation, and introduce an unbiased multi-prefix importance sampling (MPIS) estimator, to reduce GO-OAE training computational cost from 
+
+O(BK ) to O(Bm ) with m≪K, and reduces the estimator variance by a factor of 1/m . Experiments show that, on Mini-ImageNet, GO-OAE achieves over 96% of the lossless upper-bound classification accuracy using 324 bits per image ( 683 ×
+
+compression vs. raw RGB), and already attains over 94% of the upper bound with only 70% of the transmitted indices. It consis-tently outperforms reconstruction-optimized codecs and ordered autoencoders trained with uniform prefix sampling across all transmission budgets, demonstrating effective communication at extreme compression rates. 
+
+I. I NTRODUCTION 
+
+Next-generation communication systems increasingly sup-port machine intelligence rather than human perception, with transmitted data used for downstream tasks such as classi-fication, detection, and decision-making. This shift calls for coding methods that preserve task-relevant information under bandwidth constraints, rather than merely minimizing pixel-level distortion. Although goal-oriented communication [1] captures this principle, it has yet to unify compression and inference while ensuring consistent downstream performance across varying and uncertain bandwidth constraints. A common approach is to use generative neural codecs [2, 3], such as variational autoencoder (VAE) [4], for com-pression followed by a separately trained task model. This modular “compress first, infer later” pipeline assumes that reconstruction fidelity preserves task-critical information. Yet our results in Section VI-C1 challenge this: even with good reconstruction quality, classification accuracy on reconstructed images remains far below the raw-image bound ( 18 .9% vs. 
+
+77 .5% ), motivating goal-oriented codec-task co-design .Beyond the modular versus joint design question, practical communication systems can benefit from progressive transmis-sion [5], where an ordered latent sequence supports inference across varying bandwidths without re-encoding. The ordered autoencoder (OAE) introduced by [6] enables progressively improved reconstruction from increasingly long prefixes of the latent sequence. However, existing OAEs are tied to reconstruction and cannot recover task-relevant information. These observations expose a key research gap: existing frameworks lack an information-theoretic approach for learn-ing emergent ordered discrete representations, whose prefixes are directly optimized for downstream tasks. Addressing this requires (i) a goal-oriented objective that preserves progres-sive structure, (ii) an efficient training method that avoids evaluating all prefix lengths, and (iii) semantic regularization to maintain discriminative information in the codebook. We address these challenges with goal-oriented ordered autoen-coder (GO-OAE) (Figure 1). GO-OAE jointly optimizes the encoder, vector quantizer, and task decoder through an unbi-ased importance-sampled multi-prefix objective. The resulting representations prioritize task-relevant information in earlier components without explicit architectural ordering constraints, enabling variable-bandwidth communication. Our main contributions are summarized as follows:  
+
+> •
+
+GO-OAE: A new information-theoretic framework. 
+
+We propose GO-OAE, the first information-theoretic framework for progressive goal-oriented communication, which learns an ordered latent sequence directly opti-mized for downstream tasks. We show that its objective is equivalent to a weighted conditional information bottle-neck (IB) formulation, providing an information-theoretic foundation for progressive communication and semantic representation learning.  
+
+> •
+
+Emergent ordered representation with efficient train-ing. Unlike prior ordered learners that rely on autoregres-sive or architectural constraints [6, 7], GO-OAE derives ordering from a weighted conditional IB-equivalent ob-jective. We further develop an unbiased multi-prefix im-portance sampling (MPIS) estimator that reduces training complexity from O(BK ) to O(Bm ), with m≪K, and reduces the estimator variance by a factor of 1/m , where 
+
+B is the minibatch size, K is the full prefix length, and 
+
+m is the prefix sampling budget.  
+
+> •
+
+Goal-Oriented codec design principles. Our empiri-cal analysis shows two key design principles for goal-oriented codecs: reconstruction quality does not necessar-ily translate to task performance, and conventional code-book objectives inadequately preserve semantic structure, motivating task-aware regularization. arXiv:2610.13426v1 [cs.IT] 9 Oct 2026 Backbone Early Encoder Vector GO Quantization Encoder GO Decoder                         
+
+> X
+> Source
+> y
+> Goal Anywhere Progressive Transmission
+> k≤Kindices (k·log 2Nbits/sample)
+> Output: Output: Output:
+> P×DK×Dz7→
+> Kindices
+> (Codebook size: N)
+> (Ppatches)
+> Output:
+> K×DzK×Dz
+> Output:
+> P×D
+
+Receiver (Cloud/Edge Server) 
+
+> ze, 1
+> ze, 2
+> ze, 3
+> ze, 4
+> ze,K
+> ...
+> zq, 1
+> zq, 2
+> zq, 3
+> zq, 4
+> zq,K
+> ... ...
+> Truncation Codebook Projection Lookup / Backbone Task Head Late Encoder
+
+GO-OAE Transmitter (Device)                 
+
+> Fig. 1. GO-OAE for progressive goal-oriented communication. The encoder maps Pinput components of dimension D(e.g., image patches or feature tokens) into an ordered latent sequence {ze,i }Ki=1 , which is vector-quantized using a jointly learned codebook, producing the quantized latent prefix {zq,i }Ki=1 .Transmitting the first k≤Kcodes (discrete indices of the mapped codebook embeddings) requires k·log 2Nbits per sample. The receiver reconstructs the corresponding latent prefix and uses it directly for downstream task inference.
+> •
+
+Progressive communication at extremely low rates. 
+
+Experiments on MiniImageNet [8, 9] show that GO-OAE enables robust inference under arbitrary transmission truncation, achieving over 96% of lossless classification accuracy using only 324 bits per sample ( 683 × com-pression). Across all transmission budgets, it consistently outperforms reconstruction-based codecs and ordered au-toencoders trained with uniform prefix sampling [6]. The remainder of this paper is organized as follows. Section II reviews related works. Section III introduces the background on OAEs and vector quantized autoencoder (VQ-AE). Sec-tion IV presents the proposed GO-OAE framework, including its information-theoretic formulation. The proposed GO-OAE algorithm is presented in Section V, including MPIS estimator and loss design. Section VI provides numerical results. Finally, Section VII concludes the paper. II. R ELATED WORKS 
+
+Goal-Oriented Semantic Communication. Semantic com-munication shifts the objective from reliable bit transmission to preserving task-relevant information [10]. Existing studies have investigated its information-theoretic foundations, AI-enabled architectures, end-to-end learning methods, and poten-tial applications to future networks [11, 12, 13]. Recent works have increasingly incorporated generative models into image and video semantic communication. Diffusion-based methods use semantic extraction and generative reconstruction to im-prove perceptual robustness under channel impairments [14]. Self-supervised approaches learn task-agnostic latent represen-tations that are reconstructed before classification [15], while multi-task frameworks jointly support image reconstruction and classification from shared semantic features [16]. Despite these advances, most existing methods remain reconstruction-oriented: task inference is performed on re-constructed signals, and progressive transmission primarily improves perceptual fidelity. Moreover, hierarchical represen-tations do not necessarily induce an ordered latent space in which every prefix is directly optimized for task utility. 
+
+Ordered Autoencoding and Successive Refinement. Suc-cessive refinement is a fundamental concept in information theory, allowing progressive transmission of information with increasing levels of detail [5]. Learned OAEs similarly order latent variables so that longer prefixes improve reconstruction [6], while autoregressive methods predict the missing suffix from the received prefix [17]. However, these approaches optimize reconstruction or generative completion rather than task utility. Let z≤k denote the transmitted prefix with length 
+
+k, and bz>k ∼ p (bz>k |z≤k) an autoregressively generated suffix. The suffix is generated solely from the received pre-fix, i.e., I (y; z≤k, bz>k ) = I (y; z≤k) . Hence, autoregressive approaches learn a conditional prior over the untransmitted latent suffix, enabling plausible latent completion. However, it cannot add task information beyond the received prefix and also incurs sequential decoding overhead. Another relevant work is Matryoshka representation learn-ing (MRL) [18], which learns nested prefixes of a single final embedding after full backbone processing, placing most com-putation at the transmitter. It targets scalable representation storage and inference rather than lightweight-device compu-tation and communication reduction. In contrast, GO-OAE orders and discretizes intermediate latent sequences before full semantic reasoning, enabling a lightweight transmitter and progressive receiver-side inference. III. D EFINITIONS AND PRELIMINARIES 
+
+Let x ∈ X denote an input sample which follows the distribution px(x). An encoder eθ : X → ZK maps x
+
+to a latent sequence z = ( z1, . . . , zK ), where each latent component zi ∈ Z , for i ∈ K := {1, . . . , K }. The latent space 
+
+Z is generic. For example, in transformer-based architectures each zi corresponds to a token embedding. A reconstruction decoder dϕ : ZK → X maps the latent sequence to the reconstructed input bx (the goal-oriented decoder is presented in Section IV). For ease of reference, the main notations used throughout this paper are summarized in Table I. TABLE I SUMMARY OF KEY NOTATIONS                                        
+
+> Symbol Description
+> zLatent sequence (z1, . . . , zK)∈ Z K
+> iLatent component index, also as sampled or corresponding prefix length when defining the ordered objective
+> kSelected prefix length
+> z≤kLatent prefix of length k,(z1, . . . , zk)∈ Z k
+> ziThe i-th latent component, zi∈ Z
+> ze,i Encoder latent component, ze,i ∈ Z e
+> zq,i Quantized latent component, zq,i ∈ Z q
+> zq, ≤kQuantized latent prefix of length k,zq, ≤k∈ Z kq
+> ejCodebook embedding, ej∈ E
+> jiCodebook index for the i-th component (referred to interchangeably as “code index” throughout the paper)
+> NCodebook size, |E| =NmPrefix sampling budget, m≪K
+
+Definition 1 (Prefix Length and Latent Prefix) . Let k ∈ K 
+
+denote the prefix length , i.e., the number of retained la-tent components after truncating the latent sequence. For a given prefix length k, the latent prefix is defined as z≤k := (z1, . . . , zk) ∈ Z k, which consists of the first k components. For implementation purposes, z≤k may equivalently denote its zero-padded form (z1, . . . , zk, 0, . . . , 0) ∈ ZK , where the remaining components are set to zero. We further define 
+
+z<k = ( z1, . . . , zk−1) which excludes the k-th component. A. Ordered Autoencoder for Reconstruction 
+
+To encourage progressively informative latent components, we define the OAE as follows. For notational simplicity, instead of k, we use the latent index i to also denote the corresponding prefix length in the ordered objective. 
+
+Definition 2 (Reconstruction-Based OAE) . An encoder-decoder pair (eθ , d ϕ) is an ordered autoencoder if its latent sequence z = ( z1, . . . , zK ) has non-increasing incremental information gains about the input. In particular, define 
+
+∆i := I(zi; x | z<i ), i ∈ K , (1) 
+
+where z<i := ( z1, . . . , zi−1) and I(·; · | · ) denotes conditional mutual information. The ordered latent sequence satisfies 
+
+∆1 ≥ ∆2 ≥ · · · ≥ ∆K ≥ 0. (2) Xu et al. [6] show that the ordered autoencoder condition can be achieved by minimizing the objective below. 
+
+Theorem 1 (Ordered Reconstruction Objective) . [6, Theorem 1] Let the OAE reconstruction objective be defined as: 
+
+LOAE (eθ , d ϕ) := Ex∼px(x),i ∼U{ 1,K }
+
+Ez∼qeθ (z≤i|x)
+
+− log pdϕ (x|z≤i) , (3) 
+
+where U{ 1, K } denotes the uniform distribution over the set 
+
+{1, . . . , K }, qeθ (z≤i|x) and pdϕ (x|z≤i) denote the distri-butions of the encoder and the decoder with prefix length 
+
+i ∈ K , respectively. For a fixed-variance Gaussian decoder, and if the encoder satisfies conditional-independence, namely 
+
+zi−1⊥zi|x, z≤i−2, for i ≥ 3, then, (3) is equivalent, up to constants, to the prefix-averaged mean squared reconstruction loss. An optimal encoder-decoder pair (eθ∗ , d ϕ∗ ) that mini-mizes (3) satisfies the ordered autoencoder condition in (2) .The finite deterministic loss over Ns samples is 
+
+1
+
+NsNsX
+
+> n=1
+
+1
+
+K
+
+> K
+
+X
+
+> i=1
+
+∥xn − dϕ(z≤i)∥2. (4) Because (3) is an expectation over prefix length following uniform distribution, instead of summing over all i, it can be estimated unbiasedly by sampling a single prefix length per minibatch and optimizing the reconstruction loss using z≤i.
+
+B. Vector Quantized Autoencoder 
+
+We adopt VQ-AE variant of vector quantized variational autoencoder (VQ-VAE) [19] as the underlying discrete latent modeling framework for ordered autoencoding. VQ-AE learns discrete latent space by mapping the continuous encoder outputs to a finite set of learnable codebook embeddings through vector quantization. The resulting codebook indices are mapped back to their corresponding embeddings, from which the decoder reconstructs the input. We choose VQ-AE because it naturally supports ordered and progressively refinable latent sequence. First, discretized latent spaces provide more stable and semantically structured representations than continuous variables under progressive truncation, where discrete codebook indices can be trans-mitted or decoded in an ordered manner. Second, transmit-ting discrete indices is far more communication-efficient and implementation-friendly than continuous latent vectors. For example, Llama 3 8B model [20] represents each token with a 4096 -dimensional FP16 vector, requiring 65 , 536 bits per token, whereas indexing a codebook of size 128 , 256 requires only 17 bits. In vision tasks, even smaller codebooks are typ-ically sufficient, e.g., 512 entries, with each latent component index (or ”code index”) represented by only 9 bits. Let the i-th encoded and quantized latent components be denoted by ze,i ∈Z e and zq,i ∈Z q , respectively. The finite code-book is denoted by E:= {ej }Nj=1 , with N learnable codebook embeddings ej , j = 1 , . . . , N . The quantization is performed via nearest neighbor lookup, i.e., for each i ∈ K , we have 
+
+zq,i = eji , where ji = arg min  
+
+> j∈{ 1,...,N }
+
+∥ze,i − ej ∥22. (5) The quantized latent indices are then provided to the decoder. 
+
+Remark 1 (Latent and Codebook Embedding Dimensions) .
+
+For notational simplicity, in this section, we assume that ze,i ,
+
+zq,i , and ej have the same dimension Dz , as in standard VQ-AE, so that nearest-neighbor quantization is directly per-formed in the latent space. However, more generally, a learn-able projection may be inserted before quantization to map encoder outputs to a latent space of different dimensionality, as done in our experiments in Section VI. 
+
+To train VQ-AE, we minimize the following loss: 
+
+LVQ = Lrec + Lcodebook + βLcommit , (6) where Lrec = − log pdϕ (x|zq ) is the reconstruction loss, 
+
+Lcodebook = ∥sg [ze] − zq ∥22 is the codebook loss that updates the codebook embeddings, and Lcommit = ∥ze − sg [zq ]∥22 is the commitment loss that encourages the encoder outputs to commit to the quantized latents, where sg [·] denotes the stop-gradient operator, and β is a hyperparameter that balances the losses. Here, we omit the indices i for brevity. In vanilla VQ-AE, sparse code assignments often lead to poor code utilization or even codebook collapse, where only a few entries are frequently used. Such behavior limits the expressive capacity of the latent space and may cause semantically dissimilar inputs to share similar code indices. To mitigate this, we adopt the exponential moving average (EMA)-based VQ-VAE [21] update scheme for our autoen-coder, which updates codebook embedding using exponential moving average of assigned encoder outputs. This performs an online centroid update and improves codebook stability. IV. G OAL -O RIENTED ORDERED AUTOENCODING 
+
+While the ordered autoencoders introduced in Section III learn progressively refinable latents to reconstruct input data, they may not explicitly preserve the semantics for the down-stream tasks. Surprisingly, even with high reconstruction fi-delity, the latent representation may not be informative for the downstream task, as shown in Section VI-C1. Motivated by this limitation, we extend OAE toward a progressive goal-oriented communications framework GO-OAE. It consists of an encoder eθ and a task-specific decoder dϕ : ZK → Y (or 
+
+ZKq → Y if vector quantization is applied) where the objective is to optimize the task utility. 
+
+Definition 3 (GO-OAE) . A goal-oriented ordered autoencoder is defined as an encoder-decoder pair (eθ , d ϕ), optimized for minimizing the task loss across all prefix lengths: 
+
+min  
+
+> θ,ϕ
+
+Ep(x,y)
+
+" KX
+
+> i=1
+
+L(dϕ(z≤i), y)
+
+#
+
+, (7) 
+
+where L is a loss function that measures the discrepancy between the decoded output and the true task label. 
+
+Throughout this paper, we instantiate the generic loss L
+
+in (7) as the negative log-likelihood (cross-entropy) of the task label, which yields the GO-OAE distortion function 
+
+LD defined later in (8). In the following subsections, we will establish a theoretical equivalence between the GO-OAE distortion objective and a weighted conditional IB functional under ordered latent truncation, and further show that the learned latent representation satisfies a monotonically decreas-ing conditional mutual information ordering. 
+
+A. Connection to Information Bottleneck 
+
+First, we show that the GO-OAE distortion function can be connected to a weighted conditional IB functional under ordered latent truncation. 
+
+Theorem 2 (GO-OAE Distortion Objective) . Assume the Markov structure y→x→z holds, meaning that latent se-quence z is generated from the input, and task label influences 
+
+z only through x, allowing p(z|x, y) = p(z|x), and assume Bayes-optimal task decoder such that E [− log p(y|z≤i)] = 
+
+H(y|z≤i), where H(·|· ) denotes the conditional entropy. We define the GO-OAE distortion function as 
+
+LD := 
+
+> K
+
+X
+
+> i=1
+
+Ep(x,y) [− log p(y|z≤i)] . (8) 
+
+Then minimizing LD (θ, ϕ ) is equivalent, up to the constant 
+
+KH (y), to maximizing 
+
+> K
+
+X
+
+> i=1
+
+wiI(y; zi|z<i ), with wi = K − i + 1 . (9) 
+
+Proof. The proof is given in Appendix A. The Markov structure y→x→z guarantees that I(y; z) ≤
+
+I(y; x), i.e., z cannot contain task-relevant information beyond what is contained in x. The goal is not to create new task information, but to discard irrelevant details through the bottleneck term I(z; x). If we further regularize the latent sequence by its information complexity I(z; x), the resulting objective becomes a weighted conditional IB functional under ordered latent truncation to maximize: 
+
+> K
+
+X
+
+> i=1
+
+wiI(y; zi|z<i ) − λI (z; x), (10) where λ is a coefficient that controls the tradeoff between task performance and representation compression. 
+
+B. Goal-Oriented Latent Ordering 
+
+We further provide the following corollary to formally characterize the ordering property of the GO-OAE objective. 
+
+Corollary 1 (Goal-Oriented Latent Ordering) . Assume the Bayes-optimal encoder-decoder pair (eθ , d ϕ) is an optimal solution that minimizes the GO-OAE distortion objective (8) ,and each latent component has an intrinsic task-relevant contribution that is invariant under permutation of latent positions. Then, the learned latent sequence satisfies: 
+
+I(y; z1) ≥ I(y; z2|z1) ≥ . . . ≥ I(y; zK |z<K ). (11) 
+
+Proof. The proof is given in Appendix B. 
+
+Remark 2 (Information Bottleneck Behavior and Latent Or-dering) . Even without explicitly including I(z; x) in (8) , the GO-OAE objective exhibits an implicit information bottleneck effect through the VQ-AE bottleneck, finite codebook, latent dimensionality, and stochastic truncation. Beyond this implicit compression, the latent ordering is a natural consequence of the objective: earlier components appear in more prefixes and thus receive larger effective weights wi = K −i+1 . Moreover, as formally established in Corollary 1, this yields a monotoni-cally decreasing conditional mutual information ordering, with earlier dimensions capturing the most critical task-relevant semantics and later ones providing finer refinements. V. P ROPOSED GO-OAE A LGORITHM 
+
+In the objective of reconstruction-based OAE (3), the prefix length yields a uniformly random distribution U{ 1, K }, lead-ing to an unbiased estimation of the prefix length-averaged objective. This enables efficient training by randomly sam-pling a single prefix length for each minibatch. In contrast, the GO-OAE objective (8) assigns inherently non-uniform importance to different prefix lengths, since (9) introduces prefix-dependent weights wi = K −i+1 . Therefore, uniformly sampling prefix lengths no longer provides an efficient opti-mization strategy, motivating a new algorithm that accounts for non-uniform importance of different prefix lengths. Objective (8) involves a summation over all prefix lengths. Thus, for each minibatch with size B, it becomes 
+
+LD = 1
+
+B
+
+> B
+
+X
+
+> b=1
+> K
+
+X
+
+> i=1
+
+l(b) 
+
+> i
+
+, (12) with l(b) 
+
+> i
+
+= − log p
+
+
+
+y(b)|z(b)
+
+> ≤i
+
+
+
+, (13) where y(b) and z(b) 
+
+> ≤i
+
+are the label and latent prefix (with length 
+
+i) of the b-th sample in the minibatch, respectively. This results in O(BK ) decoder evaluations per iteration. Since l(b) 
+
+> i
+
+must be computed for all i and b, it can be computationally expensive for large K. Conversely, naively sampling a single prefix length i per minibatch, as in reconstruction-based OAE [6], reduces the complexity to O(B) but may introduce unbalanced supervision across prefix lengths. This motivates a stochastic approximation of (8) that is (i) unbiased, (ii) computationally efficient, and (iii) with low variance for stable training. 
+
+A. Unbiased Multi-Prefix Importance Sampling Estimator 
+
+We now seek a sampling strategy that approximates (12) with fewer decoder evaluations while preserving unbiasedness and controlling the variance of the estimator. The following corollary formalizes the MPIS estimator and its variance. 
+
+Corollary 2 (MPIS Estimator) . Let the GO-OAE objective be 
+
+LD =
+
+> K
+
+X
+
+> i=1
+
+Li where Li = Ep(x,y) [− log p (y|z≤i)] . (14) 
+
+Let q(i) be a sampling distribution over the prefix length i
+
+such that q(i) > 0, PKi=1 q(i) = 1 . At each minibatch, we sample m prefix lengths {i1, i 2, . . . , i m} independently from 
+
+q(i), and compute the stochastic estimator of LD :
+
+bLD = 1
+
+m
+
+> m
+
+X
+
+> n=1
+
+Lin
+
+q(in) . (15) 
+
+Then, bLD is an unbiased estimator of LD , i.e., 
+
+Ei1,...,i m∼q
+
+h bLD
+
+i
+
+= LD . (16) 
+
+The estimator variance yields: 
+
+Var 
+
+ bLD
+
+
+
+= 1
+
+m
+
+> K
+
+X
+
+> i=1
+
+L2
+
+> i
+
+q(i) − L 2
+
+> D
+
+!
+
+. (17) 
+
+Moreover, assuming differentiation and expectation can be interchanged, stochastic gradient descent using bLD optimizes the same objective (8) , but with a reduced complexity O(Bm ).Proof. The proof is given in Appendix C. Corollary 2 allows us to develop an unbiased and efficient training strategy for GO-OAE by significantly reducing the computational cost from O(BK ) to O(Bm ), where m≪K.We also discuss why single-prefix sampling as in [6] may introduce bias and unstable training in following Remark 3. 
+
+Remark 3 (Single-Prefix Sampling) . Sampling a single prefix length i∼q(i) and directly use Li is generally biased, because 
+
+E [Li] = PKi=1 q(i)Li is not equal to LD = PKi=1 Li.Applying importance weight to single prefix sampling bLD =
+
+Li/q (i), for i∼q(i) is unbiased, but has a high variance 
+
+Var 
+
+h bLD
+
+i
+
+= PKi=1 L2 
+
+> i
+
+/q (i) − L 2 
+
+> D
+
+, which can be large when a high-loss prefix has low sampling probability. Our proposed MPIS in Corollary 2 reduces this variance by a factor of 1/m 
+
+as implied in (17) .
+
+The remaining challenge is to further reduce the variance for stable training. By leveraging (9), we can design the sampling distribution as 
+
+q(i) ∝ wαi
+
+PKi=1 wαi
+
+, for i ∈ K , (18) where α ≥ 0 controls the degree of importance sampling, the higher the α, the more focus on the early latent components with higher importance weights. This sampling strategy re-duces the variance by allocating more samples to important components, while maintaining unbiasedness. In practice, α
+
+and prefix sampling budget m are tuned for stable and efficient training. 
+
+B. Overall Training Loss and Algorithm 
+
+To learn an ordered latent space within the VQ-AE frame-work (introduced in Section III-B), we jointly optimize the encoder-decoder and codebook parameters by minimizing the overall GO-OAE loss, consisting of unbiased stochastic goal-oriented loss bLD (15), the vector quantization (VQ) loss LV Q 
+
+(6), and optional regularizer R (e.g., sparsity, disentanglement, codebook utilization, contrastive learning, or weight decay). The overall training loss for GO-OAE is given by 
+
+LGO-OAE = bLD + βLVQ + λreg R, (19) where the hyperparameters β and λreg control the balance. Note that the unbiased estimator loss bLD in (15) may cause high-variance gradients when dividing by q(i) for rare indices. For practical concern, to stabilize the training, we can clip the importance weights, by defining: 
+
+bLD = 1
+
+m
+
+> m
+
+X
+
+> n=1
+
+Lin · min 
+
+ 1
+
+q(in) , C 
+
+
+
+, (20) where constant C controls the maximum importance weight. As for VQ loss LVQ , as explained in Section III-B, we adopt the EMA-based update scheme [21] to avoid codebook col-lapse. Codebook loss is not optimized by gradients, but rather updated by an exponential moving average of the encoder outputs assigned to each code. Thus, LVQ = ∥ze − sg [zq ]∥22
+
+denotes the commitment loss, encouraging encoder outputs to match the codebook embeddings. Below, we discuss two specific regularization losses in R
+
+to enhance semantic structure and codebook utilization. 
+
+Semantic Preservation Regularization: To further pre-serve semantic structure in the ordered latent space, we optionally include a task-specific regularizer. For example, for classification, this can be a supervised contrastive loss that pulls samples with the same class label closer in the latent space. Let sij :=  zTe,i ze,j 
+
+ /τ denote the similarity between pre-quant latent representations of samples i and j (with a slight abuse of notation), where τ is a temperature parameter. Let τ0 be the base temperature. For anchor sample i, let 
+
+S(i) = {j : yj = yi, j ̸ = i} denote the set of positive samples sharing the same label as i, and V := {i : |S (i)| > 0} denote the set of anchor samples with at least one positive sample. Then, the supervised contrastive loss is formulated as [22]: 
+
+RSC = − ττ0
+
+· 1
+
+|V| 
+
+X
+
+> i∈V
+
+1
+
+|S (i)|
+
+X
+
+> j∈S (i)
+
+log exp( sij )
+
+P  
+
+> k̸=i
+
+exp( sik ) . (21) 
+
+Entropy Regularization: We include an entropy regular-izer that increases the entropy of the empirical codebook-index distribution, encouraging balanced use of the codebook embeddings. Let h∈RN be the empirical probability mass function (PMF) estimate across a minibatch, where hj := nj /T 
+
+denotes the empirical frequency of code index j being selected, 
+
+nj is the number of times j is selected in the current minibatch (with slight abuse of notation), and T := PNj=1 nj is the total number of sampled code indices. Then, the regularizer to minimize is defined as: 
+
+Rent =
+
+> N
+
+X
+
+> j=1
+
+hj log( N h j + ϵ), (22) where ϵ is a small constant to prevent numerical instabil-ity. Note that log N h j = log hj /u j , where uj =1 /N, ∀j, and 
+
+u:=( u1, . . . , u N ) is the uniform distribution over codebook indices. Thus, this term equals DKL (h∥u).We optionally include the supervised contrastive and en-tropy regularizers {R SC , Rent }. The overall training algorithm is summarized in Algorithm 1. In EMA update, ρj is a scalar running EMA cluster size (cross-minibatch average of nj ) and 
+
+νj ∈RDz is an EMA of the corresponding sum of assigned encoder outputs. To stabilize training, we use three-stages :full-code pretraining, ordered training with MPIS, and a final calibration stage with occasional full-code supervision to avoid under-training later components. VI. E XPERIMENTAL RESULTS 
+
+We evaluate GO-OAE on image classification and target a tight budget of K=36 maximum prefix length (maxi-mum number of transmitted code indices) and codebook size N =512 , although the framework applies to other downstream tasks. Full GO-OAE transmission requires only 
+
+36 log 2 512=324 bits/image, i.e., 683 × fewer than raw 96 ×96 
+
+Algorithm 1 GO-OAE Training with MPIS Estimator 
+
+Require: Dataset D:= {X , Y} , encoder-decoder pair (eθ , d ϕ),prefix length K, codebook size N , randomly initial-ized codebook C(0) =
+
+n
+
+c(0) 
+
+> j
+
+oNj=1 
+
+, prefix sampling budget 
+
+m≪K, batch size B, commitment weight β, regulariza-tion weight λreg , EMA decay γ, sampling sharpness α 
+
+> 1:
+
+Initialize EMA cluster size ρj ←0 and EMA sums of assigned latent components νj ←0 for all code index j 
+
+> 2:
+
+Precompute sampling distribution {q(i)}Ki=1 based on (18)  
+
+> 3:
+
+for Each epoch do  
+
+> 4:
+
+for Each minibatch, samples {(x(b), y(b))}Bb=1 do  
+
+> 5:
+
+Encode : z(b) 
+
+> e
+
+= eθ
+
+ x(b), ∀b 
+
+> 6:
+
+Quantize : Compute z(b) 
+
+> q
+
+, ∀b with (5)  
+
+> 7:
+
+Sample: m prefix lengths: {i1, i 2, . . . , i m}
+
+from q(i) independently  
+
+> 8:
+
+for each sampled prefix length in do  
+
+> 9:
+
+Truncate : z(b) 
+
+> q, ≤in
+
+, ∀b 
+
+> 10:
+
+Decode : by(b) 
+
+> in
+
+= dϕ
+
+
+
+z(b)
+
+> q, ≤in
+
+
+
+, ∀b 
+
+> 11:
+
+Compute GO loss: l(b) 
+
+> in
+
+, ∀b with (13)  
+
+> 12:
+
+end for  
+
+> 13:
+
+Compute per-minibatch losses:  
+
+> 14:
+
+Compute stochastic estimator: bLD with (20)  
+
+> 15:
+
+Compute commitment loss LVQ , e.g., (6)  
+
+> 16:
+
+Compute regularization term R, e.g., RSC (21) and Rent (22)  
+
+> 17:
+
+Update encoder-decoder parameters {θ, ϕ } by minimizing (19) with stochastic gradient descent  
+
+> 18:
+
+Update codebook embeddings using EMA [21]: for each code index j, update ρj and νj based on assigned outputs, update cj ←νj /ρ j , ∀j 
+
+> 19:
+
+end for  
+
+> 20:
+
+end for 
+
+RGB storage ( 96 2×3×8=221 ,184 bits/image). Classical com-pressors (e.g., JPEG, typically ∼11 -68 ×, ∼8-20 k bits/image) use far more bits and optimize pixel fidelity rather than task sufficiency. We compare eight scenarios with the same backbone and data augmentation, which differ in quantization, goal-oriented training, supervised contrastive (SupCon) semantic regulariza-tion, and prefix sampling. Short names are used below.  
+
+> •
+
+UB: Upper bound, task model on raw images.  
+
+> •
+
+RE-OAE: Reconstruct-then-classify, frozen UB classifier on reconstructed images. Same as training an OAE in Definition 2 with objective (3) in [6], but without task-awareness.  
+
+> •
+
+RE-OAE-TA: Enhanced RE-OAE with task-awareness by including task utility in loss.  
+
+> •
+
+GO-VQAE: Goal-oriented unordered VQ-AE + task head (all K quantized latent components), without or-dering fine-tuning.  
+
+> •
+
+GO-VQAE-SC: Enhanced GO-VQAE with SupCon loss (21) on pre-quantization features.  
+
+> •
+
+GO-OAE-U: Ordered training with uniform sampling 
+
+k ∼ U{ 1, K } and full task-codec loss (19), but without SupCon (the same uniform sampling strategy as in [6]).  
+
+> •
+
+GO-OAE-U-SC: Enhanced GO-OAE-U with SupCon.  
+
+> •
+
+GO-OAE-I-SC: Proposed method, GO-OAE with MPIS estimator (Algorithm 1, sampling m=6 prefixes per mini-batch). 
+
+A. Datasets 
+
+We evaluate the proposed GO-OAE framework on Mini-ImageNet [8, 9], a widely used fine-grained classification benchmark consisting of 100 classes. We use the public 
+
+timm/mini-imagenet split via HuggingFace [23]: ∼50k samples for training, ∼10k samples for validation, and ∼5k samples for testing. All 100 classes appear in every split with consistent label indices. Images are resized to 96 ×96 (to create 
+
+36 spatial patches of size 16 ×16 ) and normalized to [0 , 1] .Training augmentation includes random crop, horizontal flip, color jitter, rotation, MixUp ( α=0 .2), and light blurring and noise corruption. Validation uses center resize and ImageNet normalization only. Top-1 accuracy on the validation set is the primary goal-oriented metric. 
+
+B. Network Architecture and Training Details 
+
+We conducted experiments using both convolutional neural network (CNN)- and vision transformer (ViT)-based back-bones under the same full-rate budget of 324 bits per image. Due to space limitations, we focus here on the lighter CNN-based model and leave the backbone discussion, including insights into ViT-based models, to Section VI-D. 
+
+CNN backbone. The encoder maps each image to a
+
+36 ×6×6 latent tensor, through four strided convolutional stages ( cnn_factor=2 , channels 128 →256 →512 ), a resid-ual block, a final 3×3 convolution projecting to 36 chan-nels, and adaptive pooling. The receiver feeds the (possibly truncated) quantized tensor to a ResNet-style classification head: 3×3 convolutions, batch norm, ReLU, two residual blocks, two stride-2 downsamples, average pooling, and a linear classifier, yielding class logits. 
+
+ViT backbone. We use a split ViT-Small backbone (resized to 96 ×96 , yielding N =36 patch tokens of dimension 
+
+384 ). The transmitter applies the first E=4 transformer blocks, followed by a 2-layer perceiver ( 36 queries, 8 heads) to a latent dimension Dz =128 , then vector-quantized. The receiver maps quantized latent components back to 384 -dimensional token embeddings, expands to 36 spatial tokens with a 2-layer perceiver, and runs the remaining 8 ViT blocks plus the head with separate CLS and positional embeddings. Classification is performed from the final CLS representation. The CNN-based model contains about 8M, 0.02 M, and 
+
+3.3M parameters in the encoder, VQ codebook, and decoder, respectively. The corresponding parameter counts for the ViT-based model are about 11 M, 0.07 M, and 17 .9M. Unless otherwise specified, both architectures use a trainable EMA codebook with size N =512 (9 bits per quantized latent 
+
+0 100 200 15 20 
+
+Prefix length k
+
+> PSNR (dB)
+> RE-OAE RE-OAE-TA
+
+0 100 200 00.20.40.60.8
+
+Prefix length k     
+
+> Top-1 accuracy  UB RE-OAE RE-OAE-TA
+> Fig. 2. Reconstruction fidelity vs. downstream task performance for the reconstruct-then-classify pipelines RE-OAE and RE-OAE-TA (K=256 ).
+
+Original 20% 40% 60% 80% 100%      
+
+> RE-OAE -TA RE-OAE Fig. 3. Reconstruction with RE-OAE and RE-OAE-TA (K=256 ).
+
+component) and full prefix length K=36 . The per-quantized latent component embedding dimension is 36 (CNN) and 128 
+
+(ViT). The EMA decay factor is γ=0 .99 . VQ training em-ploys commitment weight β=1 .0 and entropy regularization 
+
+λent =0 .02 . On SupCon-enabled variants, we add a supervised contrastive term with weight λSC =3 .0 and temperature τ =0 .1,applied to pooled pre-quantization features. For MPIS, we draw m=6 prefix lengths per minibatch with sharpness α=1 .0.We train the ordered models in three stages:  
+
+> •
+
+Pretrain: Jointly train the encoder, VQ codebook, and classifier on the full K=36 prefix ( 500 epochs).  
+
+> •
+
+Ordered: Fine-tune with random single prefix ( GO-OAE-U-SC ) or multi-prefix ( GO-OAE-I-SC ) to learn an ordered space ( 300 epochs).  
+
+> •
+
+Calibration: Mix full-prefix ( 40% ) and truncated-prefix (60% ) steps to recover full-rate accuracy while preserving low-k performance ( 100 epochs). 
+
+C. Performance Comparison 1) Reconstruction Fidelity vs. Downstream Task Perfor-mance: Our reconstruction-based evaluation in Figure 2 and 3 shows that strong reconstruction performance does not trans-late into reliable downstream classification. Even at a substan-tially larger transmission budget ( K=256 already offers better performance than K=36 in Figure 4), RE-OAE attains satis-fying peak signal-to-noise ratio (PSNR) and visually plausible reconstructions, yet top-1 accuracy on decoded images re-mains far below the original-image bound ( 18 .9% vs. 77 .5% ). Adding task-aware supervision in RE-OAE-TA substantially improves performance, but still falls well short of the upper bound. These results indicate that a modular “compress first, infer later” pipeline can fail even when reconstruction error is small. Goal-oriented design is therefore necessary to align the transmitted representation with task-relevant information. 5 10 15 20 25 30 35 00.20.40.60.8
+
+Prefix length k   
+
+> Top-1 Accuracy
+> UB RE-OAE RE-OAE-TA GO-VQAE GO-VQAE-SC GO-OAE-U GO-OAE-U-SC GO-OAE-I-SC
+> Fig. 4. Task performance comparison (CNN backbone, K= 36 ).
+
+2) Performance Comparison: Figure 4 reports mean top-1 accuracy (three runs per scenario) as a function of selected prefix length ( k≤K=36 ) for all eight scenarios applied to CNN backbone. Our main observations are as follows. First, 
+
+RE-OAE and RE-OAE-TA remain weak across all prefix lengths: at the full budget they reach only 4.7% and 55 .4% ,respectively, versus 77 .5% for the original-image bound ( UB ), confirming that a modular “compress first, infer later” pipeline can fail despite low reconstruction error. Task performance is also much lower than the results with higher prefix budget 
+
+K=256 (Figure 2 and 3). Second, end-to-end goal-oriented training improves accuracy substantially. GO-VQAE and GO-VQAE-SC jointly optimize the encoder, codebook, and task head with maximum prefix length (complete sequence, no truncation) without ordering. They serve as unordered ref-erences and show that direct task optimization outperforms reconstruction-first design. However, without ordered training, the budget K=36 is too tight for them to obtain sufficient task-relevant information. Third, semantic preservation in quan-tized latent space yields large gains in both unordered and ordered settings: GO-VQAE-SC improves over GO-VQAE 
+
+by +37 .5 percentage points at k = 36 (63 .8% vs. 26 .2% ), and 
+
+GO-OAE-U-SC improves over GO-OAE-U by +2 .4 points (73 .1% vs. 70 .7% ); the effect is even larger at low budgets. Fourth, ordered training ( GO-OAE-U , GO-OAE-U-SC , GO-OAE-I-SC ) strongly boosts accuracy at small prefixes, en-abling more robust performance under tight communication budgets. Finally, GO-OAE-I-SC approaches UB with limited prefix budget: at k=36 it reaches accuracy 74 .4% (96 .1% of 
+
+UB ) using only 324 transmitted bits ( 683 × compression vs. uncompressed RGB). Also, with only k=25 code indices (225 bits) it already attains 72 .9% accuracy ( 94 .1% of UB , 980 ×
+
+compression), highlighting the efficiency of goal-oriented or-dered representations under communication constraints. 
+
+3) Semantic Preservation in Codebook Embeddings - Effect of Supervision: Figure 4 already showed that semantic preser-vation in quantized latent space, enforced by a supervised contrastive regularizer, yields large gains in both unordered and ordered settings. Figure 5 (the same CNN backbone) complements this result in two ways: (i) GO-OAE-I-SC 
+
+GO-VQAE (pre-VQ) GO-OAE-I-SC (pre-VQ) GO-OAE-I-SC (post-VQ)    
+
+> Fig. 5. T-SNE of latent components colored by 20 classes.
+
+0 5 10 15 20 25 30 35 012
+
+Prefix length k   
+
+> Information gain (nats)
+> GO-OAE-U GO-OAE-U-SC GO-OAE-I-SC
+> Fig. 6. Information gain comparison (CNN backbone, K= 36 ).
+
+maintains stronger semantic structure in the quantized latent space than GO-VQAE , and (ii) our EMA codebook update preserves semantic information through quantization (pre-VQ vs. post-VQ). 
+
+0 5 10 15 20 25 30 35 0.40.60.8
+
+Prefix length k 
+
+> Top-1 Accuracy
+> UB (CNN) UB (ViT-S) GO-OAE-I-SC (CNN) GO-OAE-I-SC (ViT-S, E=4) GO-OAE-I-SC (ViT-S, E=1)
+> Fig. 7. Backbone comparison.
+
+4) Ordered Latent Space - Effect of Sampling Strategies: 
+
+Figure 6 compares the block information gain of GO-OAE-U ,
+
+GO-OAE-U-SC and GO-OAE-I-SC . We partition the ordered codes into 10 blocks, where block p ends at prefix length 
+
+kp corresponding to p ∈ { 10% , 20% , . . . , 100% } of the full budget. It reports the blockwise empirical information gain 
+
+∆bIp = CE( by|z≤kp−1 )−CE( by|z≤kp ). The curve of GO-OAE-I-SC decays sharply across prefix length, confirming the or-dered autoencoding requirement of monotonically diminishing conditional mutual information, consistent with the ordering predicted by Corollary 1. 
+
+D. Backbone Model Discussion 
+
+Our experiments in Figure 7 show that GO-OAE interacts differently with CNN and ViT backbones. CNN’s feature specialization supports complementary latent information and clear progressive refinement. In contrast, standard ViTs are optimized for early global contextualization, which conflicts with ordered representation learning: task-relevant information becomes rapidly mixed and redundantly distributed across tokens, allowing the first few latent components to capture most of the utility and yielding nearly flat prefix-performance curves. Using fewer transformer blocks before quantization (E=1 instead of E=4 ) spreads task utility across more latent components, yielding progressive gains over longer prefix. However, the reduced depth at transmitter also limits task-relevant information extraction before the bottleneck, resulting in lower converged accuracy. Achieving progressive refine-ment with transformer backbones may therefore require ar-chitectural redesigns that preserve decomposable intermediate features and defer global integration until after the communi-cation bottleneck. This represents an important direction for future work. VII. C ONCLUSIONS 
+
+We introduced GO-OAE, a goal-oriented progressive com-munication framework robust to unpredictable bandwidth that learns ordered quantized representations, enabling flex-ible task inference rather than source reconstruction. We showed that the goal-oriented distortion objective admits a weighted conditional information bottleneck interpretation, and introduced MPIS to cut training cost from O(BK ) to 
+
+O(Bm ), with m≪K, and with variance scaling as 1/m . On MiniImageNet, our approach attains ≥96% of the lossless bound at 324 bits/image (683 × compression) and ≥94% 
+
+with only 70% of the quantized latent components, outper-forming reconstruction-based codecs and OAEs trained with uniform prefix sampling at all budgets. Semantic preservation regularization and ordered importance sampling are essential when the communication budget is tight. Future work will extend GO-OAE to drone surveillance and robotic vision under realistic communication, compute, and energy constraints, while developing transformer architectures better suited to progressive refinement. APPENDIX 
+
+A. Proof of Theorem 2 Proof. Assuming Bayes-optimal decoders, for which 
+
+E [− log p(y|z≤i)] = H(y|z≤i), where H(·|· ) denotes the conditional entropy. Then, we have 
+
+LD =
+
+> K
+
+X
+
+> i=1
+
+H(y|z≤i) = KH (y) −
+
+> K
+
+X
+
+> i=1
+
+I(y; z≤i)
+
+Thus, minimizing LD is equivalent to maximizing PKi=1 I(y; z≤i). Based on the chain rule, we have 
+
+I(y; z≤i) = 
+
+> i
+
+X
+
+> j=1
+
+I(y; zj |z<j ),
+
+which leads to 
+
+> K
+
+X
+
+> i=1
+
+I(y; z≤i) = 
+
+> K
+
+X
+
+> i=1
+> i
+
+X
+
+> j=1
+
+I(y; zj |z<j )=
+
+> K
+
+X
+
+> j=1
+
+(K − j + 1) I(y; zj |z<j ).
+
+The loss becomes 
+
+LD = KH (y) −
+
+> K
+
+X
+
+> i=1
+
+wiI(y; zi|z<i ),
+
+where the weights are defined as wi = K − i + 1 , which means information contributed by earlier latent components is rewarded more strongly. 
+
+B. Proof of Corollary 1 Proof. From Theorem 2, we know minimizing (8) is equivalent, up to an additive constant, to maximizing (9) with non-increasing weights wi=K − i + 1 , and therefore 
+
+w1>w 2> . . . >w K >0. Define the incremental task-relevant information gain as ∆i = I(y; zi|z<i ) (for brevity we abuse the notation and still use ∆i for goal-oriented in-formation gain). Suppose, for contradiction, that an optimal representation contains an adjacent inversion, i.e., ∆i<∆i+1 
+
+for some i. After swapping their order, the contribution becomes wi∆i+1 +wi+1 ∆i, which is strictly larger than the original contribution wi∆i + wi+1 ∆i+1 . Thus, swapping the two latent components would strictly increase the objective. Since the model class is closed under permutations and the information contributions are invariant under permutation, the swapped representation remains admissible. This contradicts the global optimality of the original representation. There-fore, no adjacent inversion can exist at optimum, and hence 
+
+∆1≥∆2≥ . . . ≥∆K .
+
+C. Proof of Corollary 2 Proof. In below, we prove the unbiasedness, variance, and un-biased gradient estimation properties of the proposed estimator 
+
+bLD , respectively. 
+
+Unbiasedness: By linearity of expectation, we have 
+
+E
+
+h bLD
+
+i
+
+= E
+
+"
+
+1
+
+m
+
+> m
+
+X
+
+> n=1
+
+Ein∼q
+
+ Lin
+
+q(in)
+
+#
+
+.
+
+Since in is sampled from q(i), we have 
+
+Ein∼q
+
+ Lin
+
+q(in)
+
+
+
+=
+
+> K
+
+X
+
+> i=1
+
+q(i) Li
+
+q(i) =
+
+> K
+
+X
+
+> i=1
+
+Li = LD . (23) Thus, E
+
+h bLD
+
+i
+
+= LD , which proves the unbiasedness. 
+
+Variance: Let us define Xn := Lin /q (in) for n =1, . . . , m . Since in are sampled independently, and all 
+
+X1, . . . , X m are i.i.d. and have identical variance, we have 
+
+Var 
+
+h bLD
+
+i
+
+= 1
+
+m2
+
+> m
+
+X
+
+> n=1
+
+Var[ Xn] = 1
+
+m Var 
+
+ Li
+
+q(i)
+
+
+
+.Given the variance definition, we have 
+
+Var 
+
+ Li
+
+q(i)
+
+
+
+= Ei∼q
+
+" Li
+
+q(i)
+
+2#
+
+−
+
+
+
+Ei∼q
+
+ Li
+
+q(i)
+
+ 2
+
+> (23)
+
+=
+
+> K
+
+X
+
+> i=1
+
+q(i) L2
+
+> i
+
+q(i)2 − L 2 
+
+> D
+
+=
+
+> K
+
+X
+
+> i=1
+
+L2
+
+> i
+
+q(i) − L 2 
+
+> D
+
+. (24) Thus, we have Var 
+
+h bLD
+
+i
+
+= (1 /m )
+
+PKi=1 L2 
+
+> i
+
+/q (i) − L 2
+
+> D
+
+
+
+.
+
+Unbiased Gradient Estimation: With the proven unbi-asedness, and under standard regularity conditions allowing interchange of gradient and expectation, we have 
+
+∇θ,ϕ LD (θ, ϕ ) = ∇θ,ϕ E[ bLD (θ, ϕ )] = E[∇θ,ϕ bLD (θ, ϕ )] .
+
+REFERENCES 
+
+[1] O. Goldreich, B. Juba, and M. Sudan, “A theory of goal-oriented communication,” Journal of the ACM (JACM) ,vol. 59, no. 2, pp. 1–65, 2012. [2] F. Mentzer, G. D. Toderici, M. Tschannen, and E. Agustsson, “High-fidelity generative image compres-sion,” Advances in neural information processing systems (NeurIPS) , vol. 33, pp. 11 913–11 924, 2020. [3] G. Zhang and et al., “Progressive learned image trans-mission for semantic communication using hierarchical VAE,” IEEE Transactions on Cognitive Communications and Networking , 2025. [4] D. P. Kingma and M. Welling, “An introduction to variational autoencoders,” Foundations and Trends® in Machine Learning , vol. 12, no. 4, pp. 307–392, 2019. [5] W. H. Equitz and T. M. Cover, “Successive refinement of information,” IEEE Transactions on information theory ,vol. 37, no. 2, pp. 269–275, 1991. [6] Y. Xu, Y. Song, S. Garg, L. Gong, R. Shu, A. Grover, and S. Ermon, “Anytime sampling for autoregressive models via ordered autoencoding,” in International Conference on Learning Representations (ICLR) , 2021. [7] H. Liang, C. Dong, W. An, Z. Bao, X. Xu, and R. Meng, “Semantic importance-aware communication over MIMO fading channels,” IEEE Internet of Things Journal , 2025. [8] S. Ravi and H. Larochelle, “Optimization as a model for few-shot learning,” in International Conference on Learning Representations (ICLR) , 2017. [9] O. Russakovsky, J. Deng, H. Su, J. Krause, S. Satheesh, S. Ma, Z. Huang, A. Karpathy, A. Khosla, M. Bernstein 
+
+et al. , “Imagenet large scale visual recognition chal-lenge,” International Journal of Computer Vision (IJCV) ,vol. 115, no. 3, pp. 211–252, 2015. [10] Z. Qin, X. Tao, J. Lu, W. Tong, and G. Y. Li, “Seman-tic communications: Principles and challenges,” arXiv preprint arXiv:2201.01389 , 2021. [11] D. G¨ und¨ uz, Z. Qin, I. E. Aguerri, H. S. Dhillon, Z. Yang, A. Yener, K. K. Wong, and C.-B. Chae, “Beyond transmitting bits: Context, semantics, and task-oriented communications,” IEEE Journal on Selected Areas in Communications , vol. 41, no. 1, pp. 5–41, 2023. [12] T. M. Getu, G. Kaddoum, and M. Bennis, “A survey on goal-oriented semantic communication: Techniques, challenges, and future directions,” IEEE Access , vol. 12, pp. 51 223–51 274, 2024. [13] X. Luo, H.-H. Chen, and Q. Guo, “Semantic commu-nications: Overview, open issues, and future research directions,” IEEE Wireless Communications , vol. 29, no. 1, pp. 210–219, 2022. [14] N. Li, Y. Deng, and D. Niyato, “Goal-oriented seman-tic communication for wireless video transmission via generative ai,” IEEE Transactions on Wireless Commu-nications , 2026. [15] S. H. Wanasekara, V.-D. Nguyen, K.-S. Wong, M.-D. Nguyen, S. Chatzinotas, and O. A. Dobre, “Sc-gir: Goal-oriented semantic communication via invariant representation learning for image transmission,” IEEE Transactions on Mobile Computing , 2025. [16] Z. Lyu, G. Zhu, J. Xu, B. Ai, and S. Cui, “Semantic communications for image recovery and classification via deep joint source and channel coding,” IEEE Transac-tions on Wireless Communications , vol. 23, no. 8, pp. 8388–8404, 2024. [17] T. Li, Y. Tian, H. Li, M. Deng, and K. He, “Autore-gressive image generation without vector quantization,” 
+
+Advances in Neural Information Processing Systems (NeurIPS) , vol. 37, pp. 56 424–56 445, 2024. [18] A. Kusupati and et al., “Matryoshka representation learn-ing,” Advances in Neural Information Processing Systems (NeurIPS) , vol. 35, pp. 30 233–30 249, 2022. [19] A. Van Den Oord, O. Vinyals et al. , “Neural discrete representation learning,” Advances in neural information processing systems (NeurIPS) , vol. 30, 2017. [20] A. Grattafiori, A. Dubey, A. Jauhri, A. Pandey, A. Ka-dian, A. Al-Dahle, A. Letman, A. Mathur, A. Schelten, A. Vaughan et al. , “The Llama 3 herd of models,” arXiv preprint arXiv:2407.21783 , 2024. [21] A. Ła´ ncucki, J. Chorowski, G. Sanchez, R. Marxer, N. Chen, H. J. Dolfing, S. Khurana, T. Alum¨ ae, and A. Laurent, “Robust training of vector quantized bottle-neck models,” in 2020 International Joint Conference on Neural Networks (IJCNN) . IEEE, 2020, pp. 1–7. [22] P. Khosla, P. Teterwak, C. Wang, A. Sarna, Y. Tian, P. Isola, A. Maschinot, C. Liu, and D. Krishnan, “Super-vised contrastive learning,” Advances in neural informa-tion processing systems (NeurIPS) , vol. 33, pp. 18 661– 18 673, 2020. [23] R. Wightman, “timm/mini-imagenet dataset,” https:// huggingface.co/datasets/timm/mini-imagenet, 2021, ac-cessed: 2026-07-30.
