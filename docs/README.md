@@ -51,14 +51,14 @@
       <span class="dpr-home-dashboard-kicker">2026-10-13</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 13 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 14 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
-    <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>1</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>2 次</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>2</dd></div>
     <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>12</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-10-13 01:18:09 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-10-13 23:14:55 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -69,7 +69,9 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日精选13篇AI论文，精读1篇、速读12篇，聚焦高效压缩与注意力机制。最值得关注的是精读8分的APEX异步前缀去噪，以及速读中多流注意力残差、渐进通信有序自编码等方向。普通读者可优先从APEX了解极端压缩下的去噪思路，再按兴趣浏览速读列表。</p>
+<p>2026-10-13 日报完成 14 篇论文筛选，精读 2 篇、速读 12 篇，重点集中在压缩与视频生成方向。</p>
+<p>最值得看的是两篇 8.0 分精读：APEX 用异步前缀去噪做极端压缩，另一篇统一自回归与双向视频扩散做生成式视频压缩。</p>
+<p>普通读者建议先读这两篇精读的摘要和实验结论，再按兴趣从速读里挑渐进通信、注意力残差或水下图像增强。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -78,12 +80,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">精读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">1 篇</strong>
+    <strong class="dpr-home-dashboard-count">2 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="APEX: Asynchronous Prefix Denoising for Extreme Compression">APEX: Asynchronous Prefix Denoising for Extreme Compression</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="APEX: Asynchronous Prefix Denoising for Extreme Compression">APEX: Asynchronous Prefix Denoising for Extreme Compression</span></li><li><span class="dpr-home-dashboard-paper-title" title="Unified Generative Video Compression with Autoregressive and Bidirectional Video Diffusion">Unified Generative Video Compression with Autoregressive and Bidirectional Video Diffusion</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">compress <strong>1</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">compress <strong>2</strong></span></div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -96,7 +98,7 @@
   <div class="dpr-home-dashboard-body">
 <ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Goal-Oriented Ordered Autoencoding for Successive Refinement in Progressive Communication">Goal-Oriented Ordered Autoencoding for Successive Refinement in Progressive Communication</span></li><li><span class="dpr-home-dashboard-paper-title" title="Multi-Stream Attention Residuals">Multi-Stream Attention Residuals</span></li><li><span class="dpr-home-dashboard-paper-title" title="State-Isolated Vision Mamba via Update-Tendency Routing for Underwater Image Enhancement">State-Isolated Vision Mamba via Update-Tendency Routing for Underwater Image Enhancement</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">neural-arch <strong>7</strong></span><span class="dpr-home-dashboard-tag">compress <strong>5</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">neural-arch <strong>8</strong></span><span class="dpr-home-dashboard-tag">compress <strong>4</strong></span></div>
 </section>
 </div>
 
